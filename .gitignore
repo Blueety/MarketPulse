@@ -39,6 +39,7 @@ htmlcov/
 reports/
 data/
 alerts/
+context/
 
 # Agent work (保留 tasks/，忽略临时文件)
 tasks/*/tmp/

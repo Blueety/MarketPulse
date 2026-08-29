@@ -26,6 +26,7 @@ LAST_VALUES_FILE = DATA_DIR / "last_values.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 ALERTS_DIR = BASE_DIR / "alerts"
 ALERTS_LOG = DATA_DIR / "alerts.log"
+CONTEXT_DIR = BASE_DIR / "context"   # 四期：Hermes 上下文 JSON（generate_context 产出）
 
 # 状态阈值：VIX/VXN 共用 20/30；MOVE 量级不同，用 100/130（已确认）。
 VIX_CALM = 20.0
@@ -118,6 +119,22 @@ def check_breach(symbol: str, current: float | None, last: float | None) -> dict
         "state": state,
         "suggestion": ALERT_SUGGESTIONS[state],
     }
+
+
+def build_search_keywords(date: str, breaches: list[dict]) -> list[str]:
+    """按异动状态生成 tavily 搜索关键词（方向感知）。
+
+    异动日：每个异动指数一个方向词（变化率 >=0 用 surge / <0 用 drop）+ 两个定向词，
+    合计 3-5 个；常规日仅 1 个 "market summary {date}"。"""
+    if not breaches:
+        return [f"market summary {date}"]
+    words = [
+        f"{b['symbol']} {'surge' if b['change'] >= 0 else 'drop'} {date}"
+        for b in breaches
+    ]
+    words.append(f"market volatility {date}")
+    words.append(f"economic data {date}")
+    return words
 
 
 def build_statuses(values: dict, errors: dict) -> dict:

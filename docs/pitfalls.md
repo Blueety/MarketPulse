@@ -14,6 +14,14 @@
 - **变化率"严格大于"才触发**：恰好等于阈值不告警（设计 A）；断言用 `pytest.approx` 避免浮点边界误判。
 - **验证期模拟告警后必须恢复 `data/last_values.json`**：改缓存模拟 +22% 后运行入口，若取数成功缓存会被当日真实值覆盖（正常）；若取数失败（限流）模拟值会残留——验证前先备份。
 
+### 模块 src/（四期新增：context）
+- **`CONTEXT_DIR` 是 reporter 导入时绑定**：`generate_context` 测试必须 `monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")`；`load_history` 读 `an.HISTORY_FILE`（调用时查模块全局），测试补丁 `an.HISTORY_FILE` 即可。
+- **context 原子写**：临时文件 `context/YYYY-MM-DD.json.tmp` + `os.replace`；断言无 `.tmp` 残留。Hermes 读取依赖"要么旧文件要么完整新文件"。
+- **`generate_context` 必须在 `append_history` 之后调用**（决策 D）：history_30d 才含当日；`daily_report.py` 的调用点位于 append_history 与 save_last_values 之后、return 0 之前。
+- **`search_keywords` 方向语义**（决策 C）：变化率 >=0 用 "surge"、<0 用 "drop"（0 归 surge）；这是 tavily 归因的输入，改词会直接影响 Hermes 搜索命中率，需同步 Hermes Prompt。
+- **`breach.indices` 字段契约是 Hermes Prompt 的输入**（决策 B）：字段名 name/current/previous/change_pct/threshold/level 按 PRD 定稿，`level` 大写 WARN/ALERT；改字段必须先改 `_breach_item` 再同步 Hermes Prompt，单测锁定两者。
+- **collect_breaches 纯计算无副作用**：不写告警文件、不改 alerts.log；context 的 `breach.triggered` 不受午盘去重影响（午盘已告警的指数，收盘 context 仍标记异动，归因针对市场异动本身）。
+
 ## 环境相关
 
 <!-- 记录 Node/Python/系统/编码等环境坑 -->

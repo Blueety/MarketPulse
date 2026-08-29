@@ -59,6 +59,22 @@ def render_alert(alert: dict, date: str, alert_type: str, report_path: "Path") -
     )
 
 
+def collect_breaches(values: dict, last_values: dict) -> list[dict]:
+    """纯计算：遍历 SYMBOLS 调 check_breach 收集告警 dict，不写文件、不改 alerts.log（幂等）。
+
+    run_alert_checks 与 generate_context 共用的单一事实来源；单指数异常仅记日志跳过。"""
+    breaches = []
+    for sym in SYMBOLS:
+        try:
+            alert = check_breach(sym, values.get(sym), last_values.get(sym))
+        except Exception as exc:
+            log.warning("告警检查 %s 失败: %s", sym, exc)
+            continue
+        if alert is not None:
+            breaches.append(alert)
+    return breaches
+
+
 def run_alert_checks(date: str, values: dict, last_values: dict,
                      alert_type: str, report_path: "Path") -> list[dict]:
     """检查各指数告警：check_breach → 当日去重过滤 → 写文件 → 标记已告警。
@@ -66,16 +82,9 @@ def run_alert_checks(date: str, values: dict, last_values: dict,
     单指数异常仅记日志；调用方应再包 try/except（决策 H）。返回本次触发的告警列表。"""
     alerted = _load_alerted(date)
     pending = []
-    for sym in SYMBOLS:
-        try:
-            alert = check_breach(sym, values.get(sym), last_values.get(sym))
-        except Exception as exc:
-            log.warning("告警检查 %s 失败: %s", sym, exc)
-            continue
-        if alert is None:
-            continue
-        if sym in alerted:
-            log.info("%s 当日已告警（alerts.log），跳过", sym)
+    for alert in collect_breaches(values, last_values):
+        if alert["symbol"] in alerted:
+            log.info("%s 当日已告警（alerts.log），跳过", alert["symbol"])
             continue
         pending.append(alert)
     if not pending:

@@ -23,7 +23,7 @@ from src.analyzer import (
     save_last_values,
 )
 from src.fetcher import SYMBOLS, fetch_all
-from src.reporter import render_report, render_trend_chart, save_report
+from src.reporter import generate_context, render_report, render_trend_chart, save_report
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +67,12 @@ def main() -> int:
         log.info("缓存已更新")
     else:
         log.warning("所有数据源获取失败，本次不更新缓存")
+
+    try:  # 上下文生成（决策 E）：供 Hermes 常规解读/异动归因，失败仅记日志不影响日报
+        generate_context(date, values, changes, statuses, last_values)
+        log.info("context 已生成: context/%s.json", date)
+    except Exception as exc:
+        log.warning("context 生成失败，不影响日报: %s", exc)
 
     return 0  # 全源失败也恒为 0，避免 Hermes 定时任务误报警
 
