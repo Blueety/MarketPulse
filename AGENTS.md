@@ -9,9 +9,12 @@
 - `reports/`: 报告输出（`YYYY-MM-DD.md` / `snapshots/YYYY-MM-DD-noon.md` / `charts/YYYY-MM-DD-trend.png`）。
 - `data/`: 数据缓存（`last_values.json` 涨跌幅基准；`history.json` 近 90 日历史）。
 - `src/fetcher.py`: 数据获取层（Yahoo 取数 + SYMBOLS 注册表）。
-- `src/analyzer.py`: 纯逻辑 + 持久化（分类/涨跌幅/history 读写）。
+- `src/analyzer.py`: 纯逻辑 + 持久化（分类/涨跌幅/history 读写）。- `src/analyzer.py`: 纯逻辑 + 持久化（分类/涨跌幅/history 读写 + check_breach/alert_threshold）。
+- `src/alerter.py`: 告警层（告警文件渲染 + alerts.log 去重 + run_alert_checks 编排）。
 - `src/reporter.py`: 报告渲染（日报/快照/趋势图）。
-- `tests/`: 单元测试（test_analyzer.py / test_reporter.py）。
+- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py）。
+- `alerts/`: 告警输出（`YYYY-MM-DD-noon.md` / `YYYY-MM-DD-close.md`，gitignore 排除）。
+- `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。
 - `docs/`: 项目知识和规则。
 - `tasks/`: 任务目录和交接记录。
 - `skills/`: 可复用流程。

@@ -38,6 +38,7 @@ htmlcov/
 # Runtime-generated data (运行时自动创建，不入 git)
 reports/
 data/
+alerts/
 
 # Agent work (保留 tasks/，忽略临时文件)
 tasks/*/tmp/

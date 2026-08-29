@@ -6,10 +6,13 @@
 
 - （暂无）
 
-### 模块 src/（二期新增）
-- 修改 `src/analyzer.py` 的路径常量（CHARTS_DIR / SNAPSHOTS_DIR / HISTORY_FILE）时，注意 `src/reporter.py` 与入口脚本是**导入时绑定**：`reporter.py` 的 `CHARTS_DIR` 是 `from .analyzer import CHARTS_DIR` 的模块级引用，测试里 `monkeypatch.setattr(an, "CHARTS_DIR", ...)` 不会影响 reporter——必须 `monkeypatch.setattr(rep, "CHARTS_DIR", ...)` 才生效。
-- `render_trend_chart` 会**排除当日记录**（同日重复运行不重绘当日点）且需 ≥2 条历史才绘图：**首次运行（history 只有 1 条）不产生趋势图是设计行为**，不是 bug；验证趋势图必须预先积累 ≥2 条历史。
-- `append_history` 按 date 键覆盖当日记录——同日重复运行 `daily_report.py` 不会产生重复条目；但若手动改写 `data/history.json` 验证后需恢复，避免真实数据被临时播种数据污染。
+### 模块 src/（三期新增：告警）
+- **告警基准必须用开头加载的旧 `last_values`**（决策 G）：收盘入口在 `save_last_values` 之前调用 `run_alert_checks`，若基准误用当日新缓存会导致告警永远不触发/误触发；测试用时序断言锁定。
+- **`alerts.log` 只保留当日行**（设计 C）：`_mark_alerted` 原子重写整个文件，旧日行自动清除——跨日运行天然重置去重状态，勿手工追加。
+- **路径常量打补丁位置**：`alerter.py` 的 `ALERTS_DIR`/`ALERTS_LOG` 是导入时绑定，测试必须 `monkeypatch.setattr(al, "ALERTS_DIR", ...)`/`setattr(al, "ALERTS_LOG", ...)`；同理 `check_breach` 需 `monkeypatch.setattr(al, "check_breach", ...)`（导入绑定）。
+- **阈值 env 变量泄漏**：测试必须 `monkeypatch.delenv("ALERT_THRESHOLD_VIX", raising=False)` 隔离宿主环境，否则 check_breach 边界断言受宿主 env 影响。
+- **变化率"严格大于"才触发**：恰好等于阈值不告警（设计 A）；断言用 `pytest.approx` 避免浮点边界误判。
+- **验证期模拟告警后必须恢复 `data/last_values.json`**：改缓存模拟 +22% 后运行入口，若取数成功缓存会被当日真实值覆盖（正常）；若取数失败（限流）模拟值会残留——验证前先备份。
 
 ## 环境相关
 

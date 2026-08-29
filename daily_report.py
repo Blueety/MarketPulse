@@ -1,6 +1,6 @@
 """MarketPulse — 每日波动率指数日报生成器（编排入口）。
 
-流程：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 追加历史 → 写缓存。
+流程：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 告警检查 → 追加历史 → 写缓存。
 脚本不包含推送逻辑（由 Hermes 读取报告并推送）。
 
 用法:
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 
+from src.alerter import run_alert_checks
 from src.analyzer import (
     append_history,
     build_statuses,
@@ -33,7 +34,7 @@ log = logging.getLogger("marketpulse")
 
 
 def main() -> int:
-    """完整流程：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 追加历史 → 写缓存。"""
+    """完整流程：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 告警检查 → 追加历史 → 写缓存。"""
     date = get_us_eastern_date()
     log.info("MarketPulse 开始生成 %s 日报", date)
 
@@ -50,6 +51,11 @@ def main() -> int:
     report = render_report(date, values, changes, statuses, summary, has_history, trend_chart)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
+
+    try:  # 告警检查：save_last_values 前用旧缓存作基准（决策 G），失败仅记日志（决策 H）
+        run_alert_checks(date, values, last_values, "close", report_path)
+    except Exception as exc:
+        log.warning("告警检查失败，不影响日报生成: %s", exc)
 
     record = {"date": date, **{k.lower(): values[k] for k in SYMBOLS}}
     append_history(record)

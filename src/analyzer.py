@@ -24,12 +24,21 @@ SNAPSHOTS_DIR = REPORTS_DIR / "snapshots"
 DATA_DIR = BASE_DIR / "data"
 LAST_VALUES_FILE = DATA_DIR / "last_values.json"
 HISTORY_FILE = DATA_DIR / "history.json"
+ALERTS_DIR = BASE_DIR / "alerts"
+ALERTS_LOG = DATA_DIR / "alerts.log"
 
 # 状态阈值：VIX/VXN 共用 20/30；MOVE 量级不同，用 100/130（已确认）。
 VIX_CALM = 20.0
 VIX_WARN = 30.0
 MOVE_CALM = 100.0
 MOVE_WARN = 130.0
+
+ALERT_THRESHOLDS = {"VIX": 20.0, "VXN": 20.0, "MOVE": 15.0}  # 变化率百分比，env ALERT_THRESHOLD_<SYM> 覆盖
+ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单测断言）
+    "平静": "波动率仍处低位，建议保持现有策略，关注后续变化。",
+    "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
+    "恐慌": "波动率处于高位，建议以避险为主，防范系统性风险。",
+}
 
 HISTORY_MAX = 90      # 历史数据滚动窗口（天）
 
@@ -71,6 +80,44 @@ def compute_changes(current: dict, last_values: dict) -> dict:
         else:
             changes[sym] = (value - last_values[sym]) / last_values[sym] * 100.0
     return changes
+
+
+def alert_threshold(symbol: str) -> float:
+    """返回指数告警阈值（变化率 %）；env ALERT_THRESHOLD_<SYM> 覆盖默认，非法/非正回退默认。"""
+    default = ALERT_THRESHOLDS[symbol]
+    raw = os.environ.get(f"ALERT_THRESHOLD_{symbol}")
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        value = -1.0
+    if value <= 0:
+        log.warning("告警阈值环境变量 ALERT_THRESHOLD_%s 非法或非正（%r），回退默认 %.1f", symbol, raw, default)
+        return default
+    return value
+
+
+def check_breach(symbol: str, current: float | None, last: float | None) -> dict | None:
+    """判断当日变化率是否超过告警阈值（严格大于，等于不触发）。返回告警 dict 或 None；level：恐慌区间为 ALERT。"""
+    if current is None or last is None or last == 0:
+        return None
+    change = (current - last) / last * 100.0
+    threshold = alert_threshold(symbol)
+    if abs(change) <= threshold:
+        return None
+    state, _ = (classify_move if symbol == "MOVE" else classify_vix)(current)
+    level = "ALERT" if state == "恐慌" else "WARN"
+    return {
+        "symbol": symbol,
+        "current": current,
+        "last": last,
+        "change": change,
+        "threshold": threshold,
+        "level": level,
+        "state": state,
+        "suggestion": ALERT_SUGGESTIONS[state],
+    }
 
 
 def build_statuses(values: dict, errors: dict) -> dict:

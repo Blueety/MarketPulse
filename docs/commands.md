@@ -35,7 +35,11 @@
 - 删除 `data/last_values.json` 后运行，涨跌幅应显示"首次运行，暂无历史对比"。
 - 断网时运行，脚本不崩溃、输出明确错误提示、报告标注获取失败、history 记录 null。
 - 有 ≥2 条历史数据（不含当日）时运行 `daily_report.py`，应生成 `reports/charts/YYYY-MM-DD-trend.png`，且报告中含「## 📉 近30日趋势」章节引用 `./charts/YYYY-MM-DD-trend.png`。
-- 运行 `snapshot_report.py`，应生成 `reports/snapshots/YYYY-MM-DD-noon.md`（仅记录当前值与状态，无涨跌幅）。
+-- 修改 `data/last_values.json` 模拟变化率超阈值（如 VIX 基准 = 当前值/1.22，即 +22%）后运行 `daily_report.py`，应生成 `alerts/YYYY-MM-DD-close.md`，内容含当前值/昨日收盘/变化率/阈值/状态/建议/报告路径，格式为 frontmatter + 标题 + 字段的附录块。
+- 先跑 `snapshot_report.py` 触发午盘告警再跑 `daily_report.py`（同一 +22% 模拟）：收盘不再生成含该指数的 close 文件（午盘触发则收盘跳过，`data/alerts.log` 记当日已告警）。
+- `ALERT_THRESHOLD_VIX=30 venv/Scripts/python daily_report.py`（+22% 模拟）：VIX 不再告警（22 < 30），env 覆盖默认 20 生效。
+- 删除/移走 `data/last_values.json` 或断网时运行两入口：不崩溃、退出码 0、无告警文件（check_breach 对缺失数据返回 None）。
+- 验证后必须恢复 `data/last_values.json` 原值（备份/恢复）。
 - history.json 超过 90 条时自动滚动（仅保留最近 90 条）；同日重复运行按 date 覆盖，不产生重复条目。
 - 趋势图渲染超过 3 秒时跳过绘图，报告趋势章节改为文字说明，不中断整体流程。
 
