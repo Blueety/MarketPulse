@@ -21,6 +21,14 @@
 - **`search_keywords` 方向语义**（决策 C）：变化率 >=0 用 "surge"、<0 用 "drop"（0 归 surge）；这是 tavily 归因的输入，改词会直接影响 Hermes 搜索命中率，需同步 Hermes Prompt。
 - **`breach.indices` 字段契约是 Hermes Prompt 的输入**（决策 B）：字段名 name/current/previous/change_pct/threshold/level 按 PRD 定稿，`level` 大写 WARN/ALERT；改字段必须先改 `_breach_item` 再同步 Hermes Prompt，单测锁定两者。
 - **collect_breaches 纯计算无副作用**：不写告警文件、不改 alerts.log；context 的 `breach.triggered` 不受午盘去重影响（午盘已告警的指数，收盘 context 仍标记异动，归因针对市场异动本身）。
+### 模块 src/（五期新增：配置）
+- **conftest 隔离是测试不崩的前提**：`tests/conftest.py` 顶层 `os.environ["CONFIG_PATH"]` 指向不存在文件，collection 前生效；若无隔离，用户定制 config.json 会被 analyzer/reporter import 快照读入，classify 边界/90 天滚动/30 天窗口断言全崩。
+- **reload 接线测试必须 finally 恢复**：`TestWiring`/`TestTrendHistoryEnv` 用 `importlib.reload` 验证 config→常量后，finally 须恢复 CONFIG_PATH（或 delenv）+ 再次 reload，否则污染后续用例的模块常量。
+- **env 双重应用幂等**：import 快照一次 + 调用时 `env_float` 复核一次，同一 env 同值，幂等无害；`STATUS_THRESHOLD_*` 与 `ALERT_THRESHOLD_*` 共用 `env_float` 语义。
+- **bool 是 int 子类**：`_valid_number` 须显式 `not isinstance(v, bool)`，否则 JSON `true` 被当 `1` 通过校验。
+- **retention 裁剪只在 `append_history`**：`load_history` 不裁剪/不传参；`HISTORY_RETENTION_DAYS` 仅经 `analyzer.HISTORY_MAX` 流入 `append_history` 的 `[-HISTORY_MAX:]`。
+- **CONFIG_PATH 解析顺序**：显式 `path=` 参数 > `CONFIG_PATH` env > 项目根 `config.json`；`config.json` 入 gitignore，用户定制不入库。
+- **优先级链**：env > config.json > 内置默认；config.json 缺键补默认（深合并）、未知键忽略、叶值须非 bool 数字且 >0 否则回退默认并 `log.warning`。
 
 ## 环境相关
 

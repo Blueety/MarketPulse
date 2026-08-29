@@ -6,14 +6,16 @@
 - `snapshot_report.py`: 午盘快照独立入口（美东 12:30，仅存盘不推送）。
 - `requirements.txt`: 依赖清单（requests / matplotlib / pytest）。
 - `.env.example`: 环境说明（无需任何 API 密钥）。
+- `config.json`: 用户阈值配置（项目根，gitignore 排除；缺失回退内置默认）。
 - `reports/`: 报告输出（`YYYY-MM-DD.md` / `snapshots/YYYY-MM-DD-noon.md` / `charts/YYYY-MM-DD-trend.png`）。
 - `data/`: 数据缓存（`last_values.json` 涨跌幅基准；`history.json` 近 90 日历史）。
 - `context/`: Hermes 上下文（`YYYY-MM-DD.json`：indices + history_30d + breach + search_keywords，gitignore 排除）。
 - `src/fetcher.py`: 数据获取层（Yahoo 取数 + SYMBOLS 注册表）。
 - `src/analyzer.py`: 纯逻辑 + 持久化（分类/涨跌幅/history 读写 + check_breach/alert_threshold + CONTEXT_DIR/build_search_keywords）。
+- `src/config.py`: 配置加载层（config.json + env 覆盖 + 内置默认，白名单校验，零依赖）。
 - `src/alerter.py`: 告警层（告警文件渲染 + alerts.log 去重 + collect_breaches 纯计算 + run_alert_checks 编排）。
 - `src/reporter.py`: 报告渲染（日报/快照/趋势图）+ generate_context 上下文 JSON 生成。
-- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py）。
+- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py）。
 - `alerts/`: 告警输出（`YYYY-MM-DD-noon.md` / `YYYY-MM-DD-close.md`，gitignore 排除）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。
 - `docs/`: 项目知识和规则。

@@ -7,7 +7,7 @@
 
 ---
 
-## ✨ 四期能力一览
+## ✨ 五期能力一览
 
 | 期 | 能力 | 说明 |
 |---|---|---|
@@ -15,6 +15,7 @@
 | 二期 | 午盘快照 + 趋势图 | 美东12:30 快照 + matplotlib 三面板近30日趋势图 |
 | 三期 | 阈值告警 | 单日变化率超阈值(VIX/VXN ±20%, MOVE ±15%)独立推送告警 |
 | 四期 | AI 解读 + 异动归因 | 每日 AI 市场解读 + 异动日 tavily 搜索归因分析 |
+| 五期 | 阈值配置化 | 阈值外置到 config.json + env 覆盖，改配置不改代码 |
 
 ---
 
@@ -52,16 +53,18 @@ MarketPulse/
 ├── requirements.txt             # requests + matplotlib + pytest
 ├── .env.example                 # 无需 API 密钥
 │
-├── src/                         # 核心模块 (945 行)
+├── src/                         # 核心模块 (约 1065 行)
 │   ├── fetcher.py               #   数据获取 (Yahoo REST + 重试/退避)
 │   ├── analyzer.py              #   纯逻辑层 (状态/涨跌幅/缓存/历史/阈值/关键词)
 │   ├── alerter.py               #   告警层 (渲染/去重/编排)
+│   ├── config.py               #   配置加载 (默认/env/json 三级, 零依赖)
 │   └── reporter.py              #   报告层 (日报/快照/趋势图/context生成)
 │
-├── tests/                       # 单元测试 (86 项, 707 行)
+├── tests/                       # 单元测试 (113 项, 约 900 行)
 │   ├── test_analyzer.py         #   185 行
 │   ├── test_alerter.py          #   184 行
 │   ├── test_reporter.py         #   148 行
+│   ├── test_config.py          #   配置加载/接线测试
 │   └── test_context.py          #   190 行
 │
 ├── docs/                        # 项目文档
@@ -133,13 +136,13 @@ Yahoo Finance (^VIX / ^VXN / ^MOVE)
 ## 🧪 测试
 
 ```bash
-# 全部测试 (86 项)
+# 全部测试 (113 项)
 python -m pytest tests/ -v
 
-# 预期: 86 passed
+# 预期: 113 passed
 ```
 
-覆盖范围: 状态分类 / 涨跌幅 / 告警阈值 / 去重 / 趋势图 / context生成 / 关键词
+覆盖范围: 状态分类 / 涨跌幅 / 告警阈值 / 去重 / 趋势图 / context生成 / 关键词 / 配置加载
 
 ---
 
@@ -159,6 +162,38 @@ python -m pytest tests/ -v
 - **去重**: 午盘触发则收盘跳过同一指数
 - **推送**: 独立告警消息 (不混在日报里)
 
+## ⚙️ 配置说明（五期）
+
+阈值（状态分类、告警、趋势窗口、历史保留）已外置到 `config.json`（项目根，gitignore 排除，不入库）。
+
+**优先级链**：环境变量 > config.json > 内置默认。config.json 缺失/损坏/类型非法 → 对应键回退默认，仅记日志，不崩溃。
+
+**config.json 结构**（示例值即默认，可改）：
+
+```json
+{
+  "analysis": {
+    "vix": { "peaceful": 20, "panic": 30 },
+    "move": { "normal": 100, "tight": 130 }
+  },
+  "alert": { "vix": 20, "vxn": 20, "move": 15 },
+  "trend": { "chart_days": 30 },
+  "history": { "retention_days": 90 }
+}
+```
+
+**环境变量覆盖**（最高优先级，调用时生效，无需重启）：
+
+| env | 覆盖项 |
+| --- | --- |
+| ALERT_THRESHOLD_VIX / VXN / MOVE | 变化率告警阈值 |
+| STATUS_THRESHOLD_VIX_CALM / VIX_PANIC | VIX/VXN 平静/恐慌分界 |
+| STATUS_THRESHOLD_MOVE_CALM / MOVE_WARN | MOVE 平静/警惕分界 |
+| TREND_CHART_DAYS | 趋势图窗口（天） |
+| HISTORY_RETENTION_DAYS | 历史保留天数 |
+| CONFIG_PATH | 自定义配置文件路径 |
+
+> 改配置对下次运行生效（cron 每进程全新启动）。告警阈值 env 非法/非正自动回退默认。
 ---
 
 ## 🤖 AI 解读 + 异动归因
@@ -179,7 +214,7 @@ python -m pytest tests/ -v
 | AI | Hermes Agent + MiMo-V2.5 + Tavily Search |
 | 调度 | Hermes Cron |
 | 推送 | QQ 私聊 |
-| 测试 | 86 项, 全绿 |
+| 测试 | 113 项, 全绿 |
 
 ---
 

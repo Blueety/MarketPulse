@@ -26,6 +26,7 @@ Python 项目。每个交易日有两个运行点：
 | 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表 |
 | 纯逻辑 + 持久化 | `src/analyzer.py` | 状态分类、涨跌幅、格式化、路径常量（含 CONTEXT_DIR）、last_values 缓存、history 读写（90 天滚动、原子写、损坏容错）、`build_search_keywords` |
 | 报告渲染 | `src/reporter.py` | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 3s 线程限时）、落盘、context 上下文 JSON（`generate_context`，原子写） |
+| 配置加载 | `src/config.py` | 阈值配置：config.json + 环境变量覆盖 + 内置默认三级（DEFAULTS/ENV_MAP/env_float/load_config），白名单校验，零依赖 |
 | 报告输出 | `reports/YYYY-MM-DD.md`、`reports/snapshots/YYYY-MM-DD-noon.md`、`reports/charts/YYYY-MM-DD-trend.png` | 生成的 Markdown / 图片（美东日期） |
 | 上下文输出 | `context/YYYY-MM-DD.json` | Hermes 解读/归因输入（indices + history_30d + breach + search_keywords，运行时生成，gitignore 排除） |
 | 告警输出 | `alerts/YYYY-MM-DD-noon.md`、`alerts/YYYY-MM-DD-close.md`、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
@@ -75,6 +76,9 @@ Yahoo Finance ──> snapshot_report.py ──> reports/snapshots/YYYY-MM-DD-no
 | context 生成时机 | `generate_context` 在 `append_history` 之后、`save_last_values` 之后调用（history_30d 含当日）；临时文件 + `os.replace` 原子写；仅收盘入口生成，snapshot 不动 | 含当日的 30 日趋势对 Hermes 参考更完整；原子写避免读到半截 JSON（决策 D/F） | 2026-09-01 |
 | context 容错 | `generate_context` 不吞异常，`daily_report.py` 调用方 try/except 兜底仅记日志，退出码恒 0 | 失败路径可见可测；context 失败不影响日报主流程（决策 E） | 2026-09-01 |
 | AI 解读/归因 | Hermes 侧 Prompt + tavily 搜索为交付配置项（非仓库文件）；Python 侧不引入 LLM/搜索 SDK | PRD 明确约束（决策 G） | 2026-09-01 |
+| 阈值配置化 | 五期将硬编码阈值外置到 config.json + env 覆盖；优先级链 env > config.json > 内置默认，config 缺失/非法回退默认不崩溃 | 改配置不改代码；为加股票/新指标铺配置基建（设计 A-G 已确认） | 2026-09-01 |
+| 配置加载机制 | import 时快照 + 调用时 env 复核；模块常量名保留（既有测试 monkeypatch 路径不变）；env_float 共享助手收敛 alert_threshold 内联逻辑 | 与三期行为一致；86 条测试零迁移；env 双重应用幂等无害 | 2026-09-01 |
+| 测试隔离 | tests/conftest.py 顶层强制 CONFIG_PATH 指向不存在文件，collection 前生效 | 用户定制 config.json 后跑 pytest 不破坏默认断言（PRD 风险表"测试混用生产配置"正解） | 2026-09-01 |
 
 ## 约束
 
@@ -82,10 +86,7 @@ Yahoo Finance ──> snapshot_report.py ──> reports/snapshots/YYYY-MM-DD-no
 - 必须保持的兼容性: `python daily_report.py` / `python snapshot_report.py` 全程可手动运行。
 - 安全边界: 无需任何 API 密钥，数据全部来自 Yahoo Finance 公开接口。
 - 依赖边界: 仅 `requests` / `matplotlib` / `pytest`，不引入其他依赖。
-- 四期起合计 ≤ ~840 行（三期 738 + context 增量 94，实际 832）；context 增量
-  （analyzer 关键词 + alerter 导出 + reporter 生成与导入 + 入口接入）≤ ~95 行。
-- 四期起合计 ≤ ~810 行（三期 750 + context 增量约 60）；context 增量
-  （analyzer 关键词 + alerter 导出 + reporter 生成 + 入口接入）≤ ~80 行。
+- 五期起：阈值全部外置 `config.json`，`src/config.py`（约 122 行）+ `analyzer.py`/`reporter.py` 接线（约 +5 行）；`tests/test_config.py`（约 180 行）。优先级链 env > config.json > 内置默认，零新增依赖；`config.json` 入 gitignore（用户定制不入库）。
 
 ## 目录级规则
 

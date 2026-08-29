@@ -18,11 +18,12 @@ from .analyzer import (
     fmt_value,
     load_history,
 )
+from .config import load_config
 from .fetcher import SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
-TREND_DAYS = 30       # 趋势图窗口（天）
+TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天），来自 config（import 时快照）
 CHART_TIMEOUT = 3     # 绘图限时（秒），超时跳过绘图
 
 

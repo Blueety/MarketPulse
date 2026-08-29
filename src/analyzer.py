@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .config import env_float, load_config
 from .fetcher import SYMBOLS
 
 log = logging.getLogger("marketpulse")
@@ -28,20 +29,23 @@ ALERTS_DIR = BASE_DIR / "alerts"
 ALERTS_LOG = DATA_DIR / "alerts.log"
 CONTEXT_DIR = BASE_DIR / "context"   # 四期：Hermes 上下文 JSON（generate_context 产出）
 
-# 状态阈值：VIX/VXN 共用 20/30；MOVE 量级不同，用 100/130（已确认）。
-VIX_CALM = 20.0
-VIX_WARN = 30.0
-MOVE_CALM = 100.0
-MOVE_WARN = 130.0
+# 五期：阈值来自 load_config()（import 时快照；env > config.json > 内置默认，设计 A）。
+_CFG = load_config()
 
-ALERT_THRESHOLDS = {"VIX": 20.0, "VXN": 20.0, "MOVE": 15.0}  # 变化率百分比，env ALERT_THRESHOLD_<SYM> 覆盖
+# 状态阈值：VIX/VXN 共用 20/30；MOVE 量级不同，用 100/130。调用时经 STATUS_THRESHOLD_* env 复核。
+VIX_CALM = float(_CFG["analysis"]["vix"]["peaceful"])
+VIX_WARN = float(_CFG["analysis"]["vix"]["panic"])
+MOVE_CALM = float(_CFG["analysis"]["move"]["normal"])
+MOVE_WARN = float(_CFG["analysis"]["move"]["tight"])
+
+ALERT_THRESHOLDS = {sym: float(_CFG["alert"][sym.lower()]) for sym in SYMBOLS}  # 变化率百分比，调用时 env 复核
 ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单测断言）
     "平静": "波动率仍处低位，建议保持现有策略，关注后续变化。",
     "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
     "恐慌": "波动率处于高位，建议以避险为主，防范系统性风险。",
 }
 
-HISTORY_MAX = 90      # 历史数据滚动窗口（天）
+HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
 
 EASTERN_TZ = ZoneInfo("America/New_York")
 
@@ -53,19 +57,27 @@ def get_us_eastern_date() -> str:
 
 
 def classify_vix(value: float) -> tuple[str, str]:
-    """按 VIX 阈值分类：<20 平静 / 20-30 警惕 / >=30 恐慌。VXN 复用。"""
-    if value < VIX_CALM:
+    """按 VIX 阈值分类：<20 平静 / 20-30 警惕 / >=30 恐慌（默认值，可配置）。VXN 复用。
+
+    阈值 import 时快照，调用时经 STATUS_THRESHOLD_VIX_* env 复核（设计 A）。"""
+    calm = env_float("STATUS_THRESHOLD_VIX_CALM", VIX_CALM)
+    warn = env_float("STATUS_THRESHOLD_VIX_PANIC", VIX_WARN)
+    if value < calm:
         return "平静", "市场情绪平稳，波动率处于低位，风险偏好较高。"
-    if value < VIX_WARN:
+    if value < warn:
         return "警惕", "市场情绪偏谨慎，波动率上升，注意短期回调风险。"
     return "恐慌", "市场情绪恐慌，波动率处于高位，警惕大幅波动与系统性风险。"
 
 
 def classify_move(value: float) -> tuple[str, str]:
-    """按 MOVE 阈值分类：<100 平静 / 100-130 警惕 / >=130 恐慌。"""
-    if value < MOVE_CALM:
+    """按 MOVE 阈值分类：<100 平静 / 100-130 警惕 / >=130 恐慌（默认值，可配置）。
+
+    阈值 import 时快照，调用时经 STATUS_THRESHOLD_MOVE_* env 复核（设计 A）。"""
+    calm = env_float("STATUS_THRESHOLD_MOVE_CALM", MOVE_CALM)
+    warn = env_float("STATUS_THRESHOLD_MOVE_WARN", MOVE_WARN)
+    if value < calm:
         return "平静", "债市波动平稳，利率预期稳定。"
-    if value < MOVE_WARN:
+    if value < warn:
         return "警惕", "债市波动上升，利率预期分歧加大，注意久期风险。"
     return "恐慌", "债市波动剧烈，利率预期高度不确定，警惕债券抛售与流动性风险。"
 
@@ -85,18 +97,7 @@ def compute_changes(current: dict, last_values: dict) -> dict:
 
 def alert_threshold(symbol: str) -> float:
     """返回指数告警阈值（变化率 %）；env ALERT_THRESHOLD_<SYM> 覆盖默认，非法/非正回退默认。"""
-    default = ALERT_THRESHOLDS[symbol]
-    raw = os.environ.get(f"ALERT_THRESHOLD_{symbol}")
-    if raw is None:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        value = -1.0
-    if value <= 0:
-        log.warning("告警阈值环境变量 ALERT_THRESHOLD_%s 非法或非正（%r），回退默认 %.1f", symbol, raw, default)
-        return default
-    return value
+    return env_float(f"ALERT_THRESHOLD_{symbol}", ALERT_THRESHOLDS[symbol])
 
 
 def check_breach(symbol: str, current: float | None, last: float | None) -> dict | None:
