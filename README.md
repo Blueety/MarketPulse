@@ -12,7 +12,14 @@ venv/Scripts/activate
 venv/Scripts/python daily_report.py
 ```
 
-运行后在 `reports/YYYY-MM-DD.md` 生成日报，并在 `data/last_values.json` 缓存当日数据（次日作涨跌幅基准）。
+运行 `daily_report.py` 后在 `reports/YYYY-MM-DD.md` 生成日报（含 `## 📉 近30日趋势` 章节引用 `reports/charts/YYYY-MM-DD-trend.png`），并在 `data/last_values.json` 缓存当日数据（次日作涨跌幅基准）、向 `data/history.json` 追加当日记录（90 天滚动）。
+
+```bash
+# 午盘快照（仅取数 → 快照 → 落盘，不推送；美东 12:30 由 Hermes cron 触发）
+venv/Scripts/python snapshot_report.py
+```
+
+运行 `snapshot_report.py` 后在 `reports/snapshots/YYYY-MM-DD-noon.md` 生成午盘快照。
 
 ## 环境变量
 
@@ -30,17 +37,19 @@ venv/Scripts/python daily_report.py
 
 ## 依赖
 
-见 `requirements.txt`（requests / pytest）。
+见 `requirements.txt`（requests / matplotlib / pytest）。
 
 ## 目录结构
 
 ```
-daily_report.py          # 主脚本（所有逻辑）
+daily_report.py          # 收盘日报编排入口
+snapshot_report.py       # 午盘快照入口（美东 12:30）
+src/                     # 模块化实现（fetcher / analyzer / reporter）
 requirements.txt         # 依赖清单
 .env.example             # 说明：无需任何密钥
-reports/                 # 日报输出（YYYY-MM-DD.md）
-data/                    # 当日数据缓存（last_values.json）
-tests/                   # 单元测试（预留）
+reports/                 # 报告输出（YYYY-MM-DD.md / snapshots/ / charts/）
+data/                    # 数据（last_values.json 基准；history.json 近90日）
+tests/                   # 单元测试（test_analyzer / test_reporter）
 docs/                    # 项目知识（architecture / commands / pitfalls）
 tasks/                   # 任务交接（prd / plan / journal）
 ```
