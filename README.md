@@ -16,13 +16,9 @@ venv/Scripts/python daily_report.py
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env` 并填入你的 FRED API Key：
+无需任何 API 密钥，数据全部来自 Yahoo Finance 公开接口（`^VIX` / `^VXN` / `^MOVE`），开箱即用。
 
-```
-FRED_API_KEY=your_fred_api_key_here
-```
-
-> `.env` 已被 `.gitignore` 排除，不会进 git。
+> 脚本不读取 `.env`（已移除 dotenv 依赖），`.env` 若存在也可忽略。
 
 ## 数据源
 
@@ -30,18 +26,18 @@ FRED_API_KEY=your_fred_api_key_here
 |---|---|---|
 | VIX | Yahoo Finance (`^VIX`) | 标普500波动率，市场恐慌指标 |
 | VXN | Yahoo Finance (`^VXN`) | 纳斯达克100波动率 |
-| MOVE | FRED API (`MOVE`) | 美国国债波动率，需 FRED API Key |
+| MOVE | Yahoo Finance (`^MOVE`) | 美国国债波动率（Yahoo 标名有误，但数值真实，与 Investing.com 一致） |
 
 ## 依赖
 
-见 `requirements.txt`（yfinance / requests / python-dotenv / pytest）。
+见 `requirements.txt`（requests / pytest）。
 
 ## 目录结构
 
 ```
 daily_report.py          # 主脚本（所有逻辑）
 requirements.txt         # 依赖清单
-.env.example / .env      # FRED_API_KEY 配置
+.env.example             # 说明：无需任何密钥
 reports/                 # 日报输出（YYYY-MM-DD.md）
 data/                    # 当日数据缓存（last_values.json）
 tests/                   # 单元测试（预留）

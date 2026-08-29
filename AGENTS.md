@@ -4,7 +4,7 @@
 
 - `daily_report.py`: 主脚本（单文件，全部逻辑，待实现）。
 - `requirements.txt`: 依赖清单（锁定版本）。
-- `.env.example` / `.env`: 环境变量模板与配置（`FRED_API_KEY`）。
+- `.env.example`: 环境说明（无需任何 API 密钥）。
 - `reports/`: 报告输出（`YYYY-MM-DD.md`）。
 - `data/`: 数据缓存（`last_values.json`）。
 - `tests/`: 测试（预留）。
