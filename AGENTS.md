@@ -1,0 +1,51 @@
+# Agent Instructions — MarketPulse
+
+## Project Map
+
+- `daily_report.py`: 主脚本（单文件，全部逻辑，待实现）。
+- `requirements.txt`: 依赖清单（锁定版本）。
+- `.env.example` / `.env`: 环境变量模板与配置（`FRED_API_KEY`）。
+- `reports/`: 报告输出（`YYYY-MM-DD.md`）。
+- `data/`: 数据缓存（`last_values.json`）。
+- `tests/`: 测试（预留）。
+- `docs/`: 项目知识和规则。
+- `tasks/`: 任务目录和交接记录。
+- `skills/`: 可复用流程。
+- `src/`: 脚手架默认目录，本项目不使用（单文件脚本位于根目录）。
+
+## Required Reading
+
+- 修改前先读 `docs/architecture.md`。
+- 改行为前先读 `docs/commands.md`。
+- 复杂任务先读当前 `tasks/` 下的任务文件。
+
+## Commands（基于实际环境；所有命令在 venv 内执行）
+
+- Activate (Windows): `venv/Scripts/activate`
+- Install: `venv/Scripts/pip install -r requirements.txt`
+- Run: `venv/Scripts/python daily_report.py`
+- Test: `venv/Scripts/python -m pytest tests/ -v`
+- Freeze: `venv/Scripts/pip freeze`
+- Lint / Typecheck / Build: 无（纯 Python 脚本项目，暂未配置）
+
+## Working Rules
+
+- 复杂任务先只读分析，不要直接改。
+- 每次制定完计划后，将计划保存到 `tasks/<日期>-<简述>/plan.md`（日期用当天 `YYYY-MM-DD`，简述用简短英文描述，如 `2026-08-29-marketpulse/plan.md`）。
+  - 计划应包含：目标、涉及文件、实施步骤、验证命令。
+- 保持 diff 最小，不重构无关代码。
+- 不引入新依赖，除非先说明理由并等待确认。
+- 不修改 `.env`、生产配置、生成文件。
+- 需求不清楚时先问，不要猜。
+- 每完成一个逻辑步骤后运行验证命令，不接受"应该可以"——必须实际运行验证命令。
+- 如有失败，先解释原因再修复，不要绕过问题。
+- 验证通过后，运行 `git diff` 检查改动范围。
+- 任务完成后，提取可复用的规则（不是泛化建议），追加到 `docs/pitfalls.md` 或 `AGENTS.md`。
+- 每次任务完成后，将日志保存到 `tasks/<日期>-<简述>/journal.md`，内容包括：目标、改动文件清单、验证结果、遇到的问题、下次注意什么。这样下次会话接手时能快速了解上下文。
+
+## Done Means
+
+- 验收标准已满足。
+- 相关测试/checks 已运行或清楚标注未运行。
+- diff 已摘要。
+- 风险和后续工作已列出。
