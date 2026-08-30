@@ -197,12 +197,19 @@
       const dateIndexMap = {};
       tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
 
-      // 按交易日重新映射数据点（每个系列只画自己的数据）
+      // 按交易日重新映射数据点（每个系列只画自己的数据，缺失日期用前值连线）
       const datasets = series.map(function (s) {
         const pts = [];
+        let lastVal = null;
         (s.values || []).forEach(function (v, i) {
-          if (v != null && dateIndexMap[history.dates[i]] !== undefined) {
-            pts.push({ x: history.dates[i], y: v });
+          const date = history.dates[i];
+          if (dateIndexMap[date] === undefined) return;
+          if (v != null) {
+            lastVal = v;
+            pts.push({ x: date, y: v });
+          } else if (lastVal != null) {
+            // 缺失日期用前值填充（连线不断）
+            pts.push({ x: date, y: lastVal });
           }
         });
         return {
