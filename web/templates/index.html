@@ -188,7 +188,7 @@
         var dt = new Date(d);
         var dayOfWeek = dt.getDay(); // 0=周日, 6=周六
         var isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-        var hasData = series.some(function (s) { return s.values && s.values[i] != null; });
+        var hasData = series.every(function (s) { return s.values && s.values[i] != null; });
         if (!isWeekend && hasData) {
           dateIndexMap[i] = tradingDates.length;
           tradingDates.push(d);
