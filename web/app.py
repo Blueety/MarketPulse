@@ -106,7 +106,11 @@ def _build_history_payload() -> dict:
     series = []
     for sym in SYMBOLS:  # SYMBOLS 字典保序：GSPC/IXIC/SH/SZ/CYB/VIX/VXN/MOVE/GLD/BTC
         key = sym.lower()
-        values, change_7d = _normalize_series([r.get(key) for r in records])
+        raw = [r.get(key) for r in records]
+        # GLD 价格乘以10，显示接近实际金价（美元/盎司）
+        if key == "gld":
+            raw = [v * 10 if v is not None else v for v in raw]
+        values, change_7d = _normalize_series(raw)
         series.append({
             "key": key,
             "label": SYMBOLS[sym]["label"],
