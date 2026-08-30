@@ -17,6 +17,7 @@ from src.analyzer import (
     build_statuses,
     build_summary,
     compute_changes,
+    compute_correlation,
     get_us_eastern_date,
     load_history,
     load_last_values,
@@ -45,6 +46,7 @@ def main() -> int:
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
     history = load_history()
+    correlations = compute_correlation(history)   # 十二期：相关性分析（报告/context 同一份数值）
     statuses = build_statuses(values, errors, last_values, history)
     summary = build_summary(values, statuses, errors)
 
@@ -74,7 +76,7 @@ def main() -> int:
     report = render_report(date, values, changes, statuses, summary, has_history, trend_chart,
                            sector_heat=sector_heat, us_sector_heat=us_sector_heat,
                            us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart,
-                           alts_trend_chart=alts_trend_chart)
+                           alts_trend_chart=alts_trend_chart, correlations=correlations)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 
@@ -95,7 +97,7 @@ def main() -> int:
         log.warning("所有数据源获取失败，本次不更新缓存")
 
     try:  # 上下文生成（决策 E）：供 Hermes 常规解读/异动归因，失败仅记日志不影响日报
-        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat)
+        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat, correlations=correlations)
         log.info("context 已生成: context/%s.json", date)
     except Exception as exc:
         log.warning("context 生成失败，不影响日报: %s", exc)

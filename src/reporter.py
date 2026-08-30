@@ -11,6 +11,7 @@ from .alerter import collect_breaches
 from .analyzer import (
     CHARTS_DIR,
     CONTEXT_DIR,
+    CORRELATION_SIGNIFICANT,
     REPORTS_DIR,
     SNAPSHOTS_DIR,
     build_search_keywords,
@@ -38,7 +39,7 @@ MARKET_CHART_TITLES = {
     "cn": "A-Share Major Indices — 30-Day Trend",
     "alt": "Gold & Bitcoin — 30-Day Trend",
 }
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
@@ -70,10 +71,8 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
         a_share_rows.append(
             f"| {meta['label']} | {close} "
             f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
-        )
+    )
     a_share_table = "\n".join(a_share_rows)
-
-    # 八期：A 股领涨 / 领跌板块 Top 5（按涨跌幅降序 / 升序，不设阈值；空数据显示「数据暂缺」）
     gainers, losers = sector_heat or ([], [])
     sector_table = _sector_table_md(gainers)
     loser_table = _sector_table_md(losers)
@@ -166,6 +165,21 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 {alts_table}{alts_trend_block}
 """
 
+    # 十二期：相关性分析章节（默认 None → 省略，存量调用零影响）
+    corr_block = ""
+    if correlations is not None:
+        corr_rows = "\n".join(_correlation_row_md(item) for item in correlations)
+        corr_block = f"""
+---
+
+## 📊 相关性分析
+
+| 指数对 | 相关系数 | 有效样本 |
+| :--- | :--- | :--- |
+{corr_rows}
+
+> 窗口：近 30 个交易日；每对需 ≥10 个有效样本；|r|>0.5 视为显著相关。
+"""
     body = f"""# 📊 全市场情绪日报
 
 **日期**：{date}（美东时间）
@@ -208,7 +222,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 状态 |
 | :--- | :--- | :--- | :--- |
-{vol_table}
+{vol_table}{corr_block}
 """
     if trend_chart:
         body += f"""
@@ -247,6 +261,25 @@ def _sector_table_md(rows: list[dict]) -> str:
     if not lines:
         lines.append("| 数据暂缺 | — | — | — |")
     return "\n".join(lines)
+
+
+def _correlation_row_md(item: dict) -> str:
+    """拼相关性分析表格单行（带颜色 span）。r=None → 灰「数据不足」。"""
+    r = item["r"]
+    n = item["n"]
+    if r is None:
+        color = "#999999"
+        val = "数据不足"
+    elif r > CORRELATION_SIGNIFICANT:
+        color = "#d1495b"
+        val = f"{r:+.2f}"
+    elif r < -CORRELATION_SIGNIFICANT:
+        color = "#1a9e6c"
+        val = f"{r:+.2f}"
+    else:
+        color = "#999999"
+        val = f"{r:+.2f}"
+    return f"| {item['pair']} | <span style=\"color:{color}\">**{val}**</span> | {n} |"
 
 def render_trend_chart(history: list[dict], date: str):
     """渲染近 30 日趋势图到 reports/charts/YYYY-MM-DD-trend.png，返回 Path 或 None。
@@ -615,7 +648,7 @@ def _breach_item(alert: dict) -> dict:
         "level": alert["level"],
     }
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict, sector_heat=None, us_sector_heat=None) -> "Path":
+                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
@@ -658,6 +691,11 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "losers": (us_sector_heat or ([], []))[1],
         },
         "search_keywords": build_search_keywords(date, breaches, sector_heat),
+        "correlation": [
+            {"a": c["a"], "b": c["b"], "pair": c["pair"], "r": c["r"], "n": c["n"]}
+            for c in (correlations or [])
+            if c.get("r") is not None and abs(c["r"]) > CORRELATION_SIGNIFICANT
+        ],
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"{date}.json"

@@ -88,6 +88,12 @@
 - **alerts 空目录容错**：`alerts/` 目录缺失 / 空 / 含坏文件（无 frontmatter）→ `/api/alerts` 返回 `[]` 或跳过坏文件，绝不 500；告警文件名含日期，排序按文件名倒序取最近 10 条。
 - **只读边界**：web 进程绝不写 data/alerts/context；`/api/latest` 涨跌幅由 history 相邻记录自算，不读 `last_values.json`（它是次日告警基准，读它违反只读语义）。
 - **Chart.js CDN 降级**：图表库走 jsdelivr CDN，图区 `<script onerror>` 置 `window.__chartFailed`；`renderCharts` 在 `window.__chartFailed || !window.Chart` 时显示「图表加载失败」降级文案，页面其余模块（HTML 直渲）不受影响；无外网环境不白屏。
+## 模块 src/（十二期：相关性分析）
+
+- **相关性输入用收益率，非原始价格**：`compute_correlation` 从 history 收盘价相邻日推导日收益率（(p[t]-p[t-1])/p[t-1]），缺口行（None 或 prev 为 None）断开收益链不参与；窗口取 history 最后 `CORRELATION_DAYS=30` 行（与趋势图同语义，非自然日）。切勿对 history 提前 append 当日记录后才计算（report 阶段 history 未含当日，与趋势图一致）。
+- **Pearson 边界**：每对有效样本 <`MIN_POINTS=10` 或任一序列零方差（常量收益率）→ r=None；分母除以零已钳制；`math.atan` 越界（浮点误差导致 >1）→ 钳制 [-1,1]；结果 `round(2)` 保留两位小数。r 排序：|r|>0.5 显著；渲染颜色 r>0.5 红 / r<-0.5 绿 / 否则灰，复用既有着色（#d1495b / #1a9e6c / #999999）。
+- **context 与报告分离**：`generate_context` 仅写 |r|>0.5 显著对（决策 A）；报告表展示全部 5 对固定组合（含「数据不足」占位），两者消费同一份 `compute_correlation` 结果。`correlation` 键字段 a/b/pair/r/n；变更需同步 Hermes Prompt 契约（决策 D）。
+
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

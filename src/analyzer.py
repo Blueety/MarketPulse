@@ -51,6 +51,17 @@ STREAK_DAYS = int(_CFG["trend"]["streak_days"])
 STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理。"
 
 HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
+# 十二期：相关性分析（PRD 定稿 5 组关键对；窗口/最少样本/显著阈值均为 PRD 固定值，不配置化）
+CORRELATION_PAIRS = [   # (指数A, 指数B) —— 顺序即报告与 context 输出顺序
+    ("VIX", "GSPC"),    # 恐慌 ↔ 标普500（负相关越强，美股对恐慌越敏感）
+    ("VIX", "SH"),      # 恐慌 ↔ 上证（VIX 对 A 股传导强度）
+    ("GSPC", "SH"),     # 标普500 ↔ 上证（中美股市联动）
+    ("IXIC", "CYB"),    # 纳指 ↔ 创业板（中美科技股同步性）
+    ("MOVE", "VIX"),    # 债市恐慌 ↔ 股市恐慌
+]
+CORRELATION_DAYS = int(_CFG["trend"]["chart_days"])   # 窗口 30 交易日，与趋势图同一配置源
+CORRELATION_MIN_POINTS = 10                            # 至少 10 个有效数据点
+CORRELATION_SIGNIFICANT = 0.5                          # |r| 显著阈值（颜色编码与 context 写入共用）
 
 EASTERN_TZ = ZoneInfo("America/New_York")
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")  # 七期：A 股快照按北京时间归档
@@ -223,6 +234,80 @@ def compute_streaks(values: dict, last_values: dict | None = None,
                 break
         streaks[sym] = count if last_sign > 0 else -count
     return streaks
+
+
+def compute_correlation(history, pairs=None, window=None) -> list[dict]:
+    """计算指定指数对的 Pearson 相关系数（纯 Python，零依赖）。
+
+    输入为每日涨跌幅（收益率%），非原始价格：由 history 原始收盘价逐对推导相邻日收益率，
+    再按日期对齐取两序列均有效的点。窗口 = 最后 window 行（默认 CORRELATION_DAYS=30）。
+    每对有效点数 >= CORRELATION_MIN_POINTS(10) 才计算，否则 r=None。
+    常量序列（零方差）→ r=None；浮点误差钳制到 [-1,1]，保留两位小数。
+    返回 [{a, b, pair, r, n}]，顺序 = pairs 顺序。纯计算、可单测。
+    """
+    pairs = pairs if pairs is not None else CORRELATION_PAIRS
+    window = window if window is not None else CORRELATION_DAYS
+    rows = _corr_window(history, window)
+    results = []
+    for a, b in pairs:
+        ra = _returns(rows, a.lower())
+        rb = _returns(rows, b.lower())
+        common = sorted(set(ra) & set(rb))
+        xs = [ra[d] for d in common]
+        ys = [rb[d] for d in common]
+        n = len(xs)
+        r = _pearson(xs, ys) if n >= CORRELATION_MIN_POINTS else None
+        results.append({
+            "a": a,
+            "b": b,
+            "pair": f"{SYMBOLS[a]['label']} ↔ {SYMBOLS[b]['label']}",
+            "r": r,
+            "n": n,
+        })
+    return results
+
+
+def _corr_window(history, window):
+    """取最后 window 行（按 date 升序），与趋势图 rows[-TREND_DAYS:] 同一语义。"""
+    rows = [r for r in (history or []) if isinstance(r, dict) and r.get("date")]
+    rows.sort(key=lambda r: r.get("date", ""))
+    return rows[-window:]
+
+
+def _returns(rows, key):
+    """由原始收盘价推导逐日收益率（涨跌幅），按 date 索引。
+
+    仅当相邻两行（前一日、当日）该键均为有效数值时计算；
+    遇缺口（None）断开链，避免多日累计收益混入。返回 {date: return}。
+    """
+    rets = {}
+    prev = None
+    for r in rows:
+        v = r.get(key)
+        if isinstance(v, (int, float)):
+            if prev is not None and prev != 0:
+                rets[r["date"]] = (v - prev) / prev
+            prev = v
+        else:
+            prev = None
+    return rets
+
+
+def _pearson(xs, ys):
+    """Pearson 相关系数（零依赖）。样本 <2 或任一序列零方差 → None。"""
+    n = len(xs)
+    if n < 2:
+        return None
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    vx = sum((x - mx) ** 2 for x in xs)
+    vy = sum((y - my) ** 2 for y in ys)
+    if vx == 0 or vy == 0:
+        return None
+    r = cov / (vx ** 0.5 * vy ** 0.5)
+    r = max(-1.0, min(1.0, r))
+    return round(r, 2)
 
 
 def trend_label(streak: int, has_data: bool) -> str:

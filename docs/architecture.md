@@ -23,11 +23,11 @@ Python 项目。每个交易日有多个运行点：
 | 编排入口 | `snapshot_report.py` | 盘中快照流程编排：按 `--market`/`--time` 取市场子集 → 分类 → 渲染单板块快照 → 落盘 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`（只读缓存作告警基准，不算涨跌幅、不写 history、不推送）；4 个 Hermes cron 各传一组参数 |
 | 告警 | `src/alerter.py` | 告警文件渲染（附录块格式）、alerts.log 去重状态读写、`collect_breaches` 纯计算导出、`run_alert_checks` 编排（逐指数容错） |
 | 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表；八期新增 fetch_sector_heat 概念板块热度 Top5（AkShare/新浪源，线程限时 10s，失败返回 []） |
-| 纯逻辑 + 持久化 | `src/analyzer.py` | 状态分类、涨跌幅、格式化、路径常量（含 CONTEXT_DIR）、last_values 缓存、history 读写（90 天滚动、原子写、损坏容错）、`build_search_keywords` |
-| 报告渲染 | `src/reporter.py` | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 15s 线程限时）、分市场趋势图（us 2×1 / cn 3×1 双图，5s 限时）、落盘、context 上下文 JSON（`generate_context`，原子写） |
+| 纯逻辑 + 持久化 | src/analyzer.py | 状态分类、涨跌幅、格式化、路径常量（含 CONTEXT_DIR）、last_values 缓存、history 读写（90 天滚动、原子写、损坏容错）、build_search_keywords、compute_correlation（指数对 Pearson 相关性，纯 Python 零依赖，输入为收益率） |
+| 报告渲染 | src/reporter.py | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 15s 线程限时）、分市场趋势图（us 2×1 / cn 3×1 双图，5s 限时）、落盘、相关性分析章节与 context correlation 键（generate_context，原子写） |
 | 配置加载 | `src/config.py` | 阈值配置：config.json + 环境变量覆盖 + 内置默认三级（DEFAULTS/ENV_MAP/env_float/load_config），白名单校验，零依赖 |
 | 报告输出 | `reports/YYYY-MM-DD.md`、`reports/snapshots/YYYY-MM-DD-{market}-{time}.md`、`reports/charts/YYYY-MM-DD{-trend,-us-trend,-cn-trend}.png` | 生成的 Markdown / 图片（日报趋势图统一用美东日期） |
-| 上下文输出 | `context/YYYY-MM-DD.json` | Hermes 解读/归因输入（indices 8 键 + history_30d 含 cyb + breach + sector_heat（板块热度 Top5）+ search_keywords，运行时生成，gitignore 排除） |
+| 上下文输出 | context/YYYY-MM-DD.json | Hermes 解读/归因输入（indices 8 键 + history_30d 含 cyb + breach + sector_heat（板块热度 Top5）+ us_sector_heat + search_keywords + correlation（显著相关对 |r|>0.5），运行时生成，gitignore 排除） |
 | 告警输出 | `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
 | 数据持久化 | `data/last_values.json`（涨跌幅基准）、`data/history.json`（近 90 日历史） | 运行时生成，gitignore 排除 |
 | Web 看板 | `web/app.py`（FastAPI 应用 + 4 端点）、`web/templates/index.html`、`web/static/style.css`、`web/__init__.py` | 只读看板：解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染单页（市场概览表 / 4 组独立 y 轴趋势图 / A 股板块热度 Top5 / 告警记录），提供 `/api/history` `/api/latest` `/api/alerts` 三个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
@@ -71,7 +71,7 @@ Yahoo Finance (^MOVE) ───────┘          │
 | 告警文件 | `alerts/YYYY-MM-DD-{type}.md`（type = noon / close），多指数各占一个附录块（frontmatter + 标题 + 字段） | PRD 固定文件名 {type}；多指数同日触发不冲突（设计 D） | 2026-09-01 |
 | 告警容错 | run_alert_checks 内逐指数 try/except，调用方再包一层 try/except，仅记日志 | 告警逻辑失败不影响日报生成，退出码恒 0（决策 H） | 2026-09-01 |
 | context 计算单一来源 | alerter 新增纯计算导出 `collect_breaches(values, last_values)`（遍历 check_breach，不写文件/不改 alerts.log，幂等）；`run_alert_checks` 重构为复用它（去重/写文件/标记逻辑原样） | breach 判断单一事实来源，context 生成不产生副作用；既有 23 条 alerter 测试行为等价锁定（决策 A） | 2026-09-01 |
-| context 契约 | `context/YYYY-MM-DD.json` 六键：date / indices（value/change_pct/status）/ history_30d（dates + gspc/ixic/sh/sz/vix/vxn/move 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ sector_heat（板块热度 Top5：name/change/turnover/top_stock）/ search_keywords | PRD 字段表定稿，Hermes Prompt 按此编写；`_breach_item` 纯映射单测锁定（决策 B）；八期新增 sector_heat 键（决策 H） | 2026-08-30 |
+| context 契约 | context/YYYY-MM-DD.json 八键：date / indices（value/change_pct/status）/ history_30d（dates + gspc/ixic/sh/sz/vix/vxn/move/cyb/gld/btc 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ sector_heat（板块热度 Top5：name/change/turnover/top_stock）/ us_sector_heat / search_keywords / correlation（显著相关对：a/b/pair/r/n，|r|>0.5 才写入） | PRD 字段表定稿，Hermes Prompt 按此编写；_breach_item 纯映射单测锁定（决策 B）；八期新增 sector_heat 键（决策 H）；十一期新增 us_sector_heat 键；十二期新增 correlation 键（仅 |r|>0.5 显著对） |
 | 搜索关键词 | `build_search_keywords(date, breaches)` 方向感知：异动指数变化率 >=0 用 "surge"、<0 用 "drop"，加 market volatility / economic data 定向词，异动日 3-5 个；常规日 1 个 "market summary {date}" | 方向感知直接服务归因搜索相关性（VIX 下跌时搜 "VIX drop" 才能命中下跌原因）（决策 C） | 2026-09-01 |
 | context 生成时机 | `generate_context` 在 `append_history` 之后、`save_last_values` 之后调用（history_30d 含当日）；临时文件 + `os.replace` 原子写；仅收盘入口生成，snapshot 不动 | 含当日的 30 日趋势对 Hermes 参考更完整；原子写避免读到半截 JSON（决策 D/F） | 2026-09-01 |
 | context 容错 | `generate_context` 不吞异常，`daily_report.py` 调用方 try/except 兜底仅记日志，退出码恒 0 | 失败路径可见可测；context 失败不影响日报主流程（决策 E） | 2026-09-01 |
