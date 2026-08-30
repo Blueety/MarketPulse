@@ -181,26 +181,28 @@
     function renderLineChart(canvas, history, series) {
       const ctx = canvas.getContext("2d");
 
-      // 过滤非交易日：只保留工作日且至少有一个系列有数据的日期
-      const tradingDates = [];
-      const dateIndexMap = {};
-      history.dates.forEach(function (d, i) {
-        var dt = new Date(d);
-        var dayOfWeek = dt.getDay(); // 0=周日, 6=周六
-        var isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-        var hasData = series.every(function (s) { return s.values && s.values[i] != null; });
-        if (!isWeekend && hasData) {
-          dateIndexMap[i] = tradingDates.length;
-          tradingDates.push(d);
-        }
+      // 收集该组所有系列的日期（并集），每个系列只画自己的数据点
+      const allDates = new Set();
+      series.forEach(function (s) {
+        (s.values || []).forEach(function (v, i) {
+          if (v != null) allDates.add(history.dates[i]);
+        });
       });
+      // 过滤周末
+      const tradingDates = Array.from(allDates).filter(function (d) {
+        var dt = new Date(d);
+        return dt.getDay() !== 0 && dt.getDay() !== 6;
+      }).sort();
+      // 建立日期到索引的映射
+      const dateIndexMap = {};
+      tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
 
-      // 按交易日重新映射数据点
+      // 按交易日重新映射数据点（每个系列只画自己的数据）
       const datasets = series.map(function (s) {
         const pts = [];
         (s.values || []).forEach(function (v, i) {
-          if (v != null && dateIndexMap[i] !== undefined) {
-            pts.push({ x: tradingDates[dateIndexMap[i]], y: v });
+          if (v != null && dateIndexMap[history.dates[i]] !== undefined) {
+            pts.push({ x: history.dates[i], y: v });
           }
         });
         return {
