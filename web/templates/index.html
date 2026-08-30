@@ -266,7 +266,7 @@
       });
       new Chart(canvas, {
         type: "bar",
-        data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderRadius: 4, barThickness: 18 }] },
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderRadius: 4, barThickness: 32 }] },
         options: {
           indexAxis: "y",
           responsive: true,
@@ -274,6 +274,7 @@
           plugins: {
             legend: { display: false },
             tooltip: {
+              enabled: true,
               backgroundColor: "rgba(22, 27, 34, 0.95)",
               titleColor: "#e6edf3",
               bodyColor: "#e6edf3",
