@@ -49,6 +49,7 @@
 - 验证后必须恢复 `data/last_values.json` 原值并清理验证期临时文件（context/ 为生成物可保留当日真实状态）。
 - **阈值配置化（五期）**：`config.json` 缺失/损坏 → 回退内置默认、退出码 0、不崩溃；`ALERT_THRESHOLD_*` / `STATUS_THRESHOLD_*` / `TREND_CHART_DAYS` / `HISTORY_RETENTION_DAYS` 经 env 覆盖生效（调用时复核）；改 `config.json` 的 vix 为 22/35 后运行 `daily_report.py`，VIX 状态标签按新阈值输出（验证后恢复 20/30）；pytest 在 conftest 隔离下恒用默认，不读用户 config.json。
 - **盘中快照扩展（七期）**：4 个 Hermes cron（A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00，北京时间）分别传 `--market`/`--time`；`fetch_all(market)` 仅取对应子集（a-share=SH/SZ/CYB，us=GSPC/IXIC，不含波动率）；`render_snapshot` 单板块（a-share 只含 SH/SZ/CYB、us 只含 GSPC/IXIC，无波动率章节），A 股快照按北京时间归档、us 按美东日期；创业板 `399006.SZ` 入 SYMBOLS（8 键，阈值 `alert.cyb=5`），CYB 告警经 `ALERT_THRESHOLD_CYB` env 覆盖；快照存 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`；单测 `tests/test_phase7.py` 覆盖符号/市场日期/市场过滤取数/单板块渲染/suffix/创业板告警/复合名防碰撞/跨市场去重/入口编排（共 170 passed）。
+- **A 股板块热度（八期）**：`daily_report.py` 日报「A 股大盘」下方新增「🔥 A 股热点板块 Top 5」表（板块/涨跌幅/成交额/领涨股，涨跌幅带正负号、成交额 "X.X亿"，按涨跌幅降序 Top5 不设阈值）；`context/YYYY-MM-DD.json` 新增 `sector_heat` 键（5 条 {name,change,turnover,top_stock}）；`search_keywords` 注入板块名（`"{板块名} surge/drop {date}"`，方向感知，不触发独立告警）；板块取数失败/超时（10s 线程限时）/缺必需列均降级为「数据暂缺」、退出码 0；单测 `tests/test_phase8.py`（16 条：取数成功/异常/缺列/超时、表格渲染/空态/负值、context 键、关键词注入/方向、入口透传）全绿，全量 `pytest` 186 passed。
 
 ## 已知问题
 

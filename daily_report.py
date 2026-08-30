@@ -22,7 +22,7 @@ from src.analyzer import (
     load_last_values,
     save_last_values,
 )
-from src.fetcher import SYMBOLS, fetch_all
+from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat
 from src.reporter import generate_context, render_report, render_trend_chart, save_report
 
 logging.basicConfig(
@@ -39,6 +39,7 @@ def main() -> int:
     log.info("MarketPulse 开始生成 %s 日报", date)
 
     values, errors = fetch_all()
+    sector_heat = fetch_sector_heat()  # 八期：板块热度，失败/超时返回 [] 不影响主流程
     last_values = load_last_values()
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
@@ -48,7 +49,7 @@ def main() -> int:
     chart_path = render_trend_chart(load_history(), date)
     trend_chart = f"./charts/{chart_path.name}" if chart_path else None
 
-    report = render_report(date, values, changes, statuses, summary, has_history, trend_chart)
+    report = render_report(date, values, changes, statuses, summary, has_history, trend_chart, sector_heat=sector_heat)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 
@@ -69,7 +70,7 @@ def main() -> int:
         log.warning("所有数据源获取失败，本次不更新缓存")
 
     try:  # 上下文生成（决策 E）：供 Hermes 常规解读/异动归因，失败仅记日志不影响日报
-        generate_context(date, values, changes, statuses, last_values)
+        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat)
         log.info("context 已生成: context/%s.json", date)
     except Exception as exc:
         log.warning("context 生成失败，不影响日报: %s", exc)

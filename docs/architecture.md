@@ -22,12 +22,12 @@ Python 项目。每个交易日有多个运行点：
 | 编排入口 | `daily_report.py` | 收盘流程编排：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 追加历史 → 写缓存 → 生成 context |
 | 编排入口 | `snapshot_report.py` | 盘中快照流程编排：按 `--market`/`--time` 取市场子集 → 分类 → 渲染单板块快照 → 落盘 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`（只读缓存作告警基准，不算涨跌幅、不写 history、不推送）；4 个 Hermes cron 各传一组参数 |
 | 告警 | `src/alerter.py` | 告警文件渲染（附录块格式）、alerts.log 去重状态读写、`collect_breaches` 纯计算导出、`run_alert_checks` 编排（逐指数容错） |
-| 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表 |
+| 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表；八期新增 fetch_sector_heat 概念板块热度 Top5（AkShare/新浪源，线程限时 10s，失败返回 []） |
 | 纯逻辑 + 持久化 | `src/analyzer.py` | 状态分类、涨跌幅、格式化、路径常量（含 CONTEXT_DIR）、last_values 缓存、history 读写（90 天滚动、原子写、损坏容错）、`build_search_keywords` |
 | 报告渲染 | `src/reporter.py` | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 3s 线程限时）、落盘、context 上下文 JSON（`generate_context`，原子写） |
 | 配置加载 | `src/config.py` | 阈值配置：config.json + 环境变量覆盖 + 内置默认三级（DEFAULTS/ENV_MAP/env_float/load_config），白名单校验，零依赖 |
 | 报告输出 | `reports/YYYY-MM-DD.md`、`reports/snapshots/YYYY-MM-DD-{market}-{time}.md`、`reports/charts/YYYY-MM-DD-trend.png` | 生成的 Markdown / 图片（美东日期用于 us、北京时间用于 a-share） |
-| 上下文输出 | `context/YYYY-MM-DD.json` | Hermes 解读/归因输入（indices 8 键 + history_30d 含 cyb + breach + search_keywords，运行时生成，gitignore 排除） |
+| 上下文输出 | `context/YYYY-MM-DD.json` | Hermes 解读/归因输入（indices 8 键 + history_30d 含 cyb + breach + sector_heat（板块热度 Top5）+ search_keywords，运行时生成，gitignore 排除） |
 | 告警输出 | `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
 | 数据持久化 | `data/last_values.json`（涨跌幅基准）、`data/history.json`（近 90 日历史） | 运行时生成，gitignore 排除 |
 | 测试 | `tests/test_analyzer.py`、`tests/test_reporter.py`、`tests/test_alerter.py`、`tests/test_context.py` | 纯逻辑 / 渲染 / 趋势图 / 历史滚动 / 告警 / context 单元测试 |
@@ -70,13 +70,14 @@ Yahoo Finance (^MOVE) ───────┘          │
 | 告警文件 | `alerts/YYYY-MM-DD-{type}.md`（type = noon / close），多指数各占一个附录块（frontmatter + 标题 + 字段） | PRD 固定文件名 {type}；多指数同日触发不冲突（设计 D） | 2026-09-01 |
 | 告警容错 | run_alert_checks 内逐指数 try/except，调用方再包一层 try/except，仅记日志 | 告警逻辑失败不影响日报生成，退出码恒 0（决策 H） | 2026-09-01 |
 | context 计算单一来源 | alerter 新增纯计算导出 `collect_breaches(values, last_values)`（遍历 check_breach，不写文件/不改 alerts.log，幂等）；`run_alert_checks` 重构为复用它（去重/写文件/标记逻辑原样） | breach 判断单一事实来源，context 生成不产生副作用；既有 23 条 alerter 测试行为等价锁定（决策 A） | 2026-09-01 |
-| context 契约 | `context/YYYY-MM-DD.json` 五键：date / indices（value/change_pct/status）/ history_30d（dates + gspc/ixic/sh/sz/vix/vxn/move 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ search_keywords | PRD 字段表定稿，Hermes Prompt 按此编写；`_breach_item` 纯映射单测锁定（决策 B） | 2026-09-01 |
+| context 契约 | `context/YYYY-MM-DD.json` 六键：date / indices（value/change_pct/status）/ history_30d（dates + gspc/ixic/sh/sz/vix/vxn/move 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ sector_heat（板块热度 Top5：name/change/turnover/top_stock）/ search_keywords | PRD 字段表定稿，Hermes Prompt 按此编写；`_breach_item` 纯映射单测锁定（决策 B）；八期新增 sector_heat 键（决策 H） | 2026-08-30 |
 | 搜索关键词 | `build_search_keywords(date, breaches)` 方向感知：异动指数变化率 >=0 用 "surge"、<0 用 "drop"，加 market volatility / economic data 定向词，异动日 3-5 个；常规日 1 个 "market summary {date}" | 方向感知直接服务归因搜索相关性（VIX 下跌时搜 "VIX drop" 才能命中下跌原因）（决策 C） | 2026-09-01 |
 | context 生成时机 | `generate_context` 在 `append_history` 之后、`save_last_values` 之后调用（history_30d 含当日）；临时文件 + `os.replace` 原子写；仅收盘入口生成，snapshot 不动 | 含当日的 30 日趋势对 Hermes 参考更完整；原子写避免读到半截 JSON（决策 D/F） | 2026-09-01 |
 | context 容错 | `generate_context` 不吞异常，`daily_report.py` 调用方 try/except 兜底仅记日志，退出码恒 0 | 失败路径可见可测；context 失败不影响日报主流程（决策 E） | 2026-09-01 |
 | AI 解读/归因 | Hermes 侧 Prompt + tavily 搜索为交付配置项（非仓库文件）；Python 侧不引入 LLM/搜索 SDK | PRD 明确约束（决策 G） | 2026-09-01 |
 | 阈值配置化 | 五期将硬编码阈值外置到 config.json + env 覆盖；优先级链 env > config.json > 内置默认，config 缺失/非法回退默认不崩溃 | 改配置不改代码；为加股票/新指标铺配置基建（设计 A-G 已确认） | 2026-09-01 |
 | 盘中快照（七期） | 快照扩展为 4 个市场时点：A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00（北京时间）；`--market a-share` 取 SH/SZ/CYB、`--market us` 取 GSPC/IXIC（不含波动率）；创业板 `399006.SZ` 入 SYMBOLS（8 键，阈值 ±5%）；快照存 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`，告警文件复合名 `alerts/YYYY-MM-DD-{market}-{time}.md` 防与日报碰撞；A 股快照按北京时间归档（设计 A-G） | 盘中快照原仅美东 12:30 三板块；现按市场/时段分档，波动率仅保留在日报，快照单板块；旧 `YYYY-MM-DD-noon.md` 命名退役 | 2026-08-30 |
+| A 股板块热度（八期） | 日报新增「🔥 A 股热点板块 Top 5」：AkShare `stock_sector_spot(indicator="概念")` 取概念板块，按涨跌幅降序取 Top5（不设阈值）；`fetch_sector_heat` 线程限时 10s（新浪源无 timeout），超时/异常/缺必需列返回 [] 不中断日报；板块名注入 `search_keywords`（方向感知 surge/drop，不触发独立告警）；context 新增 `sector_heat` 键 | 丰富市场情绪感知；Top5 方案避免阈值主观设定；新浪接口挂起由线程限时兜底；板块热度非核心，失败降级为「数据暂缺」 | 2026-08-30 |
 | 测试隔离 | tests/conftest.py 顶层强制 CONFIG_PATH 指向不存在文件，collection 前生效 | 用户定制 config.json 后跑 pytest 不破坏默认断言（PRD 风险表"测试混用生产配置"正解） | 2026-09-01 |
 
 ## 约束

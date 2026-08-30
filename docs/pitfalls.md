@@ -66,6 +66,13 @@
 - **创业板 `399006.SZ` ≠ `399001.SZ`**：SYMBOLS 新增 `CYB`（创业板指），ticker 是 `399006.SZ`（深证成指是 `399001.SZ`，六期B 已用），勿混淆；阈值 `alert.cyb=5`，env `ALERT_THRESHOLD_CYB` 覆盖。
 - **跨市场告警去重独立**：`alerts.log` 按 symbol 去重，A 股标记（SH）不阻塞美股（GSPC）；同一 symbol 午盘触发则收盘跳过。验证跨市场用 `_mark_alerted(date, {"SH"})` 后跑 us 入口。
 - **入口编排 monkeypatch 点**：`snapshot_report.py` 整体编排，测试须 `monkeypatch.setattr(snap, "fetch_all"/"render_snapshot"/"save_snapshot"/"run_alert_checks", ...)` 才能验证参数透传。
+
+## 模块 src/（八期：A 股板块热度）
+
+- **AkShare 概念板块列名以实测为准**：`ak.stock_sector_spot(indicator="概念")` 实测列名为 `板块`/`涨跌幅`/`总成交额`/`股票名称`（PRD 记载的 `总成交额(元)` 实际为 `总成交额`，单位元）；解析前校验必需列存在，缺列视为失败返回 []，防止 akshare 版本升级改列名导致崩溃。
+- **新浪源无 timeout**：akshare 内部 `requests.get` 对概念板块接口无 timeout 参数，网络异常可无限挂起；`fetch_sector_heat` 用 daemon 线程 + `join(SECTOR_TIMEOUT=10)` 限时（复用 render_trend_chart 的 Windows 无 SIGALRM 模式），超时/异常/缺列一律返回 []，不中断日报主流程；10s 余量覆盖 akshare 冷启动（实测 ~2-3s）。
+- **板块热度不设阈值**：八期改为 Top5 按涨跌幅降序直接展示，不引入 `SECTOR_ALERT_PCT`；`build_search_keywords` 把全部 Top5 板块名按方向（change>=0 surge / <0 drop）注入 `search_keywords`（格式 `"{板块名} surge/drop {date}"`），不触发独立告警；无板块（取数失败/缺列）时回落既有 "market summary {date}"。
+- **板块取数不参与 SYMBOLS 循环**：`fetch_sector_heat` 是独立单请求，在 `fetch_all()` 之后调用，失败不影响 8 指数主流程；板块数据不写 history/缓存，无持久化残留。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

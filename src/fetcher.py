@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from time import sleep
 from urllib.parse import quote
 
@@ -39,6 +40,7 @@ MARKETS = {
 }
 
 TIMEOUT = 15          # 单次请求超时（秒）
+SECTOR_TIMEOUT = 10   # 板块热度获取限时（秒）；新浪接口无 timeout，超时返回 [] 不中断日报
 RETRIES = 1           # 失败重试次数（共尝试 2 次）
 
 _SESSION = requests.Session()
@@ -122,3 +124,48 @@ def fetch_all(market: str | None = None) -> tuple[dict, dict]:
         else:
             log.info("%s 收盘价: %.2f", sym, values[sym])
     return values, errors
+
+
+def fetch_sector_heat(top_n: int = 5) -> list[dict]:
+    """从 AkShare 获取概念板块热度 Top N（按涨跌幅降序）。
+
+    数据源为新浪（money.finance.sina.com.cn），akshare 内部 requests 无 timeout，
+    故用 daemon 线程 + join(SECTOR_TIMEOUT) 限时；超时 / 异常 / 缺必需列均返回 []，
+    不中断日报主流程。返回 [{name, change, turnover, top_stock}]，
+    turnover 为「X.X亿」（总成交额[元] ÷ 1e8 保留 1 位）。
+    """
+    required_cols = ["板块", "涨跌幅", "总成交额", "股票名称"]
+    holder: dict = {}
+
+    def _worker() -> None:
+        try:
+            import akshare as ak
+            df = ak.stock_sector_spot(indicator="概念")
+            if df is None or len(df) == 0:
+                raise ValueError("AkShare 概念板块返回空数据")
+            for col in required_cols:
+                if col not in df.columns:
+                    raise KeyError(f"概念板块数据缺少必需列: {col}")
+            df = df.sort_values("涨跌幅", ascending=False).head(top_n)
+            rows = []
+            for _, r in df.iterrows():
+                change = float(r["涨跌幅"])
+                turnover_yuan = float(r["总成交额"])
+                rows.append({
+                    "name": str(r["板块"]),
+                    "change": round(change, 2),
+                    "turnover": f"{turnover_yuan / 1e8:.1f}亿",
+                    "top_stock": str(r["股票名称"]),
+                })
+            holder["rows"] = rows
+        except Exception as exc:
+            log.warning("板块热度获取失败: %s", exc)
+            holder["rows"] = []
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(SECTOR_TIMEOUT)
+    if t.is_alive():
+        log.warning("板块热度获取超时（>%ds），跳过", SECTOR_TIMEOUT)
+        return []
+    return holder.get("rows", [])

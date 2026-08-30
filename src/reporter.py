@@ -27,7 +27,7 @@ TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天
 CHART_TIMEOUT = 15     # 绘图限时（秒），超时跳过绘图
 
 
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
@@ -58,6 +58,17 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
             f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
         )
     a_share_table = "\n".join(a_share_rows)
+
+    # 八期：A 股热点板块 Top 5（按涨跌幅降序，不设阈值；空数据显示「数据暂缺」）
+    sector_rows = []
+    for s in (sector_heat or []):
+        sign = "+" if s["change"] >= 0 else ""
+        sector_rows.append(
+            f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
+        )
+    if not sector_rows:
+        sector_rows.append("| 数据暂缺 | — | — | — |")
+    sector_table = "\n".join(sector_rows)
 
     vol_rows = []
     for sym in vol_syms:
@@ -94,6 +105,14 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
 {a_share_table}
+
+---
+
+## 🔥 A 股热点板块 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领涨股 |
+| :--- | :--- | :--- | :--- |
+{sector_table}
 
 ---
 
@@ -339,7 +358,7 @@ def _breach_item(alert: dict) -> dict:
 
 
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict) -> "Path":
+                     last_values: dict, sector_heat=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
@@ -371,7 +390,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "triggered": bool(breaches),
             "indices": [_breach_item(a) for a in breaches],
         },
-        "search_keywords": build_search_keywords(date, breaches),
+        "sector_heat": sector_heat or [],
+        "search_keywords": build_search_keywords(date, breaches, sector_heat),
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"{date}.json"

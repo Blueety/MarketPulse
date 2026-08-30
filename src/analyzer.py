@@ -143,19 +143,25 @@ def check_breach(symbol: str, current: float | None, last: float | None) -> dict
     }
 
 
-def build_search_keywords(date: str, breaches: list[dict]) -> list[str]:
+def build_search_keywords(date: str, breaches: list[dict], sector_heat=None) -> list[str]:
     """按异动状态生成 tavily 搜索关键词（方向感知）。
 
-    异动日：每个异动指数一个方向词（变化率 >=0 用 surge / <0 用 drop）+ 两个定向词，
-    合计 3-5 个；常规日仅 1 个 "market summary {date}"。"""
-    if not breaches:
-        return [f"market summary {date}"]
-    words = [
+    八期：板块热度（Top5，按涨跌幅排序，不设阈值）全量注入方向词，与指数异动词同构
+    （变化率 >=0 用 surge / <0 用 drop）；异动日额外补两个定向词。
+    无任何异动且板块缺失时仅 1 个 "market summary {date}"。"""
+    breach_words = [
         f"{b['symbol']} {'surge' if b['change'] >= 0 else 'drop'} {date}"
         for b in breaches
     ]
-    words.append(f"market volatility {date}")
-    words.append(f"economic data {date}")
+    sector_words = [
+        f"{s['name']} {'surge' if s['change'] >= 0 else 'drop'} {date}"
+        for s in (sector_heat or [])
+    ]
+    words = breach_words + sector_words
+    if not words:
+        return [f"market summary {date}"]
+    if breaches:
+        words += [f"market volatility {date}", f"economic data {date}"]
     return words[:5]
 
 
