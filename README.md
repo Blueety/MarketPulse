@@ -1,6 +1,6 @@
 # 📊 MarketPulse — 美股 + A 股大盘波动率监控系统
 
-> 每天自动获取 美股（标普500/纳斯达克/VIX/VXN/MOVE）+ A 股（上证/深证）大盘与波动率指数，生成带 AI 解读的日报，通过 QQ 推送。
+> 每天自动获取 美股（标普500/纳斯达克/VIX/VXN/MOVE）+ A 股（上证/深证/创业板）大盘与波动率指数，生成带 AI 解读的日报，通过 QQ 推送。
 > 异常波动时主动告警 + 自动归因分析。
 
 ![Architecture](docs/architecture-diagram.html)
@@ -16,8 +16,7 @@
 | 三期 | 阈值告警 | 单日变化率超阈值(VIX/VXN ±20%, MOVE ±15%)独立推送告警 |
 | 四期 | AI 解读 + 异动归因 | 每日 AI 市场解读 + 异动日 tavily 搜索归因分析 |
 | 六期A | Hermes 上下文 + 状态重构 | context/JSON（indices + history_30d + breach + search_keywords）；状态/涨跌幅/趋势纯逻辑化 |
-| 六期B | A 股大盘监控 | SYMBOLS 扩 7 键（加 000001.SS/399001.SZ）；日报三板块（美股/A股/波动率）；SH/SZ 告警阈值 ±4% |
-
+| 七期 | 盘中快照扩展 | SYMBOLS 扩 8 键（加 399006.SZ 创业板指）；快照 4 市场时点分档（--market/--time），单板块存盘 `snapshots/YYYY-MM-DD-{market}-{time}.md`；A 股按北京时间归档；告警文件复合名防碰撞 |
 ---
 
 ## 🚀 快速开始
@@ -36,7 +35,7 @@ pip install -r requirements.txt
 python daily_report.py
 
 # 5. 运行午盘快照
-python snapshot_report.py
+python snapshot_report.py --market a-share --time midday   # 或 --market us --time open；裸跑 = 美股午盘
 
 # 6. 运行测试
 python -m pytest tests/ -v
@@ -49,7 +48,7 @@ python -m pytest tests/ -v
 ```
 MarketPulse/
 ├── daily_report.py              # 收盘日报编排入口 (81 行)
-├── snapshot_report.py           # 午盘快照入口 (46 行)
+├── snapshot_report.py           # 盘中快照入口 (--market/--time 分档, 单板块存盘)
 ├── seed_history.py              # 半年历史回填工具 (113 行)
 ├── requirements.txt             # requests + matplotlib + pytest
 ├── .env.example                 # 无需 API 密钥
@@ -60,7 +59,7 @@ MarketPulse/
 │   ├── alerter.py               #   告警层 (渲染/去重/编排)
 │   ├── config.py               #   配置加载 (默认/env/json 三级, 零依赖)
 │   └── reporter.py              #   报告层 (日报/快照/趋势图/context生成)
-├── tests/                       # 单元测试 (147 项, 约 1050 行)
+├── tests/                       # 单元测试 (170 项, 约 1250 行)
 │   ├── test_analyzer.py         #   185 行
 │   ├── test_alerter.py          #   184 行
 │   ├── test_reporter.py         #   148 行
@@ -89,7 +88,7 @@ MarketPulse/
 ## 🔄 数据流
 
 ```
-    Yahoo Finance (^GSPC / ^IXIC / 000001.SS / 399001.SZ / ^VIX / ^VXN / ^MOVE)
+    Yahoo Finance (^GSPC / ^IXIC / 000001.SS / 399001.SZ / 399006.SZ / ^VIX / ^VXN / ^MOVE)
         │  fetcher.py (重试/退避/单源容错)
         ▼
    analyzer.py ──────────────────────────────────────
@@ -99,9 +98,9 @@ MarketPulse/
    │                        + charts/趋势图         │
    │                        + context/JSON          │
    │                                               │
-   ├──► snapshot_report.py ──► snapshots/noon.md   │
+   ├──► snapshot_report.py ──► snapshots/YYYY-MM-DD-{market}-{time}.md
    │                                               │
-   └──► alerter.py ──► alerts/{type}.md            │
+   └──► alerter.py ──► alerts/YYYY-MM-DD-{type}.md
                       + alerts.log (去重)           │
                                 │                   │
                                 ▼                   │
@@ -119,8 +118,16 @@ MarketPulse/
 | 任务 | 时间 | 内容 | 推送 |
 |------|------|------|------|
 | 📉 收盘日报+AI解读 | 每天早 8:00 (北京) | 跑脚本→读context→AI解读→异动归因 | 日报+趋势图+AI+归因 |
-| 🕛 午盘快照 | 每天 00:30 (北京) = 12:30 (美东) | 跑快照→检测告警 | 快照+告警(如有) |
+    └──► alerter.py ──► alerts/YYYY-MM-DD-{type}.md
 
+### 盘中快照 cron（不推送，仅存盘）
+
+| 任务 | 时间（北京时间） | 命令 | 市场子集 |
+|------|------|------|------|
+| 🇨🇳 A 股午盘 | 11:30 | `python snapshot_report.py --market a-share --time midday` | SH / SZ / CYB |
+| 🇨🇳 A 股收盘 | 15:00 | `python snapshot_report.py --market a-share --time close` | SH / SZ / CYB |
+| 🌏 美股开盘 | 21:30 | `python snapshot_report.py --market us --time open` | GSPC / IXIC |
+| 🌏 美股午盘 | 00:00 | `python snapshot_report.py --market us --time noon`（裸跑默认） | GSPC / IXIC |
 ---
 
 ## 📊 监控指数
@@ -130,7 +137,7 @@ MarketPulse/
 | **GSPC** (标普500) | 美股大盘基准 | 大盘趋势（连涨/跌、上升/下跌趋势）|
 | **IXIC** (纳斯达克) | 美股科技大盘 | 同 GSPC |
 | **SH** (上证指数, 000001.SS) | A 股大盘 | 同 GSPC；A 股休市/数据缺失特判为「休市」|
-| **SZ** (深证成指, 399001.SZ) | A 股大盘 | 同 SH |
+| **CYB** (创业板指, 399006.SZ) | A 股成长股大盘 | 同 SH；阈值 ±5%（alert.cyb）|
 | **VIX** (恐慌指数) | 标普500 波动率，衡量市场恐慌程度 | <20 平静 / 20-30 警惕 / ≥30 恐慌 |
 | **VXN** (科技波动) | 纳斯达克100 波动率 | 同 VIX |
 | **MOVE** (债市波动) | 美国国债波动率 | <100 平静 / 100-130 警惕 / ≥130 恐慌 |
@@ -140,10 +147,11 @@ MarketPulse/
 ## 🧪 测试
 
 ```bash
-# 全部测试 (147 项)
+# 全部测试 (170 项)
 python -m pytest tests/ -v
 
-# 预期: 147 passed
+# 预期: 170 passed
+
 ```
 
 覆盖范围: 状态分类 / 涨跌幅 / 告警阈值 / 去重 / 趋势图 / context生成 / 关键词 / 配置加载
@@ -161,7 +169,7 @@ python -m pytest tests/ -v
 
 ## 🚨 告警机制
 
-- **触发条件**: 单日变化率超阈值（VIX/VXN ±20%、MOVE ±15%、GSPC/IXIC/SH/SZ ±4%，大盘恒 WARN 级「异动」）
+- **触发条件**: 单日变化率超阈值（VIX/VXN ±20%、MOVE ±15%、GSPC ±4.5%、IXIC ±4%、SH/SZ ±4%、CYB ±5%，大盘恒 WARN 级「异动」）
 - **阈值覆盖**: 支持环境变量 `ALERT_THRESHOLD_VIX=25` / `ALERT_THRESHOLD_SH=5`
 - **推送**: 独立告警消息 (不混在日报里)
 
@@ -179,7 +187,7 @@ python -m pytest tests/ -v
     "vix": { "peaceful": 20, "panic": 30 },
     "move": { "normal": 100, "tight": 130 }
   },
-  "alert": { "vix": 20, "vxn": 20, "move": 15, "gspc": 4, "ixic": 4, "sh": 4, "sz": 4 },
+  "alert": { "vix": 20, "vxn": 20, "move": 15, "gspc": 4.5, "ixic": 4, "sh": 4, "sz": 4, "cyb": 5 },
   "trend": { "chart_days": 30 },
   "history": { "retention_days": 90 }
 }
@@ -189,7 +197,7 @@ python -m pytest tests/ -v
 
 | env | 覆盖项 |
 | --- | --- |
-| ALERT_THRESHOLD_VIX / VXN / MOVE / GSPC / IXIC / SH / SZ | 变化率告警阈值 |
+| ALERT_THRESHOLD_VIX / VXN / MOVE / GSPC / IXIC / SH / SZ / CYB | 变化率告警阈值 |
 | STATUS_THRESHOLD_VIX_CALM / VIX_PANIC | VIX/VXN 平静/恐慌分界 |
 | STATUS_THRESHOLD_MOVE_CALM / MOVE_WARN | MOVE 平静/警惕分界 |
 | TREND_CHART_DAYS | 趋势图窗口（天） |
@@ -212,7 +220,7 @@ python -m pytest tests/ -v
 | 项 | 值 |
 |---|---|
 | 语言 | Python 3.14 (venv) |
-| 测试 | 147 项, 全绿 |
+| 测试 | 170 项, 全绿 |
 | 数据源 | Yahoo Finance (公开 REST, 无需 API key) |
 | AI | Hermes Agent + MiMo-V2.5 + Tavily Search |
 | 调度 | Hermes Cron |

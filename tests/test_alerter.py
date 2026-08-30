@@ -8,7 +8,7 @@ from src import analyzer as an
 
 @pytest.fixture
 def clean_thresholds(monkeypatch):
-    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ", "CYB"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
 
 

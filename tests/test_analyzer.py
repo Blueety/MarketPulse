@@ -138,7 +138,7 @@ class TestHistory:
         self._set_file(tmp_path, monkeypatch)
         an.append_history({"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5})
         data = an.load_history()
-        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5, "gspc": None, "ixic": None, "sh": None, "sz": None}
+        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5, "gspc": None, "ixic": None, "sh": None, "sz": None, "cyb": None}
 
     def test_same_date_overrides(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)

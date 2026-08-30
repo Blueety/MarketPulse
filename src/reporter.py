@@ -219,35 +219,34 @@ def render_trend_chart(history: list[dict], date: str):
     return result.get("path")
 
 
-def render_snapshot(date, values, statuses) -> str:
-    """渲染午盘快照：美股大盘 + 波动率指数两板块（仅当前值 + 趋势/状态，不算涨跌幅）。"""
-    us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
-    a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
-    vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
-
-    us_stock_rows = [
-        f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
-        for s in us_stock_syms
-    ]
-    a_share_rows = [
-        f"| {SYMBOLS[s]['label']} | {'休市' if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
-        for s in a_share_syms
-    ]
-    vol_rows = [
-        f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
-        for s in vol_syms
-    ]
-    us_stock_table = "\n".join(us_stock_rows)
-    a_share_table = "\n".join(a_share_rows)
-    vol_table = "\n".join(vol_rows)
-
-    if values["VIX"] is not None:
-        vix_label, vix_desc = statuses["VIX"]
-        state_line = f"**VIX 当前值：{fmt_value(values['VIX'])} → 状态：{vix_label}**\n\n> {vix_desc}"
-    else:
-        state_line = "**VIX 当前值：获取失败 → 状态：无法判断**\n\n> VIX 数据获取失败，无法判断整体市场情绪。"
-
-    return f"""# 🕛 午盘快照
+def render_snapshot(date, values, statuses, market=None, time="noon") -> str:
+    """渲染盘中快照。market=None 保持原三板块午盘快照（美东 12:30）逐字不变；
+    market="a-share"/"us" 走单板块渲染（仅大盘表 + 日期/类型行，无 VIX 状态行，设计 D）。"""
+    if market is None:
+        us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
+        a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
+        vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+        us_stock_rows = [
+            f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
+            for s in us_stock_syms
+        ]
+        a_share_rows = [
+            f"| {SYMBOLS[s]['label']} | {'休市' if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
+            for s in a_share_syms
+        ]
+        vol_rows = [
+            f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
+            for s in vol_syms
+        ]
+        us_stock_table = "\n".join(us_stock_rows)
+        a_share_table = "\n".join(a_share_rows)
+        vol_table = "\n".join(vol_rows)
+        if values["VIX"] is not None:
+            vix_label, vix_desc = statuses["VIX"]
+            state_line = f"**VIX 当前值：{fmt_value(values['VIX'])} → 状态：{vix_label}**\n\n> {vix_desc}"
+        else:
+            state_line = "**VIX 当前值：获取失败 → 状态：无法判断**\n\n> VIX 数据获取失败，无法判断整体市场情绪。"
+        return f"""# 🕛 午盘快照
 
 **日期**：{date}（美东时间）
 **类型**：盘中快照（美东 12:30）
@@ -284,18 +283,45 @@ def render_snapshot(date, values, statuses) -> str:
 
 ---
 *本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
+    # 市场化单板块渲染（设计 A：us 仅大盘，不含波动率；设计 B：日期按市场时区）
+    tz_label = "北京时间" if market == "a-share" else "美东时间"
+    time_label = {"open": "开盘", "midday": "午盘", "close": "收盘", "noon": "午盘"}.get(time, "盘中")
+    if market == "a-share":
+        section_title = "🇨🇳 A 股大盘"
+        syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
+    else:
+        section_title = "🌏 美股大盘"
+        syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
+    rows = [
+        f"| {SYMBOLS[s]['label']} | {'休市' if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
+        for s in syms
+    ]
+    table = "\n".join(rows)
+    return f"""# 🕛 盘中快照
+
+**日期**：{date}（{tz_label}）
+**类型**：盘中快照（{time_label}）
+
+---
+
+## {section_title}
+
+| 指数 | 当前值 | 趋势 |
+| :--- | :--- | :--- |
+{table}
+
+---
+*本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
 def save_report(date: str, content: str) -> "Path":
     """写日报 reports/YYYY-MM-DD.md，返回路径。"""
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     path = REPORTS_DIR / f"{date}.md"
     path.write_text(content, encoding="utf-8")
     return path
-
-
-def save_snapshot(date: str, content: str) -> "Path":
-    """写午盘快照 reports/snapshots/YYYY-MM-DD-noon.md，返回路径。"""
+def save_snapshot(date: str, content: str, suffix: str = "noon") -> "Path":
+    """写盘中快照 reports/snapshots/YYYY-MM-DD-{suffix}.md，返回路径（设计 G：suffix 默认 noon，cron 传 {market}-{time}）。"""
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = SNAPSHOTS_DIR / f"{date}-noon.md"
+    path = SNAPSHOTS_DIR / f"{date}-{suffix}.md"
     path.write_text(content, encoding="utf-8")
     return path
 
@@ -339,6 +365,7 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "ixic": [r["ixic"] for r in history],
             "sh": [r["sh"] for r in history],
             "sz": [r["sz"] for r in history],
+            "cyb": [r["cyb"] for r in history],
         },
         "breach": {
             "triggered": bool(breaches),

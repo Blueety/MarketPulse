@@ -15,9 +15,8 @@ from src import reporter as rep
 
 @pytest.fixture
 def clean_thresholds(monkeypatch):
-    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ", "CYB"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
-
 
 @pytest.fixture
 def tmp_context(monkeypatch, tmp_path, clean_thresholds):
@@ -112,9 +111,9 @@ class TestGenerateContext:
         an.append_history({"date": date, "vix": 21.0, "vxn": 19.0, "move": 78.0})
 
     def test_non_breach_day(self, tmp_context):
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
                   "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         self._seed_history("2026-08-29")
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
@@ -132,9 +131,9 @@ class TestGenerateContext:
         assert data["breach"] == {"triggered": False, "indices": []}
         assert data["search_keywords"] == ["market summary 2026-08-29"]
 
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
                   "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -155,9 +154,10 @@ class TestGenerateContext:
         assert kw[-2:] == ["market volatility 2026-08-29", "economic data 2026-08-29"]
 
     def test_all_sources_failed(self, tmp_context):
-        values = {"GSPC": None, "IXIC": None, "SH": None, "SZ": None,
+        values = {"GSPC": None, "IXIC": None, "SH": None, "SZ": None, "CYB": None,
                   "VIX": None, "VXN": None, "MOVE": None}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
+                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["indices"]["VIX"]["value"] is None
@@ -168,9 +168,9 @@ class TestGenerateContext:
 
     def test_idempotent_no_alert_side_effects(self, tmp_context):
         # 连续两次运行：context 覆盖、JSON 有效；collect_breaches 纯计算不产告警文件/alerts.log
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
                   "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         rep.generate_context("2026-08-29", **self._inputs(values, last))
         rep.generate_context("2026-08-29", **self._inputs(values, last))
@@ -181,9 +181,9 @@ class TestGenerateContext:
         assert not (tmp_context / "context" / "2026-08-29.json.tmp").exists()  # 原子写已清理
 
     def test_history_window_30(self, tmp_context):
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
                   "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         from datetime import date, timedelta
 
@@ -197,5 +197,5 @@ class TestGenerateContext:
         )
         assert len(data["history_30d"]["dates"]) == 30  # 窗口截断 35 → 30
         assert data["history_30d"]["dates"][0] == (start + timedelta(days=5)).isoformat()
-        for key in ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz"):
+        for key in ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb"):
             assert len(data["history_30d"][key]) == 30

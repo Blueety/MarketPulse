@@ -21,7 +21,7 @@ DEFAULTS = {
         "vix": {"peaceful": 20.0, "panic": 30.0},
         "move": {"normal": 100.0, "tight": 130.0},
     },
-    "alert": {"vix": 20.0, "vxn": 20.0, "move": 15.0, "gspc": 4.0, "ixic": 4.5, "sh": 4.0, "sz": 4.0},
+    "alert": {"vix": 20.0, "vxn": 20.0, "move": 15.0, "gspc": 4.0, "ixic": 4.5, "sh": 4.0, "sz": 4.0, "cyb": 5.0},
     "trend": {"chart_days": 30, "streak_days": 3},
     "history": {"retention_days": 90},
 }
@@ -34,7 +34,7 @@ ENV_MAP = {
     "ALERT_THRESHOLD_GSPC": ("alert", "gspc"),
     "ALERT_THRESHOLD_IXIC": ("alert", "ixic"),
     "ALERT_THRESHOLD_SH": ("alert", "sh"),
-    "ALERT_THRESHOLD_SZ": ("alert", "sz"),
+    "ALERT_THRESHOLD_CYB": ("alert", "cyb"),
     "STATUS_THRESHOLD_VIX_CALM": ("analysis", "vix", "peaceful"),
     "STATUS_THRESHOLD_VIX_PANIC": ("analysis", "vix", "panic"),
     "STATUS_THRESHOLD_MOVE_CALM": ("analysis", "move", "normal"),

@@ -21,16 +21,22 @@ SYMBOLS = {
     "IXIC": {"label": "纳斯达克", "source": "yahoo", "ticker": "^IXIC"},
     "SH": {"label": "上证指数", "source": "yahoo", "ticker": "000001.SS"},
     "SZ": {"label": "深证成指", "source": "yahoo", "ticker": "399001.SZ"},
+    "CYB": {"label": "创业板指", "source": "yahoo", "ticker": "399006.SZ"},
     "VIX": {"label": "VIX（恐慌指数）", "source": "yahoo", "ticker": "^VIX"},
     "VXN": {"label": "VXN（科技波动）", "source": "yahoo", "ticker": "^VXN"},
     "MOVE": {"label": "MOVE（债市波动）", "source": "yahoo", "ticker": "^MOVE"},
 }
 # 大盘指数分组（与 SYMBOLS 同处数据注册表）；波动率组 = SYMBOLS 中排除本集合。
-# 顺序：美股大盘（GSPC/IXIC）在前、A 股大盘（SH/SZ）居中、波动率（VIX/VXN/MOVE）在后；
+# 顺序：美股大盘（GSPC/IXIC）在前、A 股大盘（SH/SZ/CYB）居中、波动率（VIX/VXN/MOVE）在后；
 # 该顺序决定 context indices、告警收集与报告板块的输出顺序（六期 B 三板块同序）。
-STOCK_SYMBOLS = frozenset({"GSPC", "IXIC", "SH", "SZ"})
+STOCK_SYMBOLS = frozenset({"GSPC", "IXIC", "SH", "SZ", "CYB"})
 # A 股大盘分组：用于报告板块拆分（美股 / A 股 / 波动率）与休市判定（六期 B）。
-A_SHARE_SYMBOLS = frozenset({"SH", "SZ"})
+A_SHARE_SYMBOLS = frozenset({"SH", "SZ", "CYB"})
+# 七期：快照按市场取子集。PRD 定稿：us 仅大盘（GSPC/IXIC），不含波动率。
+MARKETS = {
+    "a-share": frozenset({"SH", "SZ", "CYB"}),
+    "us": frozenset({"GSPC", "IXIC"}),
+}
 
 TIMEOUT = 15          # 单次请求超时（秒）
 RETRIES = 1           # 失败重试次数（共尝试 2 次）
@@ -75,11 +81,15 @@ def fetch_vix_vxn(symbol: str) -> float:
     raise ValueError("Yahoo 返回数据无收盘价")
 
 
-def fetch_all() -> tuple[dict, dict]:
-    """依次获取三个指数；每个源独立容错，单源失败/跳过不影响其他源。源间节流 2s，降低 Yahoo 突发限流概率。"""
+def fetch_all(market: str | None = None) -> tuple[dict, dict]:
+    """依次获取指数；market 指定时仅取该市场子集（a-share/us），None 取全量。
+    每个源独立容错，单源失败/跳过不影响其他源。源间节流 2s，降低 Yahoo 突发限流概率。"""
+    subset = MARKETS.get(market) if market else None
     values, errors = {}, {}
     first = True
     for sym, meta in SYMBOLS.items():
+        if subset is not None and sym not in subset:
+            continue
         if not first:
             sleep(2)
         first = False

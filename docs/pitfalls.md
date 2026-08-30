@@ -56,6 +56,16 @@
 - **大盘告警恒 WARN/异动**：`check_breach` 对 `STOCK_SYMBOLS`（含 SH/SZ）一律 level=WARN、state=异动，无恐慌区间；阈值严格大于才触发，恰好等于不告警。
 - **末尾平坦日（去尾 0）不打断连涨/跌**：`compute_streaks` 仅裁剪序列末尾的 0（休市日 Yahoo 返回昨收 → 当日涨跌 0）；中间平坦日仍会打断 streak。复现休市场景须让最新一日为平坦。
 
+## 模块 src/（七期：盘中快照扩展）
+
+- **`fetch_all(market)` 只取市场子集**：`snapshot_report.py` 用 `fetch_all(market)` 取对应市场（a-share=SH/SZ/CYB，us=GSPC/IXIC），不取波动率；渲染 `render_snapshot(market=...)` 单板块，波动率章节只在日报出现。改 `MARKETS`/`render_snapshot` 分支须同步 `tests/test_phase7.py`。
+- **市场日期不按市场区分**：`get_market_date(market)` 用交易所时区（上海/纽约）取当日日期，A 股快照按北京时间归档、美股按美东日期；同一次运行 a-share=2026-08-30、us=2026-08-29 是正常的（设计 B）。
+- **快照文件名复合化防碰撞**：`save_snapshot(suffix="a-share-midday")` → `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`；告警文件 `alerts/YYYY-MM-DD-{market}-{time}.md` 复合名，不与日报 `close` 文件碰撞（设计 C/G）。旧 `YYYY-MM-DD-noon.md` 命名退役（旧文件留盘不清理）。
+- **`render_snapshot` 签名兼容**：新增 `market`/`time` 参数但保持 `values/statuses` 位置不变，裸调用（无 market）= 原三板块美东 12:30，日报 `generate_report` 不受影响（决策 D）。
+- **单板块渲染兜底**：A 股取数失败（SH/SZ/CYB 全 None）时整块显示「休市」，不崩；验证单板块须构造 3 键 values（含 CYB）。
+- **创业板 `399006.SZ` ≠ `399001.SZ`**：SYMBOLS 新增 `CYB`（创业板指），ticker 是 `399006.SZ`（深证成指是 `399001.SZ`，六期B 已用），勿混淆；阈值 `alert.cyb=5`，env `ALERT_THRESHOLD_CYB` 覆盖。
+- **跨市场告警去重独立**：`alerts.log` 按 symbol 去重，A 股标记（SH）不阻塞美股（GSPC）；同一 symbol 午盘触发则收盘跳过。验证跨市场用 `_mark_alerted(date, {"SH"})` 后跑 us 入口。
+- **入口编排 monkeypatch 点**：`snapshot_report.py` 整体编排，测试须 `monkeypatch.setattr(snap, "fetch_all"/"render_snapshot"/"save_snapshot"/"run_alert_checks", ...)` 才能验证参数透传。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

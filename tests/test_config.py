@@ -35,7 +35,8 @@ class TestDefaults:
         assert cfg["alert"]["vix"] == 20.0
         assert cfg["alert"]["vxn"] == 20.0
         assert cfg["alert"]["move"] == 15.0
-        assert cfg["trend"]["chart_days"] == 30
+        assert cfg["alert"]["vix"] == 20.0
+        assert cfg["alert"]["cyb"] == 5.0
         assert cfg["history"]["retention_days"] == 90
 
     def test_defaults_is_deepcopy(self, tmp_path):

@@ -53,13 +53,18 @@ STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理
 HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
 
 EASTERN_TZ = ZoneInfo("America/New_York")
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")  # 七期：A 股快照按北京时间归档
 
 
 # ---- 纯逻辑层 ----
+def get_market_date(market: str) -> str:
+    """返回市场自身交易日 YYYY-MM-DD（设计 B）：a-share 用北京时间、us 用美东时间。"""
+    tz = SHANGHAI_TZ if market == "a-share" else EASTERN_TZ
+    return datetime.now(tz).strftime("%Y-%m-%d")
+
 def get_us_eastern_date() -> str:
     """返回美东当前日期 YYYY-MM-DD（内部 UTC，显示用美东）。"""
     return datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
-
 
 def classify_vix(value: float) -> tuple[str, str]:
     """按 VIX 阈值分类：<20 平静 / 20-30 警惕 / >=30 恐慌（默认值，可配置）。VXN 复用。
@@ -359,6 +364,7 @@ def load_history() -> list[dict]:
             "ixic": rec.get("ixic"),
             "sh": rec.get("sh"),
             "sz": rec.get("sz"),
+            "cyb": rec.get("cyb"),
             }
         for rec in data
         if isinstance(rec, dict) and rec.get("date")

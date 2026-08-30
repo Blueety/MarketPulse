@@ -16,7 +16,7 @@ from src import reporter as rep
 
 @pytest.fixture
 def clean_thresholds(monkeypatch):
-    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ", "CYB"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
 
 
@@ -31,7 +31,7 @@ def tmp_paths(monkeypatch, tmp_path):
 
 class TestSymbolsPhase6b:
     def test_seven_symbols(self):
-        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE"}
+        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE", "CYB"}
 
     def test_order_stock_ashare_vol(self):
         assert list(an.SYMBOLS)[:4] == ["GSPC", "IXIC", "SH", "SZ"]
@@ -40,10 +40,11 @@ class TestSymbolsPhase6b:
     def test_tickers(self):
         assert an.SYMBOLS["SH"]["ticker"] == "000001.SS"
         assert an.SYMBOLS["SZ"]["ticker"] == "399001.SZ"
+        assert an.SYMBOLS["CYB"]["ticker"] == "399006.SZ"
 
     def test_stock_and_ashare_groups(self):
-        assert an.STOCK_SYMBOLS == {"GSPC", "IXIC", "SH", "SZ"}
-        assert an.A_SHARE_SYMBOLS == {"SH", "SZ"}
+        assert an.STOCK_SYMBOLS == {"GSPC", "IXIC", "SH", "SZ", "CYB"}
+        assert an.A_SHARE_SYMBOLS == {"SH", "SZ", "CYB"}
 
 
 class TestA股Streak:
@@ -74,7 +75,7 @@ class TestA股Streak:
 class Test休市:
 
     def test_report_ashare_row_休市(self, clean_thresholds):
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": None, "SZ": None,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": None, "SZ": None, "CYB": None,
                   "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
         statuses = an.build_statuses(values, {})
         body = rep.render_report("2026-08-29", values,
@@ -82,6 +83,7 @@ class Test休市:
                                  "summary", True)
         assert "| 上证指数 | 休市 | — | 休市 |" in body
         assert "| 深证成指 | 休市 | — | 休市 |" in body
+        assert "| 创业板指 | 休市 | — | 休市 |" in body
 
 
 class TestA股Breach:
@@ -104,9 +106,9 @@ class TestA股Breach:
         assert an.check_breach("SH", 104.1, 100.0) is None
 
     def test_collect_both_sh_and_vix(self, clean_thresholds):
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 104.1, "SZ": 10000.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 104.1, "SZ": 10000.0, "CYB": 10000.0,
                   "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 100.0, "SZ": 10000.0, "CYB": 10000.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         syms = [b["symbol"] for b in al.collect_breaches(values, last)]
         assert "SH" in syms and "VIX" in syms
@@ -115,9 +117,9 @@ class TestA股Breach:
         # 午盘已告警 SH → 收盘 SH 跳过，但 VIX 仍可触发（告警独立）
         date = "2026-08-29"
         al._mark_alerted(date, {"SH"})
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 104.1, "SZ": 10000.0,
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 104.1, "SZ": 10000.0, "CYB": 10000.0,
                   "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 100.0, "SZ": 10000.0, "CYB": 10000.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         pending = al.run_alert_checks(date, values, last, "close", tmp_paths / "report.md")
         pending_syms = [p["symbol"] for p in pending]
@@ -130,7 +132,7 @@ class TestA股Breach:
 
 class TestReportThreeSections:
     def _seven(self):
-        return {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0,
+        return {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
 
     def test_daily_three_sections_order(self, clean_thresholds):
@@ -144,7 +146,7 @@ class TestReportThreeSections:
         idx_vol = body.index("📈 波动率指数")
         assert idx_stock < idx_ashare < idx_vol
         # A 股表 4 列（收盘价/涨跌幅/趋势），波动率行格式与现版一致
-        assert "| 上证指数 |" in body and "| 深证成指 |" in body
+        assert "| 上证指数 |" in body and "| 深证成指 |" in body and "| 创业板指 |" in body
         assert "| VIX（恐慌指数） |" in body
 
     def test_snapshot_three_sections(self, clean_thresholds):
@@ -175,12 +177,12 @@ class TestHistoryProjectionPhase6b:
 class TestContextPhase6b:
     def test_indices_seven_and_history_arrays(self, tmp_paths):
         an.append_history({"date": "2026-08-28", "vix": 20.0, "vxn": 18.0, "move": 75.0,
-                            "gspc": 4400.0, "ixic": 17000.0, "sh": 3100.0, "sz": 10000.0})
+                            "gspc": 4400.0, "ixic": 17000.0, "sh": 3100.0, "sz": 10000.0, "cyb": 2200.0})
         an.append_history({"date": "2026-08-29", "vix": 21.0, "vxn": 19.0, "move": 78.0,
-                            "gspc": 4500.0, "ixic": 17500.0, "sh": 3120.0, "sz": 10100.0})
-        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0,
+                            "gspc": 4500.0, "ixic": 17500.0, "sh": 3120.0, "sz": 10100.0, "cyb": 2210.0})
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
                   "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0,
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         path = rep.generate_context(
             "2026-08-29",
@@ -192,10 +194,12 @@ class TestContextPhase6b:
         data = json.loads(path.read_text(encoding="utf-8"))
         assert set(data["indices"]) == set(an.SYMBOLS)
         assert data["indices"]["SH"]["value"] == 3120.0
+        assert data["indices"]["CYB"]["value"] == 2210.0
         h = data["history_30d"]
-        assert len(h["sh"]) == len(h["sz"]) == len(h["dates"]) == 2
+        assert len(h["sh"]) == len(h["sz"]) == len(h["cyb"]) == len(h["dates"]) == 2
         assert h["sh"] == [3100.0, 3120.0]
         assert h["sz"] == [10000.0, 10100.0]
+        assert h["cyb"] == [2200.0, 2210.0]
 
 
 class TestSearchKeywordsCap:
