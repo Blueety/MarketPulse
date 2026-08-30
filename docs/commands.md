@@ -10,7 +10,7 @@
 | `venv/Scripts/python -m pytest tests/ -v` | 运行单元测试 | 改了函数逻辑 / 提交前 |
 | `venv/Scripts/python daily_report.py` | 运行主脚本（完整闭环：取数→报告→趋势图→写历史→写缓存） | 改了数据获取/报告生成/错误处理逻辑 |
 | `venv/Scripts/python -m uvicorn web.app:app --port 8000` | 启动 Web 看板（只读展示最近 7 日数据） | 改了 `web/` 模块 / 提交前 |
-| `venv/Scripts/python snapshot_report.py [--market a-share|us] [--time open|midday|close|noon]` | 运行盘中快照（按市场取子集→单板块快照→落盘，裸跑=美股午盘） | 改了快照/渲染/取数逻辑 |
+| `venv/Scripts/python scripts/backtest.py [--history PATH]` | 运行独立回测脚本（验证告警阈值有效性）：复用生产 `check_breach` 语义回放 `data/history.json`，输出各标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率，生成 `reports/backtest_report.md`；`--history` 指定只读历史文件（用于数据不足验证）；全程 <5s、不联网、零副作用 | 改了 `scripts/backtest.py` / 阈值逻辑后回归 |
 
 ## 完整检查
 
@@ -53,7 +53,7 @@
 - **A 股板块热度（八期）**：`daily_report.py` 日报「A 股大盘」下方新增「🔥 A 股热点板块 Top 5」表（板块/涨跌幅/成交额/领涨股，涨跌幅带正负号、成交额 "X.X亿"，按涨跌幅降序 Top5 不设阈值）；`context/YYYY-MM-DD.json` 新增 `sector_heat` 键（5 条 {name,change,turnover,top_stock}）；`search_keywords` 注入板块名（`"{板块名} surge/drop {date}"`，方向感知，不触发独立告警）；板块取数失败/超时（10s 线程限时）/缺必需列均降级为「数据暂缺」、退出码 0；单测 `tests/test_phase8.py`（16 条：取数成功/异常/缺列/超时、表格渲染/空态/负值、context 键、关键词注入/方向、入口透传）全绿，全量 `pytest` 186 passed。
 - **分市场趋势图（九期）**：日报新增美股 2×1（`charts/YYYY-MM-DD-us-trend.png`）与 A 股 3×1（`charts/YYYY-MM-DD-cn-trend.png`）趋势图；`render_market_trend_chart(history, date, market)` 复用波动率图绘图范式、独立 `MARKET_CHART_TIMEOUT=5` 限时、串行渲染、部分序列缺数据显示灰色英文 "Insufficient Data" 占位、整体行数<2 返回 None 省略章节；`render_report` 加 `us_trend_chart`/`cn_trend_chart` 默认参数，报告新增「📈 美股大盘近30日趋势」「📈 A 股大盘近30日趋势」两章节（分别插在美股大盘 / A 股大盘板块后）；`daily_report.py` 单次 `load_history()` 复用供三图；单测 `tests/test_phase9.py`（15 条）全绿，全量 `pytest` 211 passed。
 - **Web 看板（十一期）**：`venv/Scripts/python -m uvicorn web.app:app --port 8000` 启动后访问 `http://localhost:8000` 看完整看板（概览表 10 指数 / 4 组趋势图 / A 股板块热度 Top5 / 告警记录）；`pytest tests/test_web.py -v` 覆盖解析纯函数与 4 端点（20 条，全量 231 passed）；`/api/history` 末条 value 与 `data/history.json` 最后一条逐值一致、`/api/latest` 涨跌幅与相邻记录手算一致；`alerts/` 为空时页面显示「暂无告警记录」不崩；断网 / CDN 不可达时图区降级「图表加载失败」、其余模块正常；web 为独立模块，零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，不写任何数据文件。
-- **相关性分析（十二期）**：`daily_report.py` 日报「波动率指数」后新增「📊 相关性分析」章节（5 对固定指数组合表格：指数对/相关系数/有效样本，每对 ≥10 有效样本否则显示「数据不足」；|r|>0.5 视为显著，r>0.5 红 #d1495b / r<-0.5 绿 #1a9e6c / 其余灰 #999999，保留两位小数）；`context/YYYY-MM-DD.json` 新增 `correlation` 键（仅 |r|>0.5 显著对 {a,b,pair,r,n}）；计算在 `src/analyzer.compute_correlation`（纯 Python Pearson，输入为日收益率=history 收盘价相邻日推导，窗口=history 最后 30 行，单侧缺口行断开收益链不参与，零方差/有效点<10 返回 None）；`daily_report.py` 在 `load_history()` 后计算同一份结果透传给 `render_report` 与 `generate_context`；单测 `tests/test_phase12.py`（17 条：纯逻辑/报告颜色/context 键/入口透传）全绿，全量 `pytest` 248 passed（test_web.py 6 条为既有失败、非回归）。
+- **回测验证（十三期）**：`venv/Scripts/python scripts/backtest.py` 终端输出每标的一行摘要（告警次数 / 年化 / 胜率@1d / 有效触发率）+ 总耗时 + `reports/backtest_report.md` 生成，耗时 <5s、退出码 0；`--history <临时小文件>`（有效交易日 <30）时优雅退出（退出码 0、提示信息、无报告文件、data/ 无任何写入）；回测仅读 `data/history.json`、复用生产 `check_breach` 语义（严格大于、实时阈值、缺口断开），不写 data/alerts/context，不联网；新增/修改 `scripts/backtest.py` 或阈值逻辑后跑 `venv/Scripts/python -m pytest tests/test_backtest.py -v`（10 条纯逻辑测试全绿）。
 
 ## 已知问题
 

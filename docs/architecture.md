@@ -31,7 +31,7 @@ Python 项目。每个交易日有多个运行点：
 | 告警输出 | `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
 | 数据持久化 | `data/last_values.json`（涨跌幅基准）、`data/history.json`（近 90 日历史） | 运行时生成，gitignore 排除 |
 | Web 看板 | `web/app.py`（FastAPI 应用 + 4 端点）、`web/templates/index.html`、`web/static/style.css`、`web/__init__.py` | 只读看板：解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染单页（市场概览表 / 4 组独立 y 轴趋势图 / A 股板块热度 Top5 / 告警记录），提供 `/api/history` `/api/latest` `/api/alerts` 三个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
-| 测试 | `tests/test_analyzer.py`、`tests/test_reporter.py`、`tests/test_alerter.py`、`tests/test_context.py` | 纯逻辑 / 渲染 / 趋势图 / 历史滚动 / 告警 / context 单元测试 |
+| 回测 | `scripts/backtest.py` | 独立回测脚本：复用生产 `check_breach` 语义回放历史触发事件，统计告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率；只读 `data/history.json`，仅写 `reports/backtest_report.md`，不联网、零副作用 |
 
 ## 数据流
 

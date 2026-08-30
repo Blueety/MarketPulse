@@ -4,6 +4,7 @@
 
 - `daily_report.py`: 收盘日报编排入口（取数 → 报告 + 趋势图 → 写历史/缓存 → context 上下文）。
 - `snapshot_report.py`: 盘中快照独立入口（4 个 Hermes cron：A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00；按 `--market a-share|us` + `--time open|midday|close|noon` 取市场子集，单板块渲染，仅存盘不推送；裸跑=美股午盘）。
+- `scripts/backtest.py`: 独立回测脚本（十三期）：复用生产 `check_breach` 语义回放 `data/history.json` 触发事件，统计每标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率；只读历史、仅写 `reports/backtest_report.md`，不联网、零副作用（`--history PATH` 指定只读输入）。
 - `requirements.txt`: 依赖清单（requests / matplotlib / pytest）。
 - `.env.example`: 环境说明（无需任何 API 密钥）。
 - `config.json`: 用户阈值配置（项目根，gitignore 排除；缺失回退内置默认）。
@@ -15,7 +16,7 @@
 - `src/config.py`: 配置加载层（config.json + env 覆盖 + 内置默认，白名单校验，零依赖）。
 - `src/alerter.py`: 告警层（告警文件渲染 + alerts.log 去重 + collect_breaches 纯计算 + run_alert_checks 编排）。
 | `src/reporter.py`: 报告渲染（日报/快照/趋势图/分市场趋势图 + 相关性分析章节）+ generate_context 上下文 JSON 生成（含 sector_heat / us_sector_heat / correlation 键）。 |
-- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py）。
+- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py / test_backtest.py）。
 - `alerts/`: 告警输出（`YYYY-MM-DD-{market}-{time}.md`（盘中快照复合名）/ `YYYY-MM-DD-close.md`（日报）；gitignore 排除）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。
 - `docs/`: 项目知识和规则。

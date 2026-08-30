@@ -94,6 +94,16 @@
 - **Pearson 边界**：每对有效样本 <`MIN_POINTS=10` 或任一序列零方差（常量收益率）→ r=None；分母除以零已钳制；`math.atan` 越界（浮点误差导致 >1）→ 钳制 [-1,1]；结果 `round(2)` 保留两位小数。r 排序：|r|>0.5 显著；渲染颜色 r>0.5 红 / r<-0.5 绿 / 否则灰，复用既有着色（#d1495b / #1a9e6c / #999999）。
 - **context 与报告分离**：`generate_context` 仅写 |r|>0.5 显著对（决策 A）；报告表展示全部 5 对固定组合（含「数据不足」占位），两者消费同一份 `compute_correlation` 结果。`correlation` 键字段 a/b/pair/r/n；变更需同步 Hermes Prompt 契约（决策 D）。
 
+## 模块 scripts/（十三期：回测验证）
+
+- **复用 check_breach 不重写触发逻辑**：`scripts/backtest.py` 的 `collect_triggers` 直接调用生产 `check_breach(sym, cur, prev)`（严格大于阈值、实时 env/config 阈值、缺口断开），切勿在回测侧另写一套比较/阈值逻辑——否则回测与生产行为脱节（计划风险"触发语义漂移"）。改阈值语义必须同步改 `src/analyzer.check_breach`，回测随之生效。
+- **历史键小写**：history 存 `gspc`/`vix`/`sh` 等小写键（六期B 纪律）；回测按 `sym.lower()` 取列，勿用大写 symbol 取 history 值（得到 None → 误判缺口）。`BACKTEST_SYMBOLS` 大写（VIX/VXN/MOVE/GSPC/IXIC/SH/SZ），CYB 不在内（PRD 表未列，决策 A）。
+- **缺口断开**：相邻两行任一为 None 即跳过该日触发；前向后效为点对点收益（p[t+h]-p[t]），缺口不阻断但越界窗口不计入（n 透明展示）。
+- **只读边界**：脚本只写 `reports/backtest_report.md`；`--history` 仅指定只读输入，不提供任何写回能力。`REPORTS_DIR` 若被测试 monkeypatch，须打在 `scripts.backtest` 模块（同 src/ 纪律：打在 analyzer 定义方不生效）。
+- **阈值实时性**：报告内"各标的当前阈值"表用 `alert_threshold(sym)` 实时值，并注明"阈值来自 config/env 实时配置"——避免"配置已改、报告仍是旧值"误解。测试须 `monkeypatch.delenv("ALERT_THRESHOLD_<SYM>", raising=False)` 隔离宿主 env。
+- **样本门槛**：全局有效交易日 <30 优雅退出（退出码 0、不写报告）；单标的有效点 <30 仅输出计数与"样本不足"标注，不出后效/胜率/有效触发率，防小样本误导。回测只给事实数字，不输出任何结论性评语。
+- **history 排序**：`load_history` 返回存储顺序，回测前按 date 升序排序，避免乱序造成伪触发。
+
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。
