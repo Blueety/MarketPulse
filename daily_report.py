@@ -25,6 +25,7 @@ from src.analyzer import (
 )
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat
 from src.reporter import generate_context, render_market_trend_chart, render_report, render_trend_chart, save_report
+from src.image_renderer import render_report_image
 
 logging.basicConfig(
     level=logging.INFO,
@@ -101,6 +102,13 @@ def main() -> int:
         log.info("context 已生成: context/%s.json", date)
     except Exception as exc:
         log.warning("context 生成失败，不影响日报: %s", exc)
+
+    try:  # 十四期：图片化推送（决策 E）：失败仅记日志，不影响日报主流程与退出码
+        image_path = render_report_image(date)
+        if image_path:
+            log.info("日报图片已生成: %s", image_path)
+    except Exception as exc:
+        log.warning("日报图片渲染失败，不影响日报: %s", exc)
 
     return 0  # 全源失败也恒为 0，避免 Hermes 定时任务误报警
 

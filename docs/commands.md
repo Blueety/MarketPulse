@@ -11,6 +11,7 @@
 | `venv/Scripts/python daily_report.py` | 运行主脚本（完整闭环：取数→报告→趋势图→写历史→写缓存） | 改了数据获取/报告生成/错误处理逻辑 |
 | `venv/Scripts/python -m uvicorn web.app:app --port 8000` | 启动 Web 看板（只读展示最近 7 日数据） | 改了 `web/` 模块 / 提交前 |
 | `venv/Scripts/python scripts/backtest.py [--history PATH]` | 运行独立回测脚本（验证告警阈值有效性）：复用生产 `check_breach` 语义回放 `data/history.json`，输出各标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率，生成 `reports/backtest_report.md`；`--history` 指定只读历史文件（用于数据不足验证）；全程 <5s、不联网、零副作用 | 改了 `scripts/backtest.py` / 阈值逻辑后回归 |
+| `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` | 独立重渲染日报图片（Hermes 追加 AI 解读后重渲染含解读图）；依赖 imgkit + 本地 wkhtmltoimage（先 `pip install -r requirements.txt` 装 imgkit，再 winget 装 wkhtmltopdf）；失败仅退出码非 0，不影响日报 md | 改了 `src/image_renderer.py` / 模板 / 重渲染入口后 |
 
 ## 完整检查
 
@@ -29,6 +30,7 @@
 | 状态判断/涨跌幅计算 | 相关单元测试 |
 | history 读写/滚动 | 相关单元测试（test_analyzer.py TestHistory） |
 | 错误处理/离线容错 | 主脚本（断网场景） |
+| 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
 
 ## 验证要点（对应任务 prd 的 Verification Plan）
 
@@ -54,6 +56,7 @@
 - **分市场趋势图（九期）**：日报新增美股 2×1（`charts/YYYY-MM-DD-us-trend.png`）与 A 股 3×1（`charts/YYYY-MM-DD-cn-trend.png`）趋势图；`render_market_trend_chart(history, date, market)` 复用波动率图绘图范式、独立 `MARKET_CHART_TIMEOUT=5` 限时、串行渲染、部分序列缺数据显示灰色英文 "Insufficient Data" 占位、整体行数<2 返回 None 省略章节；`render_report` 加 `us_trend_chart`/`cn_trend_chart` 默认参数，报告新增「📈 美股大盘近30日趋势」「📈 A 股大盘近30日趋势」两章节（分别插在美股大盘 / A 股大盘板块后）；`daily_report.py` 单次 `load_history()` 复用供三图；单测 `tests/test_phase9.py`（15 条）全绿，全量 `pytest` 211 passed。
 - **Web 看板（十一期）**：`venv/Scripts/python -m uvicorn web.app:app --port 8000` 启动后访问 `http://localhost:8000` 看完整看板（概览表 10 指数 / 4 组趋势图 / A 股板块热度 Top5 / 告警记录）；`pytest tests/test_web.py -v` 覆盖解析纯函数与 4 端点（20 条，全量 231 passed）；`/api/history` 末条 value 与 `data/history.json` 最后一条逐值一致、`/api/latest` 涨跌幅与相邻记录手算一致；`alerts/` 为空时页面显示「暂无告警记录」不崩；断网 / CDN 不可达时图区降级「图表加载失败」、其余模块正常；web 为独立模块，零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，不写任何数据文件。
 - **回测验证（十三期）**：`venv/Scripts/python scripts/backtest.py` 终端输出每标的一行摘要（告警次数 / 年化 / 胜率@1d / 有效触发率）+ 总耗时 + `reports/backtest_report.md` 生成，耗时 <5s、退出码 0；`--history <临时小文件>`（有效交易日 <30）时优雅退出（退出码 0、提示信息、无报告文件、data/ 无任何写入）；回测仅读 `data/history.json`、复用生产 `check_breach` 语义（严格大于、实时阈值、缺口断开），不写 data/alerts/context，不联网；新增/修改 `scripts/backtest.py` 或阈值逻辑后跑 `venv/Scripts/python -m pytest tests/test_backtest.py -v`（10 条纯逻辑测试全绿）。
+- **日报图片化（十四期）**：`daily_report.py` 末尾容错调用 `render_report_image(date)`（失败仅记日志、退出码恒 0）生成 `reports/images/YYYY-MM-DD.png`；Hermes 追加「AI 解读」章节后通过 `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` 独立重渲染含解读图；依赖 imgkit（`requirements.txt` 已加）+ 本地 wkhtmltoimage（winget 装 wkhtmltopdf），解析严格依赖 `render_report` 的 Markdown 结构（标题行 `## ...` / `| 指数 | 收盘价 | 涨跌幅 | 趋势 |` 表 / `![...](charts/...)` 引用 / 标题含「解读」章节 / `alerts/{date}-close.md` 附录块）；单测 `tests/test_phase14.py`（17 条：解析/渲染/尺寸/容错/接线）全绿，全量 `pytest` 通过。
 
 ## 已知问题
 

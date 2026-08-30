@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 REPORTS_DIR = BASE_DIR / "reports"
 CHARTS_DIR = REPORTS_DIR / "charts"
 SNAPSHOTS_DIR = REPORTS_DIR / "snapshots"
+IMAGES_DIR = REPORTS_DIR / "images"   # 十四期：日报图片化输出目录（render_report_image 产出 PNG）
 DATA_DIR = BASE_DIR / "data"
 LAST_VALUES_FILE = DATA_DIR / "last_values.json"
 HISTORY_FILE = DATA_DIR / "history.json"

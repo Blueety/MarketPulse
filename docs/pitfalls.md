@@ -104,6 +104,15 @@
 - **样本门槛**：全局有效交易日 <30 优雅退出（退出码 0、不写报告）；单标的有效点 <30 仅输出计数与"样本不足"标注，不出后效/胜率/有效触发率，防小样本误导。回测只给事实数字，不输出任何结论性评语。
 - **history 排序**：`load_history` 返回存储顺序，回测前按 date 升序排序，避免乱序造成伪触发。
 
+## 模块 src/（十四期：日报图片化）
+
+- **解析严格依赖 `render_report` 的 Markdown 结构**：`src/image_renderer.py` 用正则解析 `reports/YYYY-MM-DD.md` 生成卡片（标题行 `## ...` / `| 指数 | 收盘价 | 涨跌幅 | 趋势 |` 表头 / `![...](charts/...)` 引用 / 标题含「解读」章节 / `alerts/{date}-close.md` 附录块）；改 `render_report` 输出结构（章节标题、表头文案、趋势图引用语法、AI 解读章节命名）会直接破坏图片解析，须同步回归 `tests/test_phase14.py`。
+- **图片尺寸守卫 + zoom 重试**：`render_report_image` 先按 PRD 固定宽 600 渲染，若高 >9000 或体积 ≥800KB 则用 `options={'zoom':0.8}` 重渲染（最高 3 次）压到阈下；`--disable-local-file-access` 已开启，趋势图必须用 `file://` 绝对路径（相对路径渲染后空白）。
+- **全链路容错、失败返回 None**：`render_report_image` 任意异常（imgkit 未装 / wkhtmltoimage 缺失 / 模板缺失 / 报告不存在）均捕获并返回 None；`daily_report.py` 调用方再包 try/except 仅记日志、退出码恒 0；图片是「锦上添花」，绝不阻断日报主流程与推送。
+- **imgkit 依赖 + 独立二进制**：`requirements.txt` 加 `imgkit`（pip 安装），但真正渲染靠系统 `wkhtmltoimage`（wkhtmltopdf 套件），Windows 用 `winget install wkhtmltopdf` 安装；`imgkit.config(wkhtmltoimage=...)` 显式指定二进制路径，缺失时 `wkhtmltoimage --version` 报错即视为不可用。
+- **中文字体靠系统**：渲染 HTML 用系统无衬线栈（PingFang SC / Microsoft YaHei / 文泉驿），容器/无中文字体环境会豆腐块；测试用 mock imgkit 不依赖真实二进制，仅验证解析/模板/尺寸逻辑。
+- **AI 解读章节识别**：正则 `^##\s.*解读` 匹配标题含「解读」的章节（决策 A），仅取首个；日报本身不渲染解读区，Hermes 追加解读后由 `scripts/render_report_image.py --date` 独立重渲染含解读图（依赖已落盘的 md + 解读章节），与日报自动渲染解耦。
+
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

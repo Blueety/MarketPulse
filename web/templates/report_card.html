@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MarketPulse 全市场情绪日报</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    width: 600px;
+  }
+  .card-wrap { width: 600px; padding: 20px; }
+  .header { margin-bottom: 16px; }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .header .subdate {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #8b949e;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e6edf3;
+    border-left: 3px solid #58a6ff;
+    padding-left: 8px;
+    margin: 18px 0 10px;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .index-card {
+    background: #161b22;
+    border: 1px solid #2a3038;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .index-card.up { border-left: 3px solid #3fb950; }
+  .index-card.down { border-left: 3px solid #f85149; }
+  .index-card.flat { border-left: 3px solid #484f58; }
+  .ic-label { font-size: 13px; color: #8b949e; }
+  .ic-value { font-size: 22px; font-weight: 700; margin: 4px 0 2px; }
+  .ic-change { font-size: 14px; font-weight: 600; }
+  .ic-change.up { color: #3fb950; }
+  .ic-change.down { color: #f85149; }
+  .ic-change.flat { color: #8b949e; }
+  .ic-trend { font-size: 12px; color: #8b949e; margin-top: 2px; }
+  .chart-box { margin: 8px 0; }
+  .chart-box img { width: 100%; display: block; border-radius: 8px; }
+  .chart-missing {
+    background: #161b22;
+    border: 1px dashed #2a3038;
+    border-radius: 8px;
+    color: #8b949e;
+    font-size: 14px;
+    text-align: center;
+    padding: 28px 0;
+    margin: 8px 0;
+  }
+  .interpretation {
+    background: #161b22;
+    border: 1px solid #2a3038;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+  }
+  .alert-card {
+    background: #161b22;
+    border: 1px solid #2a3038;
+    border-left: 3px solid #d29922;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+  }
+  .alert-card.alert { border-left-color: #f85149; }
+  .alert-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .badge.alert { background: #f85149; color: #fff; }
+  .badge.warn { background: #d29922; color: #000; }
+  .alert-symbol { font-size: 14px; font-weight: 600; }
+  .alert-row { font-size: 13px; color: #c9d1d9; margin-top: 2px; }
+  .alert-sugg { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  .footer {
+    color: #484f58;
+    font-size: 12px;
+    margin-top: 18px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="card-wrap">
+  <div class="header">
+    <h1>MarketPulse 全市场情绪日报</h1>
+    <div class="subdate">{{ date or '' }}</div>
+  </div>
+
+  <div class="section-title">核心指数</div>
+  <div class="cards">
+    {% for c in cards %}
+    <div class="index-card {{ c.sign }}">
+      <div class="ic-label">{{ c.label }}</div>
+      <div class="ic-value">{{ c.value }}</div>
+      <div class="ic-change {{ c.sign }}">{{ c.change }}</div>
+      <div class="ic-trend">{{ c.trend_or_status }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if charts %}
+  <div class="section-title">趋势图</div>
+  {% for chart in charts %}
+    {% if chart.missing %}
+    <div class="chart-missing">📉 趋势图暂缺</div>
+    {% else %}
+    <div class="chart-box"><img src="{{ chart.uri }}"></div>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if interpretation %}
+  <div class="section-title">🤖 AI 解读</div>
+  <div class="interpretation">{{ interpretation }}</div>
+  {% endif %}
+
+  {% if alerts %}
+  <div class="section-title">⚠️ 市场告警</div>
+  {% for a in alerts %}
+  <div class="alert-card {% if a.level == 'ALERT' %}alert{% else %}warn{% endif %}">
+    <div class="alert-head">
+      <span class="badge {% if a.level == 'ALERT' %}alert{% else %}warn{% endif %}">{{ a.level or '' }}</span>
+      <span class="alert-symbol">{{ a.symbol }}</span>
+    </div>
+    <div class="alert-row">变化率：{{ a.change }}%（阈值 ±{{ a.threshold }}%）</div>
+    <div class="alert-row">市场状态：{{ a.state or '' }}</div>
+    <div class="alert-sugg">建议：{{ a.suggestion or '' }}</div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <div class="footer">数据来源：Yahoo Finance</div>
+</div>
+</body>
+</html>
