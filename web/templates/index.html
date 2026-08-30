@@ -161,28 +161,78 @@
       }
       GROUPS.forEach(function (g) {
         const canvas = document.getElementById(g.id);
+        const ctx = canvas.getContext("2d");
         const series = history.series.filter(function (s) { return g.keys.indexOf(s.key) !== -1; });
+
+        // 过滤每个系列的 null 值，用 {x, y} 格式
+        const filtered = series.map(function (s) {
+          const pts = [];
+          s.values.forEach(function (v, i) {
+            if (v != null) pts.push({ x: history.dates[i], y: v });
+          });
+          return pts;
+        });
+
+        // 创建渐变填充
+        const colors = series.map(function (s, idx) {
+          const c = COLORS[s.key];
+          const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          grad.addColorStop(0, c + "40");
+          grad.addColorStop(1, c + "05");
+          return grad;
+        });
+
         new Chart(canvas, {
           type: "line",
           data: {
-            labels: history.dates,
-            datasets: series.map(function (s) {
+            datasets: series.map(function (s, idx) {
               return {
                 label: s.label,
-                data: s.values,
+                data: filtered[idx],
                 borderColor: COLORS[s.key],
-                backgroundColor: COLORS[s.key],
-                spanGaps: false,
-                tension: 0.1,
-                pointRadius: 2,
-                borderWidth: 2
+                backgroundColor: colors[idx],
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2.5,
+                pointBackgroundColor: COLORS[s.key],
+                pointBorderColor: "#fff",
+                pointBorderWidth: 1.5,
               };
             })
           },
           options: {
             responsive: true,
-            plugins: { legend: { position: "top" } },
-            scales: { y: { ticks: { callback: function (v) { return v; } } } }
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { position: "top", labels: { usePointStyle: true, padding: 12 } },
+              tooltip: {
+                backgroundColor: "rgba(0,0,0,0.8)",
+                titleFont: { size: 12 },
+                bodyFont: { size: 13 },
+                padding: 10,
+                cornerRadius: 6,
+                callbacks: {
+                  label: function(ctx) {
+                    return ctx.dataset.label + ": " + ctx.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                type: "category",
+                labels: history.dates,
+                grid: { display: false },
+                ticks: { font: { size: 11 }, maxRotation: 45 }
+              },
+              y: {
+                grid: { color: "rgba(0,0,0,0.06)" },
+                ticks: { font: { size: 11 } }
+              }
+            },
+            animation: { duration: 800, easing: "easeOutQuart" }
           }
         });
       });
