@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .config import env_float, load_config
-from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -38,7 +38,7 @@ VIX_WARN = float(_CFG["analysis"]["vix"]["panic"])
 MOVE_CALM = float(_CFG["analysis"]["move"]["normal"])
 MOVE_WARN = float(_CFG["analysis"]["move"]["tight"])
 
-ALERT_THRESHOLDS = {sym: float(_CFG["alert"][sym.lower()]) for sym in SYMBOLS}  # 变化率百分比，调用时 env 复核
+ALERT_THRESHOLDS = {sym: float(_CFG["alert"][sym.lower()]) for sym in SYMBOLS if sym not in ALT_SYMBOLS}  # 变化率百分比，调用时 env 复核；另类资产不设阈值
 ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单测断言）
     "平静": "波动率仍处低位，建议保持现有策略，关注后续变化。",
     "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
@@ -177,16 +177,18 @@ def _sign(x: float) -> int:
 
 
 def compute_streaks(values: dict, last_values: dict | None = None,
-                    history: list[dict] | None = None, date: str = "") -> dict:
+                    history: list[dict] | None = None, date: str = "",
+                    symbols: set = STOCK_SYMBOLS) -> dict:
     """计算大盘指数连续同向涨跌天数（streak）。返回 {sym: signed_int}（正=连涨、负=连跌、0=无方向）。
 
     纯计算、可单测：方向序列 = 历史相邻记录（排除 date==今日 行）逐日涨跌 + 今日 current vs last_values；
     序列去尾 0（横盘不打断既有趋势）后，从最后非零方向往前数连续同号天数。
+    symbols 默认 STOCK_SYMBOLS（存量行为不变）；十期传入 STOCK_SYMBOLS | ALT_SYMBOLS 使另类资产复用趋势机制。
     """
     streaks = {}
     history = history or []
     last_values = last_values or {}
-    for sym in STOCK_SYMBOLS:
+    for sym in symbols:
         lower = sym.lower()
         closes = [
             r[lower]
@@ -269,10 +271,9 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
 
     大盘指数走趋势标签（compute_streaks + trend_label），波动率走 classify_*；
     values 用 .get 容忍缺失（与 collect_breaches 一致）；不传 last_values/history（旧调用）
-    时大盘无基准 → 数据积累中。
     """
     statuses = {}
-    streaks = compute_streaks(values, last_values, history)
+    streaks = compute_streaks(values, last_values, history, symbols=STOCK_SYMBOLS | ALT_SYMBOLS)
     for sym in SYMBOLS:
         val = values.get(sym)
         if val is None:
@@ -280,7 +281,7 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
                 statuses[sym] = ("休市", "A 股休市或数据缺失。")
             else:
                 statuses[sym] = ("获取失败", "数据获取失败，无法判断状态。")
-        elif sym in STOCK_SYMBOLS:
+        elif sym in STOCK_SYMBOLS or sym in ALT_SYMBOLS:
             streak = streaks.get(sym, 0)
             has = _stock_has_data(sym, last_values, history)
             statuses[sym] = (trend_label(streak, has), _trend_desc(streak, has, sym))
@@ -373,6 +374,8 @@ def load_history() -> list[dict]:
             "sh": rec.get("sh"),
             "sz": rec.get("sz"),
             "cyb": rec.get("cyb"),
+            "gld": rec.get("gld"),
+            "btc": rec.get("btc"),
             }
         for rec in data
         if isinstance(rec, dict) and rec.get("date")

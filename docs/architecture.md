@@ -7,8 +7,8 @@
 
 Python 项目。每个交易日有多个运行点：
 
-1. **收盘日报**：`daily_report.py`（美东收盘后运行），从 Yahoo Finance 拉取美股（GSPC/IXIC/VIX/VXN/MOVE）+ A 股（SH/SZ/CYB）共 8 个指数，生成 Markdown 日报（含近 30 日趋势图），追加历史数据并缓存当日值，生成 `context/YYYY-MM-DD.json` 上下文（供 Hermes 常规解读/异动归因），交由 Hermes 读取并推送到 QQ 机器人。
-2. **盘中快照**：`snapshot_report.py`（A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00，北京时间），按 `--market {a-share,us}` + `--time {open,midday,close,noon}` 取对应市场子集，渲染单板块简报存盘 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`，检查告警阈值（只读缓存基准），不推送。
+1. **收盘日报**：`daily_report.py`（美东收盘后运行），从 Yahoo Finance 拉取美股（GSPC/IXIC/VIX/VXN/MOVE）+ A 股（SH/SZ/CYB）+ 另类资产（GLD 黄金 ETF / BTC-USD 比特币）共 10 个标的，生成 Markdown 日报（含分市场近 30 日趋势图），追加历史数据并缓存当日值，生成 `context/YYYY-MM-DD.json` 上下文（供 Hermes 常规解读/异动归因），交由 Hermes 读取并推送到 QQ 机器人。另类资产仅纳入日报「💰 另类资产」板块与趋势图，不参与告警、不进入波动率/大盘面板。
+2. **盘中快照**：`snapshot_report.py`（A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00，北京时间），按 `--market {a-share,us,alt}` + `--time {open,midday,close,noon}` 取对应市场子集（alt = GLD/BTC 另类资产单板块），渲染单板块简报存盘 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`，检查告警阈值（只读缓存基准），不推送。
 告警：两入口各自检查当日变化率是否超过阈值（默认 VIX/VXN ±20%、MOVE ±15%、GSPC/IXIC ±4/±4.5、SH/SZ ±4%、CYB ±5%，env 可覆盖），
 触发则生成 `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon），由 Hermes 检测并独立推送一条警报消息；
 同一指数当日只告警一次（午盘触发则收盘跳过），去重状态记在 `data/alerts.log`。

@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 from .analyzer import ALERTS_DIR, ALERTS_LOG, check_breach
-from .fetcher import SYMBOLS
+from .fetcher import SYMBOLS, ALT_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -65,7 +65,10 @@ def collect_breaches(values: dict, last_values: dict) -> list[dict]:
     run_alert_checks 与 generate_context 共用的单一事实来源；单指数异常仅记日志跳过。"""
     breaches = []
     for sym in SYMBOLS:
+        if sym in ALT_SYMBOLS:
+            continue
         try:
+
             alert = check_breach(sym, values.get(sym), last_values.get(sym))
         except Exception as exc:
             log.warning("告警检查 %s 失败: %s", sym, exc)

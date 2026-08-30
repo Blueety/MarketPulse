@@ -16,10 +16,12 @@ def sample_data() -> dict:
         "values": {
             "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
             "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40,
+            "GLD": 252.30, "BTC": 65000.00,
         },
         "changes": {
             "GSPC": 0.50, "IXIC": -0.30, "SH": 0.60, "SZ": -0.40, "CYB": 0.20,
             "VIX": 1.23, "VXN": -0.50, "MOVE": 2.00,
+            "GLD": 0.45, "BTC": -1.20,
         },
         "statuses": {
             "GSPC": ("连涨1日", "大盘连续上涨1日。"),
@@ -30,6 +32,8 @@ def sample_data() -> dict:
             "VIX": ("平静", "市场情绪平稳，波动率处于低位，风险偏好较高。"),
             "VXN": ("警惕", "市场情绪偏谨慎，波动率上升，注意短期回调风险。"),
             "MOVE": ("平静", "债市波动平稳，利率预期稳定。"),
+            "GLD": ("连涨1日", "大盘连续上涨1日。"),
+            "BTC": ("连跌1日", "大盘连续下跌1日。"),
         },
         "summary": "VIX 收于 15.23，市场状态：平静。",
         "has_history": True,
@@ -51,9 +55,9 @@ class TestRenderReport:
         data = sample_data()
         data["has_history"] = False
         data["changes"] = {"GSPC": None, "IXIC": None, "SH": None, "SZ": None, "CYB": None,
-                           "VIX": None, "VXN": None, "MOVE": None}
+                           "VIX": None, "VXN": None, "MOVE": None, "GLD": None, "BTC": None}
         report = rep.render_report(**data)
-        assert report.count("首次运行，暂无历史对比") == 8
+        assert report.count("首次运行，暂无历史对比") == 10
 
     def test_failed_fetch_annotated(self):
         data = sample_data()

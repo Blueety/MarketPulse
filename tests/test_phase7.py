@@ -32,10 +32,10 @@ def tmp_paths(monkeypatch, tmp_path):
 
 class TestSymbolsPhase7:
     def test_symbols_count_and_order(self):
-        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"}
+        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"}
         # 前五顺序：美股大盘 → A 股大盘（含创业板）
         assert list(an.SYMBOLS)[:5] == ["GSPC", "IXIC", "SH", "SZ", "CYB"]
-        assert list(an.SYMBOLS)[-3:] == ["VIX", "VXN", "MOVE"]
+        assert list(an.SYMBOLS)[-5:] == ["VIX", "VXN", "MOVE", "GLD", "BTC"]
 
     def test_cyb_ticker(self):
         assert an.SYMBOLS["CYB"]["label"] == "创业板指"
@@ -49,6 +49,7 @@ class TestSymbolsPhase7:
         assert ft.MARKETS == {
             "a-share": {"SH", "SZ", "CYB"},
             "us": {"GSPC", "IXIC"},
+            "alt": {"GLD", "BTC"},
         }
 
 

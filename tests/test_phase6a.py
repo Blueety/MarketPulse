@@ -18,10 +18,10 @@ def clean_thresholds(monkeypatch):
 class TestSymbolsAndConfig:
     def test_symbols_order_stock_first(self):
         assert list(an.SYMBOLS)[:4] == ["GSPC", "IXIC", "SH", "SZ"]
-        assert list(an.SYMBOLS)[-3:] == ["VIX", "VXN", "MOVE"]
+        assert list(an.SYMBOLS)[-5:] == ["VIX", "VXN", "MOVE", "GLD", "BTC"]
         assert an.STOCK_SYMBOLS == {"GSPC", "IXIC", "SH", "SZ", "CYB"}
         assert an.A_SHARE_SYMBOLS == {"SH", "SZ", "CYB"}
-        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE", "CYB"}
+        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE", "CYB", "GLD", "BTC"}
         assert an.SYMBOLS["SH"]["ticker"] == "000001.SS"
         assert an.SYMBOLS["SZ"]["ticker"] == "399001.SZ"
         assert an.SYMBOLS["CYB"]["ticker"] == "399006.SZ"
@@ -103,7 +103,7 @@ class TestCheckBreachStockAlwaysWarn:
 class TestReportSections:
     def test_daily_three_sections_stock_first(self):
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40, "GLD": 252.30, "BTC": 65000.00}
         changes = an.compute_changes(values, values)
         statuses = an.build_statuses(values, {})
         summary = an.build_summary(values, statuses, {})
@@ -118,7 +118,7 @@ class TestReportSections:
 
     def test_snapshot_three_sections(self):
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40, "GLD": 252.30, "BTC": 65000.00}
         statuses = an.build_statuses(values, {})
         body = rep.render_snapshot("2026-08-29", values, statuses)
         idx_stock = body.index("🌏 美股大盘")

@@ -101,7 +101,7 @@ class TestFetchUsSectorHeat:
 
 
 def _report_inputs(**kw):
-    syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"]
+    syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]
     values = {s: 100.0 for s in syms}
     values["VIX"] = 15.0
     changes = {s: 0.5 for s in syms}
@@ -138,9 +138,9 @@ class TestGenerateContextUsSector:
         monkeypatch.setattr(al, "ALERTS_DIR", tmp_path / "alerts")
         monkeypatch.setattr(al, "ALERTS_LOG", tmp_path / "alerts.log")
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 252.30, "BTC": 65000.00}
         last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0, "GLD": 250.10, "BTC": 64000.00}
         changes = an.compute_changes(values, last)
         statuses = an.build_statuses(values, {})
         rep.generate_context("2026-08-29", values, changes, statuses, last,
@@ -154,7 +154,7 @@ class TestGenerateContextUsSector:
 
 class TestSnapshotUsSector:
     def _values_statuses(self):
-        syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"]
+        syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]
         values = {s: 100.0 for s in syms}
         values["VIX"] = 15.0
         return values, an.build_statuses(values, {})

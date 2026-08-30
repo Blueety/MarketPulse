@@ -64,10 +64,17 @@ def main() -> int:
         log.warning("A股趋势图渲染失败，跳过: %s", exc)
     us_trend_chart = f"./charts/{us_trend_path.name}" if us_trend_path else None
     cn_trend_chart = f"./charts/{cn_trend_path.name}" if cn_trend_path else None
+    alts_trend_path = None
+    try:
+        alts_trend_path = render_market_trend_chart(history, date, "alt")
+    except Exception as exc:
+        log.warning("另类资产趋势图渲染失败，跳过: %s", exc)
+    alts_trend_chart = f"./charts/{alts_trend_path.name}" if alts_trend_path else None
 
     report = render_report(date, values, changes, statuses, summary, has_history, trend_chart,
                            sector_heat=sector_heat, us_sector_heat=us_sector_heat,
-                           us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart)
+                           us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart,
+                           alts_trend_chart=alts_trend_chart)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 

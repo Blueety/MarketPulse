@@ -31,7 +31,8 @@ log = logging.getLogger("marketpulse")
 
 def main(market: str = "us", time: str = "noon") -> int:
     """取数（仅本市场子集）→ 分类 → 渲染单板块快照 → 落盘 → 告警检查（只读缓存基准）。
-    market: a-share | us（默认 us）；time: open | midday | close | noon（默认 noon，设计 G）。"""
+    market: a-share | us | alt（默认 us）；time: open | midday | close | noon（默认 noon）。
+    alt = 另类资产（GLD 黄金 / BTC 比特币），不参与告警。"""
     date = get_market_date(market)
     log.info("MarketPulse 开始生成 %s 快照（市场=%s，时段=%s）", date, market, time)
 
@@ -54,8 +55,8 @@ def main(market: str = "us", time: str = "noon") -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """解析 CLI：--market（默认 us）/ --time（默认 noon）。"""
     parser = argparse.ArgumentParser(description="MarketPulse 盘中快照生成器")
-    parser.add_argument("--market", choices=("a-share", "us"), default="us",
-                        help="快照市场：a-share（上证/深证/创业板）或 us（标普/纳斯达克），默认 us")
+    parser.add_argument("--market", choices=("a-share", "us", "alt"), default="us",
+                        help="快照市场：a-share（上证/深证/创业板）、us（标普/纳斯达克）或 alt（黄金/比特币），默认 us")
     parser.add_argument("--time", choices=("open", "midday", "close", "noon"), default="noon",
                         help="快照时段：open/midday/close/noon，默认 noon")
     return parser.parse_args(argv)

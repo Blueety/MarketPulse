@@ -19,7 +19,7 @@ from .analyzer import (
     load_history,
 )
 from .config import load_config
-from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -31,24 +31,25 @@ MARKET_CHART_TIMEOUT = 5  # 分市场趋势图限时（秒），超时跳过该�
 MARKET_CHART_PANELS = {
     "us": [("gspc", "GSPC", "#2b6de8"), ("ixic", "IXIC", "#1a9e6c")],
     "cn": [("sh", "SH", "#d1495b"), ("sz", "SZ", "#e07600"), ("cyb", "CYB", "#7b5ce0")],
+    "alt": [("gld", "GLD", "#d4a017"), ("btc", "BTC", "#f7931a")],
 }
 MARKET_CHART_TITLES = {
     "us": "US Major Indices — 30-Day Trend",
     "cn": "A-Share Major Indices — 30-Day Trend",
+    "alt": "Gold & Bitcoin — 30-Day Trend",
 }
-
-
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
-    us_trend_chart / cn_trend_chart 为分市场趋势图相对路径，提供时分别插入
-    「美股大盘近30日趋势」/「A股大盘近30日趋势」章节；None 则省略（设计 G）。
+    us_trend_chart / cn_trend_chart / alts_trend_chart 为分市场趋势图相对路径，提供时分别插入
+    「美股大盘近30日趋势」/「A股大盘近30日趋势」/「另类资产近30日趋势」章节；None 则省略（设计 G）。
     """
     us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
     a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
-    vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+    vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS and s not in ALT_SYMBOLS]
+    alts_syms = [s for s in SYMBOLS if s in ALT_SYMBOLS]
 
     us_stock_rows = []
     for sym in us_stock_syms:
@@ -134,6 +135,36 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 ![A股大盘近30日趋势]({cn_trend_chart})
 """
+    # 十期：另类资产板块（GLD/BTC）—— 不参与告警、复用大盘四档趋势标签；值缺失 → 获取失败
+    alts_rows = []
+    for sym in alts_syms:
+        meta = SYMBOLS[sym]
+        trend, _ = statuses[sym]
+        alts_rows.append(
+            f"| {meta['label']} | {fmt_value(values[sym])} "
+            f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
+        )
+    alts_table = "\n".join(alts_rows)
+
+    # 十期：另类资产趋势图章节（设计 G，默认 None → 省略）
+    alts_trend_block = ""
+    if alts_trend_chart:
+        alts_trend_block = f"""
+---
+
+## 📈 另类资产近30日趋势
+
+![另类资产近30日趋势]({alts_trend_chart})
+"""
+    alts_block = f"""
+---
+
+## 💰 另类资产
+
+| 资产 | 收盘价 | 涨跌幅 | 趋势 |
+| :--- | :--- | :--- | :--- |
+{alts_table}{alts_trend_block}
+"""
 
     body = f"""# 📊 全市场情绪日报
 
@@ -153,7 +184,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{a_share_table}{cn_trend_block}
+{a_share_table}{cn_trend_block}{alts_block}
 
 ---
 
@@ -409,7 +440,7 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
     if market is None:
         us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
         a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
-        vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+        vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS and s not in ALT_SYMBOLS]
         us_stock_rows = [
             f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
             for s in us_stock_syms
@@ -473,6 +504,9 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
     if market == "a-share":
         section_title = "🇨🇳 A 股大盘"
         syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
+    elif market == "alt":
+        section_title = "💰 另类资产"
+        syms = [s for s in SYMBOLS if s in ALT_SYMBOLS]
     else:
         section_title = "🌏 美股大盘"
         syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
@@ -580,8 +614,6 @@ def _breach_item(alert: dict) -> dict:
         "threshold": alert["threshold"],
         "level": alert["level"],
     }
-
-
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
                      last_values: dict, sector_heat=None, us_sector_heat=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
@@ -594,8 +626,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
         "date": date,
         "indices": {
             sym: {
-                "value": values[sym],
-                "change_pct": changes[sym],
+                "value": values.get(sym),
+                "change_pct": changes.get(sym),
                 "status": statuses[sym][0],
             }
             for sym in SYMBOLS
@@ -610,6 +642,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "sh": [r["sh"] for r in history],
             "sz": [r["sz"] for r in history],
             "cyb": [r["cyb"] for r in history],
+            "gld": [r["gld"] for r in history],
+            "btc": [r["btc"] for r in history],
         },
         "breach": {
             "triggered": bool(breaches),

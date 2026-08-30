@@ -92,7 +92,7 @@ class TestFetchSectorHeatFailure:
 
 
 def _report_inputs(sector_heat=None):
-    syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"]
+    syms = ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]
     values = {s: 100.0 for s in syms}
     values["VIX"] = 15.0
     changes = {s: 0.5 for s in syms}
@@ -157,9 +157,9 @@ class TestGenerateContextSector:
     def test_sector_heat_key_and_keywords(self, monkeypatch, tmp_path):
         self._patch(monkeypatch, tmp_path)
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 252.30, "BTC": 65000.00}
         last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0, "GLD": 250.10, "BTC": 64000.00}
         sector_heat = ([{"name": "创新药", "change": 5.2, "turnover": "10.0亿", "top_stock": "A"}], [])
         rep.generate_context("2026-08-29", **self._inputs(values, last), sector_heat=sector_heat)
         data = json.loads((tmp_path / "context" / "2026-08-29.json").read_text(encoding="utf-8"))
@@ -172,9 +172,9 @@ class TestGenerateContextSector:
     def test_none_falls_back(self, monkeypatch, tmp_path):
         self._patch(monkeypatch, tmp_path)
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 252.30, "BTC": 65000.00}
         last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0, "GLD": 250.10, "BTC": 64000.00}
         rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads((tmp_path / "context" / "2026-08-29.json").read_text(encoding="utf-8"))
         assert data["sector_heat"] == {"gainers": [], "losers": []}
@@ -217,7 +217,7 @@ class TestDailyReportWiring:
         fixed_us = [{"name": "科技 (XLK)", "change": 2.5, "turnover": "$1.2B", "top_stock": "XLK"}]
 
         def fake_fetch_all(market=None):
-            return ({s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"]}, {})
+            return ({s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]}, {})
 
         def fake_fetch_sector_heat():
             calls["sector"] = fixed

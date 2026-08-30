@@ -31,11 +31,11 @@ def tmp_paths(monkeypatch, tmp_path):
 
 class TestSymbolsPhase6b:
     def test_seven_symbols(self):
-        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE", "CYB"}
+        assert set(an.SYMBOLS) == {"GSPC", "IXIC", "SH", "SZ", "VIX", "VXN", "MOVE", "CYB", "GLD", "BTC"}
 
     def test_order_stock_ashare_vol(self):
         assert list(an.SYMBOLS)[:4] == ["GSPC", "IXIC", "SH", "SZ"]
-        assert list(an.SYMBOLS)[-3:] == ["VIX", "VXN", "MOVE"]
+        assert list(an.SYMBOLS)[-5:] == ["VIX", "VXN", "MOVE", "GLD", "BTC"]
 
     def test_tickers(self):
         assert an.SYMBOLS["SH"]["ticker"] == "000001.SS"
@@ -76,7 +76,7 @@ class Test休市:
 
     def test_report_ashare_row_休市(self, clean_thresholds):
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": None, "SZ": None, "CYB": None,
-                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+                  "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40, "GLD": 252.30, "BTC": 65000.00}
         statuses = an.build_statuses(values, {})
         body = rep.render_report("2026-08-29", values,
                                  an.compute_changes(values, values), statuses,
@@ -133,7 +133,7 @@ class TestA股Breach:
 class TestReportThreeSections:
     def _seven(self):
         return {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+                "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40, "GLD": 252.30, "BTC": 65000.00}
 
     def test_daily_three_sections_order(self, clean_thresholds):
         values = self._seven()
