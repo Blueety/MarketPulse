@@ -181,12 +181,15 @@
     function renderLineChart(canvas, history, series) {
       const ctx = canvas.getContext("2d");
 
-      // 过滤非交易日：只保留在该组至少有一个系列有数据的日期
+      // 过滤非交易日：只保留工作日且至少有一个系列有数据的日期
       const tradingDates = [];
       const dateIndexMap = {};
       history.dates.forEach(function (d, i) {
+        var dt = new Date(d);
+        var dayOfWeek = dt.getDay(); // 0=周日, 6=周六
+        var isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
         var hasData = series.some(function (s) { return s.values && s.values[i] != null; });
-        if (hasData) {
+        if (!isWeekend && hasData) {
           dateIndexMap[i] = tradingDates.length;
           tradingDates.push(d);
         }
