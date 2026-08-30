@@ -126,16 +126,31 @@ def fetch_all(market: str | None = None) -> tuple[dict, dict]:
     return values, errors
 
 
-def fetch_sector_heat(top_n: int = 5) -> list[dict]:
-    """从 AkShare 获取概念板块热度 Top N（按涨跌幅降序）。
+def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
+    """从 AkShare 获取概念板块热度（领涨 / 领跌各 Top N，一次取数两路排序）。
 
     数据源为新浪（money.finance.sina.com.cn），akshare 内部 requests 无 timeout，
-    故用 daemon 线程 + join(SECTOR_TIMEOUT) 限时；超时 / 异常 / 缺必需列均返回 []，
-    不中断日报主流程。返回 [{name, change, turnover, top_stock}]，
+    故用 daemon 线程 + join(SECTOR_TIMEOUT) 限时；超时 / 异常 / 缺必需列均返回 ([], [])，
+    不中断日报主流程。返回 (gainers, losers)：
+      - gainers：按涨跌幅降序 Top N，[{name, change, turnover, top_stock}]
+      - losers：按涨跌幅升序 Top N，字段同（most-negative 在前）
     turnover 为「X.X亿」（总成交额[元] ÷ 1e8 保留 1 位）。
     """
     required_cols = ["板块", "涨跌幅", "总成交额", "股票名称"]
     holder: dict = {}
+
+    def _build_rows(df) -> list[dict]:
+        rows = []
+        for _, r in df.iterrows():
+            change = float(r["涨跌幅"])
+            turnover_yuan = float(r["总成交额"])
+            rows.append({
+                "name": str(r["板块"]),
+                "change": round(change, 2),
+                "turnover": f"{turnover_yuan / 1e8:.1f}亿",
+                "top_stock": str(r["股票名称"]),
+            })
+        return rows
 
     def _worker() -> None:
         try:
@@ -146,26 +161,18 @@ def fetch_sector_heat(top_n: int = 5) -> list[dict]:
             for col in required_cols:
                 if col not in df.columns:
                     raise KeyError(f"概念板块数据缺少必需列: {col}")
-            df = df.sort_values("涨跌幅", ascending=False).head(top_n)
-            rows = []
-            for _, r in df.iterrows():
-                change = float(r["涨跌幅"])
-                turnover_yuan = float(r["总成交额"])
-                rows.append({
-                    "name": str(r["板块"]),
-                    "change": round(change, 2),
-                    "turnover": f"{turnover_yuan / 1e8:.1f}亿",
-                    "top_stock": str(r["股票名称"]),
-                })
-            holder["rows"] = rows
+            all_rows = _build_rows(df)
+            gainers = sorted(all_rows, key=lambda r: r["change"], reverse=True)[:top_n]
+            losers = sorted(all_rows, key=lambda r: r["change"])[:top_n]
+            holder["rows"] = (gainers, losers)
         except Exception as exc:
             log.warning("板块热度获取失败: %s", exc)
-            holder["rows"] = []
+            holder["rows"] = ([], [])
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
     t.join(SECTOR_TIMEOUT)
     if t.is_alive():
         log.warning("板块热度获取超时（>%ds），跳过", SECTOR_TIMEOUT)
-        return []
-    return holder.get("rows", [])
+        return ([], [])
+    return holder.get("rows", ([], []))

@@ -1,7 +1,8 @@
 """八期 A 股板块热度专项测试（不联网，monkeypatch akshare / 编排函数）。
 
-覆盖：fetch_sector_heat 取数（成功/异常/缺列/超时限）、render_report 板块表（正常/空/负值）、
-generate_context 扩展 sector_heat 键 + search_keywords 注入板块词（不设阈值）、build_search_keywords
+覆盖：fetch_sector_heat 取数（成功/异常/缺列/超时限，返回 (gainers, losers) 元组）、
+render_report 板块表（领涨/领跌正常/空态）、generate_context 扩展 sector_heat 键
+（{gainers, losers}）+ search_keywords 注入板块词（不设阈值）、build_search_keywords
 板块注入方向语义、daily_report 入口透传板块数据。既有 170 条测试零改动（默认参数）。
 """
 
@@ -37,22 +38,27 @@ class TestFetchSectorHeat:
         import akshare as ak_mod
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: _spot_df(ROWS))
-        res = ft.fetch_sector_heat()
-        assert len(res) == 5
-        # 按涨跌幅降序：5.20, 3.79, 2.68, 1.00, -2.50
-        assert [r["change"] for r in res] == [5.2, 3.79, 2.68, 1.0, -2.5]
-        assert res[0] == {"name": "生物育种", "change": 5.2, "turnover": "72.2亿", "top_stock": "敦煌种业"}
-        assert res[1] == {"name": "水产品", "change": 3.79, "turnover": "13.7亿", "top_stock": "中水渔业"}
+        gainers, losers = ft.fetch_sector_heat()
+        # 领涨降序 Top5：5.20, 3.79, 2.68, 1.00, -2.50
+        assert len(gainers) == 5
+        assert [r["change"] for r in gainers] == [5.2, 3.79, 2.68, 1.0, -2.5]
+        assert gainers[0] == {"name": "生物育种", "change": 5.2, "turnover": "72.2亿", "top_stock": "敦煌种业"}
+        assert gainers[1] == {"name": "水产品", "change": 3.79, "turnover": "13.7亿", "top_stock": "中水渔业"}
         # 负值板块保留负号
-        assert res[4] == {"name": "领跌板块", "change": -2.5, "turnover": "1.0亿", "top_stock": "X公司"}
+        assert gainers[4] == {"name": "领跌板块", "change": -2.5, "turnover": "1.0亿", "top_stock": "X公司"}
+        # 领跌升序 Top5：6 行中取涨跌幅最低的 5 个（含低涨幅正板块）
+        assert len(losers) == 5
+        assert [r["change"] for r in losers] == [-5.0, -2.5, 1.0, 2.68, 3.79]
+        assert losers[0]["name"] == "暴跌板块"
 
     def test_top_n_param(self, monkeypatch):
         import akshare as ak_mod
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: _spot_df(ROWS))
-        res = ft.fetch_sector_heat(top_n=3)
-        assert len(res) == 3
-        assert [r["name"] for r in res] == ["生物育种", "水产品", "生态农业"]
+        gainers, losers = ft.fetch_sector_heat(top_n=3)
+        assert len(gainers) == 3
+        assert [r["name"] for r in gainers] == ["生物育种", "水产品", "生态农业"]
+        assert len(losers) == 3
 
 
 class TestFetchSectorHeatFailure:
@@ -63,14 +69,14 @@ class TestFetchSectorHeatFailure:
             raise ValueError("boom")
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", boom)
-        assert ft.fetch_sector_heat() == []
+        assert ft.fetch_sector_heat() == ([], [])
 
     def test_missing_required_column_returns_empty(self, monkeypatch):
         import akshare as ak_mod
 
         bad = [{"板块": "X", "涨跌幅": 1.0, "股票名称": "Y"}]  # 缺 总成交额
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: _spot_df(bad))
-        assert ft.fetch_sector_heat() == []
+        assert ft.fetch_sector_heat() == ([], [])
 
     def test_timeout_returns_empty(self, monkeypatch):
         import akshare as ak_mod
@@ -82,7 +88,7 @@ class TestFetchSectorHeatFailure:
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", slow)
         monkeypatch.setattr(ft, "SECTOR_TIMEOUT", 0.05)
-        assert ft.fetch_sector_heat() == []
+        assert ft.fetch_sector_heat() == ([], [])
 
 
 def _report_inputs(sector_heat=None):
@@ -103,29 +109,32 @@ def _report_inputs(sector_heat=None):
 
 
 class TestRenderReportSectorTable:
-    SECTORS = [
+    GAINERS = [
         {"name": "水产品", "change": 3.79, "turnover": "13.7亿", "top_stock": "中水渔业"},
-        {"name": "领跌", "change": -2.5, "turnover": "1.0亿", "top_stock": "X公司"},
         {"name": "生物育种", "change": 5.2, "turnover": "72.2亿", "top_stock": "敦煌种业"},
+    ]
+    LOSERS = [
+        {"name": "领跌", "change": -2.5, "turnover": "1.0亿", "top_stock": "X公司"},
     ]
 
     def test_table_rendered_with_signs(self):
-        report = rep.render_report(**_report_inputs(sector_heat=self.SECTORS))
+        report = rep.render_report(**_report_inputs(sector_heat=(self.GAINERS, self.LOSERS)))
         assert "## 🔥 A 股热点板块 Top 5" in report
         assert "| 水产品 | +3.79% | 13.7亿 | 中水渔业 |" in report
-        assert "| 领跌 | -2.50% | 1.0亿 | X公司 |" in report
         assert "| 生物育种 | +5.20% | 72.2亿 | 敦煌种业 |" in report
+        assert "## 📉 A 股领跌板块 Top 5" in report
+        assert "| 领跌 | -2.50% | 1.0亿 | X公司 |" in report
         # 既有章节不破坏
         assert "## 🇨🇳 A 股大盘" in report
         assert "## 📈 波动率指数" in report
 
     def test_empty_list_shows_placeholder(self):
-        report = rep.render_report(**_report_inputs(sector_heat=[]))
-        assert "| 数据暂缺 | — | — | — |" in report
+        report = rep.render_report(**_report_inputs(sector_heat=([], [])))
+        assert report.count("| 数据暂缺 | — | — | — |") == 2
 
     def test_none_default_shows_placeholder(self):
         report = rep.render_report(**_report_inputs())
-        assert "| 数据暂缺 | — | — | — |" in report
+        assert report.count("| 数据暂缺 | — | — | — |") == 2
 
 
 class TestGenerateContextSector:
@@ -151,10 +160,13 @@ class TestGenerateContextSector:
                   "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
         last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
-        sector_heat = [{"name": "创新药", "change": 5.2, "turnover": "10.0亿", "top_stock": "A"}]
+        sector_heat = ([{"name": "创新药", "change": 5.2, "turnover": "10.0亿", "top_stock": "A"}], [])
         rep.generate_context("2026-08-29", **self._inputs(values, last), sector_heat=sector_heat)
         data = json.loads((tmp_path / "context" / "2026-08-29.json").read_text(encoding="utf-8"))
-        assert data["sector_heat"] == sector_heat
+        assert data["sector_heat"] == {
+            "gainers": [{"name": "创新药", "change": 5.2, "turnover": "10.0亿", "top_stock": "A"}],
+            "losers": [],
+        }
         assert "创新药 surge 2026-08-29" in data["search_keywords"]
 
     def test_none_falls_back(self, monkeypatch, tmp_path):
@@ -165,23 +177,23 @@ class TestGenerateContextSector:
                 "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads((tmp_path / "context" / "2026-08-29.json").read_text(encoding="utf-8"))
-        assert data["sector_heat"] == []
+        assert data["sector_heat"] == {"gainers": [], "losers": []}
         assert data["search_keywords"] == ["market summary 2026-08-29"]
 
 
 class TestBuildSearchKeywordsSector:
     def test_sectors_injected_no_threshold(self):
         # 八期：不设阈值，3.79% 也注入（与旧版阈值版行为不同）
-        kw = an.build_search_keywords("2026-08-29", [], sector_heat=[{"name": "水产品", "change": 3.79}])
+        kw = an.build_search_keywords("2026-08-29", [], sector_heat=([{"name": "水产品", "change": 3.79}], []))
         assert kw == ["水产品 surge 2026-08-29"]
 
     def test_negative_change_drop(self):
-        kw = an.build_search_keywords("2026-08-29", [], sector_heat=[{"name": "领跌", "change": -2.5}])
+        kw = an.build_search_keywords("2026-08-29", [], sector_heat=([], [{"name": "领跌", "change": -2.5}]))
         assert kw == ["领跌 drop 2026-08-29"]
 
     def test_five_sectors_no_directional_words(self):
         sh = [{"name": f"s{i}", "change": float(i)} for i in range(5)]
-        kw = an.build_search_keywords("2026-08-29", [], sector_heat=sh)
+        kw = an.build_search_keywords("2026-08-29", [], sector_heat=(sh, []))
         assert len(kw) == 5
         assert "market volatility" not in " ".join(kw)
 
@@ -189,7 +201,7 @@ class TestBuildSearchKeywordsSector:
         kw = an.build_search_keywords(
             "2026-08-29",
             [{"symbol": "VIX", "change": 22.0}],
-            sector_heat=[{"name": "水产品", "change": 3.79}],
+            sector_heat=([{"name": "水产品", "change": 3.79}], []),
         )
         assert kw[0] == "VIX surge 2026-08-29"
         assert "水产品 surge 2026-08-29" in kw
@@ -208,7 +220,7 @@ class TestDailyReportWiring:
 
         def fake_fetch_sector_heat():
             calls["sector"] = fixed
-            return fixed
+            return (fixed, [])
 
         def fake_render(*a, **k):
             calls["render_sector"] = k.get("sector_heat")
@@ -235,5 +247,5 @@ class TestDailyReportWiring:
 
         rc = dr.main()
         assert rc == 0
-        assert calls["render_sector"] == fixed
-        assert calls["gen_sector"] == fixed
+        assert calls["render_sector"] == (fixed, [])
+        assert calls["gen_sector"] == (fixed, [])

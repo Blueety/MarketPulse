@@ -73,6 +73,7 @@
 - **新浪源无 timeout**：akshare 内部 `requests.get` 对概念板块接口无 timeout 参数，网络异常可无限挂起；`fetch_sector_heat` 用 daemon 线程 + `join(SECTOR_TIMEOUT=10)` 限时（复用 render_trend_chart 的 Windows 无 SIGALRM 模式），超时/异常/缺列一律返回 []，不中断日报主流程；10s 余量覆盖 akshare 冷启动（实测 ~2-3s）。
 - **板块热度不设阈值**：八期改为 Top5 按涨跌幅降序直接展示，不引入 `SECTOR_ALERT_PCT`；`build_search_keywords` 把全部 Top5 板块名按方向（change>=0 surge / <0 drop）注入 `search_keywords`（格式 `"{板块名} surge/drop {date}"`），不触发独立告警；无板块（取数失败/缺列）时回落既有 "market summary {date}"。
 - **板块取数不参与 SYMBOLS 循环**：`fetch_sector_heat` 是独立单请求，在 `fetch_all()` 之后调用，失败不影响 8 指数主流程；板块数据不写 history/缓存，无持久化残留。
+- **板块热度返回值是 (gainers, losers) 元组（补丁：领跌板块）**：`fetch_sector_heat()` 返回 `tuple[list[dict], list[dict]]`，一次取数两路排序——gainers 降序 TopN、losers 升序 TopN（升序 TopN 在板块稀疏时可能含低涨幅正板块，真实交易日数百板块不会重叠）；失败/超时返回 `([], [])`。`render_report` / `generate_context` / `build_search_keywords` 全部按元组契约消费：`generate_context` 落盘为 `sector_heat: {gainers: [...], losers: [...]}`；`build_search_keywords` 展平 `gainers+losers` 注入方向词。**改 fetch_sector_heat 返回结构或 context 契约前，先同步这三个消费点 + test_phase8.py**，否则既有断言（`== ([], [])` / 字典键 `gainers`/`losers`）立即崩。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

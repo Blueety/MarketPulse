@@ -153,9 +153,11 @@ def build_search_keywords(date: str, breaches: list[dict], sector_heat=None) -> 
         f"{b['symbol']} {'surge' if b['change'] >= 0 else 'drop'} {date}"
         for b in breaches
     ]
+    sector_heat = sector_heat or ([], [])
+    sectors = sector_heat[0] + sector_heat[1]
     sector_words = [
         f"{s['name']} {'surge' if s['change'] >= 0 else 'drop'} {date}"
-        for s in (sector_heat or [])
+        for s in sectors
     ]
     words = breach_words + sector_words
     if not words:

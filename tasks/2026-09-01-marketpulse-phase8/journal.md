@@ -34,3 +34,19 @@
 - `search_keywords` 异动日 breach 词优先、板块词随后、截断 5；板块多时部分板块词会被截断（既有契约上限，可接受）。
 - 交付侧（Hermes Prompt）需同步：context 新 `sector_heat` 字段（name/change/turnover/top_stock）与 `search_keywords` 可能出现中文板块名（tavily 支持中文搜索）。
 - 未 commit（按指令）。
+
+
+## 补丁执行日志 — A 股领跌板块 Top 5（2026-08-30）
+
+### 目标
+八期已完成「🔥 A 股热点板块 Top 5」（领涨），本补丁新增「📉 A 股领跌板块 Top 5」（领跌），一次取数两路排序，`fetch_sector_heat()` 返回 `(gainers, losers)` 元组。
+
+### 改动文件清单
+
+### 验证结果
+
+### 遇到的问题
+
+### 下次注意什么
+
+### 风险与后续

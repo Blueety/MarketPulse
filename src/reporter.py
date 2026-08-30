@@ -59,9 +59,11 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
         )
     a_share_table = "\n".join(a_share_rows)
 
-    # 八期：A 股热点板块 Top 5（按涨跌幅降序，不设阈值；空数据显示「数据暂缺」）
+    # 八期：A 股领涨 / 领跌板块 Top 5（按涨跌幅降序 / 升序，不设阈值；空数据显示「数据暂缺」）
+    gainers, losers = sector_heat or ([], [])
+
     sector_rows = []
-    for s in (sector_heat or []):
+    for s in gainers:
         sign = "+" if s["change"] >= 0 else ""
         sector_rows.append(
             f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
@@ -69,6 +71,16 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
     if not sector_rows:
         sector_rows.append("| 数据暂缺 | — | — | — |")
     sector_table = "\n".join(sector_rows)
+
+    loser_rows = []
+    for s in losers:
+        sign = "+" if s["change"] >= 0 else ""
+        loser_rows.append(
+            f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
+        )
+    if not loser_rows:
+        loser_rows.append("| 数据暂缺 | — | — | — |")
+    loser_table = "\n".join(loser_rows)
 
     vol_rows = []
     for sym in vol_syms:
@@ -113,6 +125,14 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 | 板块 | 涨跌幅 | 成交额 | 领涨股 |
 | :--- | :--- | :--- | :--- |
 {sector_table}
+
+---
+
+## 📉 A 股领跌板块 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领跌股 |
+|:--- | :--- | :--- | :--- |
+{loser_table}
 
 ---
 
@@ -390,7 +410,10 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "triggered": bool(breaches),
             "indices": [_breach_item(a) for a in breaches],
         },
-        "sector_heat": sector_heat or [],
+        "sector_heat": {
+            "gainers": (sector_heat or ([], []))[0],
+            "losers": (sector_heat or ([], []))[1],
+        },
         "search_keywords": build_search_keywords(date, breaches, sector_heat),
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
