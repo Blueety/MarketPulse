@@ -9,10 +9,12 @@ from pathlib import Path
 import pytest
 import web.app
 from web.app import (
+    _build_history_payload,
     _compute_latest,
     _last_records,
     _load_alerts,
     _load_sector_heat,
+    _normalize_series,
     _parse_alert_file,
 )
 
@@ -307,3 +309,76 @@ def test_endpoints_empty_data(tmp_path, monkeypatch):
     assert lat["indices"] == []
     assert lat["sector_heat"] == {"gainers": [], "losers": []}
     assert c.get("/api/alerts").json() == []
+
+
+def _seed_history(tmp_path, monkeypatch, hist):
+    """写入测试历史并 monkeypatch HISTORY_FILE（落在使用方模块 web.app）。"""
+    p = tmp_path / "history.json"
+    p.write_text(json.dumps(hist), encoding="utf-8")
+    monkeypatch.setattr(web.app, "HISTORY_FILE", p)
+
+
+def test_build_history_payload_normalized_base100(tmp_path, monkeypatch):
+    hist = [{"date": f"2026-08-{i:02d}", "gspc": float(100 + i * 10 / 6)} for i in range(7)]
+    _seed_history(tmp_path, monkeypatch, hist)
+    gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
+    assert gspc["values"][0] == 100.0
+    assert gspc["values"][-1] == pytest.approx(110.0)
+    assert gspc["change_7d"] == pytest.approx(10.0)
+
+
+def test_build_history_payload_null_preserved(tmp_path, monkeypatch):
+    hist = [
+        {"date": "2026-08-24", "gspc": None},
+        {"date": "2026-08-25", "gspc": 200.0},
+        {"date": "2026-08-26", "gspc": None},
+        {"date": "2026-08-27", "gspc": 220.0},
+        {"date": "2026-08-28", "gspc": 210.0},
+        {"date": "2026-08-29", "gspc": 230.0},
+        {"date": "2026-08-30", "gspc": 240.0},
+    ]
+    _seed_history(tmp_path, monkeypatch, hist)
+    gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
+    assert gspc["values"][0] is None          # 前导 null 保留
+    assert gspc["values"][1] == 100.0          # 基准 = 200
+    assert gspc["values"][2] is None           # 中间 null 保留
+    assert gspc["values"][-1] == pytest.approx(120.0)
+    assert gspc["change_7d"] == pytest.approx(20.0)
+
+
+def test_build_history_payload_zero_base(tmp_path, monkeypatch):
+    hist = [{"date": f"2026-08-{i:02d}", "gspc": 0.0 if i == 0 else 5.0} for i in range(7)]
+    _seed_history(tmp_path, monkeypatch, hist)
+    gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
+    assert gspc["values"] == [None] * 7        # 防除零，全 None 列表
+    assert gspc["change_7d"] is None
+
+
+def test_build_history_payload_single_value(tmp_path, monkeypatch):
+    hist = [{"date": f"2026-08-{i:02d}", "gspc": 100.0 if i == 3 else None} for i in range(7)]
+    _seed_history(tmp_path, monkeypatch, hist)
+    gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
+    assert gspc["values"][3] == 100.0
+    assert gspc["change_7d"] is None           # 仅 1 个非空值，无 7D 变化
+
+
+def test_build_history_payload_change_7d_last_non_null(tmp_path, monkeypatch):
+    hist = [
+        {"date": "2026-08-24", "gspc": 100.0},
+        {"date": "2026-08-25", "gspc": 110.0},
+        {"date": "2026-08-26", "gspc": 120.0},
+        {"date": "2026-08-27", "gspc": 130.0},
+        {"date": "2026-08-28", "gspc": 140.0},
+        {"date": "2026-08-29", "gspc": 150.0},
+        {"date": "2026-08-30", "gspc": None},
+    ]
+    _seed_history(tmp_path, monkeypatch, hist)
+    gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
+    assert gspc["change_7d"] == pytest.approx(50.0)   # 末位 null，用最后非空 150 计
+    assert gspc["values"][-1] is None
+
+
+def test_api_history_series_shape(client):
+    data = client.get("/api/history").json()
+    for s in data["series"]:
+        assert set(s.keys()) == {"key", "label", "values", "change_7d"}

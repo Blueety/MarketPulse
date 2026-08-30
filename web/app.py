@@ -69,17 +69,40 @@ def _last_records(n: int = 7) -> list[dict]:
     return _load_history_raw()[-n:]
 
 
+def _normalize_series(raw: list[float | None]) -> tuple[list[float | None], float | None]:
+    """单序列归一化为相对基准百分比（窗口首个非空值 = 100），返回 (values, change_7d)。
+
+    - base 缺失或 0 → (全 None 列表, None)（防除零；列表同长以便前端安全遍历）。
+    - 前导 null 位置原样保留；首个非空值作为基准。
+    - 非空值 < 2 → change_7d 为 None（单点无 7D 变化可言，meta 显示「—」）。
+    """
+    base = next((v for v in raw if v is not None), None)
+    if base in (None, 0):
+        return [None] * len(raw), None
+    values = [None if v is None else v / base * 100 for v in raw]
+    last = next((v for v in reversed(raw) if v is not None), None)
+    non_null = sum(1 for v in raw if v is not None)
+    change_7d = (last - base) / base * 100 if (last is not None and non_null >= 2) else None
+    return values, change_7d
+
+
 def _build_history_payload() -> dict:
-    """展开为 Chart.js 友好结构：dates + 10 组 series（key=小写 symbol）。"""
+    """展开为 Chart.js 友好结构：dates + 10 组 series（key=小写 symbol）。
+
+    每个序列归一化为相对基准百分比（窗口首个非空值 = 100），另附 change_7d
+    （7 日涨跌幅，相对基准百分比）。
+    """
     records = _last_records(7)
     dates = [r["date"] for r in records]
     series = []
     for sym in SYMBOLS:  # SYMBOLS 字典保序：GSPC/IXIC/SH/SZ/CYB/VIX/VXN/MOVE/GLD/BTC
         key = sym.lower()
+        values, change_7d = _normalize_series([r.get(key) for r in records])
         series.append({
             "key": key,
             "label": SYMBOLS[sym]["label"],
-            "values": [r.get(key) for r in records],
+            "values": values,
+            "change_7d": change_7d,
         })
     return {"dates": dates, "series": series}
 

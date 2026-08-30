@@ -34,10 +34,22 @@
     <section class="card">
       <h2>近 7 日趋势</h2>
       <div class="charts-grid" id="charts-grid">
-        <div class="chart-box"><h3>美股大盘</h3><canvas id="chart-gspc-ixic"></canvas></div>
-        <div class="chart-box"><h3>A 股大盘</h3><canvas id="chart-sh-sz-cyb"></canvas></div>
-        <div class="chart-box"><h3>波动率</h3><canvas id="chart-vix-vxn-move"></canvas></div>
-        <div class="chart-box"><h3>另类资产</h3><canvas id="chart-gld-btc"></canvas></div>
+        <div class="chart-box">
+          <div class="chart-head"><h3>美股大盘</h3><div class="chart-meta" id="meta-gspc-ixic"></div></div>
+          <canvas id="chart-gspc-ixic"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-head"><h3>A 股大盘</h3><div class="chart-meta" id="meta-sh-sz-cyb"></div></div>
+          <canvas id="chart-sh-sz-cyb"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-head"><h3>波动率</h3><div class="chart-meta" id="meta-vix-vxn-move"></div></div>
+          <canvas id="chart-vix-vxn-move"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-head"><h3>另类资产（7D 涨跌幅）</h3><div class="chart-meta" id="meta-gld-btc"></div></div>
+          <canvas id="chart-gld-btc"></canvas>
+        </div>
       </div>
     </section>
 
@@ -72,11 +84,12 @@
       gld: "#d4a017", btc: "#f7931a"
     };
     const GROUPS = [
-      { id: "chart-gspc-ixic", keys: ["gspc", "ixic"] },
-      { id: "chart-sh-sz-cyb", keys: ["sh", "sz", "cyb"] },
-      { id: "chart-vix-vxn-move", keys: ["vix", "vxn", "move"] },
-      { id: "chart-gld-btc", keys: ["gld", "btc"] },
+      { id: "chart-gspc-ixic", keys: ["gspc", "ixic"], type: "line" },
+      { id: "chart-sh-sz-cyb", keys: ["sh", "sz", "cyb"], type: "line" },
+      { id: "chart-vix-vxn-move", keys: ["vix", "vxn", "move"], type: "line" },
+      { id: "chart-gld-btc", keys: ["gld", "btc"], type: "bar" },
     ];
+    const ALT_SHORT = { gld: "黄金", btc: "比特币" };
 
     function fmtNum(v, digits) {
       if (v == null) return "—";
@@ -151,6 +164,149 @@
       });
     }
 
+    function renderMeta(g, series) {
+      const box = document.getElementById(g.id).parentElement;
+      const el = box ? box.querySelector(".chart-meta") : null;
+      if (!el) return;
+      el.innerHTML = "";
+      series.forEach(function (s) {
+        const span = document.createElement("span");
+        span.className = "meta-item";
+        span.style.color = COLORS[s.key] || "#8b949e";
+        span.textContent = s.label + " " + fmtPct(s.change_7d);
+        el.appendChild(span);
+      });
+    }
+
+    function renderLineChart(canvas, history, series) {
+      const ctx = canvas.getContext("2d");
+      const datasets = series.map(function (s) {
+        const pts = [];
+        (s.values || []).forEach(function (v, i) {
+          if (v != null) pts.push({ x: history.dates[i], y: v });
+        });
+        return {
+          label: s.label,
+          data: pts,
+          borderColor: COLORS[s.key],
+          backgroundColor: "transparent",
+          fill: false,
+          tension: 0.35,
+          borderWidth: 2.5,
+          pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 3 : 0; },
+          pointBackgroundColor: COLORS[s.key],
+          pointBorderColor: "#fff",
+          pointBorderWidth: 1.5,
+          pointHitRadius: 10,
+        };
+      });
+      new Chart(canvas, {
+        type: "line",
+        data: { datasets: datasets },
+        options: {
+          responsive: true,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(22, 27, 34, 0.95)",
+              titleColor: "#e6edf3",
+              bodyColor: "#e6edf3",
+              borderColor: "#30363d",
+              borderWidth: 1,
+              titleFont: { size: 11 },
+              bodyFont: { size: 12 },
+              padding: 8,
+              cornerRadius: 4,
+              boxWidth: 8,
+              callbacks: {
+                title: function (items) { return items.length ? items[0].label : ""; },
+                label: function (ctx) { return ctx.dataset.label + " " + fmtPct(ctx.parsed.y - 100); }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: "category",
+              labels: history.dates,
+              grid: { display: false },
+              ticks: {
+                font: { size: 10 },
+                color: "#8b949e",
+                maxRotation: 0,
+                autoSkip: true,
+                callback: function (value, index) { return String(history.dates[index]).slice(8); }
+              }
+            },
+            y: {
+              grid: { color: "rgba(48, 54, 61, 0.25)" },
+              border: { display: false },
+              ticks: {
+                font: { size: 10 },
+                color: "#8b949e",
+                callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
+              }
+            }
+          },
+          animation: { duration: 800, easing: "easeOutQuart" }
+        }
+      });
+    }
+
+    function renderBarChart(canvas, series) {
+      const ctx = canvas.getContext("2d");
+      const labels = [];
+      const data = [];
+      const bg = [];
+      series.forEach(function (s) {
+        if (s.change_7d == null) return;
+        labels.push(ALT_SHORT[s.key] || s.label);
+        data.push(s.change_7d);
+        bg.push(s.change_7d >= 0 ? "#3fb950" : "#f85149");
+      });
+      new Chart(canvas, {
+        type: "bar",
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderRadius: 4, barThickness: 18 }] },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(22, 27, 34, 0.95)",
+              titleColor: "#e6edf3",
+              bodyColor: "#e6edf3",
+              borderColor: "#30363d",
+              borderWidth: 1,
+              titleFont: { size: 11 },
+              bodyFont: { size: 12 },
+              padding: 8,
+              cornerRadius: 4,
+              callbacks: {
+                label: function (ctx) { return "7D 涨跌幅: " + fmtPct(ctx.parsed.x); }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: "rgba(48, 54, 61, 0.25)" },
+              border: { display: false },
+              ticks: {
+                font: { size: 11 },
+                color: "#8b949e",
+                callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
+              }
+            },
+            y: {
+              grid: { display: false },
+              ticks: { font: { size: 12 }, color: "#8b949e" }
+            }
+          },
+          animation: { duration: 800, easing: "easeOutQuart" }
+        }
+      });
+    }
+
     function renderCharts(history) {
       if (window.__chartFailed || !window.Chart) {
         GROUPS.forEach(function (g) {
@@ -161,84 +317,13 @@
       }
       GROUPS.forEach(function (g) {
         const canvas = document.getElementById(g.id);
-        const ctx = canvas.getContext("2d");
         const series = history.series.filter(function (s) { return g.keys.indexOf(s.key) !== -1; });
-
-        // 过滤每个系列的 null 值，用 {x, y} 格式
-        const filtered = series.map(function (s) {
-          const pts = [];
-          s.values.forEach(function (v, i) {
-            if (v != null) pts.push({ x: history.dates[i], y: v });
-          });
-          return pts;
-        });
-
-        // 创建渐变填充
-        const colors = series.map(function (s, idx) {
-          const c = COLORS[s.key];
-          const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-          grad.addColorStop(0, c + "40");
-          grad.addColorStop(1, c + "05");
-          return grad;
-        });
-
-        new Chart(canvas, {
-          type: "line",
-          data: {
-            datasets: series.map(function (s, idx) {
-              return {
-                label: s.label,
-                data: filtered[idx],
-                borderColor: COLORS[s.key],
-                backgroundColor: colors[idx],
-                fill: true,
-                tension: 0.35,
-                pointRadius: 3,
-                pointHoverRadius: 6,
-                borderWidth: 2.5,
-                pointBackgroundColor: COLORS[s.key],
-                pointBorderColor: "#fff",
-                pointBorderWidth: 1.5,
-              };
-            })
-          },
-          options: {
-            responsive: true,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-              legend: { position: "top", labels: { usePointStyle: true, padding: 12, color: "#8b949e", font: { size: 11 } } },
-              tooltip: {
-                backgroundColor: "rgba(22, 27, 34, 0.95)",
-                titleColor: "#e6edf3",
-                bodyColor: "#e6edf3",
-                borderColor: "#30363d",
-                borderWidth: 1,
-                titleFont: { size: 12 },
-                bodyFont: { size: 13 },
-                padding: 10,
-                cornerRadius: 6,
-                callbacks: {
-                  label: function(ctx) {
-                    return ctx.dataset.label + ": " + ctx.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                type: "category",
-                labels: history.dates,
-                grid: { display: false },
-                ticks: { font: { size: 11 }, color: "#8b949e", maxRotation: 45 }
-              },
-              y: {
-                grid: { color: "rgba(48, 54, 61, 0.5)" },
-                ticks: { font: { size: 11 }, color: "#8b949e" }
-              }
-            },
-            animation: { duration: 800, easing: "easeOutQuart" }
-          }
-        });
+        renderMeta(g, series);
+        if (g.type === "bar") {
+          renderBarChart(canvas, series);
+        } else {
+          renderLineChart(canvas, history, series);
+        }
       });
     }
 
