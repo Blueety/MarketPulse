@@ -60,8 +60,28 @@ def fetch_with_retry(name, fn, retries: int = RETRIES):
     return None
 
 
+def fetch_from_akshare(symbol: str) -> float:
+    """从 AkShare 获取 A 股指数最新收盘价（实时性优于 Yahoo）。"""
+    import akshare as ak
+    # 转换 ticker 格式：000001.SS → sh000001, 399001.SZ → sz399001
+    if symbol.endswith(".SS"):
+        ak_symbol = f"sh{symbol[:-3]}"
+    elif symbol.endswith(".SZ"):
+        ak_symbol = f"sz{symbol[:-3]}"
+    else:
+        raise ValueError(f"不支持的 AkShare ticker: {symbol}")
+    df = ak.stock_zh_index_daily(symbol=ak_symbol)
+    if df.empty:
+        raise ValueError(f"AkShare 返回空数据: {symbol}")
+    return float(df.iloc[-1]["close"])
+
+
 def fetch_vix_vxn(symbol: str) -> float:
-    """从 Yahoo Finance chart REST 接口获取指数最近收盘价（复用 Session，规避 history() 多请求限流）。"""
+    """获取指数最近收盘价。A 股走 AkShare（实时性更好），美股/波动率走 Yahoo。"""
+    # A 股走 AkShare
+    if symbol.endswith(".SS") or symbol.endswith(".SZ"):
+        return fetch_from_akshare(symbol)
+    # 美股/波动率走 Yahoo
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
     resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
     resp.raise_for_status()
