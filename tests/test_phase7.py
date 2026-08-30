@@ -101,6 +101,36 @@ class TestRenderMarketSnapshot:
         assert "| 上证指数 | 休市 | 休市 |" in body
         assert "| 创业板指 | 休市 | 休市 |" in body
 
+    def test_a_share_with_sector_heat(self):
+        values = {"SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0}
+        statuses = an.build_statuses(values, {})
+        sector_heat = (
+            [{"name": "创新药", "change": 5.2, "turnover": "10.0亿", "top_stock": "A制药"}],
+            [{"name": "白酒", "change": -2.5, "turnover": "8.0亿", "top_stock": "B酒业"}],
+        )
+        body = rep.render_snapshot(
+            "2026-08-29", values, statuses, market="a-share", time="close", sector_heat=sector_heat
+        )
+        assert "## 🔥 A 股热点板块 Top 5" in body
+        assert "## 📉 A 股领跌板块 Top 5" in body
+        assert "| 创新药 | +5.20% | 10.0亿 | A制药 |" in body
+        assert "| 白酒 | -2.50% | 8.0亿 | B酒业 |" in body
+
+    def test_a_share_empty_sector_heat_shows_placeholder(self):
+        values = {"SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0}
+        statuses = an.build_statuses(values, {})
+        body = rep.render_snapshot(
+            "2026-08-29", values, statuses, market="a-share", time="close", sector_heat=([], [])
+        )
+        assert body.count("| 数据暂缺 | — | — | — |") == 2
+
+    def test_us_snapshot_ignores_sector_heat(self):
+        values = {"GSPC": 4500.0, "IXIC": 17500.0}
+        statuses = an.build_statuses(values, {})
+        body = rep.render_snapshot("2026-08-29", values, statuses, market="us", time="open")
+        assert "热点板块" not in body
+        assert "领跌板块" not in body
+
     def test_none_branch_unchanged_three_sections(self):
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
                   "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
@@ -215,9 +245,14 @@ class TestSnapshotEntryOrchestration:
                 return ({"SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0}, {})
             return ({"GSPC": 4500.0, "IXIC": 17500.0}, {})
 
-        def fake_render(date, values, statuses, market=None, time="noon"):
+        def fake_fetch_sector_heat(top_n=5):
+            calls["sector_heat_called"] = True
+            return ([{"name": "x", "change": 1.0, "turnover": "1亿", "top_stock": "X"}], [])
+
+        def fake_render(date, values, statuses, market=None, time="noon", sector_heat=None):
             calls["render_market"] = market
             calls["render_time"] = time
+            calls["render_sector_heat"] = sector_heat
             return "# snap"
 
         def fake_save(date, content, suffix="noon"):
@@ -229,6 +264,7 @@ class TestSnapshotEntryOrchestration:
             return []
 
         monkeypatch.setattr(snap, "fetch_all", fake_fetch_all)
+        monkeypatch.setattr(snap, "fetch_sector_heat", fake_fetch_sector_heat)
         monkeypatch.setattr(snap, "load_last_values", lambda: {})
         monkeypatch.setattr(snap, "load_history", lambda: [])
         monkeypatch.setattr(snap, "build_statuses", lambda *a, **k: {})
@@ -241,7 +277,8 @@ class TestSnapshotEntryOrchestration:
         calls = self._patch(monkeypatch, tmp_path)
         rc = snap.main("a-share", "midday")
         assert rc == 0
-        assert calls["market"] == "a-share"
+        assert calls["sector_heat_called"] is True
+        assert calls["render_sector_heat"] == ([{"name": "x", "change": 1.0, "turnover": "1亿", "top_stock": "X"}], [])
         assert calls["suffix"] == "a-share-midday"
         assert calls["alert_type"] == "a-share-midday"
         assert calls["render_market"] == "a-share"

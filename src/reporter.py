@@ -258,7 +258,7 @@ def render_trend_chart(history: list[dict], date: str):
     return result.get("path")
 
 
-def render_snapshot(date, values, statuses, market=None, time="noon") -> str:
+def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None) -> str:
     """渲染盘中快照。market=None 保持原三板块午盘快照（美东 12:30）逐字不变；
     market="a-share"/"us" 走单板块渲染（仅大盘表 + 日期/类型行，无 VIX 状态行，设计 D）。"""
     if market is None:
@@ -336,7 +336,7 @@ def render_snapshot(date, values, statuses, market=None, time="noon") -> str:
         for s in syms
     ]
     table = "\n".join(rows)
-    return f"""# 🕛 盘中快照
+    body = f"""# 🕛 盘中快照
 
 **日期**：{date}（{tz_label}）
 **类型**：盘中快照（{time_label}）
@@ -348,9 +348,49 @@ def render_snapshot(date, values, statuses, market=None, time="noon") -> str:
 | 指数 | 当前值 | 趋势 |
 | :--- | :--- | :--- |
 {table}
+"""
+    if market == "a-share" and sector_heat is not None:
+        gainers, losers = sector_heat
+        sector_rows = []
+        for s in gainers:
+            sign = "+" if s["change"] >= 0 else ""
+            sector_rows.append(
+                f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
+            )
+        if not sector_rows:
+            sector_rows.append("| 数据暂缺 | — | — | — |")
+        loser_rows = []
+        for s in losers:
+            sign = "+" if s["change"] >= 0 else ""
+            loser_rows.append(
+                f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
+            )
+        if not loser_rows:
+            loser_rows.append("| 数据暂缺 | — | — | — |")
+        sector_table = "\n".join(sector_rows)
+        loser_table = "\n".join(loser_rows)
+        body += f"""
+---
+
+## 🔥 A 股热点板块 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领涨股 |
+| :--- | :--- | :--- | :--- |
+{sector_table}
 
 ---
+
+## 📉 A 股领跌板块 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领跌股 |
+|:--- | :--- | :--- | :--- |
+{loser_table}
+"""
+    body += """
+---
+
 *本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
+    return body
 def save_report(date: str, content: str) -> "Path":
     """写日报 reports/YYYY-MM-DD.md，返回路径。"""
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
