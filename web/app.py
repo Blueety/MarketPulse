@@ -90,9 +90,18 @@ def _build_history_payload() -> dict:
     """展开为 Chart.js 友好结构：dates + 10 组 series（key=小写 symbol）。
 
     每个序列归一化为相对基准百分比（窗口首个非空值 = 100），另附 change_7d
-    （7 日涨跌幅，相对基准百分比）。
+    （7 日涨跌幅，相对基准百分比）。过滤掉周末日期。
     """
-    records = _last_records(7)
+    from datetime import datetime
+    records = _last_records(14)  # 多取一些，过滤周末后保留7天
+    # 过滤周末
+    weekdays = []
+    for r in records:
+        dt = datetime.strptime(r["date"], "%Y-%m-%d")
+        if dt.weekday() < 5:  # 0-4 周一到周五
+            weekdays.append(r)
+    records = weekdays[-7:]  # 取最近7个交易日
+
     dates = [r["date"] for r in records]
     series = []
     for sym in SYMBOLS:  # SYMBOLS 字典保序：GSPC/IXIC/SH/SZ/CYB/VIX/VXN/MOVE/GLD/BTC
