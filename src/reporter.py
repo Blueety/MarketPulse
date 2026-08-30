@@ -27,7 +27,7 @@ TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天
 CHART_TIMEOUT = 15     # 绘图限时（秒），超时跳过绘图
 
 
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
@@ -61,26 +61,30 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
     # 八期：A 股领涨 / 领跌板块 Top 5（按涨跌幅降序 / 升序，不设阈值；空数据显示「数据暂缺」）
     gainers, losers = sector_heat or ([], [])
+    sector_table = _sector_table_md(gainers)
+    loser_table = _sector_table_md(losers)
 
-    sector_rows = []
-    for s in gainers:
-        sign = "+" if s["change"] >= 0 else ""
-        sector_rows.append(
-            f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
-        )
-    if not sector_rows:
-        sector_rows.append("| 数据暂缺 | — | — | — |")
-    sector_table = "\n".join(sector_rows)
+    # 美股板块领涨 / 领跌 Top 5（仅在有数据时渲染，避免无谓的「数据暂缺」占位）
+    us_gainers, us_losers = us_sector_heat or ([], [])
+    us_sector_block = ""
+    if us_gainers or us_losers:
+        us_sector_block = f"""
+---
 
-    loser_rows = []
-    for s in losers:
-        sign = "+" if s["change"] >= 0 else ""
-        loser_rows.append(
-            f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
-        )
-    if not loser_rows:
-        loser_rows.append("| 数据暂缺 | — | — | — |")
-    loser_table = "\n".join(loser_rows)
+## 🔥 美股板块领涨 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领涨股 |
+| :--- | :--- | :--- | :--- |
+{_sector_table_md(us_gainers)}
+
+---
+
+## 📉 美股板块领跌 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领跌股 |
+| :--- | :--- | :--- | :--- |
+{_sector_table_md(us_losers)}
+"""
 
     vol_rows = []
     for sym in vol_syms:
@@ -108,7 +112,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{us_stock_table}
+{us_stock_table}{us_sector_block}
 
 ---
 
@@ -167,6 +171,18 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 *本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
     return body
 
+
+def _sector_table_md(rows: list[dict]) -> str:
+    """渲染领涨/领跌板块表格（A 股 / 美股板块共用）。rows 为空显示「数据暂缺」。"""
+    lines = []
+    for s in rows:
+        sign = "+" if s["change"] >= 0 else ""
+        lines.append(
+            f"| {s['name']} | {sign}{s['change']:.2f}% | {s['turnover']} | {s['top_stock']} |"
+        )
+    if not lines:
+        lines.append("| 数据暂缺 | — | — | — |")
+    return "\n".join(lines)
 
 def render_trend_chart(history: list[dict], date: str):
     """渲染近 30 日趋势图到 reports/charts/YYYY-MM-DD-trend.png，返回 Path 或 None。
@@ -258,7 +274,7 @@ def render_trend_chart(history: list[dict], date: str):
     return result.get("path")
 
 
-def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None) -> str:
+def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None, us_sector_heat=None) -> str:
     """渲染盘中快照。market=None 保持原三板块午盘快照（美东 12:30）逐字不变；
     market="a-share"/"us" 走单板块渲染（仅大盘表 + 日期/类型行，无 VIX 状态行，设计 D）。"""
     if market is None:
@@ -386,6 +402,26 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
 |:--- | :--- | :--- | :--- |
 {loser_table}
 """
+    elif market == "us" and us_sector_heat is not None:
+        us_g, us_l = us_sector_heat
+        if us_g or us_l:
+            body += f"""
+---
+
+## 🔥 美股板块领涨 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领涨股 |
+| :--- | :--- | :--- | :--- |
+{_sector_table_md(us_g)}
+
+---
+
+## 📉 美股板块领跌 Top 5
+
+| 板块 | 涨跌幅 | 成交额 | 领跌股 |
+| :--- | :--- | :--- | :--- |
+{_sector_table_md(us_l)}
+"""
     body += """
 ---
 
@@ -418,7 +454,7 @@ def _breach_item(alert: dict) -> dict:
 
 
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict, sector_heat=None) -> "Path":
+                     last_values: dict, sector_heat=None, us_sector_heat=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
@@ -453,6 +489,10 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
         "sector_heat": {
             "gainers": (sector_heat or ([], []))[0],
             "losers": (sector_heat or ([], []))[1],
+        },
+        "us_sector_heat": {
+            "gainers": (us_sector_heat or ([], []))[0],
+            "losers": (us_sector_heat or ([], []))[1],
         },
         "search_keywords": build_search_keywords(date, breaches, sector_heat),
     }

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from time import sleep
+from time import monotonic, sleep
 from urllib.parse import quote
 
 import requests
@@ -37,6 +37,20 @@ A_SHARE_SYMBOLS = frozenset({"SH", "SZ", "CYB"})
 MARKETS = {
     "a-share": frozenset({"SH", "SZ", "CYB"}),
     "us": frozenset({"GSPC", "IXIC"}),
+}
+# 11 个 SPDR 行业 ETF（代码 → 中文行业名），用于美股板块领涨/领跌（与 A 股板块逻辑一致）
+US_SECTOR_ETFS = {
+    "XLK": "科技",
+    "XLF": "金融",
+    "XLE": "能源",
+    "XLV": "医疗健康",
+    "XLI": "工业",
+    "XLP": "必需消费",
+    "XLY": "可选消费",
+    "XLU": "公用事业",
+    "XLB": "原材料",
+    "XLRE": "房地产",
+    "XLC": "通信服务",
 }
 
 TIMEOUT = 15          # 单次请求超时（秒）
@@ -176,3 +190,73 @@ def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
         log.warning("板块热度获取超时（>%ds），跳过", SECTOR_TIMEOUT)
         return ([], [])
     return holder.get("rows", ([], []))
+
+
+def _fmt_us_volume(dollars: float) -> str:
+    """美股 ETF 美元成交额格式化：$X.XB / $X.XM / $X.XK。"""
+    if dollars >= 1e9:
+        return f"${dollars / 1e9:.1f}B"
+    if dollars >= 1e6:
+        return f"${dollars / 1e6:.1f}M"
+    if dollars >= 1e3:
+        return f"${dollars / 1e3:.1f}K"
+    return f"${dollars:.0f}"
+
+
+def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
+    """从 Yahoo Finance 获取 11 个 SPDR 行业 ETF 涨跌幅，返回 (gainers, losers)。
+
+    每个 ETF 独立线程并行取数（Yahoo chart REST），整体限时 SECTOR_TIMEOUT；
+    超时 / 异常 / 缺必需字段均返回 ([], [])，不中断日报主流程。
+    返回格式与 A 股板块一致：[{name, change, turnover, top_stock}]，
+    name 为「行业 (代码)」，top_stock 为 ETF 代码。
+    """
+    results: list[dict] = []
+    lock = threading.Lock()
+
+    def _one(ticker: str, label: str) -> None:
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}"
+            resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
+            resp.raise_for_status()
+            r = resp.json()["chart"].get("result")
+            if not r:
+                raise ValueError("Yahoo 返回空图表数据")
+            meta = r[0].get("meta", {})
+            change = meta.get("regularMarketChangePercent")
+            price = meta.get("regularMarketPrice")
+            volume = meta.get("regularMarketVolume")
+            if change is None or price is None:
+                raise ValueError("Yahoo 缺涨跌幅/价格")
+            dollar_vol = float(volume) * float(price) if volume else 0.0
+            row = {
+                "name": f"{label} ({ticker})",
+                "change": round(float(change), 2),
+                "turnover": _fmt_us_volume(dollar_vol),
+                "top_stock": ticker,
+            }
+            with lock:
+                results.append(row)
+        except Exception as exc:
+            log.warning("美股板块 %s 获取失败: %s", ticker, exc)
+
+    threads = [
+        threading.Thread(target=_one, args=(t, l), daemon=True)
+        for t, l in US_SECTOR_ETFS.items()
+    ]
+    for t in threads:
+        t.start()
+    deadline = monotonic() + SECTOR_TIMEOUT
+    for t in threads:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            break
+        t.join(remaining)
+    if any(t.is_alive() for t in threads):
+        log.warning("美股板块获取超时（>%ds），跳过", SECTOR_TIMEOUT)
+        return ([], [])
+    if not results:
+        return ([], [])
+    gainers = sorted(results, key=lambda r: r["change"], reverse=True)[:top_n]
+    losers = sorted(results, key=lambda r: r["change"])[:top_n]
+    return (gainers, losers)

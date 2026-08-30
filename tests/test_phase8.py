@@ -214,6 +214,7 @@ class TestDailyReportWiring:
     def test_sector_heat_passed_through(self, monkeypatch, tmp_path):
         calls = {}
         fixed = [{"name": "水产品", "change": 3.79, "turnover": "13.7亿", "top_stock": "中水渔业"}]
+        fixed_us = [{"name": "科技 (XLK)", "change": 2.5, "turnover": "$1.2B", "top_stock": "XLK"}]
 
         def fake_fetch_all(market=None):
             return ({s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE"]}, {})
@@ -222,12 +223,18 @@ class TestDailyReportWiring:
             calls["sector"] = fixed
             return (fixed, [])
 
+        def fake_fetch_us_sector_heat():
+            calls["us_sector"] = fixed_us
+            return (fixed_us, [])
+
         def fake_render(*a, **k):
             calls["render_sector"] = k.get("sector_heat")
+            calls["render_us_sector"] = k.get("us_sector_heat")
             return "# report"
 
         def fake_gen(*a, **k):
             calls["gen_sector"] = k.get("sector_heat")
+            calls["gen_us_sector"] = k.get("us_sector_heat")
             return tmp_path / "context" / "2026-08-29.json"
 
         def fake_trend(*a, **k):
@@ -235,6 +242,7 @@ class TestDailyReportWiring:
 
         monkeypatch.setattr(dr, "fetch_all", fake_fetch_all)
         monkeypatch.setattr(dr, "fetch_sector_heat", fake_fetch_sector_heat)
+        monkeypatch.setattr(dr, "fetch_us_sector_heat", fake_fetch_us_sector_heat)
         monkeypatch.setattr(dr, "render_report", fake_render)
         monkeypatch.setattr(dr, "generate_context", fake_gen)
         monkeypatch.setattr(dr, "render_trend_chart", fake_trend)
@@ -249,3 +257,5 @@ class TestDailyReportWiring:
         assert rc == 0
         assert calls["render_sector"] == (fixed, [])
         assert calls["gen_sector"] == (fixed, [])
+        assert calls["render_us_sector"] == (fixed_us, [])
+        assert calls["gen_us_sector"] == (fixed_us, [])
