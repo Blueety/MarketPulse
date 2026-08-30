@@ -38,7 +38,6 @@ htmlcov/
 # Runtime-generated data (运行时自动创建，不入 git)
 reports/
 alerts/
-context/
 
 # Agent work (保留 tasks/，忽略临时文件)
 # 用户自定义配置（不入库；用户可改阈值，系统回退内置默认）
