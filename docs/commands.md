@@ -41,7 +41,7 @@
 - 删除/移走 `data/last_values.json` 或断网时运行两入口：不崩溃、退出码 0、无告警文件（check_breach 对缺失数据返回 None）。
 - 验证后必须恢复 `data/last_values.json` 原值（备份/恢复）。
 - history.json 超过 90 条时自动滚动（仅保留最近 90 条）；同日重复运行按 date 覆盖，不产生重复条目。
-- 趋势图渲染超过 3 秒时跳过绘图，报告趋势章节改为文字说明，不中断整体流程。
+- 趋势图渲染超过 15 秒（波动率图 `CHART_TIMEOUT`）/ 5 秒（分市场图 `MARKET_CHART_TIMEOUT`）时跳过绘图，报告趋势章节省略，不中断整体流程。
 - 运行 `daily_report.py` 后应生成 `context/YYYY-MM-DD.json`；改 `data/last_values.json` 模拟 VIX +22% 后运行，`breach.triggered` 应为 `true` 且 `breach.indices` 含 VIX 明细（name/current/previous/change_pct/threshold/level），`search_keywords` 3-5 个含 "VIX surge/drop {date}"。
 - 恢复正常基准后运行，`breach.triggered=false`、`breach.indices=[]`、`search_keywords == ["market summary {date}"]`。
 - 断网/取数全失败时运行：日报正常生成、退出码 0；context 生成失败仅记日志（或生成 breach=false 的 context），不中断主流程。
@@ -50,6 +50,7 @@
 - **阈值配置化（五期）**：`config.json` 缺失/损坏 → 回退内置默认、退出码 0、不崩溃；`ALERT_THRESHOLD_*` / `STATUS_THRESHOLD_*` / `TREND_CHART_DAYS` / `HISTORY_RETENTION_DAYS` 经 env 覆盖生效（调用时复核）；改 `config.json` 的 vix 为 22/35 后运行 `daily_report.py`，VIX 状态标签按新阈值输出（验证后恢复 20/30）；pytest 在 conftest 隔离下恒用默认，不读用户 config.json。
 - **盘中快照扩展（七期）**：4 个 Hermes cron（A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00，北京时间）分别传 `--market`/`--time`；`fetch_all(market)` 仅取对应子集（a-share=SH/SZ/CYB，us=GSPC/IXIC，不含波动率）；`render_snapshot` 单板块（a-share 只含 SH/SZ/CYB、us 只含 GSPC/IXIC，无波动率章节），A 股快照按北京时间归档、us 按美东日期；创业板 `399006.SZ` 入 SYMBOLS（8 键，阈值 `alert.cyb=5`），CYB 告警经 `ALERT_THRESHOLD_CYB` env 覆盖；快照存 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`；单测 `tests/test_phase7.py` 覆盖符号/市场日期/市场过滤取数/单板块渲染/suffix/创业板告警/复合名防碰撞/跨市场去重/入口编排（共 170 passed）。
 - **A 股板块热度（八期）**：`daily_report.py` 日报「A 股大盘」下方新增「🔥 A 股热点板块 Top 5」表（板块/涨跌幅/成交额/领涨股，涨跌幅带正负号、成交额 "X.X亿"，按涨跌幅降序 Top5 不设阈值）；`context/YYYY-MM-DD.json` 新增 `sector_heat` 键（5 条 {name,change,turnover,top_stock}）；`search_keywords` 注入板块名（`"{板块名} surge/drop {date}"`，方向感知，不触发独立告警）；板块取数失败/超时（10s 线程限时）/缺必需列均降级为「数据暂缺」、退出码 0；单测 `tests/test_phase8.py`（16 条：取数成功/异常/缺列/超时、表格渲染/空态/负值、context 键、关键词注入/方向、入口透传）全绿，全量 `pytest` 186 passed。
+- **分市场趋势图（九期）**：日报新增美股 2×1（`charts/YYYY-MM-DD-us-trend.png`）与 A 股 3×1（`charts/YYYY-MM-DD-cn-trend.png`）趋势图；`render_market_trend_chart(history, date, market)` 复用波动率图绘图范式、独立 `MARKET_CHART_TIMEOUT=5` 限时、串行渲染、部分序列缺数据显示灰色英文 "Insufficient Data" 占位、整体行数<2 返回 None 省略章节；`render_report` 加 `us_trend_chart`/`cn_trend_chart` 默认参数，报告新增「📈 美股大盘近30日趋势」「📈 A 股大盘近30日趋势」两章节（分别插在美股大盘 / A 股大盘板块后）；`daily_report.py` 单次 `load_history()` 复用供三图；单测 `tests/test_phase9.py`（15 条）全绿，全量 `pytest` 211 passed。
 
 ## 已知问题
 

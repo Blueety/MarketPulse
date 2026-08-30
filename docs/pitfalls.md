@@ -74,6 +74,14 @@
 - **板块热度不设阈值**：八期改为 Top5 按涨跌幅降序直接展示，不引入 `SECTOR_ALERT_PCT`；`build_search_keywords` 把全部 Top5 板块名按方向（change>=0 surge / <0 drop）注入 `search_keywords`（格式 `"{板块名} surge/drop {date}"`），不触发独立告警；无板块（取数失败/缺列）时回落既有 "market summary {date}"。
 - **板块取数不参与 SYMBOLS 循环**：`fetch_sector_heat` 是独立单请求，在 `fetch_all()` 之后调用，失败不影响 8 指数主流程；板块数据不写 history/缓存，无持久化残留。
 - **板块热度返回值是 (gainers, losers) 元组（补丁：领跌板块）**：`fetch_sector_heat()` 返回 `tuple[list[dict], list[dict]]`，一次取数两路排序——gainers 降序 TopN、losers 升序 TopN（升序 TopN 在板块稀疏时可能含低涨幅正板块，真实交易日数百板块不会重叠）；失败/超时返回 `([], [])`。`render_report` / `generate_context` / `build_search_keywords` 全部按元组契约消费：`generate_context` 落盘为 `sector_heat: {gainers: [...], losers: [...]}`；`build_search_keywords` 展平 `gainers+losers` 注入方向词。**改 fetch_sector_heat 返回结构或 context 契约前，先同步这三个消费点 + test_phase8.py**，否则既有断言（`== ([], [])` / 字典键 `gainers`/`losers`）立即崩。
+
+## 模块 src/（九期：分市场趋势图）
+
+- **图表文本一律英文**：分市场趋势图占位文案用 "Insufficient Data"（灰 #999999），与波动率图同约束（中文字体跨平台渲染不一致）；配色直接复用既有柔和色系（GSPC 蓝 #2b6de8 / IXIC 绿 #1a9e6c / SH 红 #d1495b / SZ 橙 #e07600 / CYB 紫 #7b5ce0），勿改为中文标签。
+- **matplotlib 串行渲染**：三图（波动率 + us + cn）各自 daemon 线程 `join` 独立限时，不并行起线程——matplotlib 非线程安全，并行绘图会竞争/崩溃；新图用 `MARKET_CHART_TIMEOUT=5`，既有 `CHART_TIMEOUT=15` 不动（改它会动波动率图，违反 PRD 约束 6）。
+- **市场键 us/cn 与快照 MARKETS 键不同**：分市场趋势图文件名用 `-us`/`-cn`（图表自身注册表键 market∈{us,cn}），与 `snapshot_report.py` 的 `--market a-share|us` 互不引用；PRD 文件名定稿如此，勿混用。
+- **history 单次加载复用**：`daily_report.py` 用一次 `load_history()` 供 `build_statuses` 与三张图共用，消除重复文件读取；该历史只读、不改写，无模拟数据残留。
+- **整体跳过 vs 子图占位**：窗口内行数 <2 → `render_market_trend_chart` 返回 None（报告省略整张图，与 render_trend_chart 一致）；仅某序列有限点 <2 → 该子图中央 "Insufficient Data" 占位，其余子图正常绘制，不中断成图。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

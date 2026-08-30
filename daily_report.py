@@ -23,7 +23,7 @@ from src.analyzer import (
     save_last_values,
 )
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat
-from src.reporter import generate_context, render_report, render_trend_chart, save_report
+from src.reporter import generate_context, render_market_trend_chart, render_report, render_trend_chart, save_report
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,13 +44,30 @@ def main() -> int:
     last_values = load_last_values()
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
-    statuses = build_statuses(values, errors, last_values, load_history())
+    history = load_history()
+    statuses = build_statuses(values, errors, last_values, history)
     summary = build_summary(values, statuses, errors)
 
-    chart_path = render_trend_chart(load_history(), date)
+    chart_path = render_trend_chart(history, date)
     trend_chart = f"./charts/{chart_path.name}" if chart_path else None
 
-    report = render_report(date, values, changes, statuses, summary, has_history, trend_chart, sector_heat=sector_heat, us_sector_heat=us_sector_heat)
+    # 九期：分市场趋势图（设计 F：各自独立失败，超时/异常 → None，不影响其他图与日报）
+    us_trend_path = None
+    cn_trend_path = None
+    try:
+        us_trend_path = render_market_trend_chart(history, date, "us")
+    except Exception as exc:
+        log.warning("美股趋势图渲染失败，跳过: %s", exc)
+    try:
+        cn_trend_path = render_market_trend_chart(history, date, "cn")
+    except Exception as exc:
+        log.warning("A股趋势图渲染失败，跳过: %s", exc)
+    us_trend_chart = f"./charts/{us_trend_path.name}" if us_trend_path else None
+    cn_trend_chart = f"./charts/{cn_trend_path.name}" if cn_trend_path else None
+
+    report = render_report(date, values, changes, statuses, summary, has_history, trend_chart,
+                           sector_heat=sector_heat, us_sector_heat=us_sector_heat,
+                           us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 

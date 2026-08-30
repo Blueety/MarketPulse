@@ -25,13 +25,26 @@ log = logging.getLogger("marketpulse")
 
 TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天），来自 config（import 时快照）
 CHART_TIMEOUT = 15     # 绘图限时（秒），超时跳过绘图
+MARKET_CHART_TIMEOUT = 5  # 分市场趋势图限时（秒），超时跳过该图（PRD ≤5s/图）
+
+# 分市场趋势图注册表（设计 A）：market -> 面板（键/标签/配色）
+MARKET_CHART_PANELS = {
+    "us": [("gspc", "GSPC", "#2b6de8"), ("ixic", "IXIC", "#1a9e6c")],
+    "cn": [("sh", "SH", "#d1495b"), ("sz", "SZ", "#e07600"), ("cyb", "CYB", "#7b5ce0")],
+}
+MARKET_CHART_TITLES = {
+    "us": "US Major Indices — 30-Day Trend",
+    "cn": "A-Share Major Indices — 30-Day Trend",
+}
 
 
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
+    us_trend_chart / cn_trend_chart 为分市场趋势图相对路径，提供时分别插入
+    「美股大盘近30日趋势」/「A股大盘近30日趋势」章节；None 则省略（设计 G）。
     """
     us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
     a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
@@ -102,6 +115,26 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
     else:
         state_line = "**VIX 当前值：获取失败 → 状态：无法判断**\n\n> VIX 数据获取失败，无法判断整体市场情绪。"
 
+    # 九期：分市场趋势图章节（设计 G，默认 None → 省略）
+    us_trend_block = ""
+    if us_trend_chart:
+        us_trend_block = f"""
+---
+
+## 📈 美股大盘近30日趋势
+
+![美股大盘近30日趋势]({us_trend_chart})
+"""
+    cn_trend_block = ""
+    if cn_trend_chart:
+        cn_trend_block = f"""
+---
+
+## 📈 A股大盘近30日趋势
+
+![A股大盘近30日趋势]({cn_trend_chart})
+"""
+
     body = f"""# 📊 全市场情绪日报
 
 **日期**：{date}（美东时间）
@@ -112,7 +145,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{us_stock_table}{us_sector_block}
+{us_stock_table}{us_sector_block}{us_trend_block}
 
 ---
 
@@ -120,7 +153,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{a_share_table}
+{a_share_table}{cn_trend_block}
 
 ---
 
@@ -273,6 +306,102 @@ def render_trend_chart(history: list[dict], date: str):
         return None
     return result.get("path")
 
+
+
+def render_market_trend_chart(history: list[dict], date: str, market: str):
+    """渲染分市场近 30 日趋势图到 reports/charts/YYYY-MM-DD-{market}-trend.png，返回 Path 或 None。
+
+    market ∈ {"us", "cn"}：us = 标普500/纳指 2×1，cn = 上证/深证/创业板 3×1。
+    复用 render_trend_chart 的绘图范式（Agg 懒加载、线程限时、英文标签、datetime x 轴、面板样式）。
+    排除当日记录；窗口内行数 <2 → 返回 None（整体跳过，报告省略该章节，设计 C）。
+    某面板有限数据点 <2 → 中央显示灰色 "Insufficient Data" 占位，不画线（设计 B）；
+    其余面板正常绘制，互不中断。非法 market → 返回 None（防御，不抛，设计 F）。
+    """
+    panels = MARKET_CHART_PANELS.get(market)
+    if not panels:
+        log.warning("未知市场 %r，跳过分市场趋势图", market)
+        return None
+
+    rows = [r for r in history if r.get("date") != date]
+    rows = rows[-TREND_DAYS:]
+    if len(rows) < 2:
+        log.info("历史数据不足（%d 条），跳过 %s 趋势图", len(rows), market)
+        return None
+
+    result: dict = {}
+
+    def _plot():
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        from datetime import datetime
+
+        n = len(panels)
+        figsize = (10, 5.4) if n == 2 else (10, 7.6)
+
+        plt.rcParams["axes.edgecolor"] = "#d8d8d8"
+        plt.rcParams["grid.color"] = "#ececec"
+
+        dt_dates = []
+        for r in rows:
+            try:
+                dt_dates.append(datetime.strptime(r["date"], "%Y-%m-%d"))
+            except (TypeError, ValueError):
+                dt_dates.append(None)
+
+        fig, axes = plt.subplots(n, 1, figsize=figsize, sharex=True,
+                                 gridspec_kw={"hspace": 0.35})
+        fig.suptitle(MARKET_CHART_TITLES[market], fontsize=13, y=0.975,
+                     x=0.5, ha="center", fontweight="bold", color="#1b1b1b")
+
+        for ax, (key, label, color) in zip(axes, panels):
+            vals = [None if not isinstance(r.get(key), (int, float)) else r[key] for r in rows]
+            finite = [(t, v) for t, v in zip(dt_dates, vals) if t is not None and v is not None]
+            ax.grid(True, axis="y", alpha=0.6, lw=0.8)
+            for spine in ("top", "right"):
+                ax.spines[spine].set_visible(False)
+            ax.spines["left"].set_visible(False)
+            ax.tick_params(axis="y", labelsize=8, colors="#777777", length=0)
+            ax.tick_params(axis="x", labelsize=8, colors="#777777")
+            # 面板左上=指数名（与既有面板对齐）
+            ax.text(0.0, 1.02, label, transform=ax.transAxes, fontsize=12,
+                    fontweight="bold", color=color, ha="left", va="bottom")
+            if len(finite) < 2:
+                # 有限数据点不足 2：中央占位文案（设计 B），不画线、不抛
+                ax.text(0.5, 0.5, "Insufficient Data", transform=ax.transAxes,
+                        fontsize=11, color="#999999", ha="center", va="center")
+                continue
+            xs = [t for t, _ in finite]
+            ys = [v for _, v in finite]
+            ax.plot(xs, ys, color=color, lw=2.3, solid_capstyle="round",
+                    solid_joinstyle="round", zorder=3)
+            ax.fill_between(xs, ys, min(ys) - 2, color=color, alpha=0.10, zorder=1)
+            # 右上=当前值 + 端点圆点（与既有面板对齐）
+            ax.text(1.0, 1.02, f"{ys[-1]:.1f}", transform=ax.transAxes,
+                    fontsize=11, color="#333333", ha="right", va="bottom",
+                    fontweight="bold")
+            ax.plot(xs[-1], ys[-1], "o", color=color, ms=5.5, zorder=4)
+            ax.margins(x=0.02)
+
+        axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+        axes[-1].xaxis.set_major_locator(mdates.DayLocator(interval=7))
+
+        fig.tight_layout()
+        CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+        out = CHARTS_DIR / f"{date}-{market}-trend.png"
+        fig.savefig(out, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        result["path"] = out
+
+    t = threading.Thread(target=_plot, daemon=True)
+    t.start()
+    t.join(MARKET_CHART_TIMEOUT)
+    if t.is_alive():
+        log.warning("分市场趋势图渲染超时（%ds），跳过", MARKET_CHART_TIMEOUT)
+        return None
+    return result.get("path")
 
 def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None, us_sector_heat=None) -> str:
     """渲染盘中快照。market=None 保持原三板块午盘快照（美东 12:30）逐字不变；
