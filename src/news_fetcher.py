@@ -12,11 +12,29 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from time import sleep
 
 import requests
 
 log = logging.getLogger("news_fetcher")
+
+
+def _load_env(key: str) -> str:
+    """从环境变量或 .env 文件读取 key（环境变量优先）。"""
+    val = os.environ.get(key, "")
+    if val:
+        return val
+    # 尝试从 .env 文件读取（搜索常见位置）
+    for dotenv in [Path(__file__).resolve().parent.parent / ".env",
+                   Path(r"D:/hermes/.env"),
+                   Path.home() / ".hermes" / ".env"]:
+        if dotenv.exists():
+            for line in dotenv.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith(f"{key}="):
+                    return line[len(key) + 1:].strip().strip("'\"")
+    return ""
 
 # ---- 统一结果格式 ----
 
@@ -28,7 +46,7 @@ def _make_result(title: str, snippet: str, link: str, date: str = "") -> dict:
 
 def _search_tavily(query: str, timeout: int = 10) -> list[dict]:
     """通过 Tavily API 搜索。返回统一格式结果列表。"""
-    api_key = os.environ.get("TAVILY_API_KEY", "")
+    api_key = _load_env("TAVILY_API_KEY")
     if not api_key:
         return []
     url = "https://api.tavily.com/search"
@@ -56,7 +74,7 @@ def _search_tavily(query: str, timeout: int = 10) -> list[dict]:
 
 def _search_serpapi(query: str, timeout: int = 10) -> list[dict]:
     """通过 SerpAPI (Google) 搜索。返回统一格式结果列表。"""
-    api_key = os.environ.get("SERPAPI_API_KEY", "")
+    api_key = _load_env("SERPAPI_API_KEY")
     if not api_key:
         return []
     url = "https://serpapi.com/search"
@@ -84,7 +102,7 @@ def _search_serpapi(query: str, timeout: int = 10) -> list[dict]:
 
 def _search_anspire(query: str, timeout: int = 10) -> list[dict]:
     """通过 Anspire 搜索 API。返回统一格式结果列表。"""
-    api_key = os.environ.get("ANSPIRE_API_KEY", "")
+    api_key = _load_env("ANSPIRE_API_KEY")
     if not api_key:
         return []
     url = "https://plugin.anspire.cn/api/ntsearch/search"
