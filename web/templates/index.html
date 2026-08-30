@@ -231,7 +231,7 @@
               labels: history.dates,
               grid: { display: false },
               ticks: {
-                font: { size: 10 },
+                font: { size: 12 },
                 color: "#8b949e",
                 maxRotation: 0,
                 autoSkip: true,
@@ -242,7 +242,7 @@
               grid: { color: "rgba(48, 54, 61, 0.25)" },
               border: { display: false },
               ticks: {
-                font: { size: 10 },
+                font: { size: 12 },
                 color: "#8b949e",
                 callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
               }
@@ -270,6 +270,7 @@
         options: {
           indexAxis: "y",
           responsive: true,
+          interaction: { mode: "nearest", intersect: true },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -292,7 +293,7 @@
               grid: { color: "rgba(48, 54, 61, 0.25)" },
               border: { display: false },
               ticks: {
-                font: { size: 11 },
+                font: { size: 12 },
                 color: "#8b949e",
                 callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
               }

@@ -142,7 +142,7 @@ body {
   .meta-item { font-weight: 600; }
 .chart-box canvas {
   width: 100% !important;
-  height: 200px !important;
+  height: 260px !important;
 }
 
 /* 告警列表 */
