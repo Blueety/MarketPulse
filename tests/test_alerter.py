@@ -9,7 +9,7 @@ from src import analyzer as an
 @pytest.fixture
 def clean_thresholds(monkeypatch):
     """隔离告警阈值环境变量，避免宿主环境泄漏进测试。"""
-    for sym in ("VIX", "VXN", "MOVE"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
 
 
@@ -125,7 +125,7 @@ class TestRenderAlert:
 class TestRunAlertChecks:
     def _breaching_values(self):
         # VIX +22%、VXN +22.2% 触发；MOVE +6.7% 不触发
-        return {"VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}, {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        return {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}, {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
 
     def test_generates_alert_file(self, tmp_paths, clean_thresholds):
         values, last = self._breaching_values()
@@ -158,14 +158,14 @@ class TestRunAlertChecks:
         assert [a["symbol"] for a in alerts] == ["VIX", "VXN"]
 
     def test_no_breach_no_file(self, tmp_paths, clean_thresholds):
-        values = {"VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         assert al.run_alert_checks("2026-09-01", values, last, "close", tmp_paths / "daily.md") == []
         assert not (tmp_paths / "alerts" / "2026-09-01-close.md").exists()
 
     def test_missing_data_skipped(self, tmp_paths, clean_thresholds):
-        values = {"VIX": None, "VXN": 22.0, "MOVE": None}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": 22.0, "MOVE": None}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         alerts = al.run_alert_checks("2026-09-01", values, last, "close", tmp_paths / "daily.md")
         assert [a["symbol"] for a in alerts] == ["VXN"]
 

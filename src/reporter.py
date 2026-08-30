@@ -19,28 +19,42 @@ from .analyzer import (
     load_history,
 )
 from .config import load_config
-from .fetcher import SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
 TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天），来自 config（import 时快照）
-CHART_TIMEOUT = 3     # 绘图限时（秒），超时跳过绘图
+CHART_TIMEOUT = 15     # 绘图限时（秒），超时跳过绘图
 
 
 def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None) -> str:
-    """按 PRD 模板渲染 Markdown 日报，占位符全部替换。
+    """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
     """
-    rows = []
-    for sym, meta in SYMBOLS.items():
+    stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS]
+    vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+
+    stock_rows = []
+    for sym in stock_syms:
+        meta = SYMBOLS[sym]
+        trend, _ = statuses[sym]
+        stock_rows.append(
+            f"| {meta['label']} | {fmt_value(values[sym])} "
+            f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
+        )
+    stock_table = "\n".join(stock_rows)
+
+    vol_rows = []
+    for sym in vol_syms:
+        meta = SYMBOLS[sym]
         status_label, _ = statuses[sym]
-        rows.append(
+        vol_rows.append(
             f"| {meta['label']} | {fmt_value(values[sym])} "
             f"| {fmt_change(changes[sym], has_history, values[sym])} | {status_label} |"
         )
-    table = "\n".join(rows)
+    vol_table = "\n".join(vol_rows)
 
     if values["VIX"] is not None:
         vix_label, vix_desc = statuses["VIX"]
@@ -48,17 +62,25 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
     else:
         state_line = "**VIX 当前值：获取失败 → 状态：无法判断**\n\n> VIX 数据获取失败，无法判断整体市场情绪。"
 
-    body = f"""# 📊 市场情绪日报
+    body = f"""# 📊 全市场情绪日报
 
 **日期**：{date}（美东时间）
 
 ---
 
-## 📈 核心指数
+## 🌏 美股大盘
+
+| 指数 | 收盘价 | 涨跌幅 | 趋势 |
+| :--- | :--- | :--- | :--- |
+{stock_table}
+
+---
+
+## 📈 波动率指数
 
 | 指数 | 收盘价 | 涨跌幅 | 状态 |
 | :--- | :--- | :--- | :--- |
-{table}
+{vol_table}
 """
     if trend_chart:
         body += f"""
@@ -162,35 +184,35 @@ def render_trend_chart(history: list[dict], date: str):
 
         fig.tight_layout()
         CHARTS_DIR.mkdir(parents=True, exist_ok=True)
-        path = CHARTS_DIR / f"{date}-trend.png"
-        fig.savefig(path, dpi=110, bbox_inches="tight", facecolor="white")
+        out = CHARTS_DIR / f"{date}-trend.png"
+        fig.savefig(out, dpi=150, bbox_inches="tight")
         plt.close(fig)
-        result["path"] = path
+        result["path"] = out
 
-    thread = threading.Thread(target=_plot, daemon=True)
-    thread.start()
-    thread.join(CHART_TIMEOUT)
-    if thread.is_alive():
-        log.warning("趋势图渲染超过 %d 秒，跳过绘图", CHART_TIMEOUT)
+    t = threading.Thread(target=_plot, daemon=True)
+    t.start()
+    t.join(CHART_TIMEOUT)
+    if t.is_alive():
+        log.warning("趋势图渲染超时（%ds），跳过", CHART_TIMEOUT)
         return None
     return result.get("path")
 
 
-def save_report(date: str, content: str) -> "Path":
-    """写收盘日报 reports/YYYY-MM-DD.md，返回路径。"""
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = REPORTS_DIR / f"{date}.md"
-    path.write_text(content, encoding="utf-8")
-    return path
-
-
 def render_snapshot(date, values, statuses) -> str:
-    """渲染午盘快照：仅记录当前值与状态，不算涨跌幅。"""
-    rows = []
-    for sym, meta in SYMBOLS.items():
-        status_label, _ = statuses[sym]
-        rows.append(f"| {meta['label']} | {fmt_value(values[sym])} | {status_label} |")
-    table = "\n".join(rows)
+    """渲染午盘快照：美股大盘 + 波动率指数两板块（仅当前值 + 趋势/状态，不算涨跌幅）。"""
+    stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS]
+    vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+
+    stock_rows = [
+        f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
+        for s in stock_syms
+    ]
+    vol_rows = [
+        f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
+        for s in vol_syms
+    ]
+    stock_table = "\n".join(stock_rows)
+    vol_table = "\n".join(vol_rows)
 
     if values["VIX"] is not None:
         vix_label, vix_desc = statuses["VIX"]
@@ -205,11 +227,19 @@ def render_snapshot(date, values, statuses) -> str:
 
 ---
 
-## 📈 指数当前值
+## 🌏 美股大盘
+
+| 指数 | 当前值 | 趋势 |
+| :--- | :--- | :--- |
+{stock_table}
+
+---
+
+## 📈 波动率指数
 
 | 指数 | 当前值 | 状态 |
 | :--- | :--- | :--- |
-{table}
+{vol_table}
 
 ---
 
@@ -219,6 +249,12 @@ def render_snapshot(date, values, statuses) -> str:
 
 ---
 *本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
+def save_report(date: str, content: str) -> "Path":
+    """写日报 reports/YYYY-MM-DD.md，返回路径。"""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORTS_DIR / f"{date}.md"
+    path.write_text(content, encoding="utf-8")
+    return path
 
 
 def save_snapshot(date: str, content: str) -> "Path":
@@ -264,6 +300,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "vix": [r["vix"] for r in history],
             "vxn": [r["vxn"] for r in history],
             "move": [r["move"] for r in history],
+            "gspc": [r["gspc"] for r in history],
+            "ixic": [r["ixic"] for r in history],
         },
         "breach": {
             "triggered": bool(breaches),

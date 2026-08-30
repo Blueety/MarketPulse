@@ -14,11 +14,17 @@ import requests
 log = logging.getLogger("marketpulse")
 
 # ---- 常量 ----
+# SYMBOLS 顺序：美股大盘（GSPC/IXIC）在前，波动率指数（VIX/VXN/MOVE）在后；
+# 顺序决定 context indices、告警收集与报告板块的输出顺序（大盘板块在报告前部）。
 SYMBOLS = {
+    "GSPC": {"label": "标普500", "source": "yahoo", "ticker": "^GSPC"},
+    "IXIC": {"label": "纳斯达克", "source": "yahoo", "ticker": "^IXIC"},
     "VIX": {"label": "VIX（恐慌指数）", "source": "yahoo", "ticker": "^VIX"},
     "VXN": {"label": "VXN（科技波动）", "source": "yahoo", "ticker": "^VXN"},
     "MOVE": {"label": "MOVE（债市波动）", "source": "yahoo", "ticker": "^MOVE"},
 }
+# 大盘指数分组（与 SYMBOLS 同处数据注册表）；波动率组 = SYMBOLS 中排除本集合，保持 VIX/VXN/MOVE 原序。
+STOCK_SYMBOLS = frozenset({"GSPC", "IXIC"})
 
 TIMEOUT = 15          # 单次请求超时（秒）
 RETRIES = 1           # 失败重试次数（共尝试 2 次）

@@ -15,8 +15,7 @@ from src import reporter as rep
 
 @pytest.fixture
 def clean_thresholds(monkeypatch):
-    """隔离告警阈值环境变量，避免宿主环境泄漏进测试。"""
-    for sym in ("VIX", "VXN", "MOVE"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
 
 
@@ -113,8 +112,8 @@ class TestGenerateContext:
         an.append_history({"date": date, "vix": 21.0, "vxn": 19.0, "move": 78.0})
 
     def test_non_breach_day(self, tmp_context):
-        values = {"VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         self._seed_history("2026-08-29")
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
         assert path == tmp_context / "context" / "2026-08-29.json"
@@ -125,13 +124,13 @@ class TestGenerateContext:
         assert data["history_30d"]["dates"] == ["2026-08-28", "2026-08-29"]  # append 后调用，含当日
         assert data["history_30d"]["vix"] == [20.0, 21.0]
         assert len(data["history_30d"]["dates"]) == len(data["history_30d"]["vix"]) == \
-            len(data["history_30d"]["vxn"]) == len(data["history_30d"]["move"])
+            len(data["history_30d"]["vxn"]) == len(data["history_30d"]["move"]) == \
+            len(data["history_30d"]["gspc"]) == len(data["history_30d"]["ixic"])
         assert data["breach"] == {"triggered": False, "indices": []}
         assert data["search_keywords"] == ["market summary 2026-08-29"]
 
-    def test_breach_day(self, tmp_context):
-        values = {"VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["breach"]["triggered"] is True
@@ -151,8 +150,8 @@ class TestGenerateContext:
         assert kw[-2:] == ["market volatility 2026-08-29", "economic data 2026-08-29"]
 
     def test_all_sources_failed(self, tmp_context):
-        values = {"VIX": None, "VXN": None, "MOVE": None}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": None, "MOVE": None}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         path = rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["indices"]["VIX"]["value"] is None
@@ -163,8 +162,8 @@ class TestGenerateContext:
 
     def test_idempotent_no_alert_side_effects(self, tmp_context):
         # 连续两次运行：context 覆盖、JSON 有效；collect_breaches 纯计算不产告警文件/alerts.log
-        values = {"VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 24.4, "VXN": 22.0, "MOVE": 80.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         rep.generate_context("2026-08-29", **self._inputs(values, last))
         rep.generate_context("2026-08-29", **self._inputs(values, last))
         data = json.loads((tmp_context / "context" / "2026-08-29.json").read_text(encoding="utf-8"))
@@ -174,8 +173,8 @@ class TestGenerateContext:
         assert not (tmp_context / "context" / "2026-08-29.json.tmp").exists()  # 原子写已清理
 
     def test_history_window_30(self, tmp_context):
-        values = {"VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
-        last = {"VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+        last = {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0}
         from datetime import date, timedelta
 
         start = date(2026, 7, 1)
@@ -188,3 +187,5 @@ class TestGenerateContext:
         )
         assert len(data["history_30d"]["dates"]) == 30  # 窗口截断 35 → 30
         assert data["history_30d"]["dates"][0] == (start + timedelta(days=5)).isoformat()
+        for key in ("vix", "vxn", "move", "gspc", "ixic"):
+            assert len(data["history_30d"][key]) == 30

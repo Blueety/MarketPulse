@@ -10,12 +10,20 @@ from src.analyzer import build_statuses
 
 
 def sample_data() -> dict:
-    """一份完整的渲染输入（三指数均取数成功）。"""
+    """一份完整的渲染输入（五指数均取数成功：GSPC/IXIC 大盘 + VIX/VXN/MOVE 波动率）。"""
     return {
         "date": "2026-08-28",
-        "values": {"VIX": 15.23, "VXN": 22.11, "MOVE": 95.40},
-        "changes": {"VIX": 1.23, "VXN": -0.50, "MOVE": 2.00},
+        "values": {
+            "GSPC": 4500.0, "IXIC": 17500.0,
+            "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40,
+        },
+        "changes": {
+            "GSPC": 0.50, "IXIC": -0.30,
+            "VIX": 1.23, "VXN": -0.50, "MOVE": 2.00,
+        },
         "statuses": {
+            "GSPC": ("连涨1日", "大盘连续上涨1日。"),
+            "IXIC": ("连跌1日", "大盘连续下跌1日。"),
             "VIX": ("平静", "市场情绪平稳，波动率处于低位，风险偏好较高。"),
             "VXN": ("警惕", "市场情绪偏谨慎，波动率上升，注意短期回调风险。"),
             "MOVE": ("平静", "债市波动平稳，利率预期稳定。"),
@@ -43,9 +51,9 @@ class TestRenderReport:
     def test_first_run_change_text(self):
         data = sample_data()
         data["has_history"] = False
-        data["changes"] = {"VIX": None, "VXN": None, "MOVE": None}
+        data["changes"] = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": None, "MOVE": None}
         report = rep.render_report(**data)
-        assert report.count("首次运行，暂无历史对比") == 3
+        assert report.count("首次运行，暂无历史对比") == 5
 
     def test_failed_fetch_annotated(self):
         data = sample_data()
@@ -120,22 +128,20 @@ class TestTrendChart:
         path = rep.render_trend_chart(history, "2026-09-01")
         assert path is not None
         assert path.exists()
-
-
 class TestSnapshot:
     def test_render_complete(self):
-        values = {"VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
         statuses = build_statuses(values, {})
         content = rep.render_snapshot("2026-08-28", values, statuses)
         assert "午盘快照" in content
         assert "2026-08-28" in content
         assert "盘中快照（美东 12:30）" in content
-        for label in ("VIX（恐慌指数）", "VXN（科技波动）", "MOVE（债市波动）"):
+        for label in ("标普500", "纳斯达克", "VIX（恐慌指数）", "VXN（科技波动）", "MOVE（债市波动）"):
             assert label in content
         assert not re.search(r"\{[a-z_]+\}", content)
 
     def test_render_failed_fetch(self):
-        values = {"VIX": None, "VXN": 22.11, "MOVE": None}
+        values = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": 22.11, "MOVE": None}
         statuses = build_statuses(values, {"VIX": "获取失败（已重试）", "MOVE": "获取失败（已重试）"})
         content = rep.render_snapshot("2026-08-28", values, statuses)
         assert content.count("获取失败") >= 3

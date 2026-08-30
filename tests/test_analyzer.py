@@ -67,7 +67,7 @@ class TestComputeChanges:
 class TestBuildStatuses:
     def test_ok(self):
         statuses = an.build_statuses(
-            {"VIX": 15.0, "VXN": 25.0, "MOVE": 95.0}, {}
+            {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.0, "VXN": 25.0, "MOVE": 95.0}, {}
         )
         assert statuses["VIX"][0] == "平静"
         assert statuses["VXN"][0] == "警惕"
@@ -75,7 +75,7 @@ class TestBuildStatuses:
 
     def test_fetch_failed(self):
         statuses = an.build_statuses(
-            {"VIX": 15.0, "VXN": None, "MOVE": 95.0},
+            {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.0, "VXN": None, "MOVE": 95.0},
             {"VXN": "获取失败（已重试）"},
         )
         assert statuses["VXN"][0] == "获取失败"
@@ -84,20 +84,20 @@ class TestBuildStatuses:
 
 class TestBuildSummary:
     def test_complete(self):
-        values = {"VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40}
         statuses = an.build_statuses(values, {})
         summary = an.build_summary(values, statuses, {})
         assert "VIX 收于 15.23" in summary
         assert "获取完整" in summary
 
     def test_partial_failure(self):
-        values = {"VIX": 15.23, "VXN": None, "MOVE": 95.40}
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.23, "VXN": None, "MOVE": 95.40}
         statuses = an.build_statuses(values, {"VXN": "获取失败（已重试）"})
         summary = an.build_summary(values, statuses, {"VXN": "获取失败（已重试）"})
         assert "VXN" in summary and "获取失败" in summary
 
     def test_all_failed(self):
-        values = {"VIX": None, "VXN": None, "MOVE": None}
+        values = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": None, "MOVE": None}
         errors = {
             "VIX": "获取失败（已重试）",
             "VXN": "获取失败（已重试）",
@@ -138,8 +138,7 @@ class TestHistory:
         self._set_file(tmp_path, monkeypatch)
         an.append_history({"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5})
         data = an.load_history()
-        assert len(data) == 1
-        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5}
+        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5, "gspc": None, "ixic": None}
 
     def test_same_date_overrides(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)

@@ -42,7 +42,7 @@ def main() -> int:
     last_values = load_last_values()
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
-    statuses = build_statuses(values, errors)
+    statuses = build_statuses(values, errors, last_values, load_history())
     summary = build_summary(values, statuses, errors)
 
     chart_path = render_trend_chart(load_history(), date)

@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .config import env_float, load_config
-from .fetcher import SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -44,6 +44,11 @@ ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单�
     "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
     "恐慌": "波动率处于高位，建议以避险为主，防范系统性风险。",
 }
+
+# 六期A：大盘趋势连续涨跌天数阈值（N）；trend_label 调用时经 TREND_STREAK_DAYS env 复核。
+STREAK_DAYS = int(_CFG["trend"]["streak_days"])
+# 大盘告警（恒 WARN）建议文案：大盘无恐慌区间定义，不臆造分级。
+STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理。"
 
 HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
 
@@ -108,6 +113,17 @@ def check_breach(symbol: str, current: float | None, last: float | None) -> dict
     threshold = alert_threshold(symbol)
     if abs(change) <= threshold:
         return None
+    if symbol in STOCK_SYMBOLS:  # 大盘无恐慌区间定义，恒 WARN、state=异动
+        return {
+            "symbol": symbol,
+            "current": current,
+            "last": last,
+            "change": change,
+            "threshold": threshold,
+            "level": "WARN",
+            "state": "异动",
+            "suggestion": STOCK_SUGGESTION,
+        }
     state, _ = (classify_move if symbol == "MOVE" else classify_vix)(current)
     level = "ALERT" if state == "恐慌" else "WARN"
     return {
@@ -138,16 +154,124 @@ def build_search_keywords(date: str, breaches: list[dict]) -> list[str]:
     return words
 
 
-def build_statuses(values: dict, errors: dict) -> dict:
-    """为每个指数生成 (状态标签, 描述)。取数失败/跳过时给出明确标注。"""
+def _sign(x: float) -> int:
+    """数值符号：正 1 / 负 -1 / 零 0。"""
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
+def compute_streaks(values: dict, last_values: dict | None = None,
+                    history: list[dict] | None = None, date: str = "") -> dict:
+    """计算大盘指数连续同向涨跌天数（streak）。返回 {sym: signed_int}（正=连涨、负=连跌、0=无方向）。
+
+    纯计算、可单测：方向序列 = 历史相邻记录（排除 date==今日 行）逐日涨跌 + 今日 current vs last_values；
+    序列去尾 0（横盘不打断既有趋势）后，从最后非零方向往前数连续同号天数。
+    """
+    streaks = {}
+    history = history or []
+    last_values = last_values or {}
+    for sym in STOCK_SYMBOLS:
+        lower = sym.lower()
+        closes = [
+            r[lower]
+            for r in sorted(
+                (r for r in history if r.get("date") != date),
+                key=lambda r: r.get("date", ""),
+            )
+            if isinstance(r.get(lower), (int, float))
+        ]
+        dirs = []
+        prev = None
+        for v in closes:
+            if prev is not None:
+                dirs.append(_sign(v - prev))
+            prev = v
+        cur = values.get(sym)
+        if isinstance(cur, (int, float)):
+            last = last_values.get(sym)
+            if isinstance(last, (int, float)):
+                dirs.append(_sign(cur - last))
+        while dirs and dirs[-1] == 0:
+            dirs.pop()
+        if not dirs:
+            streaks[sym] = 0
+            continue
+        last_sign = 1 if dirs[-1] > 0 else -1
+        count = 0
+        for d in reversed(dirs):
+            if d == last_sign:
+                count += 1
+            else:
+                break
+        streaks[sym] = count if last_sign > 0 else -count
+    return streaks
+
+
+def trend_label(streak: int, has_data: bool) -> str:
+    """大盘趋势四档标签。N=STREAK_DAYS（调用时经 TREND_STREAK_DAYS env 复核）。
+
+    无数据→数据积累中；streak==0→横盘；1≤|streak|<N→连涨/跌X日；|streak|≥N→上升/下跌趋势。
+    """
+    n = int(env_float("TREND_STREAK_DAYS", STREAK_DAYS))
+    if not has_data:
+        return "数据积累中"
+    if streak == 0:
+        return "横盘"
+    if abs(streak) < n:
+        return f"连{'涨' if streak > 0 else '跌'}{abs(streak)}日"
+    return f"{'上升' if streak > 0 else '下跌'}趋势"
+
+
+def _stock_has_data(sym: str, last_values: dict | None = None,
+                    history: list[dict] | None = None) -> bool:
+    """是否有足够数据判断大盘趋势（≥1 个对比基准）。首次运行无基准 → 数据积累中。"""
+    if isinstance(last_values, dict) and isinstance(last_values.get(sym), (int, float)):
+        return True
+    history = history or []
+    cnt = 0
+    for r in history:
+        if isinstance(r.get(sym.lower()), (int, float)):
+            cnt += 1
+            if cnt >= 2:
+                return True
+    return False
+
+
+def _trend_desc(streak: int, has_data: bool, sym: str) -> str:
+    """大盘趋势描述（辅助文案，配合趋势标签）。"""
+    if not has_data:
+        return "大盘历史数据不足，趋势待积累。"
+    if streak == 0:
+        return "大盘窄幅震荡，方向暂不明。"
+    direction = "上涨" if streak > 0 else "下跌"
+    return f"大盘连续{direction}{abs(streak)}日。"
+
+
+def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
+                   history: list[dict] | None = None) -> dict:
+    """为每个指数生成 (状态标签, 描述)。取数失败/跳过时给出明确标注。
+
+    大盘指数走趋势标签（compute_streaks + trend_label），波动率走 classify_*；
+    values 用 .get 容忍缺失（与 collect_breaches 一致）；不传 last_values/history（旧调用）
+    时大盘无基准 → 数据积累中。
+    """
     statuses = {}
+    streaks = compute_streaks(values, last_values, history)
     for sym in SYMBOLS:
-        if values[sym] is None:
+        val = values.get(sym)
+        if val is None:
             statuses[sym] = ("获取失败", "数据获取失败，无法判断状态。")
+        elif sym in STOCK_SYMBOLS:
+            streak = streaks.get(sym, 0)
+            has = _stock_has_data(sym, last_values, history)
+            statuses[sym] = (trend_label(streak, has), _trend_desc(streak, has, sym))
         elif sym == "MOVE":
-            statuses[sym] = classify_move(values[sym])
+            statuses[sym] = classify_move(val)
         else:
-            statuses[sym] = classify_vix(values[sym])
+            statuses[sym] = classify_vix(val)
     return statuses
 
 
@@ -164,7 +288,7 @@ def build_summary(values: dict, statuses: dict, errors: dict) -> str:
         failed = "、".join(f"{k}（{errors[k]}）" for k in SYMBOLS if k in errors)
         parts.append(f"注意：{failed}，相关指标缺失，请留意数据源可用性。")
     else:
-        parts.append("三个波动率指数数据获取完整，无异常。")
+        parts.append("全部市场指数数据获取完整，无异常。")
     return "\n".join(parts)
 
 
@@ -228,6 +352,8 @@ def load_history() -> list[dict]:
             "vix": rec.get("vix"),
             "vxn": rec.get("vxn"),
             "move": rec.get("move"),
+            "gspc": rec.get("gspc"),
+            "ixic": rec.get("ixic"),
         }
         for rec in data
         if isinstance(rec, dict) and rec.get("date")

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from src.alerter import run_alert_checks
-from src.analyzer import build_statuses, get_us_eastern_date, load_last_values
+from src.analyzer import build_statuses, get_us_eastern_date, load_history, load_last_values
 from src.fetcher import fetch_all
 from src.reporter import render_snapshot, save_snapshot
 
@@ -32,7 +32,7 @@ def main() -> int:
 
     values, errors = fetch_all()
     last_values = load_last_values()  # 只读缓存作告警基准，不写 history/缓存
-    statuses = build_statuses(values, errors)
+    statuses = build_statuses(values, errors, last_values, load_history())
     path = save_snapshot(date, render_snapshot(date, values, statuses))
     log.info("快照已生成: %s", path)
     try:  # 告警失败仅记日志，不影响快照生成（决策 H）
