@@ -83,6 +83,11 @@
 - **市场键 us/cn 与快照 MARKETS 键不同**：分市场趋势图文件名用 `-us`/`-cn`（图表自身注册表键 market∈{us,cn}），与 `snapshot_report.py` 的 `--market a-share|us` 互不引用；PRD 文件名定稿如此，勿混用。
 - **history 单次加载复用**：`daily_report.py` 用一次 `load_history()` 供 `build_statuses` 与三张图共用，消除重复文件读取；该历史只读、不改写，无模拟数据残留。
 - **整体跳过 vs 子图占位**：窗口内行数 <2 → `render_market_trend_chart` 返回 None（报告省略整张图，与 render_trend_chart 一致）；仅某序列有限点 <2 → 该子图中央 "Insufficient Data" 占位，其余子图正常绘制，不中断成图。
+- **路径常量 patch 落点**：`web/app.py` 的路径常量（HISTORY_FILE/ALERTS_DIR/CONTEXT_DIR）从 analyzer 导入后在 web.app 重新绑定为模块级名字，解析函数一律引用本模块常量；测试必须 `monkeypatch.setattr(web.app, "HISTORY_FILE", tmp_path/...)`，打在定义方 analyzer 不生效（与 src/ 同纪律）。切勿在 web/app.py 内调用 `analyzer.load_history()` 等引用 analyzer 常量的函数，否则 monkeypatch 失效。
+- **板块热度数据源在 context，不在 history**：history.json 无板块字段；`/api/latest` 的 sector_heat 来自最新 `context/*.json` 的 `sector_heat`（gainers/losers）；context 缺失 / 键缺失 → 降级空结构 `{gainers:[],losers:[]}`。PRD 字面「从 history.json 最新条目」不实。
+- **alerts 空目录容错**：`alerts/` 目录缺失 / 空 / 含坏文件（无 frontmatter）→ `/api/alerts` 返回 `[]` 或跳过坏文件，绝不 500；告警文件名含日期，排序按文件名倒序取最近 10 条。
+- **只读边界**：web 进程绝不写 data/alerts/context；`/api/latest` 涨跌幅由 history 相邻记录自算，不读 `last_values.json`（它是次日告警基准，读它违反只读语义）。
+- **Chart.js CDN 降级**：图表库走 jsdelivr CDN，图区 `<script onerror>` 置 `window.__chartFailed`；`renderCharts` 在 `window.__chartFailed || !window.Chart` 时显示「图表加载失败」降级文案，页面其余模块（HTML 直渲）不受影响；无外网环境不白屏。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。

@@ -30,6 +30,7 @@ Python 项目。每个交易日有多个运行点：
 | 上下文输出 | `context/YYYY-MM-DD.json` | Hermes 解读/归因输入（indices 8 键 + history_30d 含 cyb + breach + sector_heat（板块热度 Top5）+ search_keywords，运行时生成，gitignore 排除） |
 | 告警输出 | `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
 | 数据持久化 | `data/last_values.json`（涨跌幅基准）、`data/history.json`（近 90 日历史） | 运行时生成，gitignore 排除 |
+| Web 看板 | `web/app.py`（FastAPI 应用 + 4 端点）、`web/templates/index.html`、`web/static/style.css`、`web/__init__.py` | 只读看板：解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染单页（市场概览表 / 4 组独立 y 轴趋势图 / A 股板块热度 Top5 / 告警记录），提供 `/api/history` `/api/latest` `/api/alerts` 三个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
 | 测试 | `tests/test_analyzer.py`、`tests/test_reporter.py`、`tests/test_alerter.py`、`tests/test_context.py` | 纯逻辑 / 渲染 / 趋势图 / 历史滚动 / 告警 / context 单元测试 |
 
 ## 数据流
@@ -79,14 +80,14 @@ Yahoo Finance (^MOVE) ───────┘          │
 | 盘中快照（七期） | 快照扩展为 4 个市场时点：A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00（北京时间）；`--market a-share` 取 SH/SZ/CYB、`--market us` 取 GSPC/IXIC（不含波动率）；创业板 `399006.SZ` 入 SYMBOLS（8 键，阈值 ±5%）；快照存 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`，告警文件复合名 `alerts/YYYY-MM-DD-{market}-{time}.md` 防与日报碰撞；A 股快照按北京时间归档（设计 A-G） | 盘中快照原仅美东 12:30 三板块；现按市场/时段分档，波动率仅保留在日报，快照单板块；旧 `YYYY-MM-DD-noon.md` 命名退役 | 2026-08-30 |
 | A 股板块热度（八期） | 日报新增「🔥 A 股热点板块 Top 5」：AkShare `stock_sector_spot(indicator="概念")` 取概念板块，按涨跌幅降序取 Top5（不设阈值）；`fetch_sector_heat` 线程限时 10s（新浪源无 timeout），超时/异常/缺必需列返回 [] 不中断日报；板块名注入 `search_keywords`（方向感知 surge/drop，不触发独立告警）；context 新增 `sector_heat` 键 | 丰富市场情绪感知；Top5 方案避免阈值主观设定；新浪接口挂起由线程限时兜底；板块热度非核心，失败降级为「数据暂缺」 | 2026-08-30 |
 | 分市场趋势图（九期） | 日报新增美股 2×1（GSPC/IXIC）与 A 股 3×1（SH/SZ/CYB）趋势图：`render_market_trend_chart(history, date, market)`（注册表式，market∈{us,cn}，复用 render_trend_chart 绘图范式，独立 `MARKET_CHART_TIMEOUT=5` 限时，三图串行渲染）；`render_report` 加 `us_trend_chart`/`cn_trend_chart` 默认参数 + 两个章节（us 图在美股大盘后、cn 图在 A 股大盘后）；占位文案英文 "Insufficient Data"；市场键 us/cn 与快照 `MARKETS` 键 a-share/us 不同；`daily_report.py` 单次 `load_history` 复用 | 波动率图外补足分市场走势感知；图表文本英文是既有硬约束；整体行数<2 返回 None 省略章节（与 render_trend_chart 一致），部分序列缺数据子图占位不中断 |
+| Web 看板（十一期） | 新增 `web/` 包：FastAPI 单页看板 + 3 个只读 JSON API（`/api/history` / `/api/latest` / `/api/alerts`）。路径常量复用 analyzer 单一事实来源，但在 `web/app.py` 重新绑定为模块级名字（解析函数一律引用本模块常量），测试 monkeypatch 落点严格打在使用方模块 `web.app`（打在定义方 analyzer 不生效）；板块热度数据源为最新 `context/*.json` 的 `sector_heat`（history.json 无板块字段，PRD 字面「从 history.json」不实，按「单独 JSON = context」落地）；`alerts/` 空目录 / 坏文件容错返回 `[]` 不 500；Chart.js 走 CDN，加载失败图区降级「图表加载失败」文案；新增运行依赖 fastapi/uvicorn/jinja2/httpx（决策 A，PRD 技术栈明确指定） | 浏览器展示最近 7 日市场数据，零侵入日报/快照主流程；只读语义（不读 `last_values.json`、不写任何生成物）保持与日报同一事实来源；量级悬殊（BTC 万级 vs VIX 十几）按市场分 4 图各独立 y 轴 | 2026-08-30 |
 | 测试隔离 | tests/conftest.py 顶层强制 CONFIG_PATH 指向不存在文件，collection 前生效 | 用户定制 config.json 后跑 pytest 不破坏默认断言（PRD 风险表"测试混用生产配置"正解） | 2026-09-01 |
 
 ## 约束
 
 - 不修改的模块/文件: `.env`，`reports/`，`data/`（均为运行时生成/用户配置）。
 - 必须保持的兼容性: `python daily_report.py` / `python snapshot_report.py [--market a-share|us] [--time open|midday|close|noon]` 全程可手动运行（裸跑 = 美股午盘）。
-- 安全边界: 无需任何 API 密钥，数据全部来自 Yahoo Finance 公开接口。
-- 依赖边界: 仅 `requests` / `matplotlib` / `pytest`，不引入其他依赖。
+- 依赖边界：运行依赖 `requests` / `matplotlib` / `pytest` / `fastapi` / `uvicorn` / `jinja2` / `httpx`（十一期 Web 看板引入后四项，PRD 技术栈明确指定 FastAPI + uvicorn + jinja2，httpx 为 TestClient 必需；Chart.js 经 CDN 不落盘，不计入 Python 依赖）。
 - 五期起：阈值全部外置 `config.json`，`src/config.py`（约 122 行）+ `analyzer.py`/`reporter.py` 接线（约 +5 行）；`tests/test_config.py`（约 180 行）。优先级链 env > config.json > 内置默认，零新增依赖；`config.json` 入 gitignore（用户定制不入库）。
 
 ## 目录级规则

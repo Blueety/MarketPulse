@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketPulse 市场看板</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          onerror="window.__chartFailed=true"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>MarketPulse 市场看板</h1>
+    <span class="subdate" id="overview-date"></span>
+  </header>
+
+  <main class="container">
+    <!-- 模块 1：市场概览 -->
+    <section class="card">
+      <h2>市场概览（最新交易日）</h2>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr><th>指数</th><th>收盘</th><th>涨跌幅</th><th>状态</th></tr>
+          </thead>
+          <tbody id="overview-body">
+            <tr><td colspan="4">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 模块 2：趋势图（4 组独立 y 轴） -->
+    <section class="card">
+      <h2>近 7 日趋势</h2>
+      <div class="charts-grid" id="charts-grid">
+        <div class="chart-box"><h3>美股大盘</h3><canvas id="chart-gspc-ixic"></canvas></div>
+        <div class="chart-box"><h3>A 股大盘</h3><canvas id="chart-sh-sz-cyb"></canvas></div>
+        <div class="chart-box"><h3>波动率</h3><canvas id="chart-vix-vxn-move"></canvas></div>
+        <div class="chart-box"><h3>另类资产</h3><canvas id="chart-gld-btc"></canvas></div>
+      </div>
+    </section>
+
+    <!-- 模块 3：板块热度 -->
+    <section class="card">
+      <h2>A 股热点板块 Top 5（领涨）</h2>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr><th>板块</th><th>涨跌幅</th><th>成交额</th><th>领涨股</th></tr>
+          </thead>
+          <tbody id="sector-body">
+            <tr><td colspan="4">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 模块 4：告警记录 -->
+    <section class="card">
+      <h2>告警记录（最近 10 条）</h2>
+      <div id="alert-list" class="alert-list">
+        <p class="empty">加载中…</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const COLORS = {
+      gspc: "#2b6de8", ixic: "#1a9e6c", sh: "#d1495b", sz: "#e07600",
+      cyb: "#7b5ce0", vix: "#c0392b", vxn: "#e67e22", move: "#8e44ad",
+      gld: "#d4a017", btc: "#f7931a"
+    };
+    const GROUPS = [
+      { id: "chart-gspc-ixic", keys: ["gspc", "ixic"] },
+      { id: "chart-sh-sz-cyb", keys: ["sh", "sz", "cyb"] },
+      { id: "chart-vix-vxn-move", keys: ["vix", "vxn", "move"] },
+      { id: "chart-gld-btc", keys: ["gld", "btc"] },
+    ];
+
+    function fmtNum(v, digits) {
+      if (v == null) return "—";
+      return Number(v).toFixed(digits);
+    }
+    function fmtPct(v) {
+      if (v == null) return "—";
+      return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
+    }
+
+    function renderOverview(latest) {
+      const tbody = document.getElementById("overview-body");
+      document.getElementById("overview-date").textContent = latest.date || "";
+      tbody.innerHTML = "";
+      if (!latest.indices || !latest.indices.length) {
+        tbody.innerHTML = '<tr><td colspan="4">暂无数据</td></tr>';
+        return;
+      }
+      latest.indices.forEach(function (it) {
+        const chg = it.change_pct;
+        const cls = chg == null ? "" : (chg >= 0 ? "pos" : "neg");
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + it.label + "</td>" +
+          "<td>" + fmtNum(it.value, 2) + "</td>" +
+          '<td class="' + cls + '">' + fmtPct(chg) + "</td>" +
+          "<td>" + (it.status || "—") + "</td>";
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSector(latest) {
+      const tbody = document.getElementById("sector-body");
+      tbody.innerHTML = "";
+      const gainers = (latest.sector_heat && latest.sector_heat.gainers) || [];
+      if (!gainers.length) {
+        tbody.innerHTML = '<tr><td colspan="4">数据暂缺</td></tr>';
+        return;
+      }
+      gainers.slice(0, 5).forEach(function (g) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + (g.name || "—") + "</td>" +
+          '<td class="pos">' + fmtPct(g.change) + "</td>" +
+          "<td>" + (g.turnover || "—") + "</td>" +
+          "<td>" + (g.top_stock || "—") + "</td>";
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAlerts(alerts) {
+      const box = document.getElementById("alert-list");
+      box.innerHTML = "";
+      if (!alerts || !alerts.length) {
+        box.innerHTML = '<p class="empty">暂无告警记录</p>';
+        return;
+      }
+      alerts.forEach(function (a) {
+        const level = a.level || "";
+        const cls = level === "ALERT" ? "alert" : (level === "WARN" ? "warn" : "");
+        const card = document.createElement("div");
+        card.className = "alert-card " + cls;
+        card.innerHTML =
+          '<div class="alert-head"><span class="badge ' + cls + '">' + level + "</span>" +
+          "<span>" + (a.symbol || "") + " · " + (a.date || "") + "</span></div>" +
+          '<div class="alert-meta">类型：' + (a.type || "—") + " ｜ 市场状态：" + (a.state || "—") + "</div>" +
+          '<div class="alert-row">当前值：' + fmtNum(a.current, 2) + " ｜ 昨日收盘：" + fmtNum(a.last, 2) +
+          " ｜ 变化率：" + fmtPct(a.change_pct) + "（阈值 ±" + fmtNum(a.threshold, 1) + "%）</div>" +
+          '<div class="alert-sugg">建议：' + (a.suggestion || "—") + "</div>" +
+          '<div class="alert-report">相关报告：' + (a.report || "—") + "</div>";
+        box.appendChild(card);
+      });
+    }
+
+    function renderCharts(history) {
+      if (window.__chartFailed || !window.Chart) {
+        GROUPS.forEach(function (g) {
+          const box = document.getElementById(g.id).parentElement;
+          box.innerHTML = '<p class="empty">图表加载失败（离线 / CDN 不可达）</p>';
+        });
+        return;
+      }
+      GROUPS.forEach(function (g) {
+        const canvas = document.getElementById(g.id);
+        const series = history.series.filter(function (s) { return g.keys.indexOf(s.key) !== -1; });
+        new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: history.dates,
+            datasets: series.map(function (s) {
+              return {
+                label: s.label,
+                data: s.values,
+                borderColor: COLORS[s.key],
+                backgroundColor: COLORS[s.key],
+                spanGaps: false,
+                tension: 0.1,
+                pointRadius: 2,
+                borderWidth: 2
+              };
+            })
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: "top" } },
+            scales: { y: { ticks: { callback: function (v) { return v; } } } }
+          }
+        });
+      });
+    }
+
+    function loadFailed(msg, boxId) {
+      const box = document.getElementById(boxId);
+      if (box) box.innerHTML = '<tr><td colspan="4">加载失败：' + msg + "</td></tr>";
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      fetch("/api/latest").then(function (r) { return r.json(); })
+        .then(function (data) { renderOverview(data); renderSector(data); })
+        .catch(function (e) { loadFailed(e.message, "overview-body"); });
+
+      fetch("/api/history").then(function (r) { return r.json(); })
+        .then(function (data) { renderCharts(data); })
+        .catch(function () { /* 图表区已在渲染函数内降级 */ });
+
+      fetch("/api/alerts").then(function (r) { return r.json(); })
+        .then(function (data) { renderAlerts(data); })
+        .catch(function () { document.getElementById("alert-list").innerHTML = '<p class="empty">加载失败</p>'; });
+    });
+  </script>
+</body>
+</html>
