@@ -112,7 +112,9 @@ body {
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 14px;
+    padding: 16px;
+    overflow: hidden;
+    min-width: 0;
   }
   .chart-box h3 {
     font-size: 14px;
