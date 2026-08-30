@@ -103,7 +103,7 @@ def main() -> int:
     if final:
         latest = final[-1]
         save_last_values(
-            {k: latest[k] for k in ("vix", "vxn", "move") if latest.get(k) is not None},
+            {k: latest[k] for k in [s.lower() for s in SYMBOLS] if latest.get(k) is not None},
             latest["date"],
         )
         print(f"last_values.json 已同步为 {latest['date']} 收盘值")

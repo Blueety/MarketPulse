@@ -7,10 +7,9 @@
 
 Python 项目。每个交易日有两个运行点：
 
-1. **收盘日报**：`daily_report.py`（美东收盘后运行），从 Yahoo Finance 拉取 VIX / VXN / MOVE 三个波动率指数，生成 Markdown 日报（含近 30 日趋势图），追加历史数据并缓存当日值，生成 `context/YYYY-MM-DD.json` 上下文（供 Hermes 常规解读/异动归因），交由 Hermes 读取并推送到 QQ 机器人。
+1. **收盘日报**：`daily_report.py`（美东收盘后运行），从 Yahoo Finance 拉取美股（GSPC/IXIC/VIX/VXN/MOVE）+ A 股（SH/SZ）共 7 个指数，生成 Markdown 日报（含近 30 日趋势图），追加历史数据并缓存当日值，生成 `context/YYYY-MM-DD.json` 上下文（供 Hermes 常规解读/异动归因），交由 Hermes 读取并推送到 QQ 机器人。
 2. **午盘快照**：`snapshot_report.py`（美东 12:30 运行），仅取数 → 分类 → 生成午盘简报存盘，检查告警阈值（只读缓存基准），不推送。
-
-告警：两入口各自检查当日变化率是否超过阈值（默认 VIX/VXN ±20%、MOVE ±15%，env 可覆盖），
+告警：两入口各自检查当日变化率是否超过阈值（默认 VIX/VXN ±20%、MOVE ±15%、GSPC/IXIC/SH/SZ ±4%，env 可覆盖），
 触发则生成 `alerts/YYYY-MM-DD-{type}.md`（type = noon / close），由 Hermes 检测并独立推送一条警报消息；
 同一指数当日只告警一次（午盘触发则收盘跳过），去重状态记在 `data/alerts.log`。
 
@@ -71,7 +70,7 @@ Yahoo Finance ──> snapshot_report.py ──> reports/snapshots/YYYY-MM-DD-no
 | 告警文件 | `alerts/YYYY-MM-DD-{type}.md`（type = noon / close），多指数各占一个附录块（frontmatter + 标题 + 字段） | PRD 固定文件名 {type}；多指数同日触发不冲突（设计 D） | 2026-09-01 |
 | 告警容错 | run_alert_checks 内逐指数 try/except，调用方再包一层 try/except，仅记日志 | 告警逻辑失败不影响日报生成，退出码恒 0（决策 H） | 2026-09-01 |
 | context 计算单一来源 | alerter 新增纯计算导出 `collect_breaches(values, last_values)`（遍历 check_breach，不写文件/不改 alerts.log，幂等）；`run_alert_checks` 重构为复用它（去重/写文件/标记逻辑原样） | breach 判断单一事实来源，context 生成不产生副作用；既有 23 条 alerter 测试行为等价锁定（决策 A） | 2026-09-01 |
-| context 契约 | `context/YYYY-MM-DD.json` 五键：date / indices（value/change_pct/status）/ history_30d（dates+vix+vxn+move 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ search_keywords | PRD 字段表定稿，Hermes Prompt 按此编写；`_breach_item` 纯映射单测锁定（决策 B） | 2026-09-01 |
+| context 契约 | `context/YYYY-MM-DD.json` 五键：date / indices（value/change_pct/status）/ history_30d（dates + gspc/ixic/sh/sz/vix/vxn/move 等长数组，含当日）/ breach（triggered + indices 字段 name/current/previous/change_pct/threshold/level，level 沿用 WARN/ALERT）/ search_keywords | PRD 字段表定稿，Hermes Prompt 按此编写；`_breach_item` 纯映射单测锁定（决策 B） | 2026-09-01 |
 | 搜索关键词 | `build_search_keywords(date, breaches)` 方向感知：异动指数变化率 >=0 用 "surge"、<0 用 "drop"，加 market volatility / economic data 定向词，异动日 3-5 个；常规日 1 个 "market summary {date}" | 方向感知直接服务归因搜索相关性（VIX 下跌时搜 "VIX drop" 才能命中下跌原因）（决策 C） | 2026-09-01 |
 | context 生成时机 | `generate_context` 在 `append_history` 之后、`save_last_values` 之后调用（history_30d 含当日）；临时文件 + `os.replace` 原子写；仅收盘入口生成，snapshot 不动 | 含当日的 30 日趋势对 Hermes 参考更完整；原子写避免读到半截 JSON（决策 D/F） | 2026-09-01 |
 | context 容错 | `generate_context` 不吞异常，`daily_report.py` 调用方 try/except 兜底仅记日志，退出码恒 0 | 失败路径可见可测；context 失败不影响日报主流程（决策 E） | 2026-09-01 |

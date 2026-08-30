@@ -1,6 +1,6 @@
-# 📊 MarketPulse — 美国市场波动率监控系统
+# 📊 MarketPulse — 美股 + A 股大盘波动率监控系统
 
-> 每天自动获取 VIX / VXN / MOVE 三个波动率指数，生成带 AI 解读的日报，通过 QQ 推送。
+> 每天自动获取 美股（标普500/纳斯达克/VIX/VXN/MOVE）+ A 股（上证/深证）大盘与波动率指数，生成带 AI 解读的日报，通过 QQ 推送。
 > 异常波动时主动告警 + 自动归因分析。
 
 ![Architecture](docs/architecture-diagram.html)
@@ -15,7 +15,8 @@
 | 二期 | 午盘快照 + 趋势图 | 美东12:30 快照 + matplotlib 三面板近30日趋势图 |
 | 三期 | 阈值告警 | 单日变化率超阈值(VIX/VXN ±20%, MOVE ±15%)独立推送告警 |
 | 四期 | AI 解读 + 异动归因 | 每日 AI 市场解读 + 异动日 tavily 搜索归因分析 |
-| 五期 | 阈值配置化 | 阈值外置到 config.json + env 覆盖，改配置不改代码 |
+| 六期A | Hermes 上下文 + 状态重构 | context/JSON（indices + history_30d + breach + search_keywords）；状态/涨跌幅/趋势纯逻辑化 |
+| 六期B | A 股大盘监控 | SYMBOLS 扩 7 键（加 000001.SS/399001.SZ）；日报三板块（美股/A股/波动率）；SH/SZ 告警阈值 ±4% |
 
 ---
 
@@ -59,8 +60,7 @@ MarketPulse/
 │   ├── alerter.py               #   告警层 (渲染/去重/编排)
 │   ├── config.py               #   配置加载 (默认/env/json 三级, 零依赖)
 │   └── reporter.py              #   报告层 (日报/快照/趋势图/context生成)
-│
-├── tests/                       # 单元测试 (113 项, 约 900 行)
+├── tests/                       # 单元测试 (147 项, 约 1050 行)
 │   ├── test_analyzer.py         #   185 行
 │   ├── test_alerter.py          #   184 行
 │   ├── test_reporter.py         #   148 行
@@ -89,7 +89,7 @@ MarketPulse/
 ## 🔄 数据流
 
 ```
-Yahoo Finance (^VIX / ^VXN / ^MOVE)
+    Yahoo Finance (^GSPC / ^IXIC / 000001.SS / 399001.SZ / ^VIX / ^VXN / ^MOVE)
         │  fetcher.py (重试/退避/单源容错)
         ▼
    analyzer.py ──────────────────────────────────────
@@ -123,10 +123,14 @@ Yahoo Finance (^VIX / ^VXN / ^MOVE)
 
 ---
 
-## 📊 三个波动率指数
+## 📊 监控指数
 
-| 指数 | 含义 | 阈值 |
+| 指数 | 含义 | 阈值 / 分类 |
 |------|------|------|
+| **GSPC** (标普500) | 美股大盘基准 | 大盘趋势（连涨/跌、上升/下跌趋势）|
+| **IXIC** (纳斯达克) | 美股科技大盘 | 同 GSPC |
+| **SH** (上证指数, 000001.SS) | A 股大盘 | 同 GSPC；A 股休市/数据缺失特判为「休市」|
+| **SZ** (深证成指, 399001.SZ) | A 股大盘 | 同 SH |
 | **VIX** (恐慌指数) | 标普500 波动率，衡量市场恐慌程度 | <20 平静 / 20-30 警惕 / ≥30 恐慌 |
 | **VXN** (科技波动) | 纳斯达克100 波动率 | 同 VIX |
 | **MOVE** (债市波动) | 美国国债波动率 | <100 平静 / 100-130 警惕 / ≥130 恐慌 |
@@ -136,10 +140,10 @@ Yahoo Finance (^VIX / ^VXN / ^MOVE)
 ## 🧪 测试
 
 ```bash
-# 全部测试 (113 项)
+# 全部测试 (147 项)
 python -m pytest tests/ -v
 
-# 预期: 113 passed
+# 预期: 147 passed
 ```
 
 覆盖范围: 状态分类 / 涨跌幅 / 告警阈值 / 去重 / 趋势图 / context生成 / 关键词 / 配置加载
@@ -157,9 +161,8 @@ python -m pytest tests/ -v
 
 ## 🚨 告警机制
 
-- **触发条件**: 单日变化率超阈值 (VIX/VXN ±20%, MOVE ±15%)
-- **阈值覆盖**: 支持环境变量 `ALERT_THRESHOLD_VIX=25`
-- **去重**: 午盘触发则收盘跳过同一指数
+- **触发条件**: 单日变化率超阈值（VIX/VXN ±20%、MOVE ±15%、GSPC/IXIC/SH/SZ ±4%，大盘恒 WARN 级「异动」）
+- **阈值覆盖**: 支持环境变量 `ALERT_THRESHOLD_VIX=25` / `ALERT_THRESHOLD_SH=5`
 - **推送**: 独立告警消息 (不混在日报里)
 
 ## ⚙️ 配置说明（五期）
@@ -176,7 +179,7 @@ python -m pytest tests/ -v
     "vix": { "peaceful": 20, "panic": 30 },
     "move": { "normal": 100, "tight": 130 }
   },
-  "alert": { "vix": 20, "vxn": 20, "move": 15 },
+  "alert": { "vix": 20, "vxn": 20, "move": 15, "gspc": 4, "ixic": 4, "sh": 4, "sz": 4 },
   "trend": { "chart_days": 30 },
   "history": { "retention_days": 90 }
 }
@@ -186,7 +189,7 @@ python -m pytest tests/ -v
 
 | env | 覆盖项 |
 | --- | --- |
-| ALERT_THRESHOLD_VIX / VXN / MOVE | 变化率告警阈值 |
+| ALERT_THRESHOLD_VIX / VXN / MOVE / GSPC / IXIC / SH / SZ | 变化率告警阈值 |
 | STATUS_THRESHOLD_VIX_CALM / VIX_PANIC | VIX/VXN 平静/恐慌分界 |
 | STATUS_THRESHOLD_MOVE_CALM / MOVE_WARN | MOVE 平静/警惕分界 |
 | TREND_CHART_DAYS | 趋势图窗口（天） |
@@ -209,12 +212,11 @@ python -m pytest tests/ -v
 | 项 | 值 |
 |---|---|
 | 语言 | Python 3.14 (venv) |
-| 依赖 | requests + matplotlib + pytest |
+| 测试 | 147 项, 全绿 |
 | 数据源 | Yahoo Finance (公开 REST, 无需 API key) |
 | AI | Hermes Agent + MiMo-V2.5 + Tavily Search |
 | 调度 | Hermes Cron |
 | 推送 | QQ 私聊 |
-| 测试 | 113 项, 全绿 |
 
 ---
 

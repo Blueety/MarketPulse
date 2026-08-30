@@ -19,7 +19,7 @@ from .analyzer import (
     load_history,
 )
 from .config import load_config
-from .fetcher import SYMBOLS, STOCK_SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -33,18 +33,31 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
     """
-    stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS]
+    us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
+    a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
     vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
 
-    stock_rows = []
-    for sym in stock_syms:
+    us_stock_rows = []
+    for sym in us_stock_syms:
         meta = SYMBOLS[sym]
         trend, _ = statuses[sym]
-        stock_rows.append(
+        us_stock_rows.append(
             f"| {meta['label']} | {fmt_value(values[sym])} "
             f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
         )
-    stock_table = "\n".join(stock_rows)
+    us_stock_table = "\n".join(us_stock_rows)
+
+    a_share_rows = []
+    for sym in a_share_syms:
+        meta = SYMBOLS[sym]
+        trend, _ = statuses[sym]
+        # A 股休市（取数失败/None）显示「休市」，与美股/波动率区分（六期 B 设计 B）
+        close = "休市" if values[sym] is None else fmt_value(values[sym])
+        a_share_rows.append(
+            f"| {meta['label']} | {close} "
+            f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
+        )
+    a_share_table = "\n".join(a_share_rows)
 
     vol_rows = []
     for sym in vol_syms:
@@ -72,7 +85,15 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{stock_table}
+{us_stock_table}
+
+---
+
+## 🇨🇳 A 股大盘
+
+| 指数 | 收盘价 | 涨跌幅 | 趋势 |
+| :--- | :--- | :--- | :--- |
+{a_share_table}
 
 ---
 
@@ -200,18 +221,24 @@ def render_trend_chart(history: list[dict], date: str):
 
 def render_snapshot(date, values, statuses) -> str:
     """渲染午盘快照：美股大盘 + 波动率指数两板块（仅当前值 + 趋势/状态，不算涨跌幅）。"""
-    stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS]
+    us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
+    a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
     vol_syms = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
 
-    stock_rows = [
+    us_stock_rows = [
         f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
-        for s in stock_syms
+        for s in us_stock_syms
+    ]
+    a_share_rows = [
+        f"| {SYMBOLS[s]['label']} | {'休市' if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
+        for s in a_share_syms
     ]
     vol_rows = [
         f"| {SYMBOLS[s]['label']} | {fmt_value(values[s])} | {statuses[s][0]} |"
         for s in vol_syms
     ]
-    stock_table = "\n".join(stock_rows)
+    us_stock_table = "\n".join(us_stock_rows)
+    a_share_table = "\n".join(a_share_rows)
     vol_table = "\n".join(vol_rows)
 
     if values["VIX"] is not None:
@@ -231,7 +258,15 @@ def render_snapshot(date, values, statuses) -> str:
 
 | 指数 | 当前值 | 趋势 |
 | :--- | :--- | :--- |
-{stock_table}
+{us_stock_table}
+
+---
+
+## 🇨🇳 A 股大盘
+
+| 指数 | 当前值 | 趋势 |
+| :--- | :--- | :--- |
+{a_share_table}
 
 ---
 
@@ -302,6 +337,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "move": [r["move"] for r in history],
             "gspc": [r["gspc"] for r in history],
             "ixic": [r["ixic"] for r in history],
+            "sh": [r["sh"] for r in history],
+            "sz": [r["sz"] for r in history],
         },
         "breach": {
             "triggered": bool(breaches),

@@ -8,8 +8,7 @@ from src import analyzer as an
 
 @pytest.fixture
 def clean_thresholds(monkeypatch):
-    """隔离告警阈值环境变量，避免宿主环境泄漏进测试。"""
-    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC"):
+    for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"):
         monkeypatch.delenv(f"ALERT_THRESHOLD_{sym}", raising=False)
 
 

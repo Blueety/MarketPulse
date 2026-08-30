@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .config import env_float, load_config
-from .fetcher import SYMBOLS, STOCK_SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS
 
 log = logging.getLogger("marketpulse")
 
@@ -151,7 +151,7 @@ def build_search_keywords(date: str, breaches: list[dict]) -> list[str]:
     ]
     words.append(f"market volatility {date}")
     words.append(f"economic data {date}")
-    return words
+    return words[:5]
 
 
 def _sign(x: float) -> int:
@@ -263,7 +263,10 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
     for sym in SYMBOLS:
         val = values.get(sym)
         if val is None:
-            statuses[sym] = ("获取失败", "数据获取失败，无法判断状态。")
+            if sym in A_SHARE_SYMBOLS:
+                statuses[sym] = ("休市", "A 股休市或数据缺失。")
+            else:
+                statuses[sym] = ("获取失败", "数据获取失败，无法判断状态。")
         elif sym in STOCK_SYMBOLS:
             streak = streaks.get(sym, 0)
             has = _stock_has_data(sym, last_values, history)
@@ -354,7 +357,9 @@ def load_history() -> list[dict]:
             "move": rec.get("move"),
             "gspc": rec.get("gspc"),
             "ixic": rec.get("ixic"),
-        }
+            "sh": rec.get("sh"),
+            "sz": rec.get("sz"),
+            }
         for rec in data
         if isinstance(rec, dict) and rec.get("date")
     ]
