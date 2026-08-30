@@ -246,14 +246,14 @@
           scales: {
             x: {
               type: "category",
-              labels: history.dates,
+              labels: tradingDates,
               grid: { display: false },
               ticks: {
                 font: { size: 12 },
                 color: "#8b949e",
                 maxRotation: 0,
                 autoSkip: true,
-                callback: function (value, index) { return String(history.dates[index]).slice(8); }
+                callback: function (value, index) { return String(tradingDates[index]).slice(8); }
               }
             },
             y: {
