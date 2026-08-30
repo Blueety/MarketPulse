@@ -67,8 +67,8 @@
 
   <script>
     const COLORS = {
-      gspc: "#2b6de8", ixic: "#1a9e6c", sh: "#d1495b", sz: "#e07600",
-      cyb: "#7b5ce0", vix: "#c0392b", vxn: "#e67e22", move: "#8e44ad",
+      gspc: "#58a6ff", ixic: "#3fb950", sh: "#f85149", sz: "#d29922",
+      cyb: "#bc8cff", vix: "#f85149", vxn: "#d29922", move: "#bc8cff",
       gld: "#d4a017", btc: "#f7931a"
     };
     const GROUPS = [
@@ -206,9 +206,13 @@
             responsive: true,
             interaction: { mode: "index", intersect: false },
             plugins: {
-              legend: { position: "top", labels: { usePointStyle: true, padding: 12 } },
+              legend: { position: "top", labels: { usePointStyle: true, padding: 12, color: "#8b949e", font: { size: 11 } } },
               tooltip: {
-                backgroundColor: "rgba(0,0,0,0.8)",
+                backgroundColor: "rgba(22, 27, 34, 0.95)",
+                titleColor: "#e6edf3",
+                bodyColor: "#e6edf3",
+                borderColor: "#30363d",
+                borderWidth: 1,
                 titleFont: { size: 12 },
                 bodyFont: { size: 13 },
                 padding: 10,
@@ -225,11 +229,11 @@
                 type: "category",
                 labels: history.dates,
                 grid: { display: false },
-                ticks: { font: { size: 11 }, maxRotation: 45 }
+                ticks: { font: { size: 11 }, color: "#8b949e", maxRotation: 45 }
               },
               y: {
-                grid: { color: "rgba(0,0,0,0.06)" },
-                ticks: { font: { size: 11 } }
+                grid: { color: "rgba(48, 54, 61, 0.5)" },
+                ticks: { font: { size: 11 }, color: "#8b949e" }
               }
             },
             animation: { duration: 800, easing: "easeOutQuart" }
