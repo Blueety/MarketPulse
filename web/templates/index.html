@@ -180,10 +180,25 @@
 
     function renderLineChart(canvas, history, series) {
       const ctx = canvas.getContext("2d");
+
+      // 过滤非交易日：只保留在该组至少有一个系列有数据的日期
+      const tradingDates = [];
+      const dateIndexMap = {};
+      history.dates.forEach(function (d, i) {
+        var hasData = series.some(function (s) { return s.values && s.values[i] != null; });
+        if (hasData) {
+          dateIndexMap[i] = tradingDates.length;
+          tradingDates.push(d);
+        }
+      });
+
+      // 按交易日重新映射数据点
       const datasets = series.map(function (s) {
         const pts = [];
         (s.values || []).forEach(function (v, i) {
-          if (v != null) pts.push({ x: history.dates[i], y: v });
+          if (v != null && dateIndexMap[i] !== undefined) {
+            pts.push({ x: tradingDates[dateIndexMap[i]], y: v });
+          }
         });
         return {
           label: s.label,
