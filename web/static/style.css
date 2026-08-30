@@ -133,13 +133,12 @@ body {
   }
   .chart-meta {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 8px 12px;
     font-size: 12px;
     color: var(--text-secondary);
     text-align: right;
-    white-space: nowrap;
   }
   .meta-item { font-weight: 600; }
 .chart-box canvas {
