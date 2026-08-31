@@ -114,6 +114,15 @@
 - **AI 解读章节识别**：正则 `^##\s.*解读` 匹配标题含「解读」的章节（决策 A），仅取首个；日报本身不渲染解读区，Hermes 追加解读后由 `scripts/render_report_image.py --date` 独立重渲染含解读图（依赖已落盘的 md + 解读章节），与日报自动渲染解耦。
 - **测试 mock 双模块落点**：`render_report_image` 在**函数内** `from playwright.sync_api import sync_playwright`，导入时查 `sys.modules["playwright"]` 与 `sys.modules["playwright.sync_api"]`。测试须**同时** `monkeypatch.setitem(sys.modules, "playwright", ...)` 与 `monkeypatch.setitem(sys.modules, "playwright.sync_api", ...)` 才能拦截；只置 `sys.modules["playwright"]=None` 拦不住**已缓存**的 `playwright.sync_api` 子模块（真实 Chromium 仍会被驱动）。playwright 自带超时抛 `TimeoutError`，mock 时让 `page.set_content` 抛 `TimeoutError` 即可走真实「超时 → 捕获 → None」路径。
 
+## 模块 web/（十七期：看板交互增强）
+
+- **Chart.js 重渲染必须 destroy 旧实例**：刷新时若直接 `new Chart(canvas, ...)` 会报 `Canvas is already in use`。按 group id 维护 `charts` 注册表，重渲染前 `if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }` 再重建（实测 90 点切换无此问题，但缺失 destroy 必然报错）。
+- **FastAPI Query 参数越界自动 422**：`days: int = Query(30, ge=1, le=90)` 时前端传 `?days=0` / `?days=91` 由框架直接返回 422，前端无需自行校验，但测试必须覆盖这两个边界。
+- **默认行为变更必同步测试**：`/api/history` 默认窗口 7→30 天后，既有 `test_api_history` 的 `len(dates)<=7` 与 vix null 索引（1→2）断言、以及 `test_api_history_series_shape` 的键集断言（`raw`）都要同步更新，否则旧断言锁死新行为。
+- **新增 API 字段同步键集断言**：series 增 `raw` 等长原始值（GLD 已 ×10，与图线一致）后，`test_api_history_series_shape` 的 `set(s.keys())` 必须含 `raw`，否则键集漂移无人发现。
+- **CDN 插件降级纪律**：chartjs-plugin-zoom 走 CDN，`<script onerror="window.__zoomFailed=true">`；插件缺失时图表照常渲染仅无缩放（zoom 配置仅在 `window.ChartZoom && !window.__zoomFailed` 时注入），与既有 Chart.js `__chartFailed` 降级同纪律，不白屏。
+- **筛选/排序单一管线**：指标筛选（state.selected）与表格排序（state.sort）统一由 `refresh()` 驱动——历史请求带 `?symbols=`、概览表在 `renderOverview` 内先按 selected 过滤再排序；整组无选中时历史请求发空余串会退回全量，故前端对 `selected.size===0` 直接走空 payload 渲染「无选中指标」占位，避免与「全部」语义混淆。
+- **浏览器自动化访问 DOM 走 `tab.evaluate`**：`browser` 的 `run` 顶层作用域无 `document`，必须在 `tab.evaluate(() => {...})` 内操作 DOM；模拟点击后需 `await setTimeout` 等 fetch 回调再断言。
 ## 环境相关
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。
