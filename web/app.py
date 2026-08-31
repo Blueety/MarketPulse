@@ -14,7 +14,7 @@ import logging
 import re
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -86,25 +86,41 @@ def _normalize_series(raw: list[float | None]) -> tuple[list[float | None], floa
     return values, change_7d
 
 
-def _build_history_payload() -> dict:
-    """展开为 Chart.js 友好结构：dates + 10 组 series（key=小写 symbol）。
+def _resolve_symbols(symbols: str | None) -> list[str]:
+    """解析 symbols 查询参数 → SYMBOLS 注册表序的大写键列表。
+
+    - None / 空白 → 全部 SYMBOLS 键（保序）。
+    - 逗号分隔 → strip + upper → 按 SYMBOLS 注册表序过滤（忽略参数传序、未知静默忽略）。
+    - 解析结果为空（全未知 / 全空白）→ []。
+    """
+    if not symbols or not symbols.strip():
+        return list(SYMBOLS.keys())
+    wanted = {s.strip().upper() for s in symbols.split(",") if s.strip()}
+    if not wanted:
+        return []
+    return [sym for sym in SYMBOLS if sym in wanted]
+
+
+def _build_history_payload(days: int = 30, symbols: str | None = None) -> dict:
+    """展开为 Chart.js 友好结构：dates + N 组 series（key=小写 symbol）。
 
     每个序列归一化为相对基准百分比（窗口首个非空值 = 100），另附 change_7d
-    （7 日涨跌幅，相对基准百分比）。过滤掉周末日期。
+    （窗口涨跌幅，键名保留向后兼容）与 raw（等长原始值，GLD 已 ×10，与图线一致）。
+    按交易日条数过滤：读全量历史 → 过滤周末 → 取最近 days 条（记录数不足时全取）。
     """
     from datetime import datetime
-    records = _last_records(14)  # 多取一些，过滤周末后保留7天
-    # 过滤周末
+    records = _load_history_raw()
+    # 过滤周末（按交易日条数，而非自然日）
     weekdays = []
     for r in records:
         dt = datetime.strptime(r["date"], "%Y-%m-%d")
-        if dt.weekday() < 5:  # 0-4 周一到周五
+        if dt.weekday() < 5:
             weekdays.append(r)
-    records = weekdays[-7:]  # 取最近7个交易日
+    records = weekdays[-days:] if days > 0 else []
 
     dates = [r["date"] for r in records]
     series = []
-    for sym in SYMBOLS:  # SYMBOLS 字典保序：GSPC/IXIC/SH/SZ/CYB/VIX/VXN/MOVE/GLD/BTC
+    for sym in _resolve_symbols(symbols):  # SYMBOLS 注册表序
         key = sym.lower()
         raw = [r.get(key) for r in records]
         # GLD 价格乘以10，显示接近实际金价（美元/盎司）
@@ -116,6 +132,7 @@ def _build_history_payload() -> dict:
             "label": SYMBOLS[sym]["label"],
             "values": values,
             "change_7d": change_7d,
+            "raw": raw,
         })
     return {"dates": dates, "series": series}
 
@@ -248,9 +265,9 @@ def _load_alerts(limit: int = 10) -> list[dict]:
 # ---- 端点 ----
 
 @app.get("/api/history")
-def api_history() -> dict:
-    """最近 7 交易日趋势数据（Chart.js 友好）。"""
-    return _build_history_payload()
+def api_history(days: int = Query(30, ge=1, le=90), symbols: str | None = Query(None)) -> dict:
+    """最近 N 交易日趋势数据（Chart.js 友好）；days 默认 30，symbols 默认全量。"""
+    return _build_history_payload(days=days, symbols=symbols)
 
 
 @app.get("/api/latest")

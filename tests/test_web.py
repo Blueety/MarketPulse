@@ -16,7 +16,9 @@ from web.app import (
     _load_sector_heat,
     _normalize_series,
     _parse_alert_file,
+    _resolve_symbols,
 )
+from src.fetcher import SYMBOLS
 
 def make_alert(date: str) -> str:
     """生成指定日期的告警 md（frontmatter date 与文件名日期一致）。"""
@@ -265,11 +267,12 @@ def test_api_history(client):
     r = client.get("/api/history")
     assert r.status_code == 200
     data = r.json()
-    assert len(data["dates"]) <= 7
+    # 默认值 30 天；夹具 8 条全为周内交易日，全量返回
+    assert len(data["dates"]) == 8
     assert len(data["series"]) == 10
     vix = next(s for s in data["series"] if s["key"] == "vix")
-    # 最后 7 条（周末过滤后）= 08-04..08-12；08-05 的 vix 为 null，index 1
-    assert vix["values"][1] is None
+    # 全量 8 条中 08-05 的 vix 为 null，index 2
+    assert vix["values"][2] is None
 
 
 def test_api_latest(client):
@@ -382,4 +385,80 @@ def test_build_history_payload_change_7d_last_non_null(tmp_path, monkeypatch):
 def test_api_history_series_shape(client):
     data = client.get("/api/history").json()
     for s in data["series"]:
-        assert set(s.keys()) == {"key", "label", "values", "change_7d"}
+        assert set(s.keys()) == {"key", "label", "values", "change_7d", "raw"}
+
+
+# ---- /api/history 新参数：days / symbols / raw / 组合 / 容错 ----
+
+def test_api_history_days_param(client):
+    r = client.get("/api/history?days=3")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["dates"]) == 3
+    assert data["dates"][-1] == "2026-08-12"  # 最近 3 条末位最新
+    assert len(data["series"]) == 10
+
+
+def test_api_history_days_caps(client):
+    r = client.get("/api/history?days=90")
+    assert r.status_code == 200
+    data = r.json()
+    # 夹具 8 条全为周内交易日，全量返回
+    assert len(data["dates"]) == 8
+
+
+def test_api_history_days_invalid(client):
+    assert client.get("/api/history?days=0").status_code == 422
+    assert client.get("/api/history?days=91").status_code == 422
+
+
+def test_api_history_symbols_param(client):
+    r = client.get("/api/history?symbols=VIX,GSPC")
+    assert r.status_code == 200
+    data = r.json()
+    keys = [s["key"] for s in data["series"]]
+    # 注册表序：GSPC 在 VIX 之前
+    assert keys == ["gspc", "vix"]
+    # 大小写混合
+    r = client.get("/api/history?symbols=vix,gspc")
+    assert [s["key"] for s in r.json()["series"]] == ["gspc", "vix"]
+    # 未知符号静默忽略
+    r = client.get("/api/history?symbols=VIX,FOO")
+    assert [s["key"] for s in r.json()["series"]] == ["vix"]
+    # 全未知 → series 为空，dates 仍返回
+    r = client.get("/api/history?symbols=FOO,BAR")
+    d = r.json()
+    assert d["series"] == []
+    assert len(d["dates"]) == 8
+    # 空串 → 全部 10
+    r = client.get("/api/history?symbols=")
+    assert len(r.json()["series"]) == 10
+
+
+def test_api_history_combined(client):
+    r = client.get("/api/history?days=3&symbols=VIX,GSPC")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["dates"]) == 3
+    assert [s["key"] for s in data["series"]] == ["gspc", "vix"]
+
+
+def test_api_history_raw_values(client):
+    data = client.get("/api/history").json()
+    gld = next(s for s in data["series"] if s["key"] == "gld")
+    # 08-03 gld 历史 420.0 → raw 已 ×10 = 4200.0；与 dates 等长
+    assert gld["raw"][0] == 4200.0
+    assert len(gld["raw"]) == len(data["dates"])
+
+
+# ---- _resolve_symbols 纯函数 ----
+
+def test_resolve_symbols():
+    assert _resolve_symbols(None) == list(SYMBOLS.keys())
+    assert _resolve_symbols("") == list(SYMBOLS.keys())
+    assert _resolve_symbols("   ") == list(SYMBOLS.keys())
+    assert _resolve_symbols("VIX,GSPC") == ["GSPC", "VIX"]    # 注册表序
+    assert _resolve_symbols("vix,gspc") == ["GSPC", "VIX"]    # 大小写不敏感
+    assert _resolve_symbols("GSPC,VIX,GSPC") == ["GSPC", "VIX"]  # 去重
+    assert _resolve_symbols("FOO") == []                      # 未知 → 空
+    assert _resolve_symbols("FOO,BAR") == []
