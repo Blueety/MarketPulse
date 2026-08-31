@@ -9,6 +9,7 @@ import time
 import types
 import zlib
 import struct as _struct
+from pathlib import Path
 
 import pytest
 
@@ -108,20 +109,61 @@ def _make_png(w=600, h=800):
     return sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
-def _fake_playwright(monkeypatch, png_factory):
-    """把 `import imgkit` 解析到假模块；from_string 写入 png_factory() 字节。"""
-    fake = types.ModuleType("playwright")
+def _fake_playwright(monkeypatch, png_factory, *, page_set_content_error=None):
+    """Mock `playwright` + `playwright.sync_api` 双模块，模拟真实调用链。"""
     calls = []
 
-    def from_string(html, path, options=None):
-        calls.append(options)
-        import os
+    class _Img:
+        def get_attribute(self, name):
+            return None
 
-        os.makedirs(str(__import__("pathlib").Path(path).parent), exist_ok=True)
-        __import__("pathlib").Path(path).write_bytes(png_factory())
+        def evaluate(self, expr):
+            return 0
 
-    # playwright mock already set up
-    monkeypatch.setitem(sys.modules, "imgkit", fake)
+    class _Page:
+        def set_content(self, html, wait_until=None):
+            if page_set_content_error is not None:
+                raise page_set_content_error
+
+        def wait_for_timeout(self, ms):
+            pass
+
+        def query_selector_all(self, sel):
+            return []
+
+        def screenshot(self, path, full_page=None):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_bytes(png_factory())
+            calls.append(path)
+
+    class _Browser:
+        def new_page(self, viewport=None):
+            return _Page()
+
+        def close(self):
+            pass
+
+    class _Chromium:
+        def launch(self, headless=None):
+            return _Browser()
+
+    class _PW:
+        def __init__(self):
+            self.chromium = _Chromium()
+
+    class _CtxMgr:
+        def __enter__(self):
+            return _PW()
+
+        def __exit__(self, *exc):
+            return False
+
+    sync_api = types.ModuleType("playwright.sync_api")
+    sync_api.sync_playwright = lambda: _CtxMgr()
+    pw = types.ModuleType("playwright")
+    pw.sync_api = sync_api
+    monkeypatch.setitem(sys.modules, "playwright", pw)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api)
     return calls
 
 
@@ -282,7 +324,9 @@ def test_render_report_image_no_playwright(tmp_path, monkeypatch):
     md_path.write_text(SAMPLE_MD, encoding="utf-8")
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    monkeypatch.setitem(sys.modules, "playwright", None)  # import imgkit → ImportError
+    # 双模块都置 None，import 立即 ImportError → 返回 None
+    monkeypatch.setitem(sys.modules, "playwright", None)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", None)
     assert ir.render_report_image("2026-08-29") is None
 
 
@@ -291,35 +335,22 @@ def test_render_report_image_timeout(tmp_path, monkeypatch):
     md_path.write_text(SAMPLE_MD, encoding="utf-8")
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    monkeypatch.setattr(ir, "RENDER_TIMEOUT", 0.2)
-    fake = types.ModuleType("playwright")
-
-    def from_string(html, path, options=None):
-        time.sleep(5)  # 阻塞超过限时
-
-    # playwright mock already set up
-    monkeypatch.setitem(sys.modules, "imgkit", fake)
+    # 真实路径：page.set_content 抛 TimeoutError → 外层捕获 → None
+    _fake_playwright(monkeypatch, lambda: _make_png(600, 800), page_set_content_error=TimeoutError)
     assert ir.render_report_image("2026-08-29") is None
 
 
-def test_render_report_image_size_guard(tmp_path, monkeypatch):
+def test_render_report_image_png_output(tmp_path, monkeypatch):
     md_path = tmp_path / "2026-08-29.md"
     md_path.write_text(SAMPLE_MD, encoding="utf-8")
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "ALERTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    calls = []
-
-    def factory():
-        calls.append(1)
-        if len(calls) == 1:
-            return b"\x00" * (900 * 1024)  # 首次 >800KB
-        return _make_png(600, 800)         # 重试后小图
-
-    _fake_playwright(monkeypatch, factory)
+    _fake_playwright(monkeypatch, lambda: _make_png(600, 800))
     out = ir.render_report_image("2026-08-29")
     assert out is not None
-    assert len(calls) == 2                  # 触发 zoom 重试
+    assert out.exists()
+    assert ir._png_dimensions(out) == (600, 800)
     assert out.stat().st_size <= ir.MAX_IMAGE_BYTES
 
 

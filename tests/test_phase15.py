@@ -169,6 +169,7 @@ class TestLoadOpeningRefs:
 
     def test_both_present(self, tmp_path, monkeypatch):
         monkeypatch.setattr(rep, "OPENING_DIR", tmp_path)
+        monkeypatch.setattr(rep, "get_market_date", lambda market: "2026-08-31")
         self._write(tmp_path, "us", "标普500", "+1.20%")
         self._write(tmp_path, "a-share", "上证指数", "+0.50%")
         refs = rep.load_opening_refs("2026-08-31")

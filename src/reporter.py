@@ -18,6 +18,7 @@ from .analyzer import (
     build_search_keywords,
     fmt_change,
     fmt_value,
+    get_market_date,
     load_history,
 )
 
@@ -778,15 +779,16 @@ def save_opening(date: str, market: str, content: str) -> "Path":
     return path
 
 
-def load_opening_refs() -> list[dict]:
+def load_opening_refs(date: str) -> list[dict]:
     """读开盘分析（reports/opening/{市场日期}-{market}.md），返回引用列表（十五期）。
 
-    美股用美东市场日期、A 股用北京时间市场日期（两者通常不同，故分别取各自市场日期匹配）；
+    date 为日报日期（美东日期）；美股文件用该 date，A 股文件用北京时间市场日期
+    get_market_date("a-share")（两者通常不同，故分别取各自市场日期匹配）；
     文件缺失/坏格式 → 跳过不报错（不影响日报）。
     """
     refs = []
     for market in ("us", "a-share"):
-        md = GET_MARKET_DATE(market)
+        md = date if market == "us" else get_market_date("a-share")
         path = OPENING_DIR / f"{md}-{market}.md"
         if not path.exists():
             continue

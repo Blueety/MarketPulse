@@ -219,14 +219,14 @@ def test_load_sector_heat_no_context_dir(monkeypatch):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     hist = [
-        {"date": "2026-08-24", "gspc": 100.0, "ixic": 200.0, "sh": 3000.0, "sz": 12000.0, "cyb": 3500.0, "vix": 17.0, "vxn": 23.0, "move": 70.0, "gld": 420.0, "btc": 76000.0},
-        {"date": "2026-08-25", "gspc": 101.0, "ixic": 202.0, "sh": 3010.0, "sz": 12050.0, "cyb": 3520.0, "vix": 18.0, "vxn": 23.5, "move": 71.0, "gld": 421.0, "btc": 76200.0},
-        {"date": "2026-08-26", "gspc": 102.0, "ixic": 205.0, "sh": 3020.0, "sz": 12100.0, "cyb": 3540.0, "vix": None, "vxn": 24.0, "move": 72.0, "gld": 423.0, "btc": 76300.0},
-        {"date": "2026-08-27", "gspc": 103.0, "ixic": 208.0, "sh": 3030.0, "sz": 12150.0, "cyb": 3560.0, "vix": 19.0, "vxn": 24.5, "move": 73.0, "gld": 424.0, "btc": 76400.0},
-        {"date": "2026-08-28", "gspc": 104.0, "ixic": 210.0, "sh": 3040.0, "sz": 12200.0, "cyb": 3580.0, "vix": 20.0, "vxn": 25.0, "move": 74.0, "gld": 425.0, "btc": 76500.0},
-        {"date": "2026-08-29", "gspc": 105.0, "ixic": 212.0, "sh": 3050.0, "sz": 12250.0, "cyb": 3600.0, "vix": None, "vxn": 25.5, "move": 75.0, "gld": 426.0, "btc": 76600.0},
-        {"date": "2026-08-30", "gspc": 106.0, "ixic": 214.0, "sh": 3060.0, "sz": 12300.0, "cyb": 3620.0, "vix": 21.0, "vxn": 26.0, "move": 76.0, "gld": 427.0, "btc": 76700.0},
-        {"date": "2026-08-31", "gspc": 107.0, "ixic": 216.0, "sh": 3070.0, "sz": 12350.0, "cyb": 3640.0, "vix": 22.0, "vxn": 26.5, "move": 77.0, "gld": 428.0, "btc": 76800.0},
+        {"date": "2026-08-03", "gspc": 100.0, "ixic": 200.0, "sh": 3000.0, "sz": 12000.0, "cyb": 3500.0, "vix": 17.0, "vxn": 23.0, "move": 70.0, "gld": 420.0, "btc": 76000.0},
+        {"date": "2026-08-04", "gspc": 101.0, "ixic": 202.0, "sh": 3010.0, "sz": 12050.0, "cyb": 3520.0, "vix": 18.0, "vxn": 23.5, "move": 71.0, "gld": 421.0, "btc": 76200.0},
+        {"date": "2026-08-05", "gspc": 102.0, "ixic": 205.0, "sh": 3020.0, "sz": 12100.0, "cyb": 3540.0, "vix": None, "vxn": 24.0, "move": 72.0, "gld": 423.0, "btc": 76300.0},
+        {"date": "2026-08-06", "gspc": 103.0, "ixic": 208.0, "sh": 3030.0, "sz": 12150.0, "cyb": 3560.0, "vix": 19.0, "vxn": 24.5, "move": 73.0, "gld": 424.0, "btc": 76400.0},
+        {"date": "2026-08-07", "gspc": 104.0, "ixic": 210.0, "sh": 3040.0, "sz": 12200.0, "cyb": 3580.0, "vix": 20.0, "vxn": 25.0, "move": 74.0, "gld": 425.0, "btc": 76500.0},
+        {"date": "2026-08-10", "gspc": 105.0, "ixic": 212.0, "sh": 3050.0, "sz": 12250.0, "cyb": 3600.0, "vix": 21.0, "vxn": 25.5, "move": 75.0, "gld": 426.0, "btc": 76600.0},
+        {"date": "2026-08-11", "gspc": 106.0, "ixic": 214.0, "sh": 3060.0, "sz": 12300.0, "cyb": 3620.0, "vix": 22.0, "vxn": 26.0, "move": 76.0, "gld": 427.0, "btc": 76700.0},
+        {"date": "2026-08-12", "gspc": 107.0, "ixic": 216.0, "sh": 3070.0, "sz": 12350.0, "cyb": 3640.0, "vix": 23.0, "vxn": 26.5, "move": 77.0, "gld": 428.0, "btc": 76800.0},
     ]
     hist_p = tmp_path / "history.json"
     hist_p.write_text(json.dumps(hist), encoding="utf-8")
@@ -268,7 +268,7 @@ def test_api_history(client):
     assert len(data["dates"]) <= 7
     assert len(data["series"]) == 10
     vix = next(s for s in data["series"] if s["key"] == "vix")
-    # 最后 7 条 = 08-25..08-31；08-26 的 vix 为 null，index 1
+    # 最后 7 条（周末过滤后）= 08-04..08-12；08-05 的 vix 为 null，index 1
     assert vix["values"][1] is None
 
 
@@ -319,7 +319,8 @@ def _seed_history(tmp_path, monkeypatch, hist):
 
 
 def test_build_history_payload_normalized_base100(tmp_path, monkeypatch):
-    hist = [{"date": f"2026-08-{i:02d}", "gspc": float(100 + i * 10 / 6)} for i in range(7)]
+    dates = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11"]
+    hist = [{"date": d, "gspc": float(100 + i * 10 / 6)} for i, d in enumerate(dates)]
     _seed_history(tmp_path, monkeypatch, hist)
     gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
     assert gspc["values"][0] == 100.0
@@ -327,15 +328,14 @@ def test_build_history_payload_normalized_base100(tmp_path, monkeypatch):
     assert gspc["change_7d"] == pytest.approx(10.0)
 
 
-def test_build_history_payload_null_preserved(tmp_path, monkeypatch):
     hist = [
-        {"date": "2026-08-24", "gspc": None},
-        {"date": "2026-08-25", "gspc": 200.0},
-        {"date": "2026-08-26", "gspc": None},
-        {"date": "2026-08-27", "gspc": 220.0},
-        {"date": "2026-08-28", "gspc": 210.0},
-        {"date": "2026-08-29", "gspc": 230.0},
-        {"date": "2026-08-30", "gspc": 240.0},
+        {"date": "2026-08-03", "gspc": None},
+        {"date": "2026-08-04", "gspc": 200.0},
+        {"date": "2026-08-05", "gspc": None},
+        {"date": "2026-08-06", "gspc": 220.0},
+        {"date": "2026-08-07", "gspc": 210.0},
+        {"date": "2026-08-10", "gspc": 230.0},
+        {"date": "2026-08-11", "gspc": 240.0},
     ]
     _seed_history(tmp_path, monkeypatch, hist)
     gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
@@ -346,8 +346,8 @@ def test_build_history_payload_null_preserved(tmp_path, monkeypatch):
     assert gspc["change_7d"] == pytest.approx(20.0)
 
 
-def test_build_history_payload_zero_base(tmp_path, monkeypatch):
-    hist = [{"date": f"2026-08-{i:02d}", "gspc": 0.0 if i == 0 else 5.0} for i in range(7)]
+    dates = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11"]
+    hist = [{"date": d, "gspc": 0.0 if i == 0 else 5.0} for i, d in enumerate(dates)]
     _seed_history(tmp_path, monkeypatch, hist)
     gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
     assert gspc["values"] == [None] * 7        # 防除零，全 None 列表
@@ -355,7 +355,8 @@ def test_build_history_payload_zero_base(tmp_path, monkeypatch):
 
 
 def test_build_history_payload_single_value(tmp_path, monkeypatch):
-    hist = [{"date": f"2026-08-{i:02d}", "gspc": 100.0 if i == 3 else None} for i in range(7)]
+    dates = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11"]
+    hist = [{"date": d, "gspc": 100.0 if i == 3 else None} for i, d in enumerate(dates)]
     _seed_history(tmp_path, monkeypatch, hist)
     gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
     assert gspc["values"][3] == 100.0
@@ -364,13 +365,13 @@ def test_build_history_payload_single_value(tmp_path, monkeypatch):
 
 def test_build_history_payload_change_7d_last_non_null(tmp_path, monkeypatch):
     hist = [
-        {"date": "2026-08-24", "gspc": 100.0},
-        {"date": "2026-08-25", "gspc": 110.0},
-        {"date": "2026-08-26", "gspc": 120.0},
-        {"date": "2026-08-27", "gspc": 130.0},
-        {"date": "2026-08-28", "gspc": 140.0},
-        {"date": "2026-08-29", "gspc": 150.0},
-        {"date": "2026-08-30", "gspc": None},
+        {"date": "2026-08-03", "gspc": 100.0},
+        {"date": "2026-08-04", "gspc": 110.0},
+        {"date": "2026-08-05", "gspc": 120.0},
+        {"date": "2026-08-06", "gspc": 130.0},
+        {"date": "2026-08-07", "gspc": 140.0},
+        {"date": "2026-08-10", "gspc": 150.0},
+        {"date": "2026-08-11", "gspc": None},
     ]
     _seed_history(tmp_path, monkeypatch, hist)
     gspc = next(s for s in _build_history_payload()["series"] if s["key"] == "gspc")
