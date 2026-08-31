@@ -47,10 +47,10 @@ class TestSectorMapping:
     def test_mapping_complete(self):
         assert ft.SECTOR_MAPPING == EXPECTED_MAPPING
         assert len(ft.SECTOR_MAPPING) == 10
+        total = sum(len(v) for v in ft.SECTOR_MAPPING.values())
         assert total == 82
         # 概念名不跨类重复
         seen = []
-        for names in ft.SECTOR_MAPPING.values():
         for names in ft.SECTOR_MAPPING.values():
             seen.extend(names)
         assert len(seen) == len(set(seen))
@@ -105,7 +105,7 @@ class TestAggregateSectors:
 
     def test_unmatched_goes_to_other(self):
         rows = [
-            _row("生物育种", 5.2, "7.2亿"),
+            _row("重组概念", 5.2, "7.2亿"),
             _row("不存在板块", -1.0, "3.0亿"),
         ]
         gainers, losers = ft.aggregate_sectors(rows)
@@ -194,7 +194,7 @@ class TestFetchSectorHeatIntegration:
             {"板块": "锂电池", "涨跌幅": 3.0, "总成交额": 40_000_000_000, "股票名称": "宁德时代"},
             {"板块": "光伏", "涨跌幅": 6.0, "总成交额": 20_000_000_000, "股票名称": "隆基绿能"},
             {"板块": "创新药", "涨跌幅": 4.0, "总成交额": 10_000_000_000, "股票名称": "恒瑞医药"},
-            {"板块": "生物育种", "涨跌幅": 5.2, "总成交额": 7_220_000_000, "股票名称": "敦煌种业"},
+            {"板块": "重组概念", "涨跌幅": 5.2, "总成交额": 7_220_000_000, "股票名称": "敦煌种业"},
         ]
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: self._spot_df(rows))
         gainers, losers = ft.fetch_sector_heat()
