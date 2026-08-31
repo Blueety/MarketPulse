@@ -302,4 +302,6 @@ def api_alerts() -> list[dict]:
 def index() -> HTMLResponse:
     """渲染单页看板。"""
     template = _TEMPLATES.get_template("index.html")
-    return HTMLResponse(template.render())
+    resp = HTMLResponse(template.render())
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
