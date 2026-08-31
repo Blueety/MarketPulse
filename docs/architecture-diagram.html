@@ -1,279 +1,175 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MarketPulse Architecture</title>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
-    .container { max-width: 1200px; margin: 0 auto; }
-    .header { margin-bottom: 2rem; }
-    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
-    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
-    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
-    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
-    svg { width: 100%; min-width: 900px; display: block; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
-    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
-    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
-    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .card-dot.cyan { background: #22d3ee; }
-    .card-dot.emerald { background: #34d399; }
-    .card-dot.violet { background: #a78bfa; }
-    .card-dot.amber { background: #fbbf24; }
-    .card h3 { font-size: 0.875rem; font-weight: 600; }
-    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
-    .card li { margin-bottom: 0.375rem; }
-    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarketPulse 架构图</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; padding: 40px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 40px; }
+        .flow { display: flex; flex-direction: column; gap: 24px; }
+        .section { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
+        .section h2 { margin: 0 0 16px 0; font-size: 18px; color: #58a6ff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .card { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px; }
+        .card h3 { margin: 0 0 8px 0; font-size: 14px; color: #3fb950; }
+        .card p { margin: 0; font-size: 12px; color: #8b949e; }
+        .arrow { text-align: center; font-size: 24px; color: #30363d; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+        .tag-yahoo { background: #1f6feb33; color: #58a6ff; }
+        .tag-akshare { background: #3fb95033; color: #3fb950; }
+        .tag-local { background: #d2992233; color: #d29922; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="header-row">
-        <div class="pulse-dot"></div>
-        <h1>MarketPulse Architecture</h1>
-      </div>
-      <p class="subtitle">全自动市场波动率监控系统 — VIX / VXN / MOVE · 日报 + 快照 + 告警 + AI 解读</p>
-    </div>
-
-    <div class="diagram-container">
-      <svg viewBox="0 0 1000 620">
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
-          </marker>
-          <marker id="arrowcyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
-          </marker>
-          <marker id="arrowemerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="colored">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
-          </marker>
-          <marker id="arrowviolet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
-          </marker>
-          <marker id="arrowamber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" />
-          </marker>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
-          </pattern>
-        </defs>
-
-        <rect width="100%" height="100%" fill="url(#grid)" />
-
-        <!-- ===== 数据源层 ===== -->
-        <rect x="20" y="20" width="280" height="100" rx="12" fill="rgba(251, 191, 36, 0.04)" stroke="#fbbf24" stroke-width="0.8" stroke-dasharray="8,4"/>
-        <text x="32" y="38" fill="#fbbf24" font-size="9" font-weight="600">DATA SOURCES</text>
-
-        <rect x="32" y="50" width="110" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
-        <text x="87" y="72" fill="white" font-size="11" font-weight="600" text-anchor="middle">Yahoo Finance</text>
-        <text x="87" y="88" fill="#94a3b8" font-size="8" text-anchor="middle">^VIX / ^VXN / ^MOVE</text>
-
-        <rect x="162" y="50" width="110" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
-        <text x="217" y="72" fill="white" font-size="11" font-weight="600" text-anchor="middle">Tavily Search</text>
-        <text x="217" y="88" fill="#94a3b8" font-size="8" text-anchor="middle">异动归因搜索</text>
-
-        <!-- ===== 核心模块层 ===== -->
-        <rect x="340" y="20" width="320" height="340" rx="12" fill="rgba(6, 78, 59, 0.04)" stroke="#34d399" stroke-width="0.8" stroke-dasharray="8,4"/>
-        <text x="352" y="38" fill="#34d399" font-size="9" font-weight="600">PYTHON CORE (src/)</text>
-
-        <!-- fetcher.py -->
-        <rect x="360" y="52" width="130" height="50" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
-        <text x="425" y="72" fill="white" font-size="11" font-weight="600" text-anchor="middle">fetcher.py</text>
-        <text x="425" y="88" fill="#94a3b8" font-size="8" text-anchor="middle">Yahoo REST · 重试 · 退避</text>
-
-        <!-- analyzer.py -->
-        <rect x="360" y="120" width="130" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
-        <text x="425" y="140" fill="white" font-size="11" font-weight="600" text-anchor="middle">analyzer.py</text>
-        <text x="425" y="156" fill="#94a3b8" font-size="8" text-anchor="middle">状态分类 · 涨跌幅 · 缓存</text>
-        <text x="425" y="170" fill="#94a3b8" font-size="8" text-anchor="middle">历史读写 · check_breach</text>
-
-        <!-- alerter.py -->
-        <rect x="510" y="120" width="130" height="70" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
-        <text x="575" y="140" fill="white" font-size="11" font-weight="600" text-anchor="middle">alerter.py</text>
-        <text x="575" y="156" fill="#94a3b8" font-size="8" text-anchor="middle">告警渲染 · 去重 · 编排</text>
-        <text x="575" y="170" fill="#94a3b8" font-size="8" text-anchor="middle">collect_breaches · alerts.log</text>
-
-        <!-- reporter.py -->
-        <rect x="360" y="208" width="280" height="70" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-        <text x="500" y="228" fill="white" font-size="11" font-weight="600" text-anchor="middle">reporter.py</text>
-        <text x="500" y="244" fill="#94a3b8" font-size="8" text-anchor="middle">日报渲染 · 快照渲染 · 趋势图(matplotlib)</text>
-        <text x="500" y="258" fill="#94a3b8" font-size="8" text-anchor="middle">generate_context() · _breach_item()</text>
-
-        <!-- 编排入口 -->
-        <rect x="360" y="296" width="130" height="48" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
-        <text x="425" y="316" fill="white" font-size="10" font-weight="600" text-anchor="middle">daily_report.py</text>
-        <text x="425" y="332" fill="#94a3b8" font-size="8" text-anchor="middle">收盘日报(81行)</text>
-
-        <rect x="510" y="296" width="130" height="48" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
-        <text x="575" y="316" fill="white" font-size="10" font-weight="600" text-anchor="middle">snapshot_report.py</text>
-        <text x="575" y="332" fill="#94a3b8" font-size="8" text-anchor="middle">午盘快照(46行)</text>
-
-        <!-- ===== 存储层 ===== -->
-        <rect x="20" y="180" width="280" height="180" rx="12" fill="rgba(76, 29, 149, 0.04)" stroke="#a78bfa" stroke-width="0.8" stroke-dasharray="8,4"/>
-        <text x="32" y="198" fill="#a78bfa" font-size="9" font-weight="600">DATA STORES</text>
-
-        <rect x="32" y="210" width="120" height="44" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="92" y="228" fill="white" font-size="10" font-weight="600" text-anchor="middle">last_values.json</text>
-        <text x="92" y="244" fill="#94a3b8" font-size="8" text-anchor="middle">昨收缓存</text>
-
-        <rect x="165" y="210" width="120" height="44" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="225" y="228" fill="white" font-size="10" font-weight="600" text-anchor="middle">history.json</text>
-        <text x="225" y="244" fill="#94a3b8" font-size="8" text-anchor="middle">90天滚动历史</text>
-
-        <rect x="32" y="264" width="120" height="44" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="92" y="282" fill="white" font-size="10" font-weight="600" text-anchor="middle">alerts.log</text>
-        <text x="92" y="298" fill="#94a3b8" font-size="8" text-anchor="middle">告警去重状态</text>
-
-        <rect x="165" y="264" width="120" height="44" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="225" y="282" fill="white" font-size="10" font-weight="600" text-anchor="middle">context/*.json</text>
-        <text x="225" y="298" fill="#94a3b8" font-size="8" text-anchor="middle">AI 解读输入</text>
-
-        <rect x="32" y="318" width="253" height="40" rx="6" fill="rgba(76, 29, 149, 0.3)" stroke="#a78bfa" stroke-width="1"/>
-        <text x="158" y="342" fill="#a78bfa" font-size="9" text-anchor="middle">reports/ · alerts/ · snapshots/ · charts/</text>
-
-        <!-- ===== Hermes + 推送层 ===== -->
-        <rect x="690" y="20" width="290" height="340" rx="12" fill="rgba(8, 51, 68, 0.04)" stroke="#22d3ee" stroke-width="0.8" stroke-dasharray="8,4"/>
-        <text x="702" y="38" fill="#22d3ee" font-size="9" font-weight="600">HERMES AGENT (MiMo-V2.5)</text>
-
-        <!-- cron -->
-        <rect x="710" y="52" width="250" height="48" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
-        <text x="835" y="72" fill="white" font-size="10" font-weight="600" text-anchor="middle">Hermes Cron</text>
-        <text x="835" y="88" fill="#94a3b8" font-size="8" text-anchor="middle">早8点日报 · 00:30快照 · 调度引擎</text>
-
-        <!-- AI 解读 -->
-        <rect x="710" y="118" width="115" height="55" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-        <text x="767" y="138" fill="white" font-size="10" font-weight="600" text-anchor="middle">AI 解读</text>
-        <text x="767" y="154" fill="#94a3b8" font-size="8" text-anchor="middle">200-300字/日</text>
-
-        <!-- 异动归因 -->
-        <rect x="845" y="118" width="115" height="55" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
-        <text x="902" y="138" fill="white" font-size="10" font-weight="600" text-anchor="middle">异动归因</text>
-        <text x="902" y="154" fill="#94a3b8" font-size="8" text-anchor="middle">tavily搜索+分析</text>
-
-        <!-- 推送 -->
-        <rect x="710" y="192" width="250" height="48" rx="6" fill="rgba(251, 191, 36, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
-        <text x="835" y="212" fill="white" font-size="10" font-weight="600" text-anchor="middle">QQ 推送</text>
-        <text x="835" y="228" fill="#94a3b8" font-size="8" text-anchor="middle">日报+趋势图+AI解读+归因</text>
-
-        <!-- 告警推送 -->
-        <rect x="710" y="258" width="250" height="48" rx="6" fill="rgba(136, 19, 55, 0.3)" stroke="#fb7185" stroke-width="1.5"/>
-        <text x="835" y="278" fill="white" font-size="10" font-weight="600" text-anchor="middle">告警推送</text>
-        <text x="835" y="294" fill="#94a3b8" font-size="8" text-anchor="middle">阈值触发独立告警消息</text>
-
-        <!-- ===== 箭头 ===== -->
-        <!-- Yahoo → fetcher -->
-        <line x1="142" y1="77" x2="358" y2="77" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowamber)"/>
-        <text x="250" y="71" fill="#94a3b8" font-size="8" text-anchor="middle">REST API</text>
-
-        <!-- fetcher → analyzer -->
-        <line x1="425" y1="102" x2="425" y2="118" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- analyzer → alerter -->
-        <line x1="490" y1="155" x2="508" y2="155" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- analyzer → reporter -->
-        <line x1="425" y1="190" x2="425" y2="206" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- reporter → daily_report -->
-        <line x1="500" y1="278" x2="425" y2="294" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- reporter → snapshot -->
-        <line x1="500" y1="278" x2="575" y2="294" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- daily_report → context -->
-        <line x1="360" y1="320" x2="287" y2="286" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowviolet)"/>
-        <text x="310" y="310" fill="#94a3b8" font-size="7">写入</text>
-
-        <!-- context → hermes -->
-        <line x1="287" y1="286" x2="708" y2="146" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowcyan)" stroke-dasharray="5,3"/>
-        <text x="500" y="210" fill="#22d3ee" font-size="8" text-anchor="middle">Hermes 读取 context</text>
-
-        <!-- alerter → alerts -->
-        <line x1="510" y1="170" x2="287" y2="286" stroke="#fb7185" stroke-width="1.2" marker-end="url(#arrowhead)" stroke-dasharray="4,3"/>
-
-        <!-- hermes → QQ -->
-        <line x1="835" y1="240" x2="835" y2="256" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-
-        <!-- Tavily → hermes -->
-        <line x1="272" y1="77" x2="708" y2="77" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
-        <text x="490" y="71" fill="#94a3b8" font-size="7" text-anchor="middle">异动时搜索</text>
-
-        <!-- ===== 图例 ===== -->
-        <text x="720" y="340" fill="white" font-size="10" font-weight="600">Legend</text>
-
-        <rect x="720" y="352" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
-        <text x="742" y="360" fill="#94a3b8" font-size="8">External / Data Source</text>
-
-        <rect x="720" y="368" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
-        <text x="742" y="376" fill="#94a3b8" font-size="8">Backend (Python Core)</text>
-
-        <rect x="720" y="384" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
-        <text x="742" y="392" fill="#94a3b8" font-size="8">Data Store (JSON)</text>
-
-        <rect x="720" y="400" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
-        <text x="742" y="408" fill="#94a3b8" font-size="8">Hermes Agent (AI)</text>
-
-        <rect x="720" y="416" width="16" height="10" rx="2" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1"/>
-        <text x="742" y="424" fill="#94a3b8" font-size="8">Entry Points / Cron</text>
-
-        <rect x="720" y="432" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
-        <text x="742" y="440" fill="#94a3b8" font-size="8">Alert System</text>
-
-        <line x1="720" y1="454" x2="736" y2="454" stroke="#22d3ee" stroke-width="1" stroke-dasharray="5,3"/>
-        <text x="742" y="457" fill="#94a3b8" font-size="8">AI Context Flow</text>
-
-        <line x1="720" y1="470" x2="736" y2="470" stroke="#fbbf24" stroke-width="1.5"/>
-        <text x="742" y="473" fill="#94a3b8" font-size="8">Data Fetch</text>
-      </svg>
-    </div>
-
-    <div class="cards">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-dot emerald"></div>
-          <h3>Python Core (945 行)</h3>
+    <div class="container">
+        <h1>📊 MarketPulse 架构图</h1>
+        
+        <div class="flow">
+            <!-- 数据源 -->
+            <div class="section">
+                <h2>📡 数据源</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>Yahoo Finance</h3>
+                        <p>美股大盘、波动率、黄金、比特币、美股板块ETF</p>
+                        <span class="tag tag-yahoo">Yahoo</span>
+                    </div>
+                    <div class="card">
+                        <h3>AkShare</h3>
+                        <p>A股大盘（实时）、A股概念板块</p>
+                        <span class="tag tag-akshare">AkShare</span>
+                    </div>
+                    <div class="card">
+                        <h3>Tavily</h3>
+                        <p>新闻搜索（AI归因用）</p>
+                        <span class="tag tag-local">Tavily</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arrow">↓</div>
+            
+            <!-- 数据获取 -->
+            <div class="section">
+                <h2>📥 数据获取层</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>fetcher.py</h3>
+                        <p>统一数据获取接口，支持 Yahoo + AkShare 双源</p>
+                    </div>
+                    <div class="card">
+                        <h3>新浪实时接口</h3>
+                        <p>A股盘中实时价格（代理兼容）</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arrow">↓</div>
+            
+            <!-- 分析层 -->
+            <div class="section">
+                <h2>🧠 分析层</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>analyzer.py</h3>
+                        <p>阈值判断、趋势分析、相关性计算、关键词生成</p>
+                    </div>
+                    <div class="card">
+                        <h3>alerter.py</h3>
+                        <p>告警管理、去重、状态跟踪</p>
+                    </div>
+                    <div class="card">
+                        <h3>opening_analyzer.py</h3>
+                        <p>开盘分析、跳空计算、板块轮动</p>
+                    </div>
+                    <div class="card">
+                        <h3>config.py</h3>
+                        <p>配置管理、env覆盖、阈值动态调整</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arrow">↓</div>
+            
+            <!-- 输出层 -->
+            <div class="section">
+                <h2>📤 输出层</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>reporter.py</h3>
+                        <p>Markdown日报、快照、趋势图渲染</p>
+                    </div>
+                    <div class="card">
+                        <h3>image_renderer.py</h3>
+                        <p>Playwright截图→PNG图片</p>
+                    </div>
+                    <div class="card">
+                        <h3>web/app.py</h3>
+                        <p>FastAPI Web看板（Chart.js）</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arrow">↓</div>
+            
+            <!-- 调度层 -->
+            <div class="section">
+                <h2>⏰ 调度层（Hermes Cron）</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>收盘日报</h3>
+                        <p>08:00 · 8指数+板块+AI解读</p>
+                    </div>
+                    <div class="card">
+                        <h3>开盘分析</h3>
+                        <p>09:45 · 跳空+板块+新闻</p>
+                    </div>
+                    <div class="card">
+                        <h3>A股午盘</h3>
+                        <p>11:45 · 快照+AI分析</p>
+                    </div>
+                    <div class="card">
+                        <h3>A股收盘</h3>
+                        <p>15:00 · 快照+AI分析</p>
+                    </div>
+                    <div class="card">
+                        <h3>美股开盘</h3>
+                        <p>21:45 · 快照+AI分析</p>
+                    </div>
+                    <div class="card">
+                        <h3>美股午盘</h3>
+                        <p>00:00 · 快照+AI分析</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arrow">↓</div>
+            
+            <!-- 推送层 -->
+            <div class="section">
+                <h2>📱 推送层</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>QQ Bot</h3>
+                        <p>日报文本 + 图片 + 快照 + 告警</p>
+                    </div>
+                    <div class="card">
+                        <h3>Railway</h3>
+                        <p>Web看板公网部署</p>
+                    </div>
+                    <div class="card">
+                        <h3>GitHub</h3>
+                        <p>代码+数据自动同步</p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <ul>
-          <li>• fetcher.py — Yahoo REST + 重试/退避/单源容错</li>
-          <li>• analyzer.py — 状态分类/涨跌幅/缓存/历史/阈值/关键词</li>
-          <li>• alerter.py — 告警渲染/去重/编排/collect_breaches</li>
-          <li>• reporter.py — 日报/快照/趋势图/context 生成</li>
-          <li>• 依赖: requests + matplotlib + pytest</li>
-        </ul>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-dot cyan"></div>
-          <h3>AI 层 (Hermes + MiMo-V2.5)</h3>
+        
+        <div style="text-align: center; margin-top: 40px; color: #484f58; font-size: 12px;">
+            MarketPulse v15 · 12 指数 · 7 cron · 281 测试 · 零新依赖(核心)
         </div>
-        <ul>
-          <li>• 每日 AI 市场解读 (200-300 字)</li>
-          <li>• 异动归因: tavily 搜索 → 事件扫描 → 归因</li>
-          <li>• context.json 结构化输入 (indices/breach/keywords)</li>
-          <li>• 趋势图三面板 + 实时数据推送 QQ</li>
-        </ul>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-dot amber"></div>
-          <h3>调度 (全自动 Cron)</h3>
-        </div>
-        <ul>
-          <li>• 早 8 点: 收盘日报 + 趋势图 + AI 解读 + 归因</li>
-          <li>• 北京 00:30: 午盘快照 + 告警检测</li>
-          <li>• 阈值告警: VIX/VXN ±20% / MOVE ±15%</li>
-          <li>• 午盘触发则收盘跳过 (去重)</li>
-        </ul>
-      </div>
     </div>
-
-    <p class="footer">MarketPulse • 四期迭代 • Python + Hermes + MiMo-V2.5 + Tavily • 86 Tests Passing</p>
-  </div>
 </body>
 </html>

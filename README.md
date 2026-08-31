@@ -1,22 +1,33 @@
-# 📊 MarketPulse — 美股 + A 股大盘波动率监控系统
+# 📊 MarketPulse — 全市场情绪监控系统
 
-> 每天自动获取 美股（标普500/纳斯达克/VIX/VXN/MOVE）+ A 股（上证/深证/创业板）大盘与波动率指数，生成带 AI 解读的日报，通过 QQ 推送。
-> 异常波动时主动告警 + 自动归因分析。
+> 每天自动获取美股、A股、波动率、黄金、比特币数据，生成带 AI 解读的日报，通过 QQ 推送。
+> 异常波动时主动告警 + 自动归因分析 + 板块热度追踪 + 相关性分析。
 
 ![Architecture](docs/architecture-diagram.html)
 
 ---
 
-## ✨ 五期能力一览
+## ✨ 十五期能力一览
 
 | 期 | 能力 | 说明 |
 |---|---|---|
-| 一期 | 收盘日报 | 每日获取 VIX/VXN/MOVE，生成 Markdown 日报 + 涨跌幅 + 状态 |
-| 二期 | 午盘快照 + 趋势图 | 美东12:30 快照 + matplotlib 三面板近30日趋势图 |
-| 三期 | 阈值告警 | 单日变化率超阈值(VIX/VXN ±20%, MOVE ±15%)独立推送告警 |
-| 四期 | AI 解读 + 异动归因 | 每日 AI 市场解读 + 异动日 tavily 搜索归因分析 |
-| 六期A | Hermes 上下文 + 状态重构 | context/JSON（indices + history_30d + breach + search_keywords）；状态/涨跌幅/趋势纯逻辑化 |
-| 七期 | 盘中快照扩展 | SYMBOLS 扩 8 键（加 399006.SZ 创业板指）；快照 4 市场时点分档（--market/--time），单板块存盘 `snapshots/YYYY-MM-DD-{market}-{time}.md`；A 股按北京时间归档；告警文件复合名防碰撞 |
+| 一期 | 收盘日报 | VIX/VXN/MOVE 日报 + 缓存 |
+| 二期 | 午盘快照 + 趋势图 | 快照 + matplotlib 三面板趋势图 |
+| 三期 | 阈值告警 | 单日变化率超阈值独立推送 |
+| 四期 | AI 解读 + 归因 | 每日 AI 解读 + 异动日新闻归因 |
+| 五期 | 阈值配置化 | config.json 配置 + env 覆盖 |
+| 六期A | 美股大盘 | 标普500 + 纳斯达克 |
+| 六期B | A股大盘 | 上证 + 深证 + 创业板 |
+| 七期 | 盘中快照扩展 | 6 个 cron + 创业板 + AkShare 实时 |
+| 八期 | 板块热度 | A股 Top5 领涨/领跌 + 美股 11 板块 |
+| 九期 | 趋势图扩展 | 美股/A股/另类资产三张图 |
+| 十期 | 黄金 & 比特币 | GLD + BTC-USD 监控 |
+| 十一期 | Web 看板 | FastAPI + Chart.js + 深色主题 |
+| 十二期 | 相关性分析 | Pearson 相关系数 + 5 组关键对 |
+| 十三期 | 回测验证 | 告警阈值历史回测 + 报告 |
+| 十四期 | 日报图片化 | Playwright 截图 + QQ 推送图片 |
+| 十五期 | 开盘分析 | 开盘跳空 + 板块轮动 + 新闻归因 |
+
 ---
 
 ## 🚀 快速开始
@@ -31,15 +42,58 @@ venv\Scripts\activate
 # 3. 安装依赖
 pip install -r requirements.txt
 
-# 4. 运行收盘日报
+# 4. 运行日报
 python daily_report.py
 
-# 5. 运行午盘快照
-python snapshot_report.py --market a-share --time midday   # 或 --market us --time open；裸跑 = 美股午盘
-
-# 6. 运行测试
-python -m pytest tests/ -v
+# 5. 启动 Web 看板
+uvicorn web.app:app --port 8000
 ```
+
+---
+
+## 📊 监控标的（12 个）
+
+| 类别 | 指数/资产 | 数据源 |
+|------|----------|--------|
+| 美股大盘 | 标普500、纳斯达克 | Yahoo Finance |
+| A股大盘 | 上证、深证、创业板 | **AkShare（实时）** |
+| 波动率 | VIX、VXN、MOVE | Yahoo Finance |
+| 另类资产 | 黄金(GLD)、比特币(BTC-USD) | Yahoo Finance |
+| 美股板块 | 11 个 SPDR Sector ETF | Yahoo Finance |
+| A股板块 | 概念板块 Top5 领涨/领跌 | **AkShare** |
+
+---
+
+## ⏰ 自动调度（7 个 cron）
+
+| 任务 | 时间(北京) | 推送 |
+|------|-----------|------|
+| 收盘日报 + AI 解读 | 08:00 | QQ |
+| 开盘分析 + 快照 | 09:45 | QQ |
+| A股午盘快照 + AI 分析 | 11:45 | QQ |
+| A股收盘快照 + AI 分析 | 15:00 | QQ |
+| 美股开盘快照 + AI 分析 | 21:45 | QQ |
+| 美股午盘快照 + AI 分析 | 00:00 | QQ |
+| 数据同步 GitHub | 08:15 | 本地 |
+
+---
+
+## 🌐 Web 看板
+
+```bash
+# 本地访问
+http://localhost:8000
+
+# 公网访问 (Railway)
+https://marketpulse-production-da76.up.railway.app
+```
+
+功能：
+- 📈 市场概览（10 指数实时数据）
+- 📉 趋势图（美股/A股/波动率/另类资产，相对涨跌）
+- 🔥 板块热度（A股领涨/领跌 + 美股 11 板块）
+- 📊 相关性分析（5 组关键对）
+- 🔔 告警记录
 
 ---
 
@@ -47,207 +101,76 @@ python -m pytest tests/ -v
 
 ```
 MarketPulse/
-├── daily_report.py              # 收盘日报编排入口 (81 行)
-├── snapshot_report.py           # 盘中快照入口 (--market/--time 分档, 单板块存盘)
-├── seed_history.py              # 半年历史回填工具 (113 行)
-├── requirements.txt             # requests + matplotlib + pytest
-├── .env.example                 # 无需 API 密钥
-│
-├── src/                         # 核心模块 (约 1065 行)
-│   ├── fetcher.py               #   数据获取 (Yahoo REST + 重试/退避)
-│   ├── analyzer.py              #   纯逻辑层 (状态/涨跌幅/缓存/历史/阈值/关键词)
-│   ├── alerter.py               #   告警层 (渲染/去重/编排)
-│   ├── config.py               #   配置加载 (默认/env/json 三级, 零依赖)
-│   └── reporter.py              #   报告层 (日报/快照/趋势图/context生成)
-├── tests/                       # 单元测试 (170 项, 约 1250 行)
-│   ├── test_analyzer.py         #   185 行
-│   ├── test_alerter.py          #   184 行
-│   ├── test_reporter.py         #   148 行
-│   ├── test_config.py          #   配置加载/接线测试
-│   └── test_context.py          #   190 行
-│
-├── docs/                        # 项目文档
-│   ├── architecture.md          #   架构说明
-│   ├── architecture-diagram.html #  架构图 (暗色系 SVG)
-│   ├── commands.md              #   验证命令
-│   └── pitfalls.md              #   已知坑点
-│
-├── skills/                      # 开发流程模板
-│   ├── bug-fix/SKILL.md         #   Bug 修复流程
-│   └── pre-review/SKILL.md      #   提交前审查流程
-│
-├── tasks/                       # 四期任务交接 (prd/plan/journal)
-├── reports/                     # 报告输出 (运行时生成, gitignore)
-├── data/                        # 数据 (运行时生成, gitignore)
-├── context/                     # AI 上下文 (运行时生成, gitignore)
-└── alerts/                      # 告警文件 (运行时生成, gitignore)
+├── src/                    # 核心模块
+│   ├── fetcher.py          # 数据获取（Yahoo + AkShare）
+│   ├── analyzer.py         # 分析逻辑（阈值/趋势/相关性）
+│   ├── alerter.py          # 告警管理
+│   ├── reporter.py         # 报告渲染
+│   ├── config.py           # 配置管理
+│   ├── image_renderer.py   # 日报图片化
+│   └── opening_analyzer.py # 开盘分析
+├── web/                    # Web 看板
+│   ├── app.py              # FastAPI 应用
+│   └── templates/          # HTML 模板
+├── scripts/                # 工具脚本
+│   ├── backtest.py         # 回测验证
+│   └── render_report_image.py
+├── daily_report.py         # 日报入口
+├── snapshot_report.py      # 快照入口
+├── opening_analyzer.py     # 开盘分析入口
+├── config.json             # 配置文件
+├── data/                   # 数据文件
+├── reports/                # 报告输出
+└── tests/                  # 测试
 ```
 
 ---
 
-## 🔄 数据流
+## ⚙️ 配置说明
 
-```
-    Yahoo Finance (^GSPC / ^IXIC / 000001.SS / 399001.SZ / 399006.SZ / ^VIX / ^VXN / ^MOVE)
-        │  fetcher.py (重试/退避/单源容错)
-        ▼
-   analyzer.py ──────────────────────────────────────
-   │ 状态分类 │ 涨跌幅 │ 缓存 │ 历史 │ 阈值判断 │
-   │                                               │
-   ├──► daily_report.py ──► reports/YYYY-MM-DD.md  │
-   │                        + charts/趋势图         │
-   │                        + context/JSON          │
-   │                                               │
-   ├──► snapshot_report.py ──► snapshots/YYYY-MM-DD-{market}-{time}.md
-   │                                               │
-   └──► alerter.py ──► alerts/YYYY-MM-DD-{type}.md
-                      + alerts.log (去重)           │
-                                │                   │
-                                ▼                   │
-                    Hermes Agent (MiMo-V2.5)        │
-                    │                               │
-                    ├── 读 context → AI 市场解读     │
-                    ├── 异动日 → tavily 搜索归因     │
-                    └── 组装 → 推送 QQ              │
+### 告警阈值（config.json）
+
+```json
+{
+  "alert": {
+    "vix": 20.0,
+    "vxn": 20.0,
+    "move": 12.0,
+    "gspc": 2.5,
+    "ixic": 3.5,
+    "sh": 2.5,
+    "sz": 3.5,
+    "cyb": 5.0
+  }
+}
 ```
 
----
+### 环境变量覆盖
 
-## ⏰ 自动调度 (Hermes Cron)
-
-| 任务 | 时间 | 内容 | 推送 |
-|------|------|------|------|
-| 📉 收盘日报+AI解读 | 每天早 8:00 (北京) | 跑脚本→读context→AI解读→异动归因 | 日报+趋势图+AI+归因 |
-    └──► alerter.py ──► alerts/YYYY-MM-DD-{type}.md
-
-### 盘中快照 cron（不推送，仅存盘）
-
-| 任务 | 时间（北京时间） | 命令 | 市场子集 |
-|------|------|------|------|
-| 🇨🇳 A 股午盘 | 11:30 | `python snapshot_report.py --market a-share --time midday` | SH / SZ / CYB |
-| 🇨🇳 A 股收盘 | 15:00 | `python snapshot_report.py --market a-share --time close` | SH / SZ / CYB |
-| 🌏 美股开盘 | 21:30 | `python snapshot_report.py --market us --time open` | GSPC / IXIC |
-| 🌏 美股午盘 | 00:00 | `python snapshot_report.py --market us --time noon`（裸跑默认） | GSPC / IXIC |
----
-
-## 📊 监控指数
-
-| 指数 | 含义 | 阈值 / 分类 |
-|------|------|------|
-| **GSPC** (标普500) | 美股大盘基准 | 大盘趋势（连涨/跌、上升/下跌趋势）|
-| **IXIC** (纳斯达克) | 美股科技大盘 | 同 GSPC |
-| **SH** (上证指数, 000001.SS) | A 股大盘 | 同 GSPC；A 股休市/数据缺失特判为「休市」|
-| **CYB** (创业板指, 399006.SZ) | A 股成长股大盘 | 同 SH；阈值 ±5%（alert.cyb）|
-| **VIX** (恐慌指数) | 标普500 波动率，衡量市场恐慌程度 | <20 平静 / 20-30 警惕 / ≥30 恐慌 |
-| **VXN** (科技波动) | 纳斯达克100 波动率 | 同 VIX |
-| **MOVE** (债市波动) | 美国国债波动率 | <100 平静 / 100-130 警惕 / ≥130 恐慌 |
+```bash
+ALERT_THRESHOLD_VIX=25    # 覆盖 VIX 阈值
+ALERT_THRESHOLD_GSPC=3.0  # 覆盖标普阈值
+```
 
 ---
 
 ## 🧪 测试
 
 ```bash
-# 全部测试 (170 项)
-python -m pytest tests/ -v
-
-# 预期: 170 passed
-
+pytest tests/ -v
 ```
 
-覆盖范围: 状态分类 / 涨跌幅 / 告警阈值 / 去重 / 趋势图 / context生成 / 关键词 / 配置加载
+当前：**281 测试通过**
 
 ---
 
-## 📈 趋势图
+## 📝 更新日志
 
-收盘日报自动附带三面板趋势图 (VIX/VXN/MOVE 近30日走势), 由 matplotlib 渲染:
-- 橙色 = MOVE (债市)
-- 玫红 = VXN (科技)
-- 蓝色 = VIX (恐慌)
-
----
-
-## 🚨 告警机制
-
-- **触发条件**: 单日变化率超阈值（VIX/VXN ±20%、MOVE ±15%、GSPC ±4.5%、IXIC ±4%、SH/SZ ±4%、CYB ±5%，大盘恒 WARN 级「异动」）
-- **阈值覆盖**: 支持环境变量 `ALERT_THRESHOLD_VIX=25` / `ALERT_THRESHOLD_SH=5`
-- **推送**: 独立告警消息 (不混在日报里)
-
-## ⚙️ 配置说明（五期）
-
-阈值（状态分类、告警、趋势窗口、历史保留）已外置到 `config.json`（项目根，gitignore 排除，不入库）。
-
-**优先级链**：环境变量 > config.json > 内置默认。config.json 缺失/损坏/类型非法 → 对应键回退默认，仅记日志，不崩溃。
-
-**config.json 结构**（示例值即默认，可改）：
-
-```json
-{
-  "analysis": {
-    "vix": { "peaceful": 20, "panic": 30 },
-    "move": { "normal": 100, "tight": 130 }
-  },
-  "alert": { "vix": 20, "vxn": 20, "move": 15, "gspc": 4.5, "ixic": 4, "sh": 4, "sz": 4, "cyb": 5 },
-  "trend": { "chart_days": 30 },
-  "history": { "retention_days": 90 }
-}
-```
-
-**环境变量覆盖**（最高优先级，调用时生效，无需重启）：
-
-| env | 覆盖项 |
-| --- | --- |
-| ALERT_THRESHOLD_VIX / VXN / MOVE / GSPC / IXIC / SH / SZ / CYB | 变化率告警阈值 |
-| STATUS_THRESHOLD_VIX_CALM / VIX_PANIC | VIX/VXN 平静/恐慌分界 |
-| STATUS_THRESHOLD_MOVE_CALM / MOVE_WARN | MOVE 平静/警惕分界 |
-| TREND_CHART_DAYS | 趋势图窗口（天） |
-| HISTORY_RETENTION_DAYS | 历史保留天数 |
-| CONFIG_PATH | 自定义配置文件路径 |
-
-> 改配置对下次运行生效（cron 每进程全新启动）。告警阈值 env 非法/非正自动回退默认。
----
-
-## 🤖 AI 解读 + 异动归因
-
-- **每日常规解读**: 200-300 字市场情绪解读
-- **异动归因** (breach.triggered=true): tavily 搜索当日新闻→300-400 字归因分析
-- **容错**: 归因失败不影响日报推送
+- **2026-08-31**: 十五期开盘分析 + A股新浪实时接口 + 所有分析加新闻搜索
+- **2026-08-31**: 十四期日报图片化(Playwright) + Web 看板深色主题
+- **2026-08-30**: 十三期回测 + 十二期相关性 + 十一期 Web 看板 + 十期黄金比特币
+- **2026-08-29**: 一期~九期(从 MVP 到全市场监控)
 
 ---
 
-## 🔧 技术栈
-
-| 项 | 值 |
-|---|---|
-| 语言 | Python 3.14 (venv) |
-| 测试 | 170 项, 全绿 |
-| 数据源 | Yahoo Finance (公开 REST, 无需 API key) |
-| AI | Hermes Agent + MiMo-V2.5 + Tavily Search |
-| 调度 | Hermes Cron |
-| 推送 | QQ 私聊 |
-
----
-
-## 📝 开发工作流
-
-1. 在 `tasks/` 下建任务目录, 写 `prd.md`
-2. 架构师 (K2.7) 出 `plan.md`, 等用户确认
-3. 执行者 (Hy3) 实施, 逐步验证, 留 diff 审阅
-4. 用户确认后 commit, 经验沉淀到 `docs/`
-
----
-
-## 📜 Git 历史
-
-```
-5791e77 feat: 四期AI解读+异动归因上下文
-23c238f feat: 三期阈值告警(主动监控/告警去重/env阈值)
-df26279 feat: 二期盘中感知+可视化(快照/趋势图/三模块拆分)
-12a2086 feat: 波动率监控 MVP(VIX/VXN/MOVE日报+缓存)
-b738421 docs: 完善项目 README 说明
-1843d9e init: 项目脚手架+技术栈初始化
-```
-
----
-
-*MarketPulse — 让你每天早上知道市场在想什么，异常时告诉你为什么。*
+*本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance / AkShare*
