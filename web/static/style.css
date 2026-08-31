@@ -246,6 +246,29 @@ body {
   color: #fff;
   font-weight: 600;
 }
+.group-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.group-bar button {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.group-bar button:hover { color: var(--text-primary); border-color: var(--blue); }
+.group-bar button.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
 
 .symbol-filter {
   display: flex;
@@ -305,8 +328,12 @@ body {
   .range-bar button { padding: 5px 12px; font-size: 12px; }
   .symbol-filter { gap: 6px; margin-bottom: 12px; }
   .symbol-filter .chip { padding: 3px 8px; font-size: 11px; }
+  .group-bar { gap: 6px; margin-bottom: 10px; }
+  .group-bar button { padding: 5px 12px; font-size: 12px; }
 }
 @media (max-width: 480px) {
   .range-bar { gap: 6px; }
   .symbol-filter .chip { padding: 3px 7px; font-size: 11px; }
+  .group-bar { gap: 6px; margin-bottom: 10px; }
+  .group-bar button { padding: 4px 10px; font-size: 11px; }
 }

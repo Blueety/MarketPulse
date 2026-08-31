@@ -45,6 +45,7 @@
         <button type="button" data-days="30" class="active">30天</button>
         <button type="button" data-days="90">90天</button>
       </div>
+      <div class="group-bar" id="group-bar"></div>
       <div class="symbol-filter" id="symbol-filter"></div>
       <div class="charts-grid" id="charts-grid">
         <div class="chart-box">
@@ -102,10 +103,10 @@
       vix: "VIX", vxn: "VXN", move: "MOVE", gld: "黄金", btc: "比特币"
     };
     const GROUPS = [
-      { id: "chart-gspc-ixic", keys: ["gspc", "ixic"], type: "line" },
-      { id: "chart-sh-sz-cyb", keys: ["sh", "sz", "cyb"], type: "line" },
-      { id: "chart-vix-vxn-move", keys: ["vix", "vxn", "move"], type: "line" },
-      { id: "chart-gld-btc", keys: ["gld", "btc"] },
+      { id: "chart-gspc-ixic", name: "美股大盘", keys: ["gspc", "ixic"], type: "line" },
+      { id: "chart-sh-sz-cyb", name: "A 股大盘", keys: ["sh", "sz", "cyb"], type: "line" },
+      { id: "chart-vix-vxn-move", name: "波动率", keys: ["vix", "vxn", "move"], type: "line" },
+      { id: "chart-gld-btc", name: "另类资产", keys: ["gld", "btc"], type: "line" },
     ];
 
     // 单一状态源：驱动所有视图刷新
@@ -113,6 +114,9 @@
       days: 30,
       selected: new Set(ALL_KEYS),
       sort: { key: null, dir: 1 },  // key: "value" | "change_pct"；dir: 1 升序 / -1 降序 / null 原序
+      history: null,  // 最近一次 /api/history 全量 payload（显隐纯客户端管理）
+      latest: null,   // 最近一次 /api/latest payload
+      selSnapshot: null,  // 类别按钮点击前的选中快照（再次点击恢复）
     };
     const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
 
@@ -126,8 +130,8 @@
     }
 
     function buildQuery() {
-      const sym = Array.from(state.selected).join(",");
-      return "/api/history?days=" + state.days + (sym ? "&symbols=" + sym : "");
+      // 显隐改为纯客户端状态：恒返回全量 10 序列；symbols 参数保留向后兼容但前端不再使用
+      return "/api/history?days=" + state.days;
     }
 
     function renderOverview(latest) {
@@ -260,6 +264,7 @@
         });
         return {
           label: s.label,
+          key: s.key,
           data: pts,
           borderColor: COLORS[s.key],
           backgroundColor: "transparent",
@@ -278,7 +283,24 @@
         responsive: true,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            labels: {
+              color: "#8b949e",
+              usePointStyle: true,
+              boxWidth: 8,
+              font: { size: 12 }
+            },
+            // 全权接管图例点击：仅改 state.selected，再统一 syncSelection（禁止默认 toggle，避免双写冲突）
+            onClick: function (evt, legendItem, legend) {
+              const chart = legend.chart;
+              const ds = chart.data.datasets[legendItem.datasetIndex];
+              if (!ds || ds.key == null) return;
+              if (state.selected.has(ds.key)) state.selected.delete(ds.key);
+              else state.selected.add(ds.key);
+              syncSelection();
+            }
+          },
           tooltip: {
             backgroundColor: "rgba(22, 27, 34, 0.95)",
             titleColor: "#e6edf3",
@@ -393,6 +415,42 @@
       });
     }
 
+    function renderGroup(g, history) {
+      // 从零构建某组图表（首载 / 范围切换 / 空组恢复重建）；会 destroy 旧实例。
+      // 显隐纯客户端：series 含该组全部序列，未选中者经 dataset.hidden 隐藏，图例项常驻可点回。
+      const canvas = document.getElementById(g.id);
+      const box = canvas.parentElement;
+      const series = history.series.filter(function (s) {
+        return g.keys.indexOf(s.key) !== -1;
+      });
+      const anySelected = series.some(function (s) { return state.selected.has(s.key); });
+      if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }
+      let ph = box.querySelector(".chart-empty");
+      if (!anySelected) {
+        canvas.style.display = "none";
+        if (!ph) {
+          ph = document.createElement("p");
+          ph.className = "empty chart-empty";
+          ph.textContent = "无选中指标";
+          box.appendChild(ph);
+        }
+        const meta = box.querySelector(".chart-meta");
+        if (meta) meta.innerHTML = "";
+        return;
+      }
+      if (ph) ph.remove();
+      canvas.style.display = "";
+      const chart = (g.type === "bar")
+        ? renderBarChart(canvas, series)
+        : renderLineChart(canvas, history, series);
+      chart.data.datasets.forEach(function (ds) {
+        if (!state.selected.has(ds.key)) ds.hidden = true;
+      });
+      chart.update();
+      charts[g.id] = chart;
+      renderMeta(g, series.filter(function (s) { return state.selected.has(s.key); }));
+    }
+
     function renderCharts(history) {
       if (window.__chartFailed || !window.Chart) {
         GROUPS.forEach(function (g) {
@@ -408,38 +466,80 @@
         Chart.register(window.ChartZoom);
         renderCharts._zoomRegistered = true;
       }
+      GROUPS.forEach(function (g) { renderGroup(g, history); });
+    }
+
+    function onGroupClick(idx) {
+      const g = GROUPS[idx];
+      // 已精确隔离到该组 → 恢复快照；否则快照当前态并仅保留该组
+      const isolated = g.keys.every(function (k) { return state.selected.has(k); })
+        && state.selected.size === g.keys.length;
+      if (isolated) {
+        state.selected = state.selSnapshot ? new Set(state.selSnapshot) : new Set(ALL_KEYS);
+      } else {
+        state.selSnapshot = new Set(state.selected);
+        state.selected = new Set(g.keys);
+      }
+      syncSelection();
+    }
+
+    function syncSelection() {
+      // 纯客户端同步中枢：图例 / 类别 / 芯片 / 全选清空 的统一入口，不发起网络请求。
+      if (!state.history || !state.latest) { refresh(); return; }
       GROUPS.forEach(function (g) {
         const canvas = document.getElementById(g.id);
         const box = canvas.parentElement;
-        const series = history.series.filter(function (s) {
-          return g.keys.indexOf(s.key) !== -1 && state.selected.has(s.key);
+        const series = state.history.series.filter(function (s) {
+          return g.keys.indexOf(s.key) !== -1;
         });
-        // 重渲染前销毁旧实例，避免 "Canvas is already in use"
-        if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }
-        // 整组无选中 → 占位（不崩、不白屏）
-        let ph = box.querySelector(".chart-empty");
-        if (series.length === 0) {
-          canvas.style.display = "none";
-          if (!ph) {
-            ph = document.createElement("p");
-            ph.className = "empty chart-empty";
-            ph.textContent = "无选中指标";
-            box.appendChild(ph);
+        const anySelected = series.some(function (s) { return state.selected.has(s.key); });
+        if (charts[g.id]) {
+          if (!anySelected) {
+            // 整组变空 → destroy + 占位
+            charts[g.id].destroy();
+            delete charts[g.id];
+            canvas.style.display = "none";
+            let ph = box.querySelector(".chart-empty");
+            if (!ph) {
+              ph = document.createElement("p");
+              ph.className = "empty chart-empty";
+              ph.textContent = "无选中指标";
+              box.appendChild(ph);
+            }
+            const meta = box.querySelector(".chart-meta");
+            if (meta) meta.innerHTML = "";
+            return;
           }
-          const meta = box.querySelector(".chart-meta");
-          if (meta) meta.innerHTML = "";
-          return;
+          // 性能路径：仅改 dataset.hidden + update（无网络请求）
+          charts[g.id].data.datasets.forEach(function (ds) {
+            ds.hidden = !state.selected.has(ds.key);
+          });
+          charts[g.id].update();
+          renderMeta(g, series.filter(function (s) { return state.selected.has(s.key); }));
+        } else {
+          // chart 不存在（空组恢复 / 首载后）→ 用缓存重建（hidden 一并应用）
+          renderGroup(g, state.history);
         }
-        if (ph) ph.remove();
-        canvas.style.display = "";
-        renderMeta(g, series);
-        charts[g.id] = (g.type === "bar")
-          ? renderBarChart(canvas, series)
-          : renderLineChart(canvas, history, series);
       });
+      renderOverview(state.latest);  // 概览表复用缓存 latest + 既有 selected 过滤/排序
+      renderFilter();  // 刷新类别按钮 / chips / 全选清空 的类
     }
 
     function renderFilter() {
+      // 类别批量按钮（group-bar）
+      const gbar = document.getElementById("group-bar");
+      gbar.innerHTML = "";
+      GROUPS.forEach(function (g, idx) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const active = g.keys.every(function (k) { return state.selected.has(k); });
+        btn.className = "filter-act" + (active ? " active" : "");
+        btn.textContent = g.name;
+        btn.dataset.group = String(idx);
+        btn.addEventListener("click", function () { onGroupClick(idx); });
+        gbar.appendChild(btn);
+      });
+      // 全选 / 清空 + 指标 chips（symbol-filter）
       const box = document.getElementById("symbol-filter");
       box.innerHTML = "";
       const allBtn = document.createElement("button");
@@ -448,8 +548,7 @@
       allBtn.textContent = "全选";
       allBtn.addEventListener("click", function () {
         state.selected = new Set(ALL_KEYS);
-        renderFilter();
-        refresh();
+        syncSelection();
       });
       const clearBtn = document.createElement("button");
       clearBtn.type = "button";
@@ -457,8 +556,7 @@
       clearBtn.textContent = "清空";
       clearBtn.addEventListener("click", function () {
         state.selected = new Set();
-        renderFilter();
-        refresh();
+        syncSelection();
       });
       box.appendChild(allBtn);
       box.appendChild(clearBtn);
@@ -471,8 +569,7 @@
         cb.addEventListener("change", function () {
           if (cb.checked) state.selected.add(key);
           else state.selected.delete(key);
-          label.className = "chip" + (cb.checked ? " on" : "");
-          refresh();
+          syncSelection();
         });
         const dot = document.createElement("span");
         dot.className = "dot";
@@ -499,14 +596,20 @@
     }
 
     function refresh() {
-      // 历史趋势：按 selected 过滤；空选 → 直接渲染占位，不请求
-      const histPromise = state.selected.size === 0
-        ? Promise.resolve({ dates: [], series: [] })
-        : fetch(buildQuery()).then(function (r) { return r.json(); });
-      histPromise.then(renderCharts).catch(function () { /* 图表区已在渲染函数内降级 */ });
+      // 历史趋势：恒取全量（显隐纯客户端）；写入缓存供 syncSelection 复用
+      fetch(buildQuery()).then(function (r) { return r.json(); })
+        .then(function (history) {
+          state.history = history;
+          renderCharts(history);
+        })
+        .catch(function () { /* 图表区已在渲染函数内降级 */ });
       // 最新概览 + 板块：始终请求（表格按 selected 过滤 + 排序）
       fetch("/api/latest").then(function (r) { return r.json(); })
-        .then(function (data) { renderOverview(data); renderSector(data); })
+        .then(function (data) {
+          state.latest = data;
+          renderOverview(data);
+          renderSector(data);
+        })
         .catch(function (e) { loadFailed(e.message, "overview-body"); });
     }
 
