@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
           onerror="window.__chartFailed=true"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"
+          onerror="window.__zoomFailed=true"></script>
 </head>
 <body>
   <header class="topbar">
@@ -21,7 +23,12 @@
       <div class="table-scroll">
         <table class="data-table">
           <thead>
-            <tr><th>指数</th><th>收盘</th><th>涨跌幅</th><th>状态</th></tr>
+            <tr>
+              <th>指数</th>
+              <th class="th-sort" data-sort="value">收盘 <span class="sort-ind"></span></th>
+              <th class="th-sort" data-sort="change_pct">涨跌幅 <span class="sort-ind"></span></th>
+              <th>状态</th>
+            </tr>
           </thead>
           <tbody id="overview-body">
             <tr><td colspan="4">加载中…</td></tr>
@@ -32,7 +39,13 @@
 
     <!-- 模块 2：趋势图（4 组独立 y 轴） -->
     <section class="card">
-      <h2>近 7 日趋势</h2>
+      <h2>近 <span id="range-label">30</span> 日趋势</h2>
+      <div class="range-bar" id="range-bar">
+        <button type="button" data-days="7">7天</button>
+        <button type="button" data-days="30" class="active">30天</button>
+        <button type="button" data-days="90">90天</button>
+      </div>
+      <div class="symbol-filter" id="symbol-filter"></div>
       <div class="charts-grid" id="charts-grid">
         <div class="chart-box">
           <div class="chart-head"><h3>美股大盘</h3><div class="chart-meta" id="meta-gspc-ixic"></div></div>
@@ -47,7 +60,7 @@
           <canvas id="chart-vix-vxn-move"></canvas>
         </div>
         <div class="chart-box">
-          <div class="chart-head"><h3>另类资产（7D 涨跌幅）</h3><div class="chart-meta" id="meta-gld-btc"></div></div>
+          <div class="chart-head"><h3>另类资产</h3><div class="chart-meta" id="meta-gld-btc"></div></div>
           <canvas id="chart-gld-btc"></canvas>
         </div>
       </div>
@@ -83,13 +96,25 @@
       cyb: "#bc8cff", vix: "#f85149", vxn: "#d29922", move: "#bc8cff",
       gld: "#ffd700", btc: "#00d4ff"
     };
+    const ALL_KEYS = Object.keys(COLORS);
+    const SHORT = {
+      gspc: "标普500", ixic: "纳指", sh: "上证", sz: "深证", cyb: "创业板",
+      vix: "VIX", vxn: "VXN", move: "MOVE", gld: "黄金", btc: "比特币"
+    };
     const GROUPS = [
       { id: "chart-gspc-ixic", keys: ["gspc", "ixic"], type: "line" },
       { id: "chart-sh-sz-cyb", keys: ["sh", "sz", "cyb"], type: "line" },
       { id: "chart-vix-vxn-move", keys: ["vix", "vxn", "move"], type: "line" },
-      { id: "chart-gld-btc", keys: ["gld", "btc"] },
+      { id: "chart-gld-btc", keys: ["gld", "btc"], type: "bar" },
     ];
-    const ALT_SHORT = { gld: "黄金", btc: "比特币" };
+
+    // 单一状态源：驱动所有视图刷新
+    const state = {
+      days: 30,
+      selected: new Set(ALL_KEYS),
+      sort: { key: null, dir: 1 },  // key: "value" | "change_pct"；dir: 1 升序 / -1 降序 / null 原序
+    };
+    const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
 
     function fmtNum(v, digits) {
       if (v == null) return "—";
@@ -100,15 +125,40 @@
       return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
     }
 
+    function buildQuery() {
+      const sym = Array.from(state.selected).join(",");
+      return "/api/history?days=" + state.days + (sym ? "&symbols=" + sym : "");
+    }
+
     function renderOverview(latest) {
+      document.getElementById("overview-date").textContent = "数据截至：" + (latest.date || "");
       const tbody = document.getElementById("overview-body");
-      document.getElementById("overview-date").textContent = latest.date || "";
       tbody.innerHTML = "";
       if (!latest.indices || !latest.indices.length) {
         tbody.innerHTML = '<tr><td colspan="4">暂无数据</td></tr>';
         return;
       }
-      latest.indices.forEach(function (it) {
+      // 按 selected 过滤（单一管线，图表与表格同步）
+      let rows = latest.indices.filter(function (it) {
+        return state.selected.has(it.symbol.toLowerCase());
+      });
+      // 排序（过滤之后执行）；null 恒排最后
+      if (state.sort.key) {
+        const k = state.sort.key;
+        const dir = state.sort.dir;
+        rows = rows.slice().sort(function (a, b) {
+          const av = a[k], bv = b[k];
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          return (av - bv) * dir;
+        });
+      }
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4">无选中指标</td></tr>';
+        return;
+      }
+      rows.forEach(function (it) {
         const chg = it.change_pct;
         const cls = chg == null ? "" : (chg >= 0 ? "pos" : "neg");
         const tr = document.createElement("tr");
@@ -119,6 +169,7 @@
           "<td>" + (it.status || "—") + "</td>";
         tbody.appendChild(tr);
       });
+      updateSortIndicators();
     }
 
     function renderSector(latest) {
@@ -173,7 +224,7 @@
         const span = document.createElement("span");
         span.className = "meta-item";
         span.style.color = COLORS[s.key] || "#8b949e";
-        span.textContent = s.label + " " + fmtPct(s.change_7d);
+        span.textContent = s.label + " " + state.days + "D " + fmtPct(s.change_7d);
         el.appendChild(span);
       });
     }
@@ -181,23 +232,19 @@
     function renderLineChart(canvas, history, series) {
       const ctx = canvas.getContext("2d");
 
-      // 收集该组所有系列的日期（并集），每个系列只画自己的数据点
       const allDates = new Set();
       series.forEach(function (s) {
         (s.values || []).forEach(function (v, i) {
           if (v != null) allDates.add(history.dates[i]);
         });
       });
-      // 过滤周末
       const tradingDates = Array.from(allDates).filter(function (d) {
         var dt = new Date(d);
         return dt.getDay() !== 0 && dt.getDay() !== 6;
       }).sort();
-      // 建立日期到索引的映射
       const dateIndexMap = {};
       tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
 
-      // 按交易日重新映射数据点（每个系列只画自己的数据，缺失日期用前值连线）
       const datasets = series.map(function (s) {
         const pts = [];
         let lastVal = null;
@@ -206,10 +253,9 @@
           if (dateIndexMap[date] === undefined) return;
           if (v != null) {
             lastVal = v;
-            pts.push({ x: date, y: v });
+            pts.push({ x: date, y: v, rawVal: (s.raw ? s.raw[i] : null) });
           } else if (lastVal != null) {
-            // 缺失日期用前值填充（连线不断）
-            pts.push({ x: date, y: lastVal });
+            pts.push({ x: date, y: lastVal, rawVal: null });
           }
         });
         return {
@@ -227,57 +273,67 @@
           pointHitRadius: 10,
         };
       });
-      new Chart(canvas, {
-        type: "line",
-        data: { datasets: datasets },
-        options: {
-          responsive: true,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              backgroundColor: "rgba(22, 27, 34, 0.95)",
-              titleColor: "#e6edf3",
-              bodyColor: "#e6edf3",
-              borderColor: "#30363d",
-              borderWidth: 1,
-              titleFont: { size: 11 },
-              bodyFont: { size: 12 },
-              padding: 8,
-              cornerRadius: 4,
-              boxWidth: 8,
-              callbacks: {
-                title: function (items) { return items.length ? items[0].label : ""; },
-                label: function (ctx) { return ctx.dataset.label + " " + fmtPct(ctx.parsed.y - 100); }
+
+      const options = {
+        responsive: true,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(22, 27, 34, 0.95)",
+            titleColor: "#e6edf3",
+            bodyColor: "#e6edf3",
+            borderColor: "#30363d",
+            borderWidth: 1,
+            titleFont: { size: 11 },
+            bodyFont: { size: 12 },
+            padding: 8,
+            cornerRadius: 4,
+            boxWidth: 8,
+            callbacks: {
+              title: function (items) { return items.length ? items[0].label : ""; },
+              label: function (ctx) {
+                const pt = ctx.dataset.data[ctx.dataIndex];
+                const rv = pt && pt.rawVal != null ? pt.rawVal : null;
+                return ctx.dataset.label + " " + fmtNum(rv, 2) + " (" + fmtPct(ctx.parsed.y - 100) + ")";
               }
             }
-          },
-          scales: {
-            x: {
-              type: "category",
-              labels: tradingDates,
-              grid: { display: false },
-              ticks: {
-                font: { size: 12 },
-                color: "#8b949e",
-                maxRotation: 0,
-                autoSkip: true,
-                callback: function (value, index) { return String(tradingDates[index]).slice(8); }
-              }
-            },
-            y: {
-              grid: { color: "rgba(48, 54, 61, 0.25)" },
-              border: { display: false },
-              ticks: {
-                font: { size: 12 },
-                color: "#8b949e",
-                callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
-              }
+          }
+        },
+        scales: {
+          x: {
+            type: "category",
+            labels: tradingDates,
+            grid: { display: false },
+            ticks: {
+              font: { size: 12 },
+              color: "#8b949e",
+              maxRotation: 0,
+              autoSkip: true,
+              callback: function (value, index) { return String(tradingDates[index]).slice(8); }
             }
           },
-          animation: { duration: 800, easing: "easeOutQuart" }
-        }
-      });
+          y: {
+            grid: { color: "rgba(48, 54, 61, 0.25)" },
+            border: { display: false },
+            ticks: {
+              font: { size: 12 },
+              color: "#8b949e",
+              callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
+            }
+          }
+        },
+        animation: { duration: 300, easing: "easeOutQuart" }
+      };
+      // 缩放/平移：仅当 zoom 插件可用时启用（CDN 失败则静默降级）
+      if (window.ChartZoom && !window.__zoomFailed) {
+        options.plugins.zoom = {
+          wheel: { enabled: true, modifierKey: "ctrl" },
+          pan: { enabled: true, modifierKey: "ctrl" },
+          limits: { y: { min: "original", max: "original" } }
+        };
+      }
+      return new Chart(canvas, { type: "line", data: { datasets: datasets }, options: options });
     }
 
     function renderBarChart(canvas, series) {
@@ -287,52 +343,53 @@
       const bg = [];
       series.forEach(function (s) {
         if (s.change_7d == null) return;
-        labels.push(ALT_SHORT[s.key] || s.label);
+        labels.push(SHORT[s.key] || s.label);
         data.push(s.change_7d);
         bg.push(s.change_7d >= 0 ? "#3fb950" : "#f85149");
       });
-      new Chart(canvas, {
+      const options = {
+        indexAxis: "y",
+        responsive: true,
+        interaction: { mode: "nearest", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            enabled: true,
+            backgroundColor: "rgba(22, 27, 34, 0.95)",
+            titleColor: "#e6edf3",
+            bodyColor: "#e6edf3",
+            borderColor: "#30363d",
+            borderWidth: 1,
+            titleFont: { size: 11 },
+            bodyFont: { size: 12 },
+            padding: 8,
+            cornerRadius: 4,
+            callbacks: {
+              label: function (ctx) { return state.days + "D 涨跌幅: " + fmtPct(ctx.parsed.x); }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(48, 54, 61, 0.25)" },
+            border: { display: false },
+            ticks: {
+              font: { size: 12 },
+              color: "#8b949e",
+              callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
+            }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { size: 12 }, color: "#8b949e" }
+          }
+        },
+        animation: { duration: 300, easing: "easeOutQuart" }
+      };
+      return new Chart(canvas, {
         type: "bar",
         data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderRadius: 4, barThickness: 32 }] },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          interaction: { mode: "nearest", intersect: false },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              enabled: true,
-              backgroundColor: "rgba(22, 27, 34, 0.95)",
-              titleColor: "#e6edf3",
-              bodyColor: "#e6edf3",
-              borderColor: "#30363d",
-              borderWidth: 1,
-              titleFont: { size: 11 },
-              bodyFont: { size: 12 },
-              padding: 8,
-              cornerRadius: 4,
-              callbacks: {
-                label: function (ctx) { return "7D 涨跌幅: " + fmtPct(ctx.parsed.x); }
-              }
-            }
-          },
-          scales: {
-            x: {
-              grid: { color: "rgba(48, 54, 61, 0.25)" },
-              border: { display: false },
-              ticks: {
-                font: { size: 12 },
-                color: "#8b949e",
-                callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
-              }
-            },
-            y: {
-              grid: { display: false },
-              ticks: { font: { size: 12 }, color: "#8b949e" }
-            }
-          },
-          animation: { duration: 800, easing: "easeOutQuart" }
-        }
+        options: options
       });
     }
 
@@ -344,16 +401,111 @@
         });
         return;
       }
+      // zoom 插件注册（仅一次）
+      if (window.ChartZoom && !window.__zoomFailed && !renderCharts._zoomRegistered) {
+        Chart.register(window.ChartZoom);
+        renderCharts._zoomRegistered = true;
+      }
       GROUPS.forEach(function (g) {
         const canvas = document.getElementById(g.id);
-        const series = history.series.filter(function (s) { return g.keys.indexOf(s.key) !== -1; });
+        const box = canvas.parentElement;
+        const series = history.series.filter(function (s) {
+          return g.keys.indexOf(s.key) !== -1 && state.selected.has(s.key);
+        });
+        // 重渲染前销毁旧实例，避免 "Canvas is already in use"
+        if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }
+        // 整组无选中 → 占位（不崩、不白屏）
+        let ph = box.querySelector(".chart-empty");
+        if (series.length === 0) {
+          canvas.style.display = "none";
+          if (!ph) {
+            ph = document.createElement("p");
+            ph.className = "empty chart-empty";
+            ph.textContent = "无选中指标";
+            box.appendChild(ph);
+          }
+          const meta = box.querySelector(".chart-meta");
+          if (meta) meta.innerHTML = "";
+          return;
+        }
+        if (ph) ph.remove();
+        canvas.style.display = "";
         renderMeta(g, series);
-        if (g.type === "bar") {
-          renderBarChart(canvas, series);
+        charts[g.id] = (g.type === "bar")
+          ? renderBarChart(canvas, series)
+          : renderLineChart(canvas, history, series);
+      });
+    }
+
+    function renderFilter() {
+      const box = document.getElementById("symbol-filter");
+      box.innerHTML = "";
+      const allBtn = document.createElement("button");
+      allBtn.type = "button";
+      allBtn.className = "filter-act";
+      allBtn.textContent = "全选";
+      allBtn.addEventListener("click", function () {
+        state.selected = new Set(ALL_KEYS);
+        renderFilter();
+        refresh();
+      });
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.className = "filter-act";
+      clearBtn.textContent = "清空";
+      clearBtn.addEventListener("click", function () {
+        state.selected = new Set();
+        renderFilter();
+        refresh();
+      });
+      box.appendChild(allBtn);
+      box.appendChild(clearBtn);
+      ALL_KEYS.forEach(function (key) {
+        const label = document.createElement("label");
+        label.className = "chip" + (state.selected.has(key) ? " on" : "");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = state.selected.has(key);
+        cb.addEventListener("change", function () {
+          if (cb.checked) state.selected.add(key);
+          else state.selected.delete(key);
+          label.className = "chip" + (cb.checked ? " on" : "");
+          refresh();
+        });
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.style.background = COLORS[key];
+        const text = document.createElement("span");
+        text.textContent = SHORT[key] || key;
+        label.appendChild(cb);
+        label.appendChild(dot);
+        label.appendChild(text);
+        box.appendChild(label);
+      });
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll(".th-sort").forEach(function (th) {
+        const ind = th.querySelector(".sort-ind");
+        if (!ind) return;
+        if (state.sort.key === th.dataset.sort) {
+          ind.textContent = state.sort.dir === 1 ? "▲" : "▼";
         } else {
-          renderLineChart(canvas, history, series);
+          ind.textContent = "";
         }
       });
+    }
+
+    function refresh() {
+      // 历史趋势：按 selected 过滤；空选 → 直接渲染占位，不请求
+      const histPromise = state.selected.size === 0
+        ? Promise.resolve({ dates: [], series: [] })
+        : fetch(buildQuery()).then(function (r) { return r.json(); });
+      histPromise.then(renderCharts).catch(function () { /* 图表区已在渲染函数内降级 */ });
+      // 最新概览 + 板块：始终请求（表格按 selected 过滤 + 排序）
+      fetch("/api/latest").then(function (r) { return r.json(); })
+        .then(function (data) { renderOverview(data); renderSector(data); })
+        .catch(function (e) { loadFailed(e.message, "overview-body"); });
     }
 
     function loadFailed(msg, boxId) {
@@ -362,14 +514,34 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
-      fetch("/api/latest").then(function (r) { return r.json(); })
-        .then(function (data) { renderOverview(data); renderSector(data); })
-        .catch(function (e) { loadFailed(e.message, "overview-body"); });
+      // 时间范围按钮
+      document.getElementById("range-bar").addEventListener("click", function (e) {
+        const btn = e.target.closest("button[data-days]");
+        if (!btn) return;
+        state.days = parseInt(btn.dataset.days, 10);
+        document.querySelectorAll("#range-bar button").forEach(function (b) {
+          b.classList.toggle("active", b === btn);
+        });
+        document.getElementById("range-label").textContent = state.days;
+        refresh();
+      });
+      // 排序表头：升序 → 降序 → 原序 三态循环
+      document.querySelectorAll(".th-sort").forEach(function (th) {
+        th.addEventListener("click", function () {
+          const key = th.dataset.sort;
+          if (state.sort.key === key) {
+            if (state.sort.dir === 1) state.sort.dir = -1;     // 升 → 降
+            else { state.sort.key = null; state.sort.dir = 1; } // 降 → 原序
+          } else {
+            state.sort.key = key; state.sort.dir = 1;          // 新列 → 升序
+          }
+          refresh();
+        });
+      });
 
-      fetch("/api/history").then(function (r) { return r.json(); })
-        .then(function (data) { renderCharts(data); })
-        .catch(function () { /* 图表区已在渲染函数内降级 */ });
-
+      renderFilter();
+      refresh();
+      // 告警仅初始加载一次（不随筛选/范围变化）
       fetch("/api/alerts").then(function (r) { return r.json(); })
         .then(function (data) { renderAlerts(data); })
         .catch(function () { document.getElementById("alert-list").innerHTML = '<p class="empty">加载失败</p>'; });
