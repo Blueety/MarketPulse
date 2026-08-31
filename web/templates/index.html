@@ -138,12 +138,11 @@
     }
 
     function renderOverview(latest) {
-      const section = document.getElementById("overview-body").closest("section");
       document.getElementById("overview-date").textContent = "数据截至：" + (latest.date || "");
       const tbody = document.getElementById("overview-body");
       tbody.innerHTML = "";
       if (!latest.indices || !latest.indices.length) {
-        section.style.display = "none";
+        tbody.innerHTML = '<tr><td colspan="4">暂无数据</td></tr>';
         return;
       }
       // 按 selected 过滤（单一管线，图表与表格同步）
@@ -163,7 +162,7 @@
         });
       }
       if (!rows.length) {
-        section.style.display = "none";
+        tbody.innerHTML = '<tr><td colspan="4">无选中指标</td></tr>';
         return;
       }
       section.style.display = "";
