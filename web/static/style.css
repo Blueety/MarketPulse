@@ -162,7 +162,7 @@ body {
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .chart-meta {
   display: flex;
@@ -177,7 +177,7 @@ body {
 .meta-item { font-weight: 600; }
 .chart-box canvas {
   width: 100% !important;
-  height: 220px !important;
+  height: 340px !important;
 }
 
 /* 告警列表：仅左侧色条 + 紧凑行式 */
@@ -331,7 +331,7 @@ body {
   .container { padding: 12px 12px 40px; }
   .card { padding: 14px 0; }
   .charts-grid { grid-template-columns: 1fr; gap: 16px; }
-  .chart-box canvas { height: 200px !important; }
+  .chart-box canvas { height: 260px !important; }
   .topbar { padding: 8px 12px; }
   .topbar h1 { font-size: 16px; }
   .data-table { font-size: 13px; }
@@ -353,7 +353,7 @@ body {
   .data-table td.val { font-size: 15px; }
   .data-table td.chg { font-size: 13px; }
   .chart-box h3 { font-size: 11px; }
-  .chart-box canvas { height: 180px !important; }
+  .chart-box canvas { height: 220px !important; }
   .topbar h1 { font-size: 14px; }
   .meta-item { font-size: 10px !important; }
   .col-status { display: none; }
