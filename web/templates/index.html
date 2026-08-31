@@ -128,7 +128,7 @@
       return Number(v).toFixed(digits);
     }
     function fmtPct(v) {
-      if (v == null) return "—";
+      if (v == null || isNaN(v)) return "—";
       return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
     }
 
@@ -316,6 +316,7 @@
               label: function (ctx) {
                 const pt = ctx.dataset.data[ctx.dataIndex];
                 const rv = pt && pt.rawVal != null ? pt.rawVal : null;
+                if (rv == null || ctx.parsed.y == null) return ctx.dataset.label + " —";
                 return ctx.dataset.label + " " + fmtNum(rv, 2) + " (" + fmtPct(ctx.parsed.y - 100) + ")";
               }
             }
