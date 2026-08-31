@@ -143,3 +143,10 @@
 | 2026-08-29 | FRED 无 MOVE 序列 | FRED 的 MOVE 指数未对公开 API 开放 | MOVE 迁至 Yahoo `^MOVE`，勿回退 |
 | 2026-08-29 | yfinance 多请求触发 429 | 一次 history() 打多个子请求 | 改为单请求直连 chart REST |
 | 2026-08-29 | 中文路径 `@架构师.md` 传参失败 | omp `@file` 不支持非 ASCII 路径 | 用 ASCII 临时文件中转 |
+
+## 模块 web/（二十期：视觉升级）
+
+- **同文件多 PUT 行号漂移**：edit 工具一次提交多个 `PUT`，各自按首次 `read` 的绝对行号；若两次 read 的窗口/编号不一致（如 155-215 窗口里的 204 ≠ 全量 read 的 211），会改错位置。本次把 renderSector 的 turnover `<td>` 误插入到 renderAlerts 内部，造成游离语句（运行时 ReferenceError 风险）。纪律：同文件多个定点修改前，先用 `grep` 取每个目标的真实行号再编辑；或优先整体 `write` 重写。
+- **FastAPI 模板缓存 + 端口占用**：Jinja2 在启动时把 `index.html` 读入缓存，旧进程不会反映模板改动；且 8000 常被既有看板进程占用。验证模板/静态改动须另起未缓存端口（如 8001）或用 `tab` 硬刷新，否则会误以为改动未生效。
+- **自动化 `每日数据更新` cron 会 `git add -A` 扫入未提交改动**：改完 `web/static/*`、`web/templates/*` 后若 cron 触发，改动会被一并提交，`git status` 显示 clean、`git diff` 为空；这是正常现象，改动已安全入仓库，无需手动提交。
+- **renderOverview 预存 `section.style.display = ""` bug**：原 `index.html` 引用未定义的全局 `section` → `ReferenceError`，会让概览表永远停在「加载中」。视觉升级重写该函数时应一并删除该行；若仅改 CSS 不动 JS 则会暴露此旧 bug。
