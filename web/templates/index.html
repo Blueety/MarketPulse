@@ -135,7 +135,7 @@
     }
 
     function renderOverview(latest) {
-      const section = document.querySelector(".card");
+      const section = document.getElementById("overview-body").closest("section");
       document.getElementById("overview-date").textContent = "数据截至：" + (latest.date || "");
       const tbody = document.getElementById("overview-body");
       tbody.innerHTML = "";
