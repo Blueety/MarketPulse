@@ -197,7 +197,7 @@
         tr.innerHTML =
           "<td>" + (g.name || "—") + "</td>" +
           '<td class="pos">' + fmtPct(g.change) + "</td>" +
-          "<td>" + (g.turnover || "—") + "</td>" +
+          '<td class="col-turnover">' + (g.turnover || "—") + "</td>" +
           "<td>" + (g.top_stock || "—") + "</td>";
         tbody.appendChild(tr);
       });
@@ -205,7 +205,6 @@
 
     function renderAlerts(alerts) {
       const box = document.getElementById("alert-list");
-          '<td class="col-turnover">' + (g.turnover || "—") + "</td>" +
       if (!alerts || !alerts.length) {
         box.innerHTML = '<p class="empty">暂无告警记录</p>';
         return;
