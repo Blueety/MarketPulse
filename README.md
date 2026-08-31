@@ -85,7 +85,7 @@ uvicorn web.app:app --port 8000
 http://localhost:8000
 
 # 公网访问 (Railway)
-https://marketpulse-production-da76.up.railway.app
+https://marketpulse-blue.up.railway.app
 ```
 
 功能：
