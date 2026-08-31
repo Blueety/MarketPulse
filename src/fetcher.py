@@ -294,8 +294,85 @@ def fetch_realtime_quotes(market: str) -> tuple[dict, dict]:
     return quotes, errors
 
 
+# 十八期：概念板块 → 大类聚合映射（PRD 表原文，10 大类 × 36 个概念名）。
+# 精确匹配概念名；未命中的概念板块在 aggregate_sectors 中归「其他」（决策 5）。
+SECTOR_MAPPING: dict[str, list[str]] = {
+    "通信/电子": ["5G概念", "华为概念", "消费电子", "物联网"],
+    "光伏/新能源": ["光伏", "光伏概念", "新能源", "锂矿", "锂电池", "盐湖提锂"],
+    "半导体/芯片": ["芯片", "半导体", "集成电路"],
+    "军工": ["国防军工", "军工航天", "军民融合"],
+    "医药": ["创新药", "仿制药", "免疫治疗", "CRO概念"],
+    "消费": ["白酒", "食品饮料", "新零售"],
+    "金融": ["券商", "银行", "保险"],
+    "地产/基建": ["房地产", "基建", "水泥"],
+    "资源/有色": ["黄金概念", "有色金属", "稀土", "煤炭"],
+    "农业": ["农业", "养殖", "猪肉"],
+}
+
+
+def _parse_turnover(text: str) -> float:
+    """将板块成交额字符串还原为元：'X.X亿' → ×1e8、'X.X万' → ×1e4、纯数字原值。
+
+    解析失败或空值返回 0.0（权重为 0 的子板块自然不贡献加权）。
+    """
+    if not text:
+        return 0.0
+    s = str(text).strip()
+    try:
+        if s.endswith("亿"):
+            return float(s[:-1]) * 1e8
+        if s.endswith("万"):
+            return float(s[:-1]) * 1e4
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def aggregate_sectors(rows: list[dict], top_n: int = 5) -> tuple[list[dict], list[dict]]:
+    """将概念板块行聚合为大类板块。
+
+    分组：行 name 命中 SECTOR_MAPPING 任一概念名 → 对应大类；否则归『其他』。
+    大类涨跌幅 = Σ(子板块 change × 子板块成交额[元]) / Σ(子板块成交额[元])；
+    若 Σ 成交额 == 0（全 0 / 全缺失）→ 该大类简单平均 mean(change)（PRD 约束）。
+    top_stock = 类别内成交额最大子板块的 top_stock（代表主权重，决策 2）。
+    turnover = 类别合计元 ÷ 1e8 保留 1 位，复用 'X.X亿' 格式（行契约同构）。
+    输出：10 映射类 + 『其他』共 11 类（≤15 满足 PRD），gainers 降序 TopN、losers 升序 TopN。
+    空输入返回 ([], [])。
+    """
+    if not rows:
+        return ([], [])
+
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        cat = "其他"
+        for category, names in SECTOR_MAPPING.items():
+            if r["name"] in names:
+                cat = category
+                break
+        groups.setdefault(cat, []).append(r)
+
+    aggregated: list[dict] = []
+    for cat, members in groups.items():
+        weights = [_parse_turnover(m["turnover"]) for m in members]
+        total = sum(weights)
+        if total == 0:
+            change = sum(m["change"] for m in members) / len(members)
+        else:
+            change = sum(m["change"] * w for m, w in zip(members, weights)) / total
+        top_member = max(members, key=lambda m: _parse_turnover(m["turnover"]))
+        aggregated.append({
+            "name": cat,
+            "change": round(change, 2),
+            "turnover": f"{total / 1e8:.1f}亿",
+            "top_stock": top_member["top_stock"],
+        })
+
+    gainers = sorted(aggregated, key=lambda r: r["change"], reverse=True)[:top_n]
+    losers = sorted(aggregated, key=lambda r: r["change"])[:top_n]
+    return (gainers, losers)
+
 def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
-    """从 AkShare 获取概念板块热度（领涨 / 领跌各 Top N，一次取数两路排序）。
+    """从 AkShare 取全量概念板块，按 SECTOR_MAPPING 聚合为大类后返回（领涨 / 领跌各 Top N，一次取数两路排序）。
 
     数据源为新浪（money.finance.sina.com.cn），akshare 内部 requests 无 timeout，
     故用 daemon 线程 + join(SECTOR_TIMEOUT) 限时；超时 / 异常 / 缺必需列均返回 ([], [])，
@@ -331,8 +408,7 @@ def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
                 if col not in df.columns:
                     raise KeyError(f"概念板块数据缺少必需列: {col}")
             all_rows = _build_rows(df)
-            gainers = sorted(all_rows, key=lambda r: r["change"], reverse=True)[:top_n]
-            losers = sorted(all_rows, key=lambda r: r["change"])[:top_n]
+            gainers, losers = aggregate_sectors(all_rows, top_n)
             holder["rows"] = (gainers, losers)
         except Exception as exc:
             log.warning("板块热度获取失败: %s", exc)

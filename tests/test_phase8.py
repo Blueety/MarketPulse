@@ -23,42 +23,51 @@ def _spot_df(rows):
 
 
 # 概念板块实测列名：板块 / 涨跌幅 / 总成交额 / 股票名称（另含其它列不影响）
+# 跨类别板块：锂电池/光伏→光伏/新能源，创新药→医药，猪肉→农业，生物育种/领跌板块→其他
 ROWS = [
-    {"板块": "生物育种", "涨跌幅": 5.20, "总成交额": 7_220_000_000, "股票名称": "敦煌种业", "其它": 1},
-    {"板块": "水产品", "涨跌幅": 3.79, "总成交额": 1_370_489_337, "股票名称": "中水渔业", "其它": 2},
-    {"板块": "生态农业", "涨跌幅": 2.68, "总成交额": 9_730_000_000, "股票名称": "敦煌种业", "其它": 3},
-    {"板块": "中间板块", "涨跌幅": 1.00, "总成交额": 200_000_000, "股票名称": "Z公司", "其它": 4},
-    {"板块": "领跌板块", "涨跌幅": -2.50, "总成交额": 100_000_000, "股票名称": "X公司", "其它": 5},
-    {"板块": "暴跌板块", "涨跌幅": -5.00, "总成交额": 500_000_000, "股票名称": "Y公司", "其它": 6},
+    {"板块": "锂电池", "涨跌幅": 3.0, "总成交额": 40_000_000_000, "股票名称": "宁德时代", "其它": 1},
+    {"板块": "光伏", "涨跌幅": 6.0, "总成交额": 20_000_000_000, "股票名称": "隆基绿能", "其它": 2},
+    {"板块": "创新药", "涨跌幅": 4.0, "总成交额": 10_000_000_000, "股票名称": "恒瑞医药", "其它": 3},
+    {"板块": "猪肉", "涨跌幅": -3.0, "总成交额": 5_000_000_000, "股票名称": "牧原股份", "其它": 4},
+    {"板块": "生物育种", "涨跌幅": 5.2, "总成交额": 7_220_000_000, "股票名称": "敦煌种业", "其它": 5},
+    {"板块": "领跌板块", "涨跌幅": -5.0, "总成交额": 500_000_000, "股票名称": "X公司", "其它": 6},
 ]
 
 
 class TestFetchSectorHeat:
-    def test_top5_sorted_desc_and_format(self, monkeypatch):
+    def test_aggregates_to_categories(self, monkeypatch):
         import akshare as ak_mod
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: _spot_df(ROWS))
         gainers, losers = ft.fetch_sector_heat()
-        # 领涨降序 Top5：5.20, 3.79, 2.68, 1.00, -2.50
-        assert len(gainers) == 5
-        assert [r["change"] for r in gainers] == [5.2, 3.79, 2.68, 1.0, -2.5]
-        assert gainers[0] == {"name": "生物育种", "change": 5.2, "turnover": "72.2亿", "top_stock": "敦煌种业"}
-        assert gainers[1] == {"name": "水产品", "change": 3.79, "turnover": "13.7亿", "top_stock": "中水渔业"}
-        # 负值板块保留负号
-        assert gainers[4] == {"name": "领跌板块", "change": -2.5, "turnover": "1.0亿", "top_stock": "X公司"}
-        # 领跌升序 Top5：6 行中取涨跌幅最低的 5 个（含低涨幅正板块）
-        assert len(losers) == 5
-        assert [r["change"] for r in losers] == [-5.0, -2.5, 1.0, 2.68, 3.79]
-        assert losers[0]["name"] == "暴跌板块"
+        # 4 个大类：光伏/新能源 / 医药 / 农业 / 其他，top5 截断后仍是这 4 类
+        assert len(gainers) == 4
+        assert len(losers) == 4
+        assert {r["name"] for r in gainers} == {"光伏/新能源", "医药", "农业", "其他"}
+        # 加权涨跌幅：光伏/新能源 = (3×40 + 6×20) / 60 = 4.0
+        pv = next(r for r in gainers if r["name"] == "光伏/新能源")
+        assert pv["change"] == 4.0
+        assert pv["turnover"] == "600.0亿"
+        # top_stock = 类别内成交额最大子板块（锂电池 40e9 > 光伏 20e9）
+        assert pv["top_stock"] == "宁德时代"
+        # 其他类加权：(5.2×7.22 + (-5.0)×0.5) / 7.72 ≈ 4.54
+        other = next(r for r in gainers if r["name"] == "其他")
+        assert other["change"] == pytest.approx(4.54, abs=0.01)
+        assert other["turnover"] == "77.2亿"
+        assert other["top_stock"] == "敦煌种业"
+        # 聚合行契约与概念行同构
+        assert set(gainers[0].keys()) == {"name", "change", "turnover", "top_stock"}
 
     def test_top_n_param(self, monkeypatch):
         import akshare as ak_mod
 
         monkeypatch.setattr(ak_mod, "stock_sector_spot", lambda indicator=None: _spot_df(ROWS))
-        gainers, losers = ft.fetch_sector_heat(top_n=3)
-        assert len(gainers) == 3
-        assert [r["name"] for r in gainers] == ["生物育种", "水产品", "生态农业"]
-        assert len(losers) == 3
+        gainers, losers = ft.fetch_sector_heat(top_n=2)
+        assert len(gainers) == 2
+        assert len(losers) == 2
+        # gainers 降序 Top2：其他(4.54) / 光伏/新能源(4.0)
+        assert gainers[0]["name"] == "其他"
+        assert gainers[1]["name"] == "光伏/新能源"
 
 
 class TestFetchSectorHeatFailure:
