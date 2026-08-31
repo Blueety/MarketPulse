@@ -401,6 +401,8 @@
         });
         return;
       }
+      // 清除所有旧占位（从"全不选"状态恢复时必需）
+      document.querySelectorAll(".chart-empty").forEach(function (el) { el.remove(); });
       // zoom 插件注册（仅一次）
       if (window.ChartZoom && !window.__zoomFailed && !renderCharts._zoomRegistered) {
         Chart.register(window.ChartZoom);
