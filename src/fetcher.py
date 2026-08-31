@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import re
 import logging
+
 import threading
 from time import monotonic, sleep
 from urllib.parse import quote
@@ -57,6 +59,23 @@ US_SECTOR_ETFS = {
     "XLB": "原材料",
     "XLRE": "房地产",
     "XLC": "通信服务",
+}
+
+# 十五期：开盘分析实时行情注册表（新浪 hq.sinajs.cn）。
+REALTIME_URL = "https://hq.sinajs.cn/list={codes}"
+# 市场 → {SYMBOLS 键: (新浪代码, 期望名称)}。
+# A 股字段序：0名称 1今开 2昨收 3当前价 4最高 5最低 … 30日期 31时间
+# 美股字段序：0名称 1当前价 2涨跌幅% 3时间 4涨跌额 5昨收 6今开 7最高 8最低
+REALTIME_MARKETS = {
+    "a-share": {
+        "SH": ("sh000001", "上证指数"),
+        "SZ": ("sz399001", "深证成指"),
+        "CYB": ("sz399006", "创业板指"),
+    },
+    "us": {
+        "GSPC": ("gb_inx", "标普500指数"),
+        "IXIC": ("gb_ixic", "纳斯达克"),
+    },
 }
 
 TIMEOUT = 15          # 单次请求超时（秒）
@@ -157,6 +176,124 @@ def fetch_all(market: str | None = None) -> tuple[dict, dict]:
     return values, errors
 
 
+def _sina_realtime_get(url: str) -> str:
+    """单次 GET 新浪实时行情，带 Referer 头；失败抛异常由调用方重试/容错。"""
+    resp = _SESSION.get(
+        url,
+        headers={"Referer": "https://finance.sina.com.cn"},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.text
+
+
+def _to_float(s: str) -> float | None:
+    """字段转 float；空串/0 视为缺失（None，避免跳空除零）；非数值抛 ValueError（由调用方判整行无效）。"""
+    s = s.strip()
+    if not s:
+        return None
+    v = float(s)
+    return v if v != 0 else None
+
+
+def parse_sina_realtime(text: str, market: str) -> dict | None:
+    """解析单条新浪实时行情 `var hq_str_xxx="..."`（A 股 / 美股两套字段序）。
+
+    返回 {current, prev_close, open}（float）；空串 / 字段不足 / 数值非法 → None（可单测，全 mock）。
+    """
+    m = re.search(r'=\s*"(.*?)";', text, re.DOTALL)
+    if not m:
+        return None
+    parts = m.group(1).split(",")
+    try:
+        if market == "a-share":
+            # 0名称 1今开 2昨收 3当前价 …
+            if len(parts) < 4:
+                return None
+            return {
+                "open": _to_float(parts[1]),
+                "prev_close": _to_float(parts[2]),
+                "current": _to_float(parts[3]),
+            }
+        # 美股：0名称 1当前价 2涨跌幅% 3时间 4涨跌额 5昨收 6今开 …
+        if len(parts) < 7:
+            return None
+        return {
+            "current": _to_float(parts[1]),
+            "prev_close": _to_float(parts[5]),
+            "open": _to_float(parts[6]),
+        }
+    except (ValueError, IndexError):
+        return None
+
+
+def _extract_block(text: str, code: str) -> str | None:
+    """从新浪整体响应中提取单个代码对应的 `var hq_str_xxx="..."` 整行。"""
+    m = re.search(r'var hq_str_' + re.escape(code) + r'="(.*?)";', text, re.DOTALL)
+    return m.group(0) if m else None
+
+
+def fetch_vix_realtime() -> tuple[float | None, float | None]:
+    """取 VIX 实时/最近收盘价与昨收（Yahoo meta regularMarketPrice / chartPreviousClose）。
+
+    新浪无 VIX 数据，开盘情绪走 Yahoo 兜底；失败返回 (None, None) 不抛（设计：降级「数据暂缺」）。
+    """
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX"
+        resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
+        resp.raise_for_status()
+        result = resp.json()["chart"].get("result")
+        if not result:
+            return None, None
+        meta = result[0].get("meta", {})
+        current = meta.get("regularMarketPrice")
+        prev = meta.get("chartPreviousClose")
+        return (
+            float(current) if current is not None else None,
+            float(prev) if prev is not None else None,
+        )
+    except Exception as exc:
+        log.warning("VIX 实时获取失败（开盘情绪降级）: %s", exc)
+        return None, None
+
+
+def fetch_realtime_quotes(market: str) -> tuple[dict, dict]:
+    """取开盘分析实时行情：新浪直连指数 + VIX 走 Yahoo 兜底。
+
+    返回 (quotes, errors)；quotes[sym] = {current, prev_close, open}，并含 "VIX" 键（open=None）。
+    A 股/美股任一指数解析失败记 errors 不中断；VIX 缺失进 errors、大盘方向仍可用；整体失败返回空 dict + errors。
+    """
+    quotes: dict = {}
+    errors: dict = {}
+    mapping = REALTIME_MARKETS.get(market, {})
+    if mapping:
+        codes = ",".join(code for code, _ in mapping.values())
+        url = REALTIME_URL.format(codes=codes)
+        try:
+            text = fetch_with_retry(f"sina-realtime-{market}", lambda: _sina_realtime_get(url))
+        except Exception as exc:
+            text = None
+            errors["sina"] = str(exc)
+        if text is None:
+            if "sina" not in errors:
+                errors["sina"] = "新浪实时行情获取失败"
+        else:
+            for sym, (code, _name) in mapping.items():
+                block = _extract_block(text, code)
+                parsed = parse_sina_realtime(block, market) if block else None
+                if parsed is None:
+                    errors[sym] = "解析失败"
+                else:
+                    quotes[sym] = parsed
+    # VIX：Yahoo 兜底（新浪无 VIX）
+    vix_cur, vix_prev = fetch_vix_realtime()
+    if vix_cur is not None:
+        quotes["VIX"] = {"current": vix_cur, "prev_close": vix_prev, "open": None}
+    else:
+        errors["VIX"] = "VIX 获取失败"
+    return quotes, errors
+
+
 def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
     """从 AkShare 获取概念板块热度（领涨 / 领跌各 Top N，一次取数两路排序）。
 
@@ -182,6 +319,7 @@ def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
                 "top_stock": str(r["股票名称"]),
             })
         return rows
+
 
     def _worker() -> None:
         try:

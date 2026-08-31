@@ -24,7 +24,8 @@ from src.analyzer import (
     save_last_values,
 )
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat
-from src.reporter import generate_context, render_market_trend_chart, render_report, render_trend_chart, save_report
+from src.reporter import (generate_context, render_market_trend_chart, render_report,
+                          render_trend_chart, save_report, load_opening_refs)
 from src.image_renderer import render_report_image
 
 logging.basicConfig(
@@ -72,12 +73,20 @@ def main() -> int:
         alts_trend_path = render_market_trend_chart(history, date, "alt")
     except Exception as exc:
         log.warning("另类资产趋势图渲染失败，跳过: %s", exc)
+
     alts_trend_chart = f"./charts/{alts_trend_path.name}" if alts_trend_path else None
+    # 十五期：读当日开盘分析引用（美股/A 股按美东日期匹配），失败仅记日志不影响日报
+    opening_refs = []
+    try:
+        opening_refs = load_opening_refs(date)
+    except Exception as exc:
+        log.warning("开盘分析引用加载失败，跳过: %s", exc)
 
     report = render_report(date, values, changes, statuses, summary, has_history, trend_chart,
                            sector_heat=sector_heat, us_sector_heat=us_sector_heat,
                            us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart,
-                           alts_trend_chart=alts_trend_chart, correlations=correlations)
+                           alts_trend_chart=alts_trend_chart, correlations=correlations,
+                           opening_refs=opening_refs)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 
 from .alerter import collect_breaches
@@ -19,11 +20,11 @@ from .analyzer import (
     fmt_value,
     load_history,
 )
+
 from .config import load_config
-from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS
+from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS, REALTIME_MARKETS
 
 log = logging.getLogger("marketpulse")
-
 TREND_DAYS = int(load_config()["trend"]["chart_days"])   # 趋势图窗口（天），来自 config（import 时快照）
 CHART_TIMEOUT = 15     # 绘图限时（秒），超时跳过绘图
 MARKET_CHART_TIMEOUT = 5  # 分市场趋势图限时（秒），超时跳过该图（PRD ≤5s/图）
@@ -39,13 +40,19 @@ MARKET_CHART_TITLES = {
     "cn": "A-Share Major Indices — 30-Day Trend",
     "alt": "Gold & Bitcoin — 30-Day Trend",
 }
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None) -> str:
+
+# 十五期：开盘分析独立输出目录（与 snapshots/ 同级，互不干扰）
+OPENING_DIR = REPORTS_DIR / "opening"
+
+
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None, opening_refs=None) -> str:
     """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
-    us_trend_chart / cn_trend_chart / alts_trend_chart 为分市场趋势图相对路径，提供时分别插入
     「美股大盘近30日趋势」/「A股大盘近30日趋势」/「另类资产近30日趋势」章节；None 则省略（设计 G）。
+    opening_refs 为开盘分析引用列表（[{market, date, summary}]），提供时在「总结」后插入
+    「🔔 开盘分析」章节（每市场一行：链接 + 摘要）；None 则省略（十五期，存量调用零影响）。
     """
     us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
     a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
@@ -180,6 +187,22 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 > 窗口：近 30 个交易日；每对需 ≥10 个有效样本；|r|>0.5 视为显著相关。
 """
+
+    # 十五期：开盘分析引用章节（默认 None → 省略，存量调用零影响）
+    opening_block = ""
+    if opening_refs:
+        bullets = "\n".join(
+            f"- {'🌏 美股开盘分析' if r['market'] == 'us' else '🇨🇳 A 股开盘分析'}："
+            f"[查看](opening/{r['date']}-{r['market']}.md) — {r['summary']}"
+            for r in opening_refs
+        )
+        opening_block = f"""
+---
+
+## 🔔 开盘分析
+
+{bullets}
+"""
     body = f"""# 📊 全市场情绪日报
 
 **日期**：{date}（美东时间）
@@ -243,7 +266,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 ## 📝 总结
 
-{summary}
+{summary}{opening_block}
 
 ---
 *本报告由 MarketPulse 自动生成 | 数据来源：Yahoo Finance*"""
@@ -636,6 +659,182 @@ def save_snapshot(date: str, content: str, suffix: str = "noon") -> "Path":
     path.write_text(content, encoding="utf-8")
     return path
 
+
+def render_opening_report(date, market, quotes, gaps, sentiment, sector_heat=None, errors=None) -> str:
+    """渲染开盘分析 Markdown：开盘跳空表 / 热点板块 / 开盘情绪 / 速览 / AI 解读占位（十五期）。
+
+    quotes[sym] = {current, prev_close, open}；gaps[sym] = {open_gap, current_change}（% 或 None）；
+    sentiment = {vix: {value,label,desc,prev_close}, direction, avg_gap}；sector_heat = (gainers, losers) 元组。
+    取数失败 → 表行「获取失败」；缺昨收 → 跳空/涨跌显示「—」；板块缺失 → 「数据暂缺」。
+    """
+    tz_label = "北京时间" if market == "a-share" else "美东时间"
+    market_label = "A 股" if market == "a-share" else "美股"
+    mapping = REALTIME_MARKETS.get(market, {})
+
+    gap_rows = []
+    for sym, (code, name) in mapping.items():
+        q = quotes.get(sym)
+        g = gaps.get(sym, {})
+        if q is None:
+            gap_rows.append(f"| {name} | 获取失败 | 获取失败 | 获取失败 | 获取失败 | 获取失败 |")
+        else:
+            og = g.get("open_gap")
+            cc = g.get("current_change")
+            gap_rows.append(
+                f"| {name} | {fmt_value(q.get('open'))} | {fmt_value(q.get('prev_close'))} "
+                f"| {'—' if og is None else f'{og:+.2f}%'} | {fmt_value(q.get('current'))} "
+                f"| {'—' if cc is None else f'{cc:+.2f}%'} |"
+            )
+    gap_table = "\n".join(gap_rows)
+
+    gainers, losers = sector_heat or ([], [])
+    gainer_table = _sector_table_md(gainers)
+    loser_table = _sector_table_md(losers)
+
+    vix = sentiment["vix"]
+    vix_line = (f"**VIX 当前值：{fmt_value(vix['value'])} → 状态：{vix['label']}**"
+                f"（数据来源：Yahoo Finance）\n\n> {vix['desc']}")
+    avg = sentiment.get("avg_gap")
+    dir_desc = f"跳空均值 {avg:+.2f}%" if avg is not None else "无跳空数据"
+    dir_line = f"**大盘方向**：{sentiment['direction']}（{dir_desc}）"
+
+    valid = {s: g["open_gap"] for s, g in gaps.items() if g.get("open_gap") is not None}
+    if valid:
+        strong_sym = max(valid, key=lambda s: valid[s])
+        weak_sym = min(valid, key=lambda s: valid[s])
+        strong_name = mapping[strong_sym][1]
+        weak_name = mapping[weak_sym][1]
+        strong_s = f"{valid[strong_sym]:+.2f}%"
+        weak_s = f"{valid[weak_sym]:+.2f}%"
+    else:
+        strong_name = weak_name = strong_s = weak_s = "—"
+    top_gain = gainers[0]["name"] if gainers else "—"
+    top_gain_pct = f"{gainers[0]['change']:+.2f}%" if gainers else "—"
+    top_loss = losers[0]["name"] if losers else "—"
+    top_loss_pct = f"{losers[0]['change']:+.2f}%" if losers else "—"
+
+    note = "\n\n> 注：部分数据源获取异常，相关项显示「获取失败」。" if errors else ""
+
+    return f"""# 🌅 开盘分析
+
+**日期**：{date}（{tz_label}）
+**类型**：开盘分析（{market_label}开盘后 15-30 分钟）
+
+---
+
+## 📊 开盘跳空
+
+| 指数 | 开盘价 | 昨收 | 跳空 | 当前价 | 当前涨跌 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+{gap_table}
+
+---
+
+## 🔥 热点板块 Top 5（开盘）
+
+| 板块 | 涨跌幅 | 成交额 | 领涨股 |
+| :--- | :--- | :--- | :--- |
+{gainer_table}
+
+---
+
+## 📉 领跌板块 Top 5（开盘）
+
+| 板块 | 涨跌幅 | 成交额 | 领跌股 |
+| :--- | :--- | :--- | :--- |
+{loser_table}
+
+---
+
+## 🏷️ 开盘情绪
+
+{vix_line}
+
+{dir_line}
+
+---
+
+## 📝 开盘速览
+
+- 大盘整体{sentiment['direction']}，最强指数 {strong_name} 跳空 {strong_s}、最弱指数 {weak_name} 跳空 {weak_s}。
+- 领涨板块：{top_gain}（{top_gain_pct}）；领跌板块：{top_loss}（{top_loss_pct}）。
+- VIX {fmt_value(vix['value'])}，市场情绪{vix['label']}。
+
+---
+
+## 🤖 AI 解读
+
+（待 Hermes 追加：100-200 字开盘分析）
+
+---
+*本报告由 MarketPulse 自动生成 | 数据来源：新浪实时行情（VIX 来自 Yahoo Finance）*{note}"""
+
+
+def save_opening(date: str, market: str, content: str) -> "Path":
+    """写开盘分析 reports/opening/YYYY-MM-DD-{market}.md，返回路径（十五期；复合名防 A/美股同日碰撞）。"""
+    OPENING_DIR.mkdir(parents=True, exist_ok=True)
+    path = OPENING_DIR / f"{date}-{market}.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def load_opening_refs() -> list[dict]:
+    """读开盘分析（reports/opening/{市场日期}-{market}.md），返回引用列表（十五期）。
+
+    美股用美东市场日期、A 股用北京时间市场日期（两者通常不同，故分别取各自市场日期匹配）；
+    文件缺失/坏格式 → 跳过不报错（不影响日报）。
+    """
+    refs = []
+    for market in ("us", "a-share"):
+        md = GET_MARKET_DATE(market)
+        path = OPENING_DIR / f"{md}-{market}.md"
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception as exc:
+            log.warning("开盘分析引用读取失败 %s: %s", path, exc)
+            continue
+        summary = _parse_opening_summary(text, market)
+        if summary is None:
+            continue
+        refs.append({"market": market, "date": md, "summary": summary})
+    return refs
+
+
+def _parse_opening_summary(text: str, market: str) -> str | None:
+    """从开盘分析报告解析摘要行（首条跳空 + VIX 状态）；解析失败返回 None。"""
+    lines = text.splitlines()
+    name = gap = None
+    in_gap = False
+    for ln in lines:
+        if ln.startswith("## 📊 开盘跳空"):
+            in_gap = True
+            continue
+        if in_gap:
+            if ln.startswith("## "):
+                break
+            if not ln.strip().startswith("|"):
+                continue
+            if "---" in ln:
+                continue
+            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+            if len(cells) >= 5 and cells[0] != "指数":
+                name, gap = cells[0], cells[3]
+                break
+    if name is None:
+        return None
+    vix_val = vix_label = None
+    for ln in lines:
+        m = re.search(r"VIX 当前值：([\d.]+|获取失败)\s*→\s*状态：([^*]+?)\*\*", ln)
+        if m:
+            vix_val, vix_label = m.group(1), m.group(2)
+            break
+    if market == "us":
+        if vix_val is not None:
+            return f"{name} 跳空 {gap}，VIX {vix_val}（{vix_label}）"
+        return f"{name} 跳空 {gap}"
+    return f"{name} 跳空 {gap}"
 
 def _breach_item(alert: dict) -> dict:
     """check_breach 原始 dict → context 契约字段（PRD 示例字段名；level 沿用 WARN/ALERT 大写）。"""

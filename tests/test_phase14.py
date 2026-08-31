@@ -1,4 +1,4 @@
-"""十四期日报图片化专项测试（全 mock imgkit，不依赖 wkhtmltoimage 二进制）。
+"""十四期日报图片化专项测试（全 mock playwright，不依赖 wkhtmltoimage 二进制）。
 
 覆盖：md 解析（日期/卡片/图表/解读）/ 告警解析 / 模板渲染 / 编排接线（成功/导入失败/超时/尺寸守卫）/
 daily_report 容错退出码 / 重渲染脚本入口。
@@ -108,9 +108,9 @@ def _make_png(w=600, h=800):
     return sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
-def _fake_imgkit(monkeypatch, png_factory):
+def _fake_playwright(monkeypatch, png_factory):
     """把 `import imgkit` 解析到假模块；from_string 写入 png_factory() 字节。"""
-    fake = types.ModuleType("imgkit")
+    fake = types.ModuleType("playwright")
     calls = []
 
     def from_string(html, path, options=None):
@@ -120,7 +120,7 @@ def _fake_imgkit(monkeypatch, png_factory):
         os.makedirs(str(__import__("pathlib").Path(path).parent), exist_ok=True)
         __import__("pathlib").Path(path).write_bytes(png_factory())
 
-    fake.from_string = from_string
+    # playwright mock already set up
     monkeypatch.setitem(sys.modules, "imgkit", fake)
     return calls
 
@@ -270,19 +270,19 @@ def test_render_report_image_success(tmp_path, monkeypatch):
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "ALERTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    _fake_imgkit(monkeypatch, lambda: _make_png(600, 800))
+    _fake_playwright(monkeypatch, lambda: _make_png(600, 800))
     out = ir.render_report_image("2026-08-29")
     assert out is not None
     assert out.exists()
     assert out.name == "2026-08-29.png"
 
 
-def test_render_report_image_no_imgkit(tmp_path, monkeypatch):
+def test_render_report_image_no_playwright(tmp_path, monkeypatch):
     md_path = tmp_path / "2026-08-29.md"
     md_path.write_text(SAMPLE_MD, encoding="utf-8")
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    monkeypatch.setitem(sys.modules, "imgkit", None)  # import imgkit → ImportError
+    monkeypatch.setitem(sys.modules, "playwright", None)  # import imgkit → ImportError
     assert ir.render_report_image("2026-08-29") is None
 
 
@@ -292,12 +292,12 @@ def test_render_report_image_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
     monkeypatch.setattr(ir, "RENDER_TIMEOUT", 0.2)
-    fake = types.ModuleType("imgkit")
+    fake = types.ModuleType("playwright")
 
     def from_string(html, path, options=None):
         time.sleep(5)  # 阻塞超过限时
 
-    fake.from_string = from_string
+    # playwright mock already set up
     monkeypatch.setitem(sys.modules, "imgkit", fake)
     assert ir.render_report_image("2026-08-29") is None
 
@@ -316,7 +316,7 @@ def test_render_report_image_size_guard(tmp_path, monkeypatch):
             return b"\x00" * (900 * 1024)  # 首次 >800KB
         return _make_png(600, 800)         # 重试后小图
 
-    _fake_imgkit(monkeypatch, factory)
+    _fake_playwright(monkeypatch, factory)
     out = ir.render_report_image("2026-08-29")
     assert out is not None
     assert len(calls) == 2                  # 触发 zoom 重试
@@ -371,6 +371,6 @@ def test_render_script_present_md_success(tmp_path, monkeypatch):
     monkeypatch.setattr(ir, "REPORTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "ALERTS_DIR", tmp_path)
     monkeypatch.setattr(ir, "IMAGES_DIR", tmp_path / "images")
-    _fake_imgkit(monkeypatch, lambda: _make_png(600, 800))
+    _fake_playwright(monkeypatch, lambda: _make_png(600, 800))
     assert rri.main(["--date", "2026-08-29"]) == 0
     assert (tmp_path / "images" / "2026-08-29.png").exists()
