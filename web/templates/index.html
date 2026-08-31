@@ -302,6 +302,7 @@
             }
           },
           tooltip: {
+            enabled: !('ontouchstart' in window),  // 移动端禁用悬浮
             backgroundColor: "rgba(22, 27, 34, 0.95)",
             titleColor: "#e6edf3",
             bodyColor: "#e6edf3",
