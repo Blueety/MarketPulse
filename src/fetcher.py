@@ -83,7 +83,7 @@ def fetch_with_retry(name, fn, retries: int = RETRIES):
 
 
 def fetch_from_akshare(symbol: str) -> float:
-    """从 AkShare 获取 A 股指数最新收盘价（实时性优于 Yahoo）。"""
+    """从 AkShare 新浪接口获取 A 股指数实时价格。"""
     import akshare as ak
     # 转换 ticker 格式：000001.SS → sh000001, 399001.SZ → sz399001
     if symbol.endswith(".SS"):
@@ -92,6 +92,17 @@ def fetch_from_akshare(symbol: str) -> float:
         ak_symbol = f"sz{symbol[:-3]}"
     else:
         raise ValueError(f"不支持的 AkShare ticker: {symbol}")
+    
+    # 优先用新浪实时接口（延迟低，代理兼容性好）
+    try:
+        df = ak.stock_zh_index_spot_sina()
+        row = df[df["代码"] == ak_symbol]
+        if not row.empty:
+            return float(row.iloc[0]["最新价"])
+    except Exception:
+        pass
+    
+    # 降级到日线接口
     df = ak.stock_zh_index_daily(symbol=ak_symbol)
     if df.empty:
         raise ValueError(f"AkShare 返回空数据: {symbol}")
