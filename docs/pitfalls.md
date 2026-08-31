@@ -150,3 +150,9 @@
 - **FastAPI 模板缓存 + 端口占用**：Jinja2 在启动时把 `index.html` 读入缓存，旧进程不会反映模板改动；且 8000 常被既有看板进程占用。验证模板/静态改动须另起未缓存端口（如 8001）或用 `tab` 硬刷新，否则会误以为改动未生效。
 - **自动化 `每日数据更新` cron 会 `git add -A` 扫入未提交改动**：改完 `web/static/*`、`web/templates/*` 后若 cron 触发，改动会被一并提交，`git status` 显示 clean、`git diff` 为空；这是正常现象，改动已安全入仓库，无需手动提交。
 - **renderOverview 预存 `section.style.display = ""` bug**：原 `index.html` 引用未定义的全局 `section` → `ReferenceError`，会让概览表永远停在「加载中」。视觉升级重写该函数时应一并删除该行；若仅改 CSS 不动 JS 则会暴露此旧 bug。
+
+## 模块 web/（二十三期：趋势图视觉精修）
+
+- **Chart.js 非交互降透明度须显式声明 hover 恢复**：dataset `borderColor` 用 8 位 hex（`COLORS[key] + "d9"`，85% 不透明）降低非交互视觉攻击性时，hover 不会自动变回全色——必须额外设 `hoverBorderColor: COLORS[key]`（全色）与 `hoverBorderWidth`（如 2.6）；只改 `borderColor` 则 hover 仍是 85% 灰。四图共用 `renderLineChart` 一处 dataset 配置，改一处即四图一致。
+- **曲线平滑 `tension` 取值纪律**：金融/时序图轻微平滑用 `0.25`（Chart.js 文档常用值），`0.08` 几乎等同直线无效果、`0.4+` 是强 spline（PRD 否决）。保留真实局部拐点须 ≤0.3；改 tension 后必须用 `window.Chart.getChart(canvas).data.datasets[0].tension` 运行时复核四图一致。
+- **验证 web 图表改动走 `tab.evaluate`**：浏览器 `run` 顶层无 `document`，DOM/Chart 实例访问必须包在 `tab.evaluate(() => {...})` 内；`window.Chart.getChart(canvas)` 可读取 `tension/borderWidth/borderColor/hoverBorder*/pointRadius` 等运行时值，比截图更可靠——本机未配视觉模型时尤其（inspect_image 直接报 "does not support image input"）。
