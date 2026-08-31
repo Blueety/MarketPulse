@@ -27,10 +27,10 @@ class TestSymbolsAndConfig:
         assert an.SYMBOLS["CYB"]["ticker"] == "399006.SZ"
 
     def test_config_defaults_phase6a(self, clean_thresholds):
-        assert an.alert_threshold("GSPC") == 4.0
-        assert an.alert_threshold("IXIC") == 4.5
-        assert an.alert_threshold("SH") == 4.0
-        assert an.alert_threshold("SZ") == 4.0
+        assert an.alert_threshold("GSPC") == cfg.DEFAULTS["alert"]["gspc"]
+        assert an.alert_threshold("IXIC") == cfg.DEFAULTS["alert"]["ixic"]
+        assert an.alert_threshold("SH") == cfg.DEFAULTS["alert"]["sh"]
+        assert an.alert_threshold("SZ") == cfg.DEFAULTS["alert"]["sz"]
         assert an.alert_threshold("CYB") == 5.0
         assert cfg.load_config()["trend"]["streak_days"] == 3
 

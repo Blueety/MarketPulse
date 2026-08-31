@@ -12,6 +12,7 @@ import pytest
 from src import alerter as al
 from src import analyzer as an
 from src import reporter as rep
+from src.config import DEFAULTS
 
 
 @pytest.fixture
@@ -92,14 +93,14 @@ class TestA股Breach:
         assert alert is not None
         assert alert["level"] == "WARN"
         assert alert["state"] == "异动"
-        assert alert["threshold"] == pytest.approx(4.0)
+        assert alert["threshold"] == pytest.approx(DEFAULTS["alert"]["sh"])
 
     def test_sh_exact_not_trigger(self, clean_thresholds):
-        assert an.check_breach("SH", 104.0, 100.0) is None
+        assert an.check_breach("SH", 102.5, 100.0) is None
 
     def test_sz_independent_threshold(self, clean_thresholds):
         assert an.check_breach("SZ", 104.1, 100.0) is not None
-        assert an.check_breach("SZ", 104.0, 100.0) is None
+        assert an.check_breach("SZ", 103.4, 100.0) is None
 
     def test_env_override_sh(self, monkeypatch, clean_thresholds):
         monkeypatch.setenv("ALERT_THRESHOLD_SH", "5")

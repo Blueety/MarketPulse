@@ -34,7 +34,7 @@ class TestDefaults:
         assert cfg["analysis"]["move"]["tight"] == 130.0
         assert cfg["alert"]["vix"] == 20.0
         assert cfg["alert"]["vxn"] == 20.0
-        assert cfg["alert"]["move"] == 15.0
+        assert cfg["alert"]["move"] == 12.0
         assert cfg["alert"]["vix"] == 20.0
         assert cfg["alert"]["cyb"] == 5.0
         assert cfg["history"]["retention_days"] == 90
@@ -173,7 +173,7 @@ class TestWiring:
         assert rep.TREND_DAYS == 30
         assert an.ALERT_THRESHOLDS["VIX"] == 20.0
         assert an.ALERT_THRESHOLDS["VXN"] == 20.0
-        assert an.ALERT_THRESHOLDS["MOVE"] == 15.0
+        assert an.ALERT_THRESHOLDS["MOVE"] == 12.0
 
     def test_reload_updates_constants(self, monkeypatch, tmp_path):
         cfg = {

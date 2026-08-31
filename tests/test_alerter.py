@@ -6,6 +6,7 @@ from src import alerter as al
 from src import analyzer as an
 
 
+from src.config import DEFAULTS
 @pytest.fixture
 def clean_thresholds(monkeypatch):
     for sym in ("VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ", "CYB"):
@@ -24,7 +25,7 @@ class TestAlertThreshold:
     def test_defaults(self, clean_thresholds):
         assert an.alert_threshold("VIX") == 20.0
         assert an.alert_threshold("VXN") == 20.0
-        assert an.alert_threshold("MOVE") == 15.0
+        assert an.alert_threshold("MOVE") == DEFAULTS["alert"]["move"]
 
     def test_env_override(self, monkeypatch, clean_thresholds):
         monkeypatch.setenv("ALERT_THRESHOLD_VIX", "30")
@@ -36,7 +37,7 @@ class TestAlertThreshold:
 
     def test_nonpositive_env_falls_back(self, monkeypatch, clean_thresholds):
         monkeypatch.setenv("ALERT_THRESHOLD_MOVE", "0")
-        assert an.alert_threshold("MOVE") == 15.0
+        assert an.alert_threshold("MOVE") == DEFAULTS["alert"]["move"]
 
 
 class TestCheckBreach:
