@@ -1,32 +1,38 @@
-/* MarketPulse 看板 - 深色专业主题 */
+/* MarketPulse 看板 - 金融市场终端风格（深色 / 紧凑 / 数字优先） */
 :root {
-  --bg-primary: #0d1117;
-  --bg-card: #161b22;
-  --bg-hover: #1c2128;
-  --border: #2a3038;
+  --bg-primary: #0b0e14;
+  --bg-elevated: #11161f;
+  --bg-hover: #11161f;
+  --border: #1f252d;
   --text-primary: #e6edf3;
   --text-secondary: #8b949e;
-  --text-muted: #484f58;
+  --text-muted: #4a525c;
   --green: #3fb950;
   --red: #f85149;
   --blue: #58a6ff;
   --orange: #d29922;
   --purple: #bc8cff;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-num: 18px;
+  --fs-num-sm: 14px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* 顶栏：收窄、标题克制、日期等宽次级 */
 .topbar {
-  background: var(--bg-card);
+  background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,155 +41,180 @@ body {
   z-index: 100;
 }
 .topbar h1 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   color: var(--text-primary);
 }
 .subdate {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
+  font-family: var(--mono);
 }
 
 .container {
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  padding: 16px 16px 48px;
 }
 
-/* 卡片 */
-  .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px;
-  }
-  .card h2 {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+/* 分区：去掉卡片边界，hairline 分隔 */
+.card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.card:last-child { border-bottom: none; }
+.card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.card h2 .h2-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
 
 /* 数据表格 */
 .table-scroll { overflow-x: auto; }
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 14px;
 }
 .data-table th {
   text-align: left;
-  padding: 10px 12px;
+  padding: 6px 12px;
   color: var(--text-secondary);
   font-weight: 500;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 .data-table td {
-  padding: 14px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-primary);
 }
-.data-table tr:hover {
-  background: var(--bg-hover);
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover { background: var(--bg-hover); }
+.data-table td.name { color: var(--text-primary); font-size: 13px; }
+.data-table td.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
-.data-table tr:last-child td {
-  border-bottom: none;
-}
-.pos { color: var(--green); font-weight: 600; }
-.neg { color: var(--red); font-weight: 600; }
+.data-table td.val { font-size: var(--fs-num); font-weight: 600; }
+.data-table td.chg { font-size: var(--fs-num-sm); font-weight: 600; }
+.pos { color: var(--green) !important; font-weight: 600; }
+.neg { color: var(--red) !important; font-weight: 600; }
 
-/* 图表网格 */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  .chart-box {
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    overflow: hidden;
-    min-width: 0;
-  }
-  .chart-box h3 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 0;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  .chart-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .chart-meta {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px 12px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    text-align: right;
-  }
-  .meta-item { font-weight: 600; }
+/* 状态圆点（D5：休市灰 / 失败橙 / 异动红 / 其余绿） */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--text-muted);
+}
+.dot-gray { background: #6e7681; }
+.dot-orange { background: var(--orange); }
+.dot-red { background: var(--red); }
+.dot-green { background: var(--green); }
+
+/* 图表网格：扁平、无卡片 */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.chart-box {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+.chart-box h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
+}
+.chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.chart-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+  font-family: var(--mono);
+}
+.meta-item { font-weight: 600; }
 .chart-box canvas {
   width: 100% !important;
-  height: 260px !important;
+  height: 220px !important;
 }
 
-/* 告警列表 */
+/* 告警列表：仅左侧色条 + 紧凑行式 */
 .alert-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .alert-card {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-left: 3px solid var(--border);
+  padding: 10px 12px;
+  background: transparent;
 }
-.alert-card.alert {
-  border-left: 3px solid var(--red);
-}
-.alert-card.warn {
-  border-left: 3px solid var(--orange);
-}
+.alert-card.alert { border-left-color: var(--red); }
+.alert-card.warn { border-left-color: var(--orange); }
 .alert-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 .badge.alert { background: var(--red); color: #fff; }
 .badge.warn { background: var(--orange); color: #000; }
 .alert-meta, .alert-row, .alert-sugg, .alert-report {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: 2px;
+  font-family: var(--mono);
 }
 
 .empty {
@@ -191,51 +222,23 @@ body {
   font-style: italic;
   text-align: center;
   padding: 24px;
+  font-size: 13px;
 }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .container { padding: 12px; gap: 12px; }
-  .charts-grid { grid-template-columns: 1fr; gap: 12px; }
-  .chart-box canvas { height: 200px !important; }
-  .topbar { padding: 12px 16px; }
-  .topbar h1 { font-size: 16px; }
-  .card { padding: 16px; }
-  .card h2 { font-size: 14px; }
-  .data-table { font-size: 13px; }
-  .data-table th, .data-table td { padding: 10px 8px; }
-  .table-scroll { -webkit-overflow-scrolling: touch; }
-  .alert-card { padding: 10px 12px; }
-}
-
-/* 小屏手机 */
-@media (max-width: 480px) {
-  .container { padding: 8px; gap: 8px; }
-  .card { padding: 12px; border-radius: 8px; }
-  .card h2 { font-size: 13px; margin-bottom: 10px; }
-  .data-table { font-size: 12px; }
-  .data-table th, .data-table td { padding: 8px 6px; }
-  .chart-box { padding: 10px; }
-  .chart-box h3 { font-size: 11px; }
-  .chart-box canvas { height: 180px !important; }
-  .topbar h1 { font-size: 14px; }
-  .meta-item { font-size: 11px !important; }
-}
-
-/* 时间范围 / 指标筛选 */
+/* 时间范围 / 指标筛选：收敛 */
 .range-bar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
 }
 .range-bar button {
-  background: var(--bg-hover);
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -248,17 +251,17 @@ body {
 }
 .group-bar {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .group-bar button {
-  background: var(--bg-hover);
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -272,7 +275,7 @@ body {
 
 .symbol-filter {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   align-items: center;
   margin-bottom: 14px;
@@ -281,8 +284,8 @@ body {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 3px 10px;
+  border-radius: 5px;
   font-size: 12px;
   cursor: pointer;
 }
@@ -291,7 +294,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 12px;
@@ -323,17 +326,41 @@ body {
 /* 图表占位 */
 .chart-empty { padding: 40px 0; text-align: center; }
 
-/* 移动端：范围按钮 / 筛选区换行不溢出（flex-wrap 已处理，补充间距收敛） */
+/* 响应式：平板 */
 @media (max-width: 768px) {
-  .range-bar button { padding: 5px 12px; font-size: 12px; }
-  .symbol-filter { gap: 6px; margin-bottom: 12px; }
-  .symbol-filter .chip { padding: 3px 8px; font-size: 11px; }
-  .group-bar { gap: 6px; margin-bottom: 10px; }
-  .group-bar button { padding: 5px 12px; font-size: 12px; }
+  .container { padding: 12px 12px 40px; }
+  .card { padding: 14px 0; }
+  .charts-grid { grid-template-columns: 1fr; gap: 16px; }
+  .chart-box canvas { height: 200px !important; }
+  .topbar { padding: 8px 12px; }
+  .topbar h1 { font-size: 16px; }
+  .data-table { font-size: 13px; }
+  .data-table th, .data-table td { padding: 7px 8px; }
+  .data-table td.val { font-size: 16px; }
+  .alert-card { padding: 8px 10px; }
+  .range-bar button, .group-bar button { padding: 4px 10px; font-size: 11px; }
+  .symbol-filter .chip { padding: 2px 8px; font-size: 11px; }
 }
+
+/* 小屏手机：收敛间距 + 隐藏溢出风险列（状态 / 成交额） */
 @media (max-width: 480px) {
-  .range-bar { gap: 6px; }
-  .symbol-filter .chip { padding: 3px 7px; font-size: 11px; }
-  .group-bar { gap: 6px; margin-bottom: 10px; }
-  .group-bar button { padding: 4px 10px; font-size: 11px; }
+  .container { padding: 8px 8px 32px; }
+  .card { padding: 12px 0; }
+  .card h2 { font-size: 12px; margin-bottom: 10px; }
+  .card h2 .h2-sub { font-size: 10px; }
+  .data-table { font-size: 12px; }
+  .data-table th, .data-table td { padding: 6px 6px; }
+  .data-table td.val { font-size: 15px; }
+  .data-table td.chg { font-size: 13px; }
+  .chart-box h3 { font-size: 11px; }
+  .chart-box canvas { height: 180px !important; }
+  .topbar h1 { font-size: 14px; }
+  .meta-item { font-size: 10px !important; }
+  .col-status { display: none; }
+  .col-turnover { display: none; }
+  .range-bar { gap: 5px; }
+  .range-bar button, .group-bar button { padding: 3px 9px; font-size: 11px; }
+  .group-bar { gap: 5px; margin-bottom: 8px; }
+  .symbol-filter { gap: 5px; }
+  .symbol-filter .chip { padding: 2px 7px; font-size: 11px; }
 }

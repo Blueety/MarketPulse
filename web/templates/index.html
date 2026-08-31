@@ -22,7 +22,7 @@
   <main class="container">
     <!-- 模块 1：市场概览 -->
     <section class="card">
-      <h2>市场概览（最新交易日）</h2>
+      <h2>市场概览 <span class="h2-sub">· 最新交易日</span></h2>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
@@ -30,7 +30,7 @@
               <th>指数</th>
               <th class="th-sort" data-sort="value">收盘 <span class="sort-ind"></span></th>
               <th class="th-sort" data-sort="change_pct">涨跌幅 <span class="sort-ind"></span></th>
-              <th>状态</th>
+              <th class="col-status">状态</th>
             </tr>
           </thead>
           <tbody id="overview-body">
@@ -72,11 +72,11 @@
 
     <!-- 模块 3：板块热度 -->
     <section class="card">
-      <h2>A 股热点板块 Top 5（领涨）</h2>
+      <h2>A 股热点板块 <span class="h2-sub">· Top 5 领涨</span></h2>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
-            <tr><th>板块</th><th>涨跌幅</th><th>成交额</th><th>领涨股</th></tr>
+            <tr><th>板块</th><th>涨跌幅</th><th class="col-turnover">成交额</th><th>领涨股</th></tr>
           </thead>
           <tbody id="sector-body">
             <tr><td colspan="4">加载中…</td></tr>
@@ -87,7 +87,7 @@
 
     <!-- 模块 4：告警记录 -->
     <section class="card">
-      <h2>告警记录（最近 10 条）</h2>
+      <h2>告警记录 <span class="h2-sub">· 最近 10 条</span></h2>
       <div id="alert-list" class="alert-list">
         <p class="empty">加载中…</p>
       </div>
@@ -165,16 +165,20 @@
         tbody.innerHTML = '<tr><td colspan="4">无选中指标</td></tr>';
         return;
       }
-      section.style.display = "";
       rows.forEach(function (it) {
         const chg = it.change_pct;
         const cls = chg == null ? "" : (chg >= 0 ? "pos" : "neg");
+        const st = it.status || "—";
+        let dot = "dot-green";
+        if (st.indexOf("休市") >= 0) dot = "dot-gray";
+        else if (st.indexOf("失败") >= 0) dot = "dot-orange";
+        else if (st.indexOf("异动") >= 0) dot = "dot-red";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          "<td>" + it.label + "</td>" +
-          "<td>" + fmtNum(it.value, 2) + "</td>" +
-          '<td class="' + cls + '">' + fmtPct(chg) + "</td>" +
-          "<td>" + (it.status || "—") + "</td>";
+          '<td class="name">' + it.label + "</td>" +
+          '<td class="num val">' + fmtNum(it.value, 2) + "</td>" +
+          '<td class="num chg ' + cls + '">' + fmtPct(chg) + "</td>" +
+          '<td class="col-status"><span class="status-dot ' + dot + '"></span>' + st + "</td>";
         tbody.appendChild(tr);
       });
       updateSortIndicators();
@@ -201,7 +205,7 @@
 
     function renderAlerts(alerts) {
       const box = document.getElementById("alert-list");
-      box.innerHTML = "";
+          '<td class="col-turnover">' + (g.turnover || "—") + "</td>" +
       if (!alerts || !alerts.length) {
         box.innerHTML = '<p class="empty">暂无告警记录</p>';
         return;
