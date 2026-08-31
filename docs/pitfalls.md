@@ -114,6 +114,14 @@
 - **AI 解读章节识别**：正则 `^##\s.*解读` 匹配标题含「解读」的章节（决策 A），仅取首个；日报本身不渲染解读区，Hermes 追加解读后由 `scripts/render_report_image.py --date` 独立重渲染含解读图（依赖已落盘的 md + 解读章节），与日报自动渲染解耦。
 - **测试 mock 双模块落点**：`render_report_image` 在**函数内** `from playwright.sync_api import sync_playwright`，导入时查 `sys.modules["playwright"]` 与 `sys.modules["playwright.sync_api"]`。测试须**同时** `monkeypatch.setitem(sys.modules, "playwright", ...)` 与 `monkeypatch.setitem(sys.modules, "playwright.sync_api", ...)` 才能拦截；只置 `sys.modules["playwright"]=None` 拦不住**已缓存**的 `playwright.sync_api` 子模块（真实 Chromium 仍会被驱动）。playwright 自带超时抛 `TimeoutError`，mock 时让 `page.set_content` 抛 `TimeoutError` 即可走真实「超时 → 捕获 → None」路径。
 
+## 模块 src/（十八期：板块聚合）
+
+- **聚合必须发生在取数层**：`fetch_sector_heat` 内部 `_worker` 取全量概念板块后调用 `aggregate_sectors`，一次完成聚合；web `/api/latest` 的 `sector_heat` 只读 `context/*.json`（web 进程绝不写数据、也不持有聚合源），若把聚合留在日报/快照各自做，web 无聚合数据源且日报与看板展示不一致。
+- **turnover 字符串需还原为元再加权**：行内 `turnover` 是本项目自产格式化字符串「X.X亿」（元÷1e8 保留 1 位），聚合权重需数值成交额，故 `_parse_turnover("13.7亿") → 1.37e9`（"X.X亿"→×1e8、"X.X万"→×1e4、纯数字原值、解析失败/空→0.0）；不在行内加 raw 键（避免破坏行契约与 `test_phase8` 精确 dict 断言）。
+- **聚合行契约与概念行同构**：`aggregate_sectors` 输出仍是 `{name, change, turnover, top_stock}`，`turnover` 复用「合计元÷1e8 保留 1 位」；五个消费点（render_report / render_snapshot / render_opening_report / generate_context / build_search_keywords / web）零改动即可显示大类。
+- **未匹配概念板块归「其他」兜底漏配**：SECTOR_MAPPING 精确匹配概念名，命中即归大类、未命中归「其他」；新浪实际板块命名与 PRD 字面大量不符（如「白酒概念」「券商重仓」「生态农业」「稀缺资源」「华为海思」「氢能源」），已据实跑 175 板块核对补全别名，提升大类覆盖率（仅「半导体/芯片」无新浪对应板块名而恒空）。
+- **改 `fetch_sector_heat` 返回语义需同步契约测试**：聚合后返回行变为大类名，`tests/test_phase8.py` 的 `TestFetchSectorHeat` 契约测试须改用跨类别 mock 并断言加权值/类别数/ top_stock，否则原「生物育种」等概念名断言立即失效（注意：扩展别名后原 mock 用的「生物育种」会命中「农业」，须改用确未命中的名如「重组概念」）。
+- **成交额全 0 类别走简单平均**：某大类子板块成交额合计为 0（含全 0 / 全缺失）时，加权分母为 0，按 PRD 约束改走 `mean(change)`；个别子板块 0 权重自然不贡献。
 ## 模块 web/（十七期：看板交互增强）
 
 - **Chart.js 重渲染必须 destroy 旧实例**：刷新时若直接 `new Chart(canvas, ...)` 会报 `Canvas is already in use`。按 group id 维护 `charts` 注册表，重渲染前 `if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }` 再重建（实测 90 点切换无此问题，但缺失 destroy 必然报错）。

@@ -22,7 +22,7 @@ Python 项目。每个交易日有多个运行点：
 | 编排入口 | `daily_report.py` | 收盘流程编排：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 追加历史 → 写缓存 → 生成 context |
 | 编排入口 | `snapshot_report.py` | 盘中快照流程编排：按 `--market`/`--time` 取市场子集 → 分类 → 渲染单板块快照 → 落盘 `reports/snapshots/YYYY-MM-DD-{market}-{time}.md`（只读缓存作告警基准，不算涨跌幅、不写 history、不推送）；4 个 Hermes cron 各传一组参数 |
 | 告警 | `src/alerter.py` | 告警文件渲染（附录块格式）、alerts.log 去重状态读写、`collect_breaches` 纯计算导出、`run_alert_checks` 编排（逐指数容错） |
-| 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表；八期新增 fetch_sector_heat 概念板块热度 Top5（AkShare/新浪源，线程限时 10s，失败返回 []） |
+| 数据获取 | `src/fetcher.py` | Yahoo 取数（含重试/退避/源间节流），SYMBOLS 注册表；八期新增 fetch_sector_heat 概念板块热度 Top5（AkShare/新浪源，线程限时 10s，失败返回 []）；十八期新增 SECTOR_MAPPING + aggregate_sectors，fetch_sector_heat 内部将全量概念板块聚合为 10 大类 +「其他」（成交额加权，零成交额简单平均，未匹配归其他，行契约同构） |
 | 纯逻辑 + 持久化 | src/analyzer.py | 状态分类、涨跌幅、格式化、路径常量（含 CONTEXT_DIR）、last_values 缓存、history 读写（90 天滚动、原子写、损坏容错）、build_search_keywords、compute_correlation（指数对 Pearson 相关性，纯 Python 零依赖，输入为收益率） |
 | 报告渲染 | src/reporter.py | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 15s 线程限时）、分市场趋势图（us 2×1 / cn 3×1 双图，5s 限时）、落盘、相关性分析章节与 context correlation 键（generate_context，原子写） |
 | 配置加载 | `src/config.py` | 阈值配置：config.json + 环境变量覆盖 + 内置默认三级（DEFAULTS/ENV_MAP/env_float/load_config），白名单校验，零依赖 |
@@ -82,7 +82,7 @@ Yahoo Finance (^VIX, ^VXN) ──┐
 | 分市场趋势图（九期） | 日报新增美股 2×1（GSPC/IXIC）与 A 股 3×1（SH/SZ/CYB）趋势图：`render_market_trend_chart(history, date, market)`（注册表式，market∈{us,cn}，复用 render_trend_chart 绘图范式，独立 `MARKET_CHART_TIMEOUT=5` 限时，三图串行渲染）；`render_report` 加 `us_trend_chart`/`cn_trend_chart` 默认参数 + 两个章节（us 图在美股大盘后、cn 图在 A 股大盘后）；占位文案英文 "Insufficient Data"；市场键 us/cn 与快照 `MARKETS` 键 a-share/us 不同；`daily_report.py` 单次 `load_history` 复用 | 波动率图外补足分市场走势感知；图表文本英文是既有硬约束；整体行数<2 返回 None 省略章节（与 render_trend_chart 一致），部分序列缺数据子图占位不中断 |
 | Web 看板（十一期） | 新增 `web/` 包：FastAPI 单页看板 + 3 个只读 JSON API（`/api/history` / `/api/latest` / `/api/alerts`）。路径常量复用 analyzer 单一事实来源，但在 `web/app.py` 重新绑定为模块级名字（解析函数一律引用本模块常量），测试 monkeypatch 落点严格打在使用方模块 `web.app`（打在定义方 analyzer 不生效）；板块热度数据源为最新 `context/*.json` 的 `sector_heat`（history.json 无板块字段，PRD 字面「从 history.json」不实，按「单独 JSON = context」落地）；`alerts/` 空目录 / 坏文件容错返回 `[]` 不 500；Chart.js 走 CDN，加载失败图区降级「图表加载失败」文案；新增运行依赖 fastapi/uvicorn/jinja2/httpx（决策 A，PRD 技术栈明确指定） | 浏览器展示最近 7 日市场数据，零侵入日报/快照主流程；只读语义（不读 `last_values.json`、不写任何生成物）保持与日报同一事实来源；量级悬殊（BTC 万级 vs VIX 十几）按市场分 4 图各独立 y 轴 | 2026-08-30 |
 | 测试隔离 | tests/conftest.py 顶层强制 CONFIG_PATH 指向不存在文件，collection 前生效 | 用户定制 config.json 后跑 pytest 不破坏默认断言（PRD 风险表"测试混用生产配置"正解） | 2026-09-01 |
-| 日报图片化（十四期） | 新增 `src/image_renderer.py`：md 解析（日期 / 10 指数卡片 / 趋势图引用 / AI 解读章节）/ 告警附录块解析 / Jinja2 模板 `web/templates/report_card.html` → Playwright 截图转 PNG（宽 600 自适应高、全链路容错；注意：15s 超时 / ≤800KB 尺寸守卫 / zoom=0.8 重试已在 a536888 删除，当前未实现）；`daily_report.py` 末尾调用，失败仅记日志、退出码恒 0；独立入口 `scripts/render_report_image.py --date` 供 Hermes 追加 AI 解读后重渲染含解读图 | PRD 图片化推送：手机竖屏长图、中文字体（PingFang SC / Microsoft YaHei）、趋势图以 `file://` 绝对路径引用不内嵌（避免 +33% 膨胀）；AI 解读数据源 = md 标题含「解读」的章节（决策 A）；告警区仅取 `alerts/{date}-close.md`（决策 E）；10 标的全量卡片（决策 F）；图片参数 PRD 固定值常量化不配置化 | 2026-09-01 |
+| 板块聚合（十八期） | `fetch_sector_heat` 内部单点聚合：SECTOR_MAPPING（10 大类 + 新浪实际别名）× `_parse_turnover` 还原成交额 + `aggregate_sectors` 纯函数加权；日报/快照/开盘分析/context/web 五个消费点零改动（web 只读 context 无聚合源，必须取数层聚合）；聚合公式 = Σ(子板块 change×成交额[元]) / Σ成交额[元]，Σ=0 走简单平均；未匹配概念板块归「其他」参与排序；聚合行契约 {name, change, turnover, top_stock} 与概念行同构；top_stock 取类别内成交额最大子板块 | 聚合在取数层一次完成，消费点自动全变大类，零 mock 签名破坏、零重复实现；精确匹配兜底漏配；大盘名替代概念名（超出 PRD 文件表字面，已确认） | 2026-08-31 |
 
 ## 约束
 
