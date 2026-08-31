@@ -107,11 +107,12 @@
 ## 模块 src/（十四期：日报图片化）
 
 - **解析严格依赖 `render_report` 的 Markdown 结构**：`src/image_renderer.py` 用正则解析 `reports/YYYY-MM-DD.md` 生成卡片（标题行 `## ...` / `| 指数 | 收盘价 | 涨跌幅 | 趋势 |` 表头 / `![...](charts/...)` 引用 / 标题含「解读」章节 / `alerts/{date}-close.md` 附录块）；改 `render_report` 输出结构（章节标题、表头文案、趋势图引用语法、AI 解读章节命名）会直接破坏图片解析，须同步回归 `tests/test_phase14.py`。
-- **图片尺寸守卫 + zoom 重试**：`render_report_image` 先按 PRD 固定宽 600 渲染，若高 >9000 或体积 ≥800KB 则用 `options={'zoom':0.8}` 重渲染（最高 3 次）压到阈下；`--disable-local-file-access` 已开启，趋势图必须用 `file://` 绝对路径（相对路径渲染后空白）。
-- **全链路容错、失败返回 None**：`render_report_image` 任意异常（imgkit 未装 / wkhtmltoimage 缺失 / 模板缺失 / 报告不存在）均捕获并返回 None；`daily_report.py` 调用方再包 try/except 仅记日志、退出码恒 0；图片是「锦上添花」，绝不阻断日报主流程与推送。
-- **imgkit 依赖 + 独立二进制**：`requirements.txt` 加 `imgkit`（pip 安装），但真正渲染靠系统 `wkhtmltoimage`（wkhtmltopdf 套件），Windows 用 `winget install wkhtmltopdf` 安装；`imgkit.config(wkhtmltoimage=...)` 显式指定二进制路径，缺失时 `wkhtmltoimage --version` 报错即视为不可用。
-- **中文字体靠系统**：渲染 HTML 用系统无衬线栈（PingFang SC / Microsoft YaHei / 文泉驿），容器/无中文字体环境会豆腐块；测试用 mock imgkit 不依赖真实二进制，仅验证解析/模板/尺寸逻辑。
+- **尺寸守卫 + zoom 重试（已删除）**：a536888 用 Playwright 替换 imgkit 时删除了 15s 限时（RENDER_TIMEOUT / MAX_IMAGE_BYTES 已成死常量）、≤800KB 尺寸守卫与 zoom 重试；如需恢复须回填 `src/image_renderer.py` 并重写对应单测。`--disable-local-file-access` 已开启，趋势图必须用 `file://` 绝对路径（相对路径渲染后空白）。
+- **全链路容错、失败返回 None**：`render_report_image` 任意异常（playwright 未装 / 模板缺失 / 报告不存在）均捕获并返回 None；`daily_report.py` 调用方再包 try/except 仅记日志、退出码恒 0；图片是「锦上添花」，绝不阻断日报主流程与推送。
+- **Playwright 渲染（替代 imgkit）**：`src/image_renderer.py` 经 `from playwright.sync_api import sync_playwright` 驱动 Chromium 截图 PNG；`requirements.txt` 须含 `playwright` 且本机装浏览器（`playwright install chromium`）。未装 / 导入失败 → 捕获返回 None，日报不受影响。
+- **中文字体靠系统**：渲染 HTML 用系统无衬线栈（PingFang SC / Microsoft YaHei / 文泉驿），无中文字体环境会豆腐块；测试用 mock `playwright` + `playwright.sync_api` 双模块（见下），不依赖真实浏览器，仅验证解析 / 模板 / 输出契约。
 - **AI 解读章节识别**：正则 `^##\s.*解读` 匹配标题含「解读」的章节（决策 A），仅取首个；日报本身不渲染解读区，Hermes 追加解读后由 `scripts/render_report_image.py --date` 独立重渲染含解读图（依赖已落盘的 md + 解读章节），与日报自动渲染解耦。
+- **测试 mock 双模块落点**：`render_report_image` 在**函数内** `from playwright.sync_api import sync_playwright`，导入时查 `sys.modules["playwright"]` 与 `sys.modules["playwright.sync_api"]`。测试须**同时** `monkeypatch.setitem(sys.modules, "playwright", ...)` 与 `monkeypatch.setitem(sys.modules, "playwright.sync_api", ...)` 才能拦截；只置 `sys.modules["playwright"]=None` 拦不住**已缓存**的 `playwright.sync_api` 子模块（真实 Chromium 仍会被驱动）。playwright 自带超时抛 `TimeoutError`，mock 时让 `page.set_content` 抛 `TimeoutError` 即可走真实「超时 → 捕获 → None」路径。
 
 ## 环境相关
 
