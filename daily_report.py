@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 
 from src.alerter import run_alert_checks
-from src.northbound import fetch_northbound_flow
 from src.analyzer import (
     append_history,
     build_statuses,
@@ -195,8 +194,7 @@ def main() -> int:
                            sector_heat=sector_heat, us_sector_heat=us_sector_heat,
                            us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart,
                            alts_trend_chart=alts_trend_chart, correlations=correlations,
-                           opening_refs=opening_refs, watchlist=watchlist_view,
-                           northbound=northbound_data)
+                           opening_refs=opening_refs, watchlist=watchlist_view)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 
@@ -211,14 +209,6 @@ def main() -> int:
     except Exception as exc:
         log.warning("告警检查失败，不影响日报生成: %s", exc)
 
-    # 北向资金异动告警（独立于指数告警）
-    try:
-        from src.alerter import check_northbound_alert
-        check_northbound_alert(date, northbound_data, report_path)
-    except Exception as exc:
-        log.warning("北向资金告警检查失败（不影响日报）: %s", exc)
-
-
     saved = {k: v for k, v in values.items() if v is not None}
     if saved:
         save_last_values(saved, date)
@@ -227,7 +217,7 @@ def main() -> int:
         log.warning("所有数据源获取失败，本次不更新缓存")
 
     try:  # 上下文生成（决策 E）：供 Hermes 常规解读/异动归因，失败仅记日志不影响日报
-        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat, correlations=correlations, watchlist=watchlist_view, northbound=northbound_data)
+        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat, correlations=correlations, watchlist=watchlist_view)
         log.info("context 已生成: context/%s.json", date)
     except Exception as exc:
         log.warning("context 生成失败，不影响日报: %s", exc)

@@ -21,7 +21,7 @@ DEFAULTS = {
         "vix": {"peaceful": 20.0, "panic": 30.0},
         "move": {"normal": 100.0, "tight": 130.0},
     },
-    "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0, "northbound": 100.0},
+    "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0},
     "trend": {"chart_days": 30, "streak_days": 3},
     "history": {"retention_days": 90},
     # 二十四期：自选股/持仓（值为 list[dict]，白名单合并无法处理，由 _valid_watchlist 单独校验）
@@ -44,7 +44,7 @@ ENV_MAP = {
     "TREND_CHART_DAYS": ("trend", "chart_days"),
     "TREND_STREAK_DAYS": ("trend", "streak_days"),
     "HISTORY_RETENTION_DAYS": ("history", "retention_days"),
-    "ALERT_NORTHBOUND_THRESHOLD": ("alert", "northbound"),
+
 }
 
 # 项目根 config.json 默认位置（可用 CONFIG_PATH env 或 load_config(path=...) 覆盖）。

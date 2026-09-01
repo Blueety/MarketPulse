@@ -501,35 +501,6 @@ def fmt_change(change: float | None, has_history: bool, value: float | None) -> 
     return f"{sign}{change:.2f}%"
 
 
-def fmt_northbound(data: dict | None) -> str:
-    """格式化北向资金显示文本。
-
-    返回示例：
-    - "净流入 32.15 亿元"（正值）
-    - "净流出 12.50 亿元"（负值）
-    - "数据暂缺"（None）
-    """
-    if data is None:
-        return "数据暂缺"
-    net = data["net_inflow"]
-    if net >= 0:
-        return f"净流入 {net:.2f} 亿元"
-    else:
-        return f"净流出 {abs(net):.2f} 亿元"
-
-
-def fmt_northbound_detail(data: dict | None) -> str:
-    """格式化北向资金明细（沪股通/深股通）。
-
-    返回示例："沪股通 +18.20 / 深股通 +13.95"
-    """
-    if data is None:
-        return "—"
-    sh = data["sh_net"]
-    sz = data["sz_net"]
-    return f"沪股通 {sh:+.2f} / 深股通 {sz:+.2f}"
-
-
 # ---- 缓存层 ----
 def load_last_values() -> dict:
     """读取缓存 {symbol: value}；文件不存在或损坏时按首跑处理（空 dict）。"""
