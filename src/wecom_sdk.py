@@ -1,4 +1,4 @@
-"""企业微信智能机器人 — 官方 SDK + Hermes AI。"""
+"""企业微信智能机器人 — 官方 SDK + Hermes AI (异步处理)。"""
 import asyncio
 import logging
 import subprocess
@@ -24,13 +24,13 @@ def ask_hermes_sync(question: str) -> str:
         )
         return result.stdout.strip() or "(无回复)"
     except subprocess.TimeoutExpired:
-        return "(AI 处理超时)"
+        return "(AI 处理超时,请稍后再试)"
     except Exception as e:
         return f"(AI 错误: {e})"
 
 
 async def on_text(frame):
-    """处理文本消息 — 先快速回复,后台调 AI"""
+    """处理文本消息 — 先立即回复确认,后台调 AI"""
     body = frame.body or {}
     sender = body.get("from", {}).get("userid", "unknown")
     content = body.get("text", {}).get("content", "").strip()
@@ -40,9 +40,9 @@ async def on_text(frame):
 
     log.info("收到 [%s]: %s", sender, content[:100])
 
-    # 先发送"正在处理"
+    # 立即回复确认(5 秒内)
     stream_id = generate_req_id("stream")
-    await client.reply_stream(frame, stream_id, "🤔 正在思考...", finish=False)
+    await client.reply_stream(frame, stream_id, "✅ 收到!AI 正在处理,请稍候...", finish=False)
 
     # 后台调用 Hermes
     loop = asyncio.get_event_loop()
