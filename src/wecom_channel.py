@@ -64,13 +64,15 @@ async def send_text(ws, user_id: str, content: str):
 
 async def handle_incoming(ws, raw: str):
     """处理收到的用户消息 — 转发给 Hermes"""
+    log.info("原始消息: %s", raw[:500])
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
         return
 
     cmd = data.get("cmd")
-    if cmd != "aibot_msg":
+    if cmd not in ("aibot_msg", "aibot_msg_callback"):
+        log.info("非消息命令: %s", cmd)
         return
 
     body = data.get("body", {})
