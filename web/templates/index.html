@@ -7,6 +7,15 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>MarketPulse 市场看板</title>
+<script>
+  (function () {
+    try {
+      if (localStorage.getItem("mp-theme") === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    } catch (e) {}
+  })();
+</script>
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
           onerror="window.__chartFailed=true"></script>
@@ -98,7 +107,11 @@
   <script>
     // === 主题切换 ===
     function getTheme() {
-      return localStorage.getItem('mp-theme') || 'dark';
+      try {
+        return localStorage.getItem('mp-theme') || 'dark';
+      } catch (e) {
+        return 'dark';
+      }
     }
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
@@ -661,7 +674,7 @@
       if (themeBtn) {
         themeBtn.addEventListener('click', function() {
           var next = getTheme() === 'dark' ? 'light' : 'dark';
-          localStorage.setItem('mp-theme', next);
+          try { localStorage.setItem('mp-theme', next); } catch (e) {}
           applyTheme(next);
           if (state.history) renderCharts(state.history);
         });
