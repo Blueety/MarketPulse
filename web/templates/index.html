@@ -258,15 +258,20 @@
 
       const datasets = series.map(function (s) {
         const pts = [];
-        (s.values || []).forEach(function (v, i) {
-          const date = history.dates[i];
-          if (dateIndexMap[date] === undefined) return;
-          if (v != null) {
-            pts.push({ x: date, y: v, rawVal: (s.raw ? s.raw[i] : null) });
-          } else {
-            pts.push({ x: date, y: null, rawVal: null });
-          }
-        });
+                  let lastVal = null;
+                  let lastRaw = null;
+                  (s.values || []).forEach(function (v, i) {
+                    const date = history.dates[i];
+                    if (dateIndexMap[date] === undefined) return;
+                    if (v != null) {
+                      lastVal = v;
+                      lastRaw = s.raw ? s.raw[i] : null;
+                      pts.push({ x: date, y: v, rawVal: lastRaw });
+                    } else if (lastVal != null) {
+                      // 前向填充：用前一个值连接空缺（黄金周末不断线）
+                      pts.push({ x: date, y: lastVal, rawVal: lastRaw, filled: true });
+                    }
+                  });
         return {
           label: s.label,
           key: s.key,

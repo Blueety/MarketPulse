@@ -46,14 +46,16 @@ MARKET_CHART_TITLES = {
 OPENING_DIR = REPORTS_DIR / "opening"
 
 
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None, opening_refs=None) -> str:
-    """按 PRD 模板渲染 Markdown 日报：美股大盘 + 波动率指数两板块（趋势图/总结不动）。
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None, opening_refs=None, watchlist=None) -> str:
+    """按 PRD 模板渲染 Markdown 日报。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
     提供时插入「近30日趋势」章节；None 则省略该章节。
     「美股大盘近30日趋势」/「A股大盘近30日趋势」/「另类资产近30日趋势」章节；None 则省略（设计 G）。
     opening_refs 为开盘分析引用列表（[{market, date, summary}]），提供时在「总结」后插入
-    「🔔 开盘分析」章节（每市场一行：链接 + 摘要）；None 则省略（十五期，存量调用零影响）。
+    「🔔 开盘分析」章节；None 则省略（十五期，存量调用零影响）。
+    watchlist 为自选股视图（compute_portfolio_correlation + 取数结果合并），提供时插入
+    「📋 自选股/持仓」板块（二十四期，存量调用零影响）。
     """
     us_stock_syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
     a_share_syms = [s for s in SYMBOLS if s in A_SHARE_SYMBOLS]
@@ -204,6 +206,66 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 {bullets}
 """
+
+    # 二十四期：自选股/持仓板块（默认 None → 省略，存量调用零影响）
+    watchlist_block = ""
+    wl_stocks = (watchlist or {}).get("stocks") or []
+    if wl_stocks:
+        if not (watchlist or {}).get("available"):
+            # 取数全失败 → 整板块占位
+            watchlist_block = """
+---
+
+## 📋 自选股/持仓
+
+自选股数据暂缺
+"""
+        else:
+            wl_rows = []
+            news_lines = []
+            for st in wl_stocks:
+            for st in wl_stocks:
+                chg = st.get("change_pct")
+                if val is None:
+                    close = "数据暂缺"
+                    chg_cell = "—"
+                else:
+                    close = fmt_value(val)
+                    chg_cell = fmt_change(chg, True, val)
+                r = st.get("r")
+                if val is None or r is None:
+                    corr_cell = "数据不足"
+                elif r > 0.5:
+                    corr_cell = f"🔴 {r:.2f}"
+                elif r < -0.5:
+                    corr_cell = f"🟢 {r:.2f}"
+                else:
+                    corr_cell = f"{r:.2f}"
+                wl_rows.append(
+                    f"| {st['label']} ({st['symbol']}) | {close} | {chg_cell} | {corr_cell} |"
+                )
+                news = st.get("news")
+                if news:
+                    news_lines.append(f"- 📰 **{st['label']} ({st['symbol']})**：{news}")
+            risk = (watchlist or {}).get("portfolio_risk") or {}
+            risk_line = ""
+            if risk.get("high"):
+                avg = risk.get("avg_r")
+                risk_line = (
+                    f"\n> ⚠️ 组合集中度高：持仓间平均相关系数 "
+                    f"{avg:.2f}，分散化不足，警惕同涨同跌风险。\n"
+                )
+            news_block = "\n".join(news_lines)
+            watchlist_block = f"""
+---
+
+## 📋 自选股/持仓
+
+| 股票 | 收盘价 | 涨跌幅 | 相关性 |
+| :--- | :--- | :--- | :--- |
+{"\n".join(wl_rows)}{risk_line}"""
+            if news_block:
+                watchlist_block += f"\n{news_block}\n"
     body = f"""# 📊 全市场情绪日报
 
 **日期**：{date}（美东时间）

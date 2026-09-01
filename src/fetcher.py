@@ -7,10 +7,17 @@ from __future__ import annotations
 
 import re
 import logging
-
 import threading
+from datetime import datetime, timedelta
 from time import monotonic, sleep
 from urllib.parse import quote
+
+try:
+    from zoneinfo import ZoneInfo
+    _EASTERN_TZ = ZoneInfo("America/New_York")
+except Exception:  # pragma: no cover - 仅极老 Python 回退
+    from datetime import timezone
+    _EASTERN_TZ = timezone.utc
 
 import requests
 
@@ -504,3 +511,108 @@ def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
     gainers = sorted(results, key=lambda r: r["change"], reverse=True)[:top_n]
     losers = sorted(results, key=lambda r: r["change"])[:top_n]
     return (gainers, losers)
+
+
+# ---- 二十四期：自选股/持仓取数 ----
+def _fetch_yahoo_watch(symbol: str) -> tuple[float, list]:
+    """Yahoo chart REST 取美股/ETF 当日价 + 近 30 日收盘序列（range=1mo, interval=1d）。
+
+    当日价取 meta.regularMarketPrice（缺失回退序列末值）；序列时间戳转美东日期，
+    与 history.json 美东 date 键对齐。返回 (value, [(date, close), ...])。
+    """
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
+    resp = _SESSION.get(url, params={"interval": "1d", "range": "1mo"}, timeout=TIMEOUT)
+    resp.raise_for_status()
+    r = resp.json()["chart"].get("result")
+    if not r:
+        raise ValueError("Yahoo 返回空图表数据")
+    res = r[0]
+    meta = res.get("meta", {})
+    ts = res.get("timestamp") or []
+    quotes = res.get("indicators", {}).get("quote", [{}])
+    closes = quotes[0].get("close", []) if quotes else []
+    series = []
+    for t, c in zip(ts, closes):
+        if c is None or t is None:
+            continue
+        dt = datetime.fromtimestamp(t, _EASTERN_TZ).strftime("%Y-%m-%d")
+        series.append((dt, float(c)))
+    if not series:
+        raise ValueError("Yahoo 序列为空")
+    value = meta.get("regularMarketPrice")
+    if value is None:
+        value = series[-1][1]
+    return float(value), series
+
+
+def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
+    """AkShare 东财日线取 A 股(.SS/.SZ) 当日收盘价 + 近 ~30 交易日序列。
+
+    symbol 去掉后缀作 AkShare 代码；取 70 个自然日确保覆盖 ≥30 交易日。日期列与
+    history.json 美东 date 键同日对齐（A 股 15:00 北京 = 美东当日）。返回 (value, [(date, close), ...])。
+    """
+    import akshare as ak
+    code = symbol[:-3]  # 去掉 .SS / .SZ
+    end = datetime.now().strftime("%Y%m%d")
+    start = (datetime.now() - timedelta(days=70)).strftime("%Y%m%d")
+    df = ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start, end_date=end, adjust="")
+    if df is None or len(df) == 0:
+        raise ValueError(f"AkShare 返回空数据: {symbol}")
+    series = []
+    for _, row in df.iterrows():
+        d = row["日期"]
+        d_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
+        series.append((d_str, float(row["收盘"])))
+    if not series:
+        raise ValueError(f"AkShare 序列为空: {symbol}")
+    return float(series[-1][1]), series
+
+
+def fetch_watchlist(stocks: list[dict]) -> tuple[dict, dict, dict]:
+    """取自选股数据：返回 (values, series, errors)。
+
+    values[symbol]=当日收盘价；series[symbol]=[(date, close), ...] 近 30 日（含当日）；
+    errors[symbol]=错误信息（取数失败/超时）。逐标的并行线程 + 整体限时 SECTOR_TIMEOUT，
+    单标的失败置 None 不中断，全失败返回空 dict。美股/ETF 走 Yahoo；A 股(.SS/.SZ) 走 AkShare。
+    """
+    results: dict = {}
+    lock = threading.Lock()
+
+    def _one(item: dict) -> None:
+        sym = item.get("symbol")
+        entry = {"value": None, "series": None, "error": None}
+        try:
+            if not sym:
+                raise ValueError("条目缺 symbol")
+            if sym.endswith(".SS") or sym.endswith(".SZ"):
+                entry["value"], entry["series"] = _fetch_a_share_watch(sym)
+            else:
+                entry["value"], entry["series"] = _fetch_yahoo_watch(sym)
+        except Exception as exc:
+            entry["error"] = str(exc)
+            log.warning("自选股 %s 获取失败: %s", sym, exc)
+        with lock:
+            results[sym] = entry
+
+    threads = [threading.Thread(target=_one, args=(it,), daemon=True) for it in stocks]
+    for t in threads:
+        t.start()
+    deadline = monotonic() + SECTOR_TIMEOUT
+    for t in threads:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            break
+        t.join(remaining)
+    if any(t.is_alive() for t in threads):
+        log.warning("自选股获取超时（>%ds），未完成标的信息缺失", SECTOR_TIMEOUT)
+
+    values, series, errors = {}, {}, {}
+    for it in stocks:
+        sym = it.get("symbol")
+        r = results.get(sym)
+        if r is None or r["value"] is None:
+            errors[sym] = r["error"] if r else "未完成（超时/未返回）"
+        else:
+            values[sym] = r["value"]
+            series[sym] = r["series"]
+    return values, series, errors

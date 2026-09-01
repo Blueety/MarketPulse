@@ -22,8 +22,9 @@ DEFAULTS = {
         "move": {"normal": 100.0, "tight": 130.0},
     },
     "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0},
-    "trend": {"chart_days": 30, "streak_days": 3},
     "history": {"retention_days": 90},
+    # 二十四期：自选股/持仓（值为 list[dict]，白名单合并无法处理，由 _valid_watchlist 单独校验）
+    "watchlist": {"stocks": [], "corr_high_threshold": 0.7},
 }
 
 # 环境变量名 → 配置路径（白名单；未知 env 忽略，不做动态键）。
@@ -99,6 +100,9 @@ def _merge_valid(base: dict, raw: dict, prefix: tuple = ()) -> dict:
     """白名单深合并：raw 未知键忽略；叶值须为非 bool 数字且 >0，否则回退 base（记日志）。"""
     out = dict(base)
     for key, base_val in base.items():
+        # list 值（如 watchlist.stocks）白名单不合并，由专用校验器处理；跳过避免误报
+        if isinstance(base_val, list):
+            continue
         raw_val = raw.get(key)
         if isinstance(base_val, dict):
             if isinstance(raw_val, dict):
@@ -112,6 +116,50 @@ def _merge_valid(base: dict, raw: dict, prefix: tuple = ()) -> dict:
     return out
 
 
+def _valid_watchlist(raw) -> dict:
+    """校验 watchlist 配置（值为 list[dict]，_merge_valid 无法处理，单独校验）。
+
+    stocks ≤20 只；symbol 非空字符串、去重（重复丢弃记日志）；label 缺省回退 symbol；
+    非法条目丢弃记日志；corr_high_threshold 走 _valid_number（须为正数字）。
+    返回 {"stocks": [...], "corr_high_threshold": float}。
+    """
+    default = {"stocks": [], "corr_high_threshold": 0.7}
+    if not isinstance(raw, dict):
+        if raw is not None:
+            log.warning("配置 watchlist 非法（%r），回退默认", raw)
+        return dict(default)
+    stocks = []
+    seen = set()
+    raw_stocks = raw.get("stocks")
+    if isinstance(raw_stocks, list):
+        for item in raw_stocks:
+            if not isinstance(item, dict):
+                log.warning("watchlist 条目非法（%r），丢弃", item)
+                continue
+            sym = item.get("symbol")
+            if not isinstance(sym, str) or not sym.strip():
+                log.warning("watchlist symbol 非法（%r），丢弃", item)
+                continue
+            sym = sym.strip()
+            if sym in seen:
+                log.warning("watchlist symbol 重复（%s），丢弃", sym)
+                continue
+            seen.add(sym)
+            label = item.get("label")
+            if not isinstance(label, str) or not label.strip():
+                label = sym
+            stocks.append({"symbol": sym, "label": label})
+    if len(stocks) > 20:
+        log.warning("watchlist 数量 %d 超过上限 20，截断至 20", len(stocks))
+        stocks = stocks[:20]
+    threshold = raw.get("corr_high_threshold")
+    if _valid_number(threshold):
+        corr_high_threshold = threshold
+    else:
+        if "corr_high_threshold" in raw:
+            log.warning("watchlist.corr_high_threshold 非法（%r），回退默认 0.7", threshold)
+        corr_high_threshold = 0.7
+    return {"stocks": stocks, "corr_high_threshold": corr_high_threshold}
 def load_config(path=None) -> dict:
     """加载完整配置：读文件（缺失/损坏/非 dict 降级默认）→ 白名单校验合并 → env 覆盖。"""
     cfg = copy.deepcopy(DEFAULTS)
@@ -119,6 +167,8 @@ def load_config(path=None) -> dict:
     raw = _read_json(file_path)
     if raw is not None:
         cfg = _merge_valid(cfg, raw)
+    # watchlist 含 list[dict]，_merge_valid 无法校验，单独处理（不受白名单合并影响）
+    cfg["watchlist"] = _valid_watchlist(raw.get("watchlist") if raw is not None else None)
     for env_name, keys in ENV_MAP.items():
         node = cfg
         for k in keys[:-1]:

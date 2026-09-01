@@ -311,6 +311,94 @@ def _pearson(xs, ys):
     return round(r, 2)
 
 
+def _benchmark_for(symbol: str) -> str:
+    """自选股基准指数（D3 按市场归属单基准）：美股/ETF → GSPC；.SS → SH；.SZ → SZ。"""
+    if symbol.endswith(".SS"):
+        return "SH"
+    if symbol.endswith(".SZ"):
+        return "SZ"
+    return "GSPC"
+
+
+def compute_portfolio_correlation(watchlist_data, history, window=None, threshold=None) -> dict:
+    """计算自选股与大盘基准的相关性 + 组合集中度（纯计算、零 I/O，可单测）。
+
+    watchlist_data: list[dict] = [{"symbol", "label", "series"}]，series=[(date, close), ...]
+    （fetch_watchlist 产出；日期须与 history.json 美东 date 键对齐）。
+    复用 _corr_window / _returns / _pearson：将序列按 date 并入 history 行后推导收益率。
+
+    返回：{"stocks": [{symbol, label, benchmark, r, n}],
+           "portfolio_risk": {"high": bool, "avg_r": float|None}}。
+    - 每只 vs 基准（D3）相关系数 r；样本 < CORRELATION_MIN_POINTS → r=None。
+    - 组合集中度（D4）：组合内两两 |r| 平均 > threshold(默认 0.7) → high；
+      <2 只或无效对 → avg_r=None, high=False。
+    """
+    window = window or CORRELATION_DAYS
+    threshold = 0.7 if threshold is None else threshold
+    rows = _corr_window(history, window)
+
+    # 自选股序列（date->close）按 ticker 小写并入 history 行，供 _returns 复用
+    series_by_ticker = {}
+    for it in watchlist_data:
+        sym = it.get("symbol")
+        s = it.get("series") or []
+        if sym and s:
+            series_by_ticker[sym.lower()] = {d: c for d, c in s}
+
+    augmented = []
+    for r in rows:
+        new_row = dict(r)
+        for tk, sdict in series_by_ticker.items():
+            if r["date"] in sdict:
+                new_row[tk] = sdict[r["date"]]
+        augmented.append(new_row)
+
+    # 1) 每只 vs 基准相关性
+    stocks_out = []
+    valid_syms = []
+    for it in watchlist_data:
+        sym = it.get("symbol")
+        label = it.get("label") or sym
+        bench = _benchmark_for(sym) if sym else None
+        if not sym or not it.get("series"):
+            stocks_out.append({"symbol": sym, "label": label, "benchmark": None,
+                               "r": None, "n": 0})
+            continue
+        key = sym.lower()
+        rb_key = bench.lower()
+        ra = _returns(augmented, key)
+        rb = _returns(augmented, rb_key)
+        common = sorted(set(ra) & set(rb))
+        xs = [ra[d] for d in common]
+        ys = [rb[d] for d in common]
+        n = len(xs)
+        r = _pearson(xs, ys) if n >= CORRELATION_MIN_POINTS else None
+        stocks_out.append({"symbol": sym, "label": label, "benchmark": bench,
+                           "r": r, "n": n})
+        valid_syms.append(sym)
+
+    # 2) 组合内两两平均 |r| → 集中度
+    pair_abs = []
+    for i in range(len(valid_syms)):
+        for j in range(i + 1, len(valid_syms)):
+            ki, kj = valid_syms[i].lower(), valid_syms[j].lower()
+            ri = _returns(augmented, ki)
+            rj = _returns(augmented, kj)
+            common = sorted(set(ri) & set(rj))
+            xs = [ri[d] for d in common]
+            ys = [rj[d] for d in common]
+            if len(xs) >= CORRELATION_MIN_POINTS:
+                r = _pearson(xs, ys)
+                if r is not None:
+                    pair_abs.append(abs(r))
+    avg_r = round(sum(pair_abs) / len(pair_abs), 2) if pair_abs else None
+    high = bool(avg_r is not None and avg_r > threshold)
+    return {
+        "stocks": stocks_out,
+        "portfolio_risk": {"high": high, "avg_r": avg_r},
+    }
+
+
 def trend_label(streak: int, has_data: bool) -> str:
     """大盘趋势四档标签。N=STREAK_DAYS（调用时经 TREND_STREAK_DAYS env 复核）。
 
