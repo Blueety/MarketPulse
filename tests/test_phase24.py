@@ -21,7 +21,7 @@ import daily_report as dr
 # --------------------------------------------------------------------------- #
 def _sample_inputs():
     values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-              "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+              "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 200.0, "BTC": 60000.0}
     last = {k: v * 0.99 for k, v in values.items()}
     changes = an.compute_changes(values, last)
     statuses = an.build_statuses(values, {}, last, an.load_history())
@@ -164,7 +164,7 @@ class TestDailyReportWiring:
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
         monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (
             {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-             "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}, {}))
+             "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 200.0, "BTC": 60000.0}, {}))
         monkeypatch.setattr(dr, "fetch_sector_heat", lambda *a, **k: ([], []))
         monkeypatch.setattr(dr, "fetch_us_sector_heat", lambda *a, **k: ([], []))
         monkeypatch.setattr(dr, "render_trend_chart", lambda *a, **k: None)

@@ -233,7 +233,7 @@ class TestOpeningEntry:
 
         rc = oa.main("a-share")
         assert rc == 0
-        assert captured["path"] == tmp_path / "2026-08-31-a-share.md"
+        assert captured["path"] == tmp_path / f"{rep.get_market_date('a-share')}-a-share.md"
 
     def test_zero_persistence(self, tmp_path, monkeypatch):
         # 重定向所有可写目录，断言 data/ context/ 无新增写入

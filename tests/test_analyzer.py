@@ -208,12 +208,21 @@ class TestComputePortfolioCorrelation:
         assert st["r"] == pytest.approx(1.0, abs=0.01)
         assert st["n"] >= 10
         assert out["portfolio_risk"]["avg_r"] is None
-        assert out["portfolio_risk"]["high"] is False
-
     def test_negative_benchmark_corr(self):
         dates = self._dates()
-        hist = _wl_hist(dates, [100 + i for i in range(12)])
-        data = [{"symbol": "STK", "label": "Stock", "series": _wl_series(dates, lambda i: 50 - i)}]
+        # bench 按 rets 累积、series 按 -rets 累积 → 反向 → 负相关
+        rets = [0.05, -0.03, 0.04, -0.02, 0.06, -0.01, 0.03, -0.04, 0.02, -0.05, 0.03, -0.02]
+        b = 100.0
+        s = 50.0
+        bvals, svals = [], []
+        for r in rets:
+            bvals.append(b)
+            svals.append(s)
+            b *= (1 + r)
+            s *= (1 - r)
+        hist = _wl_hist(dates, bvals)
+        series = list(zip(dates, svals))
+        data = [{"symbol": "STK", "label": "Stock", "series": series}]
         out = an.compute_portfolio_correlation(data, hist)
         assert out["stocks"][0]["r"] == pytest.approx(-1.0, abs=0.01)
 

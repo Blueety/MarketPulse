@@ -205,8 +205,7 @@ class TestWatchlistContext:
     def _inputs(self, values, last_values):
         changes = an.compute_changes(values, last_values)
         statuses = an.build_statuses(values, {}, last_values, an.load_history())
-        summary = an.build_summary(values, statuses, {})
-        return dict(values=values, changes=changes, statuses=statuses, summary=summary, last_values=last_values)
+        return dict(values=values, changes=changes, statuses=statuses, last_values=last_values)
 
     def test_empty_structure(self, tmp_context):
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
