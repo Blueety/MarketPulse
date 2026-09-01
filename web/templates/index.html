@@ -95,6 +95,28 @@
   </main>
 
   <script>
+    // === 主题切换 ===
+    function getTheme() {
+      return localStorage.getItem('mp-theme') || 'dark';
+    }
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+    }
+    applyTheme(getTheme());
+    function themeColors() {
+      var dark = getTheme() === 'dark';
+      return {
+        tooltipBg: dark ? 'rgba(22, 27, 34, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        tooltipTitle: dark ? '#e6edf3' : '#1d1d1f',
+        tooltipBody: dark ? '#e6edf3' : '#1d1d1f',
+        tooltipBorder: dark ? '#30363d' : '#d2d2d7',
+        axisTick: dark ? '#8b949e' : '#86868b',
+        gridLine: dark ? 'rgba(48, 54, 61, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        gridLineBar: dark ? 'rgba(48, 54, 61, 0.25)' : 'rgba(0, 0, 0, 0.1)',
+      };
+    }
     const COLORS = {
       gspc: "#58a6ff", ixic: "#3fb950", sh: "#f85149", sz: "#d29922",
       cyb: "#bc8cff", vix: "#f85149", vxn: "#d29922", move: "#bc8cff",
@@ -300,7 +322,7 @@
           legend: {
             display: false,
             labels: {
-              color: "#8b949e",
+              color: themeColors().axisTick,
               usePointStyle: true,
               boxWidth: 8,
               font: { size: 12 }
@@ -308,10 +330,10 @@
           },
           tooltip: {
             enabled: !('ontouchstart' in window),  // 移动端禁用悬浮
-            backgroundColor: "rgba(22, 27, 34, 0.95)",
-            titleColor: "#e6edf3",
-            bodyColor: "#e6edf3",
-            borderColor: "#30363d",
+            backgroundColor: themeColors().tooltipBg,
+            titleColor: themeColors().tooltipTitle,
+            bodyColor: themeColors().tooltipBody,
+            borderColor: themeColors().tooltipBorder,
             borderWidth: 1,
             titleFont: { size: 11 },
             bodyFont: { size: 12 },
@@ -338,7 +360,7 @@
             grid: { display: false },
             ticks: {
               font: { size: 11 },
-              color: "#8b949e",
+              color: themeColors().axisTick,
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 10,
@@ -349,11 +371,11 @@
             }
           },
           y: {
-            grid: { color: "rgba(48, 54, 61, 0.08)" },
+            grid: { color: themeColors().gridLine },
             border: { display: false },
             ticks: {
               font: { size: 11 },
-              color: "#8b949e",
+              color: themeColors().axisTick,
               maxTicksLimit: 5,
               callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
             }
@@ -391,10 +413,10 @@
           legend: { display: false },
           tooltip: {
             enabled: true,
-            backgroundColor: "rgba(22, 27, 34, 0.95)",
-            titleColor: "#e6edf3",
-            bodyColor: "#e6edf3",
-            borderColor: "#30363d",
+            backgroundColor: themeColors().tooltipBg,
+            titleColor: themeColors().tooltipTitle,
+            bodyColor: themeColors().tooltipBody,
+            borderColor: themeColors().tooltipBorder,
             borderWidth: 1,
             titleFont: { size: 11 },
             bodyFont: { size: 12 },
@@ -407,17 +429,17 @@
         },
         scales: {
           x: {
-            grid: { color: "rgba(48, 54, 61, 0.25)" },
+            grid: { color: themeColors().gridLineBar },
             border: { display: false },
             ticks: {
               font: { size: 12 },
-              color: "#8b949e",
+              color: themeColors().axisTick,
               callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
             }
           },
           y: {
             grid: { display: false },
-            ticks: { font: { size: 12 }, color: "#8b949e" }
+            ticks: { font: { size: 12 }, color: themeColors().axisTick }
           }
         },
         animation: { duration: 300, easing: "easeOutQuart" }
@@ -633,6 +655,13 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
+      // 主题切换
+      document.getElementById('theme-toggle').addEventListener('click', function() {
+        var next = getTheme() === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('mp-theme', next);
+        applyTheme(next);
+        if (state.history) renderCharts(state.history);
+      });
       // 时间范围按钮
       document.getElementById("range-bar").addEventListener("click", function (e) {
         const btn = e.target.closest("button[data-days]");
