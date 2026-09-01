@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from src.alerter import run_alert_checks
+from src.northbound import fetch_northbound_flow
 from src.analyzer import (
     append_history,
     build_statuses,
@@ -99,6 +100,19 @@ def main() -> int:
     values, errors = fetch_all()
     sector_heat = fetch_sector_heat()  # 八期：板块热度，失败/超时返回 [] 不影响主流程
     us_sector_heat = fetch_us_sector_heat()  # 美股板块领涨/领跌，失败/超时返回 [] 不影响主流程
+
+    # 北向资金获取（独立容错，失败不影响日报）
+    northbound_data = None
+    try:
+        northbound_data = fetch_northbound_flow()
+        if northbound_data:
+            log.info("北向资金: 净流入 %.2f 亿元", northbound_data["net_inflow"])
+        else:
+            log.info("北向资金数据暂缺（所有数据源失败）")
+    except Exception as exc:
+        log.warning("北向资金获取异常（不影响日报）: %s", exc)
+        northbound_data = None
+
     last_values = load_last_values()
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
@@ -166,7 +180,8 @@ def main() -> int:
                            sector_heat=sector_heat, us_sector_heat=us_sector_heat,
                            us_trend_chart=us_trend_chart, cn_trend_chart=cn_trend_chart,
                            alts_trend_chart=alts_trend_chart, correlations=correlations,
-                           opening_refs=opening_refs, watchlist=watchlist_view)
+                           opening_refs=opening_refs, watchlist=watchlist_view,
+                           northbound=northbound_data)
     report_path = save_report(date, report)
     log.info("报告已生成: %s", report_path)
 
@@ -174,6 +189,13 @@ def main() -> int:
         run_alert_checks(date, values, last_values, "close", report_path)
     except Exception as exc:
         log.warning("告警检查失败，不影响日报生成: %s", exc)
+
+    # 北向资金异动告警（独立于指数告警）
+    try:
+        from src.alerter import check_northbound_alert
+        check_northbound_alert(date, northbound_data, report_path)
+    except Exception as exc:
+        log.warning("北向资金告警检查失败（不影响日报）: %s", exc)
 
     record = {"date": date, **{k.lower(): values[k] for k in SYMBOLS}}
     append_history(record)
@@ -187,7 +209,7 @@ def main() -> int:
         log.warning("所有数据源获取失败，本次不更新缓存")
 
     try:  # 上下文生成（决策 E）：供 Hermes 常规解读/异动归因，失败仅记日志不影响日报
-        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat, correlations=correlations, watchlist=watchlist_view)
+        generate_context(date, values, changes, statuses, last_values, sector_heat=sector_heat, us_sector_heat=us_sector_heat, correlations=correlations, watchlist=watchlist_view, northbound=northbound_data)
         log.info("context 已生成: context/%s.json", date)
     except Exception as exc:
         log.warning("context 生成失败，不影响日报: %s", exc)

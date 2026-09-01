@@ -48,7 +48,7 @@ MARKET_CHART_TITLES = {
 OPENING_DIR = REPORTS_DIR / "opening"
 
 
-def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None, opening_refs=None, watchlist=None) -> str:
+def render_report(date, values, changes, statuses, summary, has_history, trend_chart=None, sector_heat=None, us_sector_heat=None, us_trend_chart=None, cn_trend_chart=None, alts_trend_chart=None, correlations=None, opening_refs=None, watchlist=None, northbound=None) -> str:
     """按 PRD 模板渲染 Markdown 日报。
 
     trend_chart 为图表相对路径（如 "./charts/2026-08-29-trend.png"），
@@ -85,6 +85,12 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
             f"| {fmt_change(changes[sym], has_history, values[sym])} | {trend} |"
     )
     a_share_table = "\n".join(a_share_rows)
+
+    # 北向资金行（始终显示，无数据时显示「数据暂缺」）
+    nb_display = fmt_northbound(northbound)
+    nb_detail = fmt_northbound_detail(northbound)
+    northbound_block = f"\n| **北向资金** | **{nb_display}** | {nb_detail} |"
+
     gainers, losers = sector_heat or ([], [])
     sector_table = _sector_table_md(gainers)
     loser_table = _sector_table_md(losers)
@@ -286,7 +292,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{a_share_table}{cn_trend_block}{alts_block}{watchlist_block}
+{a_share_table}{northbound_block}{cn_trend_block}{alts_block}{watchlist_block}
 
 ---
 
@@ -936,7 +942,7 @@ def _breach_item(alert: dict) -> dict:
         "level": alert["level"],
     }
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None, watchlist=None) -> "Path":
+                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None, watchlist=None, northbound=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
@@ -985,6 +991,7 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             if c.get("r") is not None and abs(c["r"]) > CORRELATION_SIGNIFICANT
         ],
         "watchlist": _watchlist_context(watchlist),
+        "northbound": northbound,
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"{date}.json"
