@@ -7,16 +7,6 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>MarketPulse 市场看板</title>
-  <script>
-    (function () {
-      try {
-        if (localStorage.getItem("mp-theme") === "light") {
-          document.documentElement.classList.add("light");
-        }
-      } catch (e) {}
-    })();
-  </script>
-
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
           onerror="window.__chartFailed=true"></script>
@@ -26,10 +16,7 @@
 <body>
   <header class="topbar">
     <h1>MarketPulse 市场看板</h1>
-    <div class="topbar-right">
-      <span class="subdate" id="overview-date"></span>
-      <button type="button" id="theme-toggle" class="theme-toggle" title="切换深色/浅色主题">☀️</button>
-    </div>
+    <span class="subdate" id="overview-date"></span>
   </header>
 
   <main class="container">
@@ -622,17 +609,6 @@
       });
     }
 
-    function setTheme(light) {
-      if (light) {
-        document.documentElement.classList.add("light");
-      } else {
-        document.documentElement.classList.remove("light");
-      }
-      try { localStorage.setItem("mp-theme", light ? "light" : "dark"); } catch (e) {}
-      const btn = document.getElementById("theme-toggle");
-      if (btn) btn.textContent = light ? "🌙" : "☀️";
-    }
-
     function refresh() {
       // 历史趋势：恒取全量（显隐纯客户端）；写入缓存供 syncSelection 复用
       fetch(buildQuery()).then(function (r) { return r.json(); })
@@ -657,15 +633,6 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
-      // 主题切换（浅色/深色）
-      const themeToggle = document.getElementById("theme-toggle");
-      if (themeToggle) {
-        setTheme(document.documentElement.classList.contains("light"));
-        themeToggle.addEventListener("click", function () {
-          setTheme(!document.documentElement.classList.contains("light"));
-        });
-      }
-
       // 时间范围按钮
       document.getElementById("range-bar").addEventListener("click", function (e) {
         const btn = e.target.closest("button[data-days]");
