@@ -1,4 +1,4 @@
-"""企业微信智能机器人 — 官方 SDK + Hermes AI (异步处理)。"""
+"""企业微信智能机器人 — 官方 SDK + Hermes AI (主动推送模式)。"""
 import asyncio
 import logging
 import subprocess
@@ -30,7 +30,7 @@ def ask_hermes_sync(question: str) -> str:
 
 
 async def on_text(frame):
-    """处理文本消息 — 先立即回复确认,后台调 AI"""
+    """处理文本消息 — 先回复确认,后台调 AI,完成后主动推送"""
     body = frame.body or {}
     sender = body.get("from", {}).get("userid", "unknown")
     content = body.get("text", {}).get("content", "").strip()
@@ -40,17 +40,20 @@ async def on_text(frame):
 
     log.info("收到 [%s]: %s", sender, content[:100])
 
-    # 立即回复确认(5 秒内)
+    # 1. 立即回复确认(5 秒内)
     stream_id = generate_req_id("stream")
-    await client.reply_stream(frame, stream_id, "✅ 收到!AI 正在处理,请稍候...", finish=False)
+    await client.reply_stream(frame, stream_id, "✅ 收到!AI 正在处理,请稍候...", finish=True)
 
-    # 后台调用 Hermes
+    # 2. 后台调用 Hermes
     loop = asyncio.get_event_loop()
     reply = await loop.run_in_executor(None, ask_hermes_sync, content)
 
-    # 发送最终回复
-    await client.reply_stream(frame, stream_id, reply, finish=True)
-    log.info("已回复 [%s]", sender)
+    # 3. 主动推送最终回复(新消息)
+    await client.send_message(sender, {
+        "msgtype": "text",
+        "text": {"content": reply}
+    })
+    log.info("已推送 [%s]", sender)
 
 
 async def on_enter(frame):
@@ -64,7 +67,7 @@ async def on_enter(frame):
 
 async def main():
     global client
-    log.info("启动企业微信 WebSocket 客户端 (Hermes AI)")
+    log.info("启动企业微信 WebSocket 客户端 (Hermes AI - 主动推送模式)")
 
     options = WSClientOptions(
         bot_id=BOT_ID,
