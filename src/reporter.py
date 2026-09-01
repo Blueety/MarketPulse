@@ -224,7 +224,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
             wl_rows = []
             news_lines = []
             for st in wl_stocks:
-            for st in wl_stocks:
+                val = st.get("value")
                 chg = st.get("change_pct")
                 if val is None:
                     close = "数据暂缺"
@@ -284,7 +284,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 | 指数 | 收盘价 | 涨跌幅 | 趋势 |
 | :--- | :--- | :--- | :--- |
-{a_share_table}{cn_trend_block}{alts_block}
+{a_share_table}{cn_trend_block}{alts_block}{watchlist_block}
 
 ---
 
@@ -866,6 +866,29 @@ def load_opening_refs(date: str) -> list[dict]:
     return refs
 
 
+def _watchlist_context(watchlist) -> dict:
+    """将自选股视图转为 context 契约（二十四期）。无配置/未传 → 空结构（键恒定，Hermes 稳定）。"""
+    if not watchlist:
+        return {"stocks": [], "portfolio_risk": {"high": False, "avg_r": None}}
+    stocks = []
+    for st in watchlist.get("stocks", []):
+        stocks.append({
+            "symbol": st.get("symbol"),
+            "label": st.get("label"),
+            "value": st.get("value"),
+            "change_pct": st.get("change_pct"),
+            "corr": {
+                "benchmark": st.get("benchmark"),
+                "r": st.get("r"),
+                "n": st.get("n", 0),
+            },
+        })
+    return {
+        "stocks": stocks,
+        "portfolio_risk": watchlist.get("portfolio_risk", {"high": False, "avg_r": None}),
+    }
+
+
 def _parse_opening_summary(text: str, market: str) -> str | None:
     """从开盘分析报告解析摘要行（首条跳空 + VIX 状态）；解析失败返回 None。"""
     lines = text.splitlines()
@@ -911,7 +934,7 @@ def _breach_item(alert: dict) -> dict:
         "level": alert["level"],
     }
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None) -> "Path":
+                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None, watchlist=None) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
@@ -959,6 +982,7 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             for c in (correlations or [])
             if c.get("r") is not None and abs(c["r"]) > CORRELATION_SIGNIFICANT
         ],
+        "watchlist": _watchlist_context(watchlist),
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"{date}.json"
