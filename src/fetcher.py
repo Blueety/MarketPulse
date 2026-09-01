@@ -546,25 +546,28 @@ def _fetch_yahoo_watch(symbol: str) -> tuple[float, list]:
 
 
 def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
-    """AkShare 东财日线取 A 股(.SS/.SZ) 当日收盘价 + 近 ~30 交易日序列。
+    """用新浪接口取 A 股(.SS/.SZ) 当日收盘价 + 近 ~30 交易日序列。
 
     symbol 去掉后缀作 AkShare 代码；取 70 个自然日确保覆盖 ≥30 交易日。日期列与
     history.json 美东 date 键同日对齐（A 股 15:00 北京 = 美东当日）。返回 (value, [(date, close), ...])。
     """
     import akshare as ak
     code = symbol[:-3]  # 去掉 .SS / .SZ
+    # 用新浪接口（代理兼容），而非东方财富接口
+    prefix = "sh" if symbol.endswith(".SS") else "sz"
+    sina_symbol = prefix + code
     end = datetime.now().strftime("%Y%m%d")
     start = (datetime.now() - timedelta(days=70)).strftime("%Y%m%d")
-    df = ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start, end_date=end, adjust="")
+    df = ak.stock_zh_a_daily(symbol=sina_symbol, start_date=start, end_date=end, adjust="")
     if df is None or len(df) == 0:
-        raise ValueError(f"AkShare 返回空数据: {symbol}")
+        raise ValueError(f"AkShare 新浪返回空数据: {symbol}")
     series = []
     for _, row in df.iterrows():
-        d = row["日期"]
+        d = row["date"]
         d_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
-        series.append((d_str, float(row["收盘"])))
+        series.append((d_str, float(row["close"])))
     if not series:
-        raise ValueError(f"AkShare 序列为空: {symbol}")
+        raise ValueError(f"AkShare 新浪序列为空: {symbol}")
     return float(series[-1][1]), series
 
 
