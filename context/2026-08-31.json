@@ -2,54 +2,54 @@
   "date": "2026-08-31",
   "indices": {
     "GSPC": {
-      "value": 7711.76,
-      "change_pct": 0.0,
+      "value": 7686.14,
+      "change_pct": -0.33221988236148287,
       "status": "连跌1日"
     },
     "IXIC": {
-      "value": 26402.424,
-      "change_pct": 0.0,
+      "value": 26370.889,
+      "change_pct": -0.11943979083132615,
       "status": "连跌1日"
     },
     "SH": {
       "value": 3986.298,
-      "change_pct": 0.863295918529998,
+      "change_pct": 0.0,
       "status": "连涨1日"
     },
     "SZ": {
       "value": 14014.997,
-      "change_pct": 0.44385946743599974,
+      "change_pct": 0.0,
       "status": "连涨1日"
     },
     "CYB": {
       "value": 3438.681,
-      "change_pct": 0.41700723717812843,
+      "change_pct": 0.0,
       "status": "连涨2日"
     },
     "VIX": {
-      "value": 15.25,
-      "change_pct": 5.6826056826056845,
+      "value": 14.92,
+      "change_pct": -2.163934426229509,
       "status": "平静"
     },
     "VXN": {
-      "value": 19.92,
-      "change_pct": 0.0,
-      "status": "平静"
+      "value": 20.18,
+      "change_pct": 1.3052208835341264,
+      "status": "警惕"
     },
     "MOVE": {
-      "value": 70.9655,
-      "change_pct": 0.0,
+      "value": 75.3193,
+      "change_pct": 6.135093813190906,
       "status": "平静"
     },
     "GLD": {
-      "value": 408.89,
-      "change_pct": 0.0,
+      "value": 408.42,
+      "change_pct": -0.11494533982243892,
       "status": "连跌1日"
     },
     "BTC": {
-      "value": 78213.35,
-      "change_pct": 0.7701285862470258,
-      "status": "连涨1日"
+      "value": 78567.58,
+      "change_pct": 0.45290222193525265,
+      "status": "连涨2日"
     }
   },
   "history_30d": {
@@ -115,7 +115,7 @@
       null,
       14.43,
       14.43,
-      15.25
+      14.92
     ],
     "vxn": [
       28.059999465942383,
@@ -147,7 +147,7 @@
       null,
       19.92,
       19.92,
-      19.92
+      20.18
     ],
     "move": [
       80.08000183105469,
@@ -179,7 +179,7 @@
       null,
       70.965,
       70.9655,
-      70.9655
+      75.3193
     ],
     "gspc": [
       7408.2998046875,
@@ -211,7 +211,7 @@
       null,
       7711.76,
       7711.76,
-      7711.76
+      7686.14
     ],
     "ixic": [
       25137.689453125,
@@ -243,7 +243,7 @@
       null,
       26402.424,
       26402.424,
-      26402.424
+      26370.889
     ],
     "sh": [
       3876.777,
@@ -371,7 +371,7 @@
       null,
       null,
       408.89,
-      408.89
+      408.42
     ],
     "btc": [
       65044.8125,
@@ -403,7 +403,7 @@
       77830.2890625,
       null,
       77615.61,
-      78213.35
+      78567.58
     ]
   },
   "breach": {
@@ -479,18 +479,66 @@
   "us_sector_heat": {
     "gainers": [
       {
+        "name": "能源 (XLE)",
+        "change": 2.04,
+        "turnover": "$1.7B",
+        "top_stock": "XLE"
+      },
+      {
         "name": "科技 (XLK)",
-        "change": -1.55,
-        "turnover": "$1.2B",
+        "change": 0.44,
+        "turnover": "$881.0M",
         "top_stock": "XLK"
+      },
+      {
+        "name": "医疗健康 (XLV)",
+        "change": -0.36,
+        "turnover": "$1.2B",
+        "top_stock": "XLV"
+      },
+      {
+        "name": "可选消费 (XLY)",
+        "change": -0.53,
+        "turnover": "$572.5M",
+        "top_stock": "XLY"
+      },
+      {
+        "name": "必需消费 (XLP)",
+        "change": -0.55,
+        "turnover": "$595.7M",
+        "top_stock": "XLP"
       }
     ],
     "losers": [
       {
-        "name": "科技 (XLK)",
-        "change": -1.55,
-        "turnover": "$1.2B",
-        "top_stock": "XLK"
+        "name": "通信服务 (XLC)",
+        "change": -1.35,
+        "turnover": "$369.3M",
+        "top_stock": "XLC"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": -1.17,
+        "turnover": "$1.3B",
+        "top_stock": "XLU"
+      },
+      {
+        "name": "工业 (XLI)",
+        "change": -1.14,
+        "turnover": "$1.3B",
+        "top_stock": "XLI"
+      },
+      {
+        "name": "原材料 (XLB)",
+        "change": -0.92,
+        "turnover": "$637.9M",
+        "top_stock": "XLB"
+      },
+      {
+        "name": "房地产 (XLRE)",
+        "change": -0.83,
+        "turnover": "$326.6M",
+        "top_stock": "XLRE"
       }
     ]
   },
@@ -506,7 +554,7 @@
       "a": "VIX",
       "b": "GSPC",
       "pair": "VIX（恐慌指数） ↔ 标普500",
-      "r": -0.67,
+      "r": -0.61,
       "n": 27
     }
   ]
