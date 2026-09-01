@@ -13,7 +13,7 @@ from src import analyzer as an
 from src import config as cfg
 from src import fetcher as ft
 from src import reporter as rep
-import src.daily_report as dr
+import daily_report as dr
 
 
 # --------------------------------------------------------------------------- #
@@ -128,8 +128,6 @@ class TestRenderReportWatchlist:
         assert "0.95" in body
 
 
-def _boom_stocks(stocks):
-    raise RuntimeError("net down")
 
     def test_news(self):
         wl = {"available": True, "stocks": [

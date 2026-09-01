@@ -199,3 +199,35 @@ class TestGenerateContext:
         assert data["history_30d"]["dates"][0] == (start + timedelta(days=5)).isoformat()
         for key in ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb"):
             assert len(data["history_30d"][key]) == 30
+
+
+class TestWatchlistContext:
+    def _inputs(self, values, last_values):
+        changes = an.compute_changes(values, last_values)
+        statuses = an.build_statuses(values, {}, last_values, an.load_history())
+        summary = an.build_summary(values, statuses, {})
+        return dict(values=values, changes=changes, statuses=statuses, summary=summary, last_values=last_values)
+
+    def test_empty_structure(self, tmp_context):
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+        last = {k: v * 0.99 for k, v in values.items()}
+        path = rep.generate_context("2026-08-29", **self._inputs(values, last), watchlist=None)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["watchlist"] == {"stocks": [], "portfolio_risk": {"high": False, "avg_r": None}}
+
+    def test_with_data(self, tmp_context):
+        values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
+        last = {k: v * 0.99 for k, v in values.items()}
+        wl = {"available": True, "stocks": [
+            {"symbol": "AAPL", "label": "苹果", "value": 210.0, "change_pct": 5.0,
+             "r": 0.83, "n": 20, "benchmark": "GSPC", "news": None}],
+            "portfolio_risk": {"high": True, "avg_r": 0.9}}
+        path = rep.generate_context("2026-08-29", **self._inputs(values, last), watchlist=wl)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["watchlist"]["stocks"][0]["symbol"] == "AAPL"
+        assert data["watchlist"]["stocks"][0]["value"] == 210.0
+        assert data["watchlist"]["stocks"][0]["corr"]["r"] == 0.83
+        assert data["watchlist"]["stocks"][0]["corr"]["benchmark"] == "GSPC"
+        assert data["watchlist"]["portfolio_risk"]["high"] is True
