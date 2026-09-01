@@ -694,9 +694,19 @@
       renderFilter();
       refresh();
       // 告警仅初始加载一次（不随筛选/范围变化）
-      fetch("/api/alerts").then(function (r) { return r.json(); })
-        .then(function (data) { renderAlerts(data); })
-        .catch(function () { document.getElementById("alert-list").innerHTML = '<p class="empty">加载失败</p>'; });
+      fetch("/api/alerts")
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          renderAlerts(Array.isArray(data) ? data : []);
+        })
+        .catch(function (err) {
+          console.error("[alerts] fetch failed:", err);
+          var el = document.getElementById("alert-list");
+          if (el) el.innerHTML = '<p class="empty">加载失败</p>';
+        });
     });
   </script>
 </body>
