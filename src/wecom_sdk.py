@@ -19,7 +19,7 @@ def ask_hermes_sync(question: str) -> str:
     try:
         result = subprocess.run(
             ["hermes", "-z", question],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=300,
             encoding="utf-8",
         )
         return result.stdout.strip() or "(无回复)"
