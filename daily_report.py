@@ -92,6 +92,21 @@ def _attrib_watchlist_news(label: str, symbol: str, change_pct: float) -> str | 
         return None
 
 
+_US_GATE = ("gspc", "ixic")   # D1：去重判定符号集（小写键），美股两大盘指数
+
+
+def _is_us_duplicate_day(history: list[dict], record: dict) -> bool:
+    """美股（GSPC/IXIC）与最近历史记录全同 → True（非交易日重复，跳过写历史）。
+
+    排除 MOVE（浮点抖动 70.965→70.9655 会误判）；其余键（A 股/另类）变动不阻止
+    跳过（D2：混合日整条跳过，PRD 字面）。history 为空（首跑）→ False。
+    """
+    if not history:
+        return False
+    prev = history[-1]
+    return all(prev.get(k) == record.get(k) for k in _US_GATE)
+
+
 def main() -> int:
     """完整流程：取数 → 读缓存/历史 → 算涨跌幅 → 渲染报告 + 趋势图 → 写报告 → 告警检查 → 追加历史 → 写缓存。"""
     date = get_us_eastern_date()
@@ -182,9 +197,12 @@ def main() -> int:
                            alts_trend_chart=alts_trend_chart, correlations=correlations,
                            opening_refs=opening_refs, watchlist=watchlist_view,
                            northbound=northbound_data)
-    report_path = save_report(date, report)
-    log.info("报告已生成: %s", report_path)
-
+    record = {"date": date, **{k.lower(): values[k] for k in SYMBOLS}}
+    if _is_us_duplicate_day(history, record):
+        log.info("美股数据与最近记录相同（非交易日），跳过历史追加: %s", date)
+    else:
+        append_history(record)
+        log.info("历史已追加: %s", record)
     try:  # 告警检查：save_last_values 前用旧缓存作基准（决策 G），失败仅记日志（决策 H）
         run_alert_checks(date, values, last_values, "close", report_path)
     except Exception as exc:
