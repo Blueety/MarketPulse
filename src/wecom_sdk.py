@@ -1,6 +1,8 @@
-"""企业微信智能机器人 — 官方 SDK (wecom-aibot-sdk-python)。"""
+"""企业微信智能机器人 — 官方 SDK + Hermes AI 集成。"""
 import asyncio
 import logging
+import subprocess
+import os
 
 from wecom_aibot_sdk import WSClient, WSClientOptions, generate_req_id
 
@@ -13,16 +15,45 @@ SECRET = "2kwT4xhbz0yRAmvMDLgjsA2VcBBie3e9GFc3fpgAI4d"
 client = None
 
 
+def ask_hermes(question: str) -> str:
+    """调用 Hermes 处理问题"""
+    try:
+        result = subprocess.run(
+            ["hermes", "ask", question],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+        )
+        return result.stdout.strip() or "处理完成,但没有返回内容。"
+    except subprocess.TimeoutExpired:
+        return "处理超时,请稍后再试。"
+    except Exception as e:
+        return f"处理出错: {e}"
+
+
 async def on_text(frame):
-    """处理文本消息"""
+    """处理文本消息 — 调用 Hermes AI"""
     body = frame.body or {}
     sender = body.get("sender", {}).get("id", "unknown")
-    content = body.get("content", {}).get("text", "")
-    log.info("收到 [%s]: %s", sender, content)
+    content = body.get("content", {}).get("text", "").strip()
 
-    # 回复
+    if not content:
+        return
+
+    log.info("收到 [%s]: %s", sender, content[:100])
+
+    # 先发送"正在处理"
     stream_id = generate_req_id("stream")
-    await client.reply_stream(frame, stream_id, f"✅ 收到: {content}", finish=True)
+    await client.reply_stream(frame, stream_id, "🤔 正在处理...", finish=False)
+
+    # 调用 Hermes
+    loop = asyncio.get_event_loop()
+    reply = await loop.run_in_executor(None, ask_hermes, content)
+
+    # 发送最终回复
+    await client.reply_stream(frame, stream_id, reply, finish=True)
+    log.info("已回复 [%s]", sender)
 
 
 async def on_enter(frame):
@@ -30,13 +61,13 @@ async def on_enter(frame):
     log.info("用户进入会话")
     await client.reply_welcome(frame, {
         "msgtype": "text",
-        "text": {"content": "你好!我是 MarketPulse 通知助手。"}
+        "text": {"content": "你好!我是 MarketPulse 助手。\n\n你可以问我:\n• 市场行情\n• 持仓分析\n• 新闻解读\n• 或其他问题"}
     })
 
 
 async def main():
     global client
-    log.info("启动企业微信 WebSocket 客户端")
+    log.info("启动企业微信 WebSocket 客户端 (Hermes AI)")
 
     options = WSClientOptions(
         bot_id=BOT_ID,
@@ -52,7 +83,6 @@ async def main():
 
     await client.connect_async()
 
-    # 保持运行
     while client.is_connected:
         await asyncio.sleep(1)
 
