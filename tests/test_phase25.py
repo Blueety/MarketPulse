@@ -58,7 +58,6 @@ class TestDailyReportDedupWiring:
         monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (dict(_VALUES), {}))
         monkeypatch.setattr(dr, "fetch_sector_heat", lambda *a, **k: ([], []))
         monkeypatch.setattr(dr, "fetch_us_sector_heat", lambda *a, **k: ([], []))
-        monkeypatch.setattr(dr, "fetch_northbound_flow", lambda: None)
         monkeypatch.setattr(dr, "fetch_watchlist", lambda stocks: ({}, {}, {}))
         monkeypatch.setattr(dr, "compute_portfolio_correlation",
                             lambda *a, **k: {"stocks": [], "portfolio_risk": {"high": False, "avg_r": None}})

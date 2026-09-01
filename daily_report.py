@@ -115,18 +115,6 @@ def main() -> int:
     sector_heat = fetch_sector_heat()  # 八期：板块热度，失败/超时返回 [] 不影响主流程
     us_sector_heat = fetch_us_sector_heat()  # 美股板块领涨/领跌，失败/超时返回 [] 不影响主流程
 
-    # 北向资金获取（独立容错，失败不影响日报）
-    northbound_data = None
-    try:
-        northbound_data = fetch_northbound_flow()
-        if northbound_data:
-            log.info("北向资金: 净流入 %.2f 亿元", northbound_data["net_inflow"])
-        else:
-            log.info("北向资金数据暂缺（所有数据源失败）")
-    except Exception as exc:
-        log.warning("北向资金获取异常（不影响日报）: %s", exc)
-        northbound_data = None
-
     last_values = load_last_values()
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)

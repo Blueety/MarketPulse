@@ -67,3 +67,54 @@
 - 若 adata 数据源长期不可用，可考虑新增 Sina/东方财富作为备选源（当前降级链仅 adata → None）
 - 北向资金行使用 3 列格式（非标准 4 列表格行），需注意 Markdown 渲染兼容性
 - `daily_report.py` 中存在 `append_history(record)` 被重复调用两次的问题（第 204/207 行和第 218/219 行），可能导致 `test_dup_day_skips_append` 失败，需后续修复
+
+---
+
+## 回滚记录
+
+**日期**：2026-09-01
+**执行者**：Hy3（子代理）
+**原因**：北向资金数据源（adata、akshare 等）因政策限制全部返回 0，功能无法使用
+
+### 回滚文件清单
+
+| 文件 | 动作 | 说明 |
+| :--- | :--- | :--- |
+| `src/northbound.py` | **删除** | 北向资金获取模块 |
+| `tests/test_northbound.py` | **删除** | 北向资金单元测试（19 个用例） |
+| `src/analyzer.py` | 修改 | 删除 `fmt_northbound()` 和 `fmt_northbound_detail()` 函数 |
+| `src/reporter.py` | 修改 | 删除 `render_report()` 的 `northbound` 参数及北向资金行渲染；删除 `generate_context()` 的 `northbound` 参数 |
+| `src/alerter.py` | 修改 | 删除 `check_northbound_alert()` 函数 |
+| `daily_report.py` | 修改 | 删除 `from src.northbound import fetch_northbound_flow`、北向数据获取逻辑、北向告警调用 |
+| `requirements.txt` | 修改 | 删除 `adata>=0.3.1` |
+| `src/config.py` | 修改 | DEFAULTS["alert"] 删除 `"northbound": 100.0`；ENV_MAP 删除 `ALERT_NORTHBOUND_THRESHOLD` |
+| `config.json` | 修改 | alert 删除 `"northbound": 100` |
+| `.env.example` | 修改 | 删除北向资金告警阈值注释 |
+| `tests/test_phase25.py` | 修改 | 删除 `monkeypatch.setattr(dr, "fetch_northbound_flow", ...)` |
+
+### 验证结果
+
+- ✅ 全量回归 363/363 测试通过，0 失败
+- ✅ 所有 Python 源文件无 northbound 引用
+- ✅ config.json、.env.example、requirements.txt 无残留配置
+
+### 最终确认（Hy3 回滚验证）
+
+**日期**：2026-09-01
+**执行者**：Hy3（子代理）
+
+**验证步骤**：
+1. ✅ `src/northbound.py` 已删除（File not found）
+2. ✅ `tests/test_northbound.py` 已删除（File not found）
+3. ✅ `src/analyzer.py` 无 `fmt_northbound` / `fmt_northbound_detail` 引用
+4. ✅ `src/reporter.py` 无 northbound 参数/渲染逻辑
+5. ✅ `src/alerter.py` 无 `check_northbound_alert` 函数
+6. ✅ `daily_report.py` 无 northbound 导入或调用
+7. ✅ `requirements.txt` 无 adata 依赖
+8. ✅ `src/config.py` 无 northbound 阈值配置（DEFAULTS + ENV_MAP 均无）
+9. ✅ `config.json` alert 部分无 northbound 键
+10. ✅ `.env.example` 无北向资金注释
+11. ✅ `tests/test_phase25.py` 无 `fetch_northbound_flow` monkeypatch
+12. ✅ 全量测试 363/363 通过，8 个 warnings（均为既有的 matplotlib/fastapi 警告）
+
+**结论**：北向资金监控功能已完全回滚，代码库无任何残留引用。
