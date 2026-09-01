@@ -1,0 +1,137 @@
+{
+  "date": "2026-09-01",
+  "indices": {
+    "GSPC": {
+      "value": 4500.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "IXIC": {
+      "value": 17500.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "SH": {
+      "value": 3120.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "SZ": {
+      "value": 10100.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "CYB": {
+      "value": 2210.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "VIX": {
+      "value": 21.0,
+      "change_pct": null,
+      "status": "警惕"
+    },
+    "VXN": {
+      "value": 19.0,
+      "change_pct": null,
+      "status": "平静"
+    },
+    "MOVE": {
+      "value": 78.0,
+      "change_pct": null,
+      "status": "平静"
+    },
+    "GLD": {
+      "value": 200.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    },
+    "BTC": {
+      "value": 60000.0,
+      "change_pct": null,
+      "status": "数据积累中"
+    }
+  },
+  "history_30d": {
+    "dates": [
+      "2026-08-31",
+      "2026-09-01"
+    ],
+    "vix": [
+      21.0,
+      21.0
+    ],
+    "vxn": [
+      19.0,
+      19.0
+    ],
+    "move": [
+      78.0,
+      78.0
+    ],
+    "gspc": [
+      4500.0,
+      4500.0
+    ],
+    "ixic": [
+      17500.0,
+      17500.0
+    ],
+    "sh": [
+      3120.0,
+      3120.0
+    ],
+    "sz": [
+      10100.0,
+      10100.0
+    ],
+    "cyb": [
+      2210.0,
+      2210.0
+    ],
+    "gld": [
+      200.0,
+      200.0
+    ],
+    "btc": [
+      59000.0,
+      60000.0
+    ]
+  },
+  "breach": {
+    "triggered": false,
+    "indices": []
+  },
+  "sector_heat": {
+    "gainers": [],
+    "losers": []
+  },
+  "us_sector_heat": {
+    "gainers": [],
+    "losers": []
+  },
+  "search_keywords": [
+    "market summary 2026-09-01"
+  ],
+  "correlation": [],
+  "watchlist": {
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "沪深300ETF",
+        "value": null,
+        "change_pct": null,
+        "corr": {
+          "benchmark": null,
+          "r": null,
+          "n": 0
+        }
+      }
+    ],
+    "portfolio_risk": {
+      "high": false,
+      "avg_r": null
+    }
+  },
+  "northbound": null
+}

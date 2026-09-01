@@ -197,6 +197,9 @@ def main() -> int:
                            alts_trend_chart=alts_trend_chart, correlations=correlations,
                            opening_refs=opening_refs, watchlist=watchlist_view,
                            northbound=northbound_data)
+    report_path = save_report(date, report)
+    log.info("报告已生成: %s", report_path)
+
     record = {"date": date, **{k.lower(): values[k] for k in SYMBOLS}}
     if _is_us_duplicate_day(history, record):
         log.info("美股数据与最近记录相同（非交易日），跳过历史追加: %s", date)
@@ -215,9 +218,6 @@ def main() -> int:
     except Exception as exc:
         log.warning("北向资金告警检查失败（不影响日报）: %s", exc)
 
-    record = {"date": date, **{k.lower(): values[k] for k in SYMBOLS}}
-    append_history(record)
-    log.info("历史已追加: %s", record)
 
     saved = {k: v for k, v in values.items() if v is not None}
     if saved:

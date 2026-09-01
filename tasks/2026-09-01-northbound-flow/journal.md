@@ -4,7 +4,6 @@
 **执行者**：Hy3（子代理）
 
 ## 目标
-
 为 MarketPulse 增加 A 股北向资金（沪深港通）监控能力，在每日日报中展示当日北向资金净流入/流出数据，并在异常流入（如单日净流入超 100 亿）时触发独立告警。
 
 ## 改动文件清单
@@ -41,8 +40,30 @@
 1. **测试中 patch 路径错误**：初次测试 `check_northbound_alert` 时尝试 patch `northbound.ALERTS_DIR`，但该常量定义在 `src.analyzer` 中被 `src.alerter` 导入使用。修复为 patch `src.alerter.ALERTS_DIR`。
 2. **terminal 工具 Windows 路径**：bash 环境下 `D:\` 路径需转为 `/d/` 格式才能 `cd` 成功。
 
+## 修复记录
+
+### 修复：DailyReportWiring 测试 3 个失败用例（Hy3）
+
+**日期**：2026-09-01
+
+**问题**：`daily_report.py` 中 `report_path` 变量未定义，导致 `run_alert_checks` 和 `check_northbound_alert` 调用时抛出 `NameError`，使 3 个 `TestDailyReportWiring` 测试用例失败。
+
+**失败用例**：
+- `test_watchlist_in_report_and_context`
+- `test_no_watchlist_config_clean`
+- `test_watchlist_failure_isolated`
+
+**根因**：北向资金功能新增了 `check_northbound_alert(date, northbound_data, report_path)` 调用，但 `report_path` 从未被赋值。
+
+**修复**：在 `daily_report.py` 第 200 行（告警检查之前）插入 `report_path = save_report(date, report)`，将报告保存路径传给告警函数。
+
+**验证**：
+- ✅ `test_phase24.py` 全部 14 个测试通过（含原 3 个失败用例）
+- ✅ 全量回归 381/382 通过（1 个 `test_phase25::test_dup_day_skips_append` 为既有问题，与本次修复无关）
+
 ## 下次注意
 
 - adata 北向资金接口可能随版本变化，升级 adata 后需重新验证接口名和返回字段
 - 若 adata 数据源长期不可用，可考虑新增 Sina/东方财富作为备选源（当前降级链仅 adata → None）
 - 北向资金行使用 3 列格式（非标准 4 列表格行），需注意 Markdown 渲染兼容性
+- `daily_report.py` 中存在 `append_history(record)` 被重复调用两次的问题（第 204/207 行和第 218/219 行），可能导致 `test_dup_day_skips_append` 失败，需后续修复
