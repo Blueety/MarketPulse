@@ -156,3 +156,14 @@
 - **Chart.js 非交互降透明度须显式声明 hover 恢复**：dataset `borderColor` 用 8 位 hex（`COLORS[key] + "d9"`，85% 不透明）降低非交互视觉攻击性时，hover 不会自动变回全色——必须额外设 `hoverBorderColor: COLORS[key]`（全色）与 `hoverBorderWidth`（如 2.6）；只改 `borderColor` 则 hover 仍是 85% 灰。四图共用 `renderLineChart` 一处 dataset 配置，改一处即四图一致。
 - **曲线平滑 `tension` 取值纪律**：金融/时序图轻微平滑用 `0.25`（Chart.js 文档常用值），`0.08` 几乎等同直线无效果、`0.4+` 是强 spline（PRD 否决）。保留真实局部拐点须 ≤0.3；改 tension 后必须用 `window.Chart.getChart(canvas).data.datasets[0].tension` 运行时复核四图一致。
 - **验证 web 图表改动走 `tab.evaluate`**：浏览器 `run` 顶层无 `document`，DOM/Chart 实例访问必须包在 `tab.evaluate(() => {...})` 内；`window.Chart.getChart(canvas)` 可读取 `tension/borderWidth/borderColor/hoverBorder*/pointRadius` 等运行时值，比截图更可靠——本机未配视觉模型时尤其（inspect_image 直接报 "does not support image input"）。
+## 模块 web/（二十五期：美股去重 + 浅色主题）
+
+- **美股去重判定符号集必须排除 MOVE**：实测 MOVE 有浮点级抖动（70.965 → 70.9655，+0.0007%），若判定集含 MOVE，非交易日重复（如 08-30）不会被 `prev.get("move")==record.get("move")` 判为同值，去重失效；同时「全 10 键相等才跳过」方案在 08-30/09-01 这类「美股同、A 股/BTC 异」日永不触发（证据：08-30 有 gld/btc 实值、09-01 有 A 股三指数变动）。判定集取 `("gspc","ixic")`，与 PRD 示例（gspc）一致。
+- **混合日（D2）A 股/BTC 数据不写 history 为 PRD 取舍**：09-01 类美股未交易但 A 股/BTC/GLD 变动的日，按 PRD「今天的美股数据与昨天相同则不写入」整条跳过 `append_history`（含当日 A 股涨跌幅跨日计算缺失，下一交易日 A 股涨跌幅基于再下一交易日算）；日报/context 当日仍完整生成，仅历史序列缺此日。
+- **真正平盘日会被跳过**：美股真的收平（与最近记录 GSPC/IXIC 全同）时 `_is_us_duplicate_day` 返回 True → 跳过，与周末跳过同语义，接受。
+- **history 已有重复行不清理**：08-30 等已在库的历史重复行不迁移，靠 90 天滚动自然淘汰；PRD 未要求迁移（~10 行范围）。
+- **web 浅色主题——FOUC 预应用**：`index.html` `<head>` 最前的预应用脚本在首屏渲染前读 `localStorage["mp-theme"]`，为 `light` 则给 `<html>` 加 `light` 类，否则刷新闪烁（深→浅跳变）；脚本包在 `try/catch` 内（隐私模式 `localStorage` 抛错不阻塞）。
+- **web 浅色主题——localStorage 校验**：`setTheme` 写 `localStorage` 同样包 `try/catch`；键名恒 `"mp-theme"`（值 `"light"`/`"dark"`），与预应用脚本一致。
+- **web 浅色主题——uvicorn 模板缓存 / 端口占用**：Jinja2 启动把 `index.html` 读入缓存，旧进程不反映模板改动；且 8000 常被既有看板占用。验证模板/静态改动须另起未缓存端口（如 8001/8002）或用硬刷新；headless 浏览器会缓存 `style.css`，换端口（不同 origin）可强制重新拉取，否则 `:root.light` 规则看似「不生效」实为缓存旧 CSS（`tab.evaluate` 查 `document.styleSheets` 的 `:root.light` 规则可证伪）。
+- **web 浅色主题——`tab.evaluate` 断言**：浏览器 `run` 顶层无 `document`，DOM/计算样式访问必须包在 `tab.evaluate(() => {...})` 内且 `await`；一次 `run` 内完成 初始→点击→刷新→再点击 全流程，避免跨 `run` 上下文重置 `localStorage` 导致持久化断言失真；验证三态：`html.light` 类、`localStorage["mp-theme"]`、computed `background-color`（深 `rgb(11,14,20)` ↔ 浅 `rgb(245,245,245)`）。
+
