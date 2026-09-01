@@ -1,4 +1,4 @@
-"""企业微信智能机器人 — 官方 SDK。"""
+"""企业微信智能机器人 — 官方 SDK + 正确的消息结构。"""
 import asyncio
 import logging
 
@@ -16,17 +16,17 @@ client = None
 async def on_text(frame):
     """处理文本消息"""
     body = frame.body or {}
-    sender = body.get("sender", {}).get("id", "unknown")
-    content = body.get("content", {}).get("text", "").strip()
+    sender = body.get("from", {}).get("userid", "unknown")
+    content = body.get("text", {}).get("content", "")
 
     if not content:
         return
 
-    log.info("收到 [%s]: %s", sender, content[:100])
+    log.info("收到 [%s]: %s", sender, content)
 
     # 回复
     stream_id = generate_req_id("stream")
-    reply = f"✅ 已收到你的消息: {content}\n\n我是 MarketPulse 助手,目前正在开发中,后续会集成 AI 分析能力。"
+    reply = f"你好 {sender}! 我是 MarketPulse 助手。\n\n你刚才说: {content}\n\n(后续会集成 AI 分析能力)"
     await client.reply_stream(frame, stream_id, reply, finish=True)
     log.info("已回复 [%s]", sender)
 
