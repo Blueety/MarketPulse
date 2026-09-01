@@ -240,3 +240,52 @@ class TestTrendHistoryEnv:
         finally:
             monkeypatch.delenv("HISTORY_RETENTION_DAYS", raising=False)
             importlib.reload(an)
+
+
+class TestWatchlistValidation:
+    def test_default_when_no_file(self, tmp_path):
+        cfg = load_config(path=tmp_path / "nope.json")
+        assert cfg["watchlist"] == {"stocks": [], "corr_high_threshold": 0.7}
+
+    def test_valid_file(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [
+            {"symbol": "AAPL", "label": "苹果"}, {"symbol": "600519.SS"}],
+            "corr_high_threshold": 0.8}})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"]["corr_high_threshold"] == 0.8
+        assert cfg["watchlist"]["stocks"][0] == {"symbol": "AAPL", "label": "苹果"}
+        assert cfg["watchlist"]["stocks"][1] == {"symbol": "600519.SS", "label": "600519.SS"}
+
+    def test_truncate_to_20(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [{"symbol": f"S{i}"} for i in range(25)]}})
+        cfg = load_config(path=p)
+        assert len(cfg["watchlist"]["stocks"]) == 20
+
+    def test_dedup_symbols(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [
+            {"symbol": "AAPL"}, {"symbol": "AAPL"}, {"symbol": "AAPL"}]}})
+        cfg = load_config(path=p)
+        assert len(cfg["watchlist"]["stocks"]) == 1
+
+    def test_drop_illegal_entry(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [
+            {"symbol": "AAPL"}, "notadict", {"symbol": ""}, {"label": "nolabel"}]}})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"]["stocks"] == [{"symbol": "AAPL", "label": "AAPL"}]
+
+    def test_threshold_invalid_fallback(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [{"symbol": "AAPL"}],
+                                            "corr_high_threshold": -1}})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"]["corr_high_threshold"] == 0.7
+
+    def test_threshold_valid(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [{"symbol": "AAPL"}],
+                                            "corr_high_threshold": 0.5}})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"]["corr_high_threshold"] == 0.5
+
+    def test_watchlist_non_dict(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": "bad"})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"] == {"stocks": [], "corr_high_threshold": 0.7}

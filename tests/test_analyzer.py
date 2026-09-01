@@ -182,3 +182,103 @@ class TestHistory:
         assert len(data) == 1
         assert data[0]["date"] == "2026-08-01"
         assert not history_file.with_name("history.json.tmp").exists()  # 临时文件已清理
+
+
+def _wl_hist(dates, gspc):
+    return [{"date": d, "vix": 20.0, "vxn": 18.0, "move": 75.0,
+             "gspc": g, "ixic": g * 4, "sh": 3000.0, "sz": 10000.0, "cyb": 2200.0,
+             "gld": 200.0, "btc": 60000.0} for d, g in zip(dates, gspc)]
+
+
+def _wl_series(dates, fn):
+    return [(d, fn(i)) for i, d in enumerate(dates)]
+
+
+class TestComputePortfolioCorrelation:
+    def _dates(self, n=12):
+        return [f"2026-08-{i:02d}" for i in range(1, n + 1)]
+
+    def test_positive_benchmark_corr(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        data = [{"symbol": "STK", "label": "Stock", "series": _wl_series(dates, lambda i: 50 + i)}]
+        out = an.compute_portfolio_correlation(data, hist)
+        st = out["stocks"][0]
+        assert st["benchmark"] == "GSPC"
+        assert st["r"] == pytest.approx(1.0, abs=0.01)
+        assert st["n"] >= 10
+        assert out["portfolio_risk"]["avg_r"] is None
+        assert out["portfolio_risk"]["high"] is False
+
+    def test_negative_benchmark_corr(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        data = [{"symbol": "STK", "label": "Stock", "series": _wl_series(dates, lambda i: 50 - i)}]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["stocks"][0]["r"] == pytest.approx(-1.0, abs=0.01)
+
+    def test_a_share_benchmark(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        data = [{"symbol": "600519.SS", "label": "茅台", "series": _wl_series(dates, lambda i: 1800 + i)}]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["stocks"][0]["benchmark"] == "SH"
+
+    def test_insufficient_data(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        data = [{"symbol": "STK", "label": "Stock", "series": [("2026-08-01", 50.0)]}]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["stocks"][0]["r"] is None
+        assert out["stocks"][0]["n"] == 0
+
+    def test_gap_disconnect_insufficient(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        # 去掉两个连续日期 → 两段各 <10 回报 → n<10 → r None
+        series = [(d, 50 + i) for i, d in enumerate(dates) if d not in ("2026-08-06", "2026-08-07")]
+        data = [{"symbol": "STK", "label": "Stock", "series": series}]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["stocks"][0]["r"] is None
+
+    def test_concentration_high(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        s = _wl_series(dates, lambda i: 50 + i)
+        data = [
+            {"symbol": "A", "label": "A", "series": s},
+            {"symbol": "B", "label": "B", "series": s},
+        ]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["portfolio_risk"]["high"] is True
+        assert out["portfolio_risk"]["avg_r"] == pytest.approx(1.0, abs=0.01)
+
+    def test_concentration_not_high(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        s1 = _wl_series(dates, lambda i: 50 + i)
+        s2 = _wl_series(dates, lambda i: 50 + (1 if i % 2 == 0 else -1))
+        data = [
+            {"symbol": "A", "label": "A", "series": s1},
+            {"symbol": "B", "label": "B", "series": s2},
+        ]
+        out = an.compute_portfolio_correlation(data, hist)
+        assert out["portfolio_risk"]["avg_r"] == pytest.approx(0.0, abs=0.05)
+        assert out["portfolio_risk"]["high"] is False
+
+    def test_threshold_param(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        s = _wl_series(dates, lambda i: 50 + i)
+        data = [
+            {"symbol": "A", "label": "A", "series": s},
+            {"symbol": "B", "label": "B", "series": s},
+        ]
+        out = an.compute_portfolio_correlation(data, hist, threshold=1.5)
+        assert out["portfolio_risk"]["high"] is False
+
+    def test_empty(self):
+        dates = self._dates()
+        hist = _wl_hist(dates, [100 + i for i in range(12)])
+        out = an.compute_portfolio_correlation([], hist)
+        assert out == {"stocks": [], "portfolio_risk": {"high": False, "avg_r": None}}
