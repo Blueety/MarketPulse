@@ -17,6 +17,7 @@
   <header class="topbar">
     <h1>MarketPulse 市场看板</h1>
     <span class="subdate" id="overview-date"></span>
+    <button id="theme-toggle" type="button" class="theme-toggle" title="切换主题">☀️</button>
   </header>
 
   <main class="container">
@@ -656,12 +657,15 @@
 
     document.addEventListener("DOMContentLoaded", function () {
       // 主题切换
-      document.getElementById('theme-toggle').addEventListener('click', function() {
-        var next = getTheme() === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('mp-theme', next);
-        applyTheme(next);
-        if (state.history) renderCharts(state.history);
-      });
+      var themeBtn = document.getElementById('theme-toggle');
+      if (themeBtn) {
+        themeBtn.addEventListener('click', function() {
+          var next = getTheme() === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('mp-theme', next);
+          applyTheme(next);
+          if (state.history) renderCharts(state.history);
+        });
+      }
       // 时间范围按钮
       document.getElementById("range-bar").addEventListener("click", function (e) {
         const btn = e.target.closest("button[data-days]");
