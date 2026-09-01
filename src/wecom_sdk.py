@@ -1,6 +1,7 @@
-"""企业微信智能机器人 — 官方 SDK + 正确的消息结构。"""
+"""企业微信智能机器人 — 官方 SDK + Hermes AI。"""
 import asyncio
 import logging
+import subprocess
 
 from wecom_aibot_sdk import WSClient, WSClientOptions, generate_req_id
 
@@ -13,20 +14,41 @@ SECRET = "2kwT4xhbz0yRAmvMDLgjsA2VcBBie3e9GFc3fpgAI4d"
 client = None
 
 
+def ask_hermes_sync(question: str) -> str:
+    """同步调用 Hermes"""
+    try:
+        result = subprocess.run(
+            ["hermes", "-z", question],
+            capture_output=True, text=True, timeout=120,
+            encoding="utf-8",
+        )
+        return result.stdout.strip() or "(无回复)"
+    except subprocess.TimeoutExpired:
+        return "(AI 处理超时)"
+    except Exception as e:
+        return f"(AI 错误: {e})"
+
+
 async def on_text(frame):
-    """处理文本消息"""
+    """处理文本消息 — 先快速回复,后台调 AI"""
     body = frame.body or {}
     sender = body.get("from", {}).get("userid", "unknown")
-    content = body.get("text", {}).get("content", "")
+    content = body.get("text", {}).get("content", "").strip()
 
     if not content:
         return
 
-    log.info("收到 [%s]: %s", sender, content)
+    log.info("收到 [%s]: %s", sender, content[:100])
 
-    # 回复
+    # 先发送"正在处理"
     stream_id = generate_req_id("stream")
-    reply = f"你好 {sender}! 我是 MarketPulse 助手。\n\n你刚才说: {content}\n\n(后续会集成 AI 分析能力)"
+    await client.reply_stream(frame, stream_id, "🤔 正在思考...", finish=False)
+
+    # 后台调用 Hermes
+    loop = asyncio.get_event_loop()
+    reply = await loop.run_in_executor(None, ask_hermes_sync, content)
+
+    # 发送最终回复
     await client.reply_stream(frame, stream_id, reply, finish=True)
     log.info("已回复 [%s]", sender)
 
@@ -36,13 +58,13 @@ async def on_enter(frame):
     log.info("用户进入会话")
     await client.reply_welcome(frame, {
         "msgtype": "text",
-        "text": {"content": "你好!我是 MarketPulse 助手。\n\n发送任意消息测试连接。"}
+        "text": {"content": "你好!我是 MarketPulse AI 助手。\n\n发送任意消息,我会用 AI 回复你。"}
     })
 
 
 async def main():
     global client
-    log.info("启动企业微信 WebSocket 客户端")
+    log.info("启动企业微信 WebSocket 客户端 (Hermes AI)")
 
     options = WSClientOptions(
         bot_id=BOT_ID,
