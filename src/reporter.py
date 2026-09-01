@@ -17,6 +17,8 @@ from .analyzer import (
     SNAPSHOTS_DIR,
     build_search_keywords,
     fmt_change,
+    fmt_northbound,
+    fmt_northbound_detail,
     fmt_value,
     get_market_date,
     load_history,
