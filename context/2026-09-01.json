@@ -12,23 +12,23 @@
       "status": "连跌1日"
     },
     "SH": {
-      "value": 3987.559,
-      "change_pct": 0.031633360074947284,
-      "status": "连涨2日"
+      "value": 3979.8877,
+      "change_pct": -0.19238085254663248,
+      "status": "连跌1日"
     },
     "SZ": {
-      "value": 13933.107,
-      "change_pct": -0.5843026580740576,
-      "status": "连跌1日"
+      "value": 13872.377,
+      "change_pct": -0.4358683242725371,
+      "status": "连跌2日"
     },
     "CYB": {
-      "value": 3407.037,
-      "change_pct": -0.9202365674513057,
-      "status": "连跌1日"
+      "value": 3393.43,
+      "change_pct": -0.39937928469811074,
+      "status": "连跌2日"
     },
     "VIX": {
-      "value": 14.92,
-      "change_pct": 0.0,
+      "value": 15.88,
+      "change_pct": 6.4343163538874055,
       "status": "平静"
     },
     "VXN": {
@@ -38,7 +38,7 @@
     },
     "MOVE": {
       "value": 75.319,
-      "change_pct": -0.0003983042858812391,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "GLD": {
@@ -47,9 +47,9 @@
       "status": "连跌2日"
     },
     "BTC": {
-      "value": 78738.44,
-      "change_pct": 0.21746883383706178,
-      "status": "连涨2日"
+      "value": 78037.03,
+      "change_pct": -0.8908101303505676,
+      "status": "连跌1日"
     }
   },
   "history_30d": {
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 4.29,
-        "turnover": "446.3亿",
+        "change": 3.82,
+        "turnover": "568.2亿",
         "top_stock": "神农种业"
       },
       {
         "name": "地产/基建",
-        "change": 1.69,
-        "turnover": "125.5亿",
+        "change": 1.35,
+        "turnover": "169.7亿",
         "top_stock": "农发种业"
       },
       {
         "name": "消费",
-        "change": 1.27,
-        "turnover": "185.5亿",
+        "change": 1.07,
+        "turnover": "265.1亿",
         "top_stock": "西安饮食"
       },
       {
         "name": "金融",
-        "change": 0.54,
-        "turnover": "1580.7亿",
+        "change": 0.22,
+        "turnover": "2443.4亿",
         "top_stock": "华映科技"
       },
       {
-        "name": "其他",
-        "change": 0.15,
-        "turnover": "15411.4亿",
-        "top_stock": "大北农"
+        "name": "医药",
+        "change": 0.05,
+        "turnover": "1306.0亿",
+        "top_stock": "振东制药"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -1.42,
-        "turnover": "2261.4亿",
-        "top_stock": "百邦科技"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -0.94,
-        "turnover": "3201.4亿",
-        "top_stock": "骆驼股份"
+        "change": -1.65,
+        "turnover": "3483.8亿",
+        "top_stock": "星星科技"
       },
       {
         "name": "资源/有色",
-        "change": -0.71,
-        "turnover": "479.1亿",
+        "change": -1.65,
+        "turnover": "707.4亿",
         "top_stock": "亚盛集团"
       },
       {
+        "name": "光伏/新能源",
+        "change": -1.51,
+        "turnover": "4959.3亿",
+        "top_stock": "骆驼股份"
+      },
+      {
         "name": "军工",
-        "change": -0.34,
-        "turnover": "1226.1亿",
+        "change": -0.68,
+        "turnover": "1839.2亿",
         "top_stock": "内蒙一机"
       },
       {
-        "name": "医药",
-        "change": 0.06,
-        "turnover": "809.0亿",
-        "top_stock": "振东制药"
+        "name": "其他",
+        "change": -0.18,
+        "turnover": "23427.1亿",
+        "top_stock": "大北农"
       }
     ]
   },
@@ -547,7 +547,7 @@
     "地产/基建 surge 2026-09-01",
     "消费 surge 2026-09-01",
     "金融 surge 2026-09-01",
-    "其他 surge 2026-09-01"
+    "医药 surge 2026-09-01"
   ],
   "correlation": [
     {
@@ -563,8 +563,8 @@
       {
         "symbol": "515300.SS",
         "label": "沪深300ETF",
-        "value": 1.322,
-        "change_pct": 1.38,
+        "value": 1.324,
+        "change_pct": 1.53,
         "corr": {
           "benchmark": "SH",
           "r": -0.23,
@@ -576,5 +576,11 @@
       "high": false,
       "avg_r": null
     }
+  },
+  "northbound": {
+    "net_inflow": 0.0,
+    "sh_net": 0.0,
+    "sz_net": 0.0,
+    "date": "2026-09-01"
   }
 }
