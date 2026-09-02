@@ -260,7 +260,7 @@ class TestSnapshotEntryOrchestration:
             calls["suffix"] = suffix
             return tmp_path / f"{date}-{suffix}.md"
 
-        def fake_alert(date, values, last, alert_type, report_path):
+        def fake_alert(date, values, last, alert_type, report_path, history=None):
             calls["alert_type"] = alert_type
             return []
 
