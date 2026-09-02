@@ -122,7 +122,7 @@ def compute_changes(current: dict, last_values: dict) -> dict:
     return changes
 
 def _trailing_returns(symbol: str, history, lookback_days: int) -> list[float]:
-    """从最新往回收集连续有效日收益（%）。遇该列非数值行即停（缺口中断，不跨期混算）。
+    """从最新往回收集有效日收益（%）。跳过该列非数值行（缺口跳过，继续扫描）。
 
     返回最新 lookback_days 个收益；样本不足时返回全部（由调用方判门槛）。
     history 已假定不含候选当日（调用方负责排除，纯函数不读日期语义）。"""
@@ -133,8 +133,7 @@ def _trailing_returns(symbol: str, history, lookback_days: int) -> list[float]:
         v = row.get(lower)
         if isinstance(v, (int, float)):
             closes.append(float(v))
-        else:
-            break                             # 缺口：更老数据跨期，混入会扭曲分布
+        # 跳过 None，继续往回扫（不 break）
     rets = [(closes[i - 1] - closes[i]) / closes[i] * 100.0
             for i in range(len(closes) - 1, 0, -1)]   # 相邻日收益，新→旧
     return rets[:lookback_days]

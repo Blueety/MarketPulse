@@ -89,10 +89,16 @@ class TestTrailingReturns:
         rets = an._trailing_returns("VIX", hist, 5)
         assert rets == pytest.approx([10.0, -10.0, 11.1111, -10.0, 11.1111], abs=1e-3)
 
-    def test_gap_inside_window_interrupts(self):
-        # d4=105, d3=None → 缺口中断，仅 1 个有效收盘 → 0 个收益
+    def test_gap_inside_window_skips(self):
+        # d4=105, d3=None → 跳过 None，继续扫描，得到 3 个有效收盘 → 2 个收益
         hist = _hist_dates([100, 110, None, 105])
-        assert an._trailing_returns("VIX", hist, 5) == []
+        rets = an._trailing_returns("VIX", hist, 5)
+        # 最新→最旧: 105, None(跳过), 110, 100 → closes=[105,110,100]
+        # rets[0] = (110-100)/100*100 = 10.0%
+        # rets[1] = (105-110)/110*100 = -4.55%
+        assert len(rets) == 2
+        assert rets[0] == pytest.approx(10.0, abs=1e-3)
+        assert rets[1] == pytest.approx(-5/110*100, abs=1e-3)
 
     def test_gap_outside_window_ok(self):
         # 缺口在最旧行（窗口外），不影响最近 4 个收盘
