@@ -192,6 +192,7 @@ class TestCheckBreachMode:
 class TestWiring:
 
     def test_collect_breaches_passes_history(self, clean_thresholds, monkeypatch):
+        calls = []
         monkeypatch.setattr(alerter, "check_breach",
                             lambda sym, cur, last, history=None: calls.append(history) or None)
         hist = _hist_dates([20, 20.1, 19.9])
