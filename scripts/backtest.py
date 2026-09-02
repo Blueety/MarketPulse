@@ -245,6 +245,7 @@ def render_report(history, triggers, fwd, run_date, eff_days) -> str:
         levels = Counter(t["level"] for t in sym_triggers)
         modes = Counter(t["threshold_mode"] for t in sym_triggers)
         etr = effective_trigger_rate(sym_triggers, history)
+        small = n_points < MIN_SYMBOL_POINTS
         lines += [
             f"## {sym}",
             "",

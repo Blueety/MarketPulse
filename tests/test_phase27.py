@@ -20,6 +20,11 @@ import snapshot_report as sr
 from scripts import backtest as bt
 # 隔离：清除宿主 ALERT_THRESHOLD_* env（与 test_alerter.clean_thresholds 同义）
 # --------------------------------------------------------------------------- #
+# 与 test_phase25 一致的 10 标的基准值（保证 build_statuses / generate_context 覆盖全部 SYMBOLS）
+_VALUES = {
+    "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
+    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 200.0, "BTC": 60000.0,
+}
 @pytest.fixture
 def clean_thresholds(monkeypatch):
     for sym in an.SYMBOLS:
@@ -210,9 +215,8 @@ class TestWiring:
 
     def test_run_alert_checks_passes_history(self, clean_thresholds, monkeypatch):
         captured = {}
-        monkeypatch.setattr(an, "collect_breaches",
+        monkeypatch.setattr(alerter, "collect_breaches",
                             lambda v, lv, history=None: captured.setdefault("h", history) or [])
-        alerter = __import__("src.alerter", fromlist=["run_alert_checks"])
         hist = _hist_dates([20, 20.1, 19.9])
         alerter.run_alert_checks("2026-09-03", {"VIX": 20.0}, {"VIX": 20.0}, "close",
                                  __import__("pathlib").Path("x.md"), hist)
@@ -229,7 +233,7 @@ class TestWiring:
         ]
         monkeypatch.setattr(an, "load_history", lambda: today_rows)
         rep.generate_context("2026-09-03", {"VIX": 20.0}, {"VIX": 0.0},
-                             {"VIX": ("平静", "ok")}, {"VIX": 20.0})
+                             {sym: ("平静", "ok") for sym in an.SYMBOLS}, {"VIX": 20.0})
         assert captured["h"] is not None
         assert all(r["date"] != "2026-09-03" for r in captured["h"])
 
@@ -241,7 +245,7 @@ class TestWiring:
         monkeypatch.setattr(an, "LAST_VALUES_FILE", tmp_path / "last_values.json")
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
         monkeypatch.setattr(dr, "get_us_eastern_date", lambda: "2026-09-03")
-        monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: ({"VIX": 21.0}, {}))
+        monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (dict(_VALUES), {}))
         monkeypatch.setattr(dr, "fetch_sector_heat", lambda *a, **k: ([], []))
         monkeypatch.setattr(dr, "fetch_us_sector_heat", lambda *a, **k: ([], []))
         monkeypatch.setattr(dr, "fetch_watchlist", lambda stocks: ({}, {}, {}))
@@ -264,8 +268,26 @@ class TestWiring:
         args = captured["args"]
         assert len(args) >= 6
         assert isinstance(args[5], list)
-        # 内存 history 变量（L122 load_history 结果，天然不含当日）== [seed]
-        assert args[5] == [seed]
+        # 内存 history 变量（L122 load_history 结果，天然不含当日）
+        assert len(args[5]) == 1
+        assert args[5][0]["date"] == "2026-09-02"
+        assert "2026-09-03" not in {r["date"] for r in args[5]}
+    def test_regression_no_history_dict_shape(self, clean_thresholds):
+        # 不传 history → 与旧版逐位一致（固定阈值 + 新键显式标注）
+        # VIX=25 落在 20~30「警惕」区间 → level=WARN（非 ALERT）
+        breach = an.check_breach("VIX", 25, 20)
+        assert breach == {
+            "symbol": "VIX",
+            "current": 25,
+            "last": 20,
+            "change": 25.0,
+            "threshold": 20.0,
+            "threshold_mode": "fixed",
+            "dynamic_threshold": None,
+            "level": "WARN",
+            "state": "警惕",
+            "suggestion": an.ALERT_SUGGESTIONS["警惕"],
+        }
 
     def test_snapshot_passes_history(self, clean_thresholds, monkeypatch, tmp_path):
         monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
@@ -288,7 +310,7 @@ class TestWiring:
         args = captured["args"]
         assert len(args) >= 6
         assert isinstance(args[5], list)
-        assert args[5] == [seed]  # 文件恒无当日 → 全部行传入
+        assert args[5] == an.load_history()  # 文件恒无当日 → 全部行原样传入
 
 
 # --------------------------------------------------------------------------- #
@@ -296,15 +318,15 @@ class TestWiring:
 # --------------------------------------------------------------------------- #
 class TestBacktestDynamic:
     def _long_history(self, n=30):
-        # 前段平稳（早段样本不足→fixed），后段出现大幅跳变（晚段 dynamic）
+        # 基准平稳（±0.01，收益 ~±0.05%）→ 动态阈值极小，不会误触发。
+        # 早段跳变置于 rows[2]（候选 i=2/i=3，history[:i] 样本不足 → fixed）。
+        # 末段跳变置于末行 rows[29]（候选 i=29，history[:29] 充足且窗口不含此跳变 → dynamic）。
         rows = []
         for i in range(1, n + 1):
-            vix = 20.0 + (0.1 if i % 2 else -0.1)
+            vix = 20.0 + (0.01 if i % 2 else -0.01)
             rows.append({"date": f"2026-02-{i:02d}", "vix": vix})
-        # 早段触发：i=3 跳到 26（+30% 远超固定 20）
-        rows[2]["vix"] = 26.0
-        # 晚段触发：i=28 跳到 26
-        rows[27]["vix"] = 26.0
+        rows[2]["vix"] = 26.0    # 早段触发（fixed）
+        rows[29]["vix"] = 26.0   # 末段触发（dynamic，窗口 history[:29] 不含此跳变）
         return rows
 
     def test_collect_triggers_has_mode(self):
