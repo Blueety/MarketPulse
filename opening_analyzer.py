@@ -19,6 +19,7 @@ from src.analyzer import classify_vix, get_market_date
 from src.fetcher import fetch_realtime_quotes, fetch_sector_heat, fetch_us_sector_heat
 from src.reporter import render_opening_report, save_opening
 
+from src.git_ops import auto_commit_push
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -106,6 +107,8 @@ def main(market: str = "a-share") -> int:
         render_opening_report(date, market, quotes, gaps, sentiment, sector_heat, errors),
     )
     log.info("开盘分析已生成: %s", path)
+    # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
+    auto_commit_push(date, f"{market} opening analysis")
     return 0  # 全源失败也恒 0
 
 

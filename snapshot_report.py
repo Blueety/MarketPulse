@@ -20,6 +20,7 @@ from src.alerter import run_alert_checks
 from src.analyzer import build_statuses, get_market_date, load_history, load_last_values
 from src.fetcher import fetch_all, fetch_sector_heat
 from src.reporter import render_snapshot, save_snapshot
+from src.git_ops import auto_commit_push
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,6 +50,8 @@ def main(market: str = "us", time: str = "noon") -> int:
         run_alert_checks(date, values, last_values, f"{market}-{time}", path)
     except Exception as exc:
         log.warning("告警检查失败，不影响快照生成: %s", exc)
+    # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
+    auto_commit_push(date, f"{market} {time} snapshot")
     return 0
 
 

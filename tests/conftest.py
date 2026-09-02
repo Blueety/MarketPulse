@@ -8,3 +8,7 @@ import os
 from pathlib import Path
 
 os.environ["CONFIG_PATH"] = str(Path(__file__).parent / "_nonexistent_config.json")
+
+# 二十六期护栏：强制关闭自动推送，防止 test_phase25 等真实调用 daily_report.main()
+# 触发的 auto_commit_push 误推 GitHub（AUTO_PUSH=0 → git_ops 直接返回 False，零子进程）。
+os.environ["AUTO_PUSH"] = "0"

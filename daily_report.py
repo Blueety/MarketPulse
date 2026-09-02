@@ -30,6 +30,7 @@ from src.news_fetcher import search_news
 from src.reporter import (generate_context, render_market_trend_chart, render_report,
                           render_trend_chart, save_report, load_opening_refs)
 from src.image_renderer import render_report_image
+from src.git_ops import auto_commit_push
 
 logging.basicConfig(
     level=logging.INFO,
@@ -216,6 +217,8 @@ def main() -> int:
             log.info("日报图片已生成: %s", image_path)
     except Exception as exc:
         log.warning("日报图片渲染失败，不影响日报: %s", exc)
+    # 二十六期：cron 执行后自动 commit + push（同步 Railway 部署）；失败仅记日志、退出码恒 0
+    auto_commit_push(date, "daily report")
 
     return 0  # 全源失败也恒为 0，避免 Hermes 定时任务误报警
 
