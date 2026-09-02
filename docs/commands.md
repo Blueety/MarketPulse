@@ -31,6 +31,7 @@
 | history 读写/滚动 | 相关单元测试（test_analyzer.py TestHistory） |
 | 错误处理/离线容错 | 主脚本（断网场景） |
 | 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
+| cron 自动提交推送（二十六期） | 无需手动；daily_report / snapshot_report / opening_analyzer 末尾自动 commit+push；本地验证用 `AUTO_PUSH=0` 关闭（如 `AUTO_PUSH=0 venv/Scripts/python daily_report.py`）；真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交） |
 
 ## 验证要点（对应任务 prd 的 Verification Plan）
 
@@ -58,6 +59,7 @@
 - **回测验证（十三期）**：`venv/Scripts/python scripts/backtest.py` 终端输出每标的一行摘要（告警次数 / 年化 / 胜率@1d / 有效触发率）+ 总耗时 + `reports/backtest_report.md` 生成，耗时 <5s、退出码 0；`--history <临时小文件>`（有效交易日 <30）时优雅退出（退出码 0、提示信息、无报告文件、data/ 无任何写入）；回测仅读 `data/history.json`、复用生产 `check_breach` 语义（严格大于、实时阈值、缺口断开），不写 data/alerts/context，不联网；新增/修改 `scripts/backtest.py` 或阈值逻辑后跑 `venv/Scripts/python -m pytest tests/test_backtest.py -v`（10 条纯逻辑测试全绿）。
 - **日报图片化（十四期）**：`daily_report.py` 末尾容错调用 `render_report_image(date)`（失败仅记日志、退出码恒 0）生成 `reports/images/YYYY-MM-DD.png`；Hermes 追加「AI 解读」章节后通过 `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` 独立重渲染含解读图；依赖 imgkit（`requirements.txt` 已加）+ 本地 wkhtmltoimage（winget 装 wkhtmltopdf），解析严格依赖 `render_report` 的 Markdown 结构（标题行 `## ...` / `| 指数 | 收盘价 | 涨跌幅 | 趋势 |` 表 / `![...](charts/...)` 引用 / 标题含「解读」章节 / `alerts/{date}-close.md` 附录块）；单测 `tests/test_phase14.py`（17 条：解析/渲染/尺寸/容错/接线）全绿，全量 `pytest` 通过。
 - **美股去重 + 浅色主题（二十五期）**：美股去重由 `daily_report.py` 的 `_is_us_duplicate_day(history, record)`（判定集 GSPC+IXIC，排除 MOVE 浮点抖动）在 `append_history` 前加门，非交易日（美股值与最近记录全同）整条跳过写历史；混合日（美股未动但 A 股/BTC 变动）按 PRD 字面整条跳过，当日日报/context 仍完整；`pytest tests/test_phase25.py -v` 覆盖纯逻辑 ×4 + 接线 ×2（既有断言零改动，全量 `pytest` 382 passed）；浅色主题：`venv/Scripts/python -m uvicorn web.app:app --port 8002`（另起未缓存端口防模板/静态缓存）启动后浏览器验证——初始深 `rgb(11,14,20)`、点击切 `html.light` + `localStorage["mp-theme"]=="light"` + 浅 `rgb(245,245,245)`、刷新保持、再点回深；`tab.evaluate` 查 `document.styleSheets` 含 `:root.light` 规则证伪 CSS 缓存。
+- **cron 自动提交推送（二十六期）**：三入口 main() 末尾自动 `git add -A` + commit（`auto: {date} {type}`）+ push origin master（默认开启，`AUTO_PUSH=0` 关闭）；无改动（`git status --porcelain` 空）跳过、幂等（F4）；commit message 全 ASCII：daily→`auto: {date} daily report`、snapshot→`auto: {date} {market} {time} snapshot`、opening→`auto: {date} {market} opening analysis`（F5）；push 经 Clash 代理 `http://127.0.0.1:7890` 仅注入子进程 env 副本（F3）；失败仅 print `[auto-push] Failed`、退出码恒 0（F6 重试由 `scripts/push_retry.sh` + Hermes cron 承担）；pytest 在 conftest `AUTO_PUSH=0` 下恒跳过、无真实推送；单测 `tests/test_phase26.py`（11 条）覆盖门控 / message 格式 / 代理注入 / 失败不抛；本地反复跑务必 `AUTO_PUSH=0`，真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交）。
 
 
 ## 已知问题

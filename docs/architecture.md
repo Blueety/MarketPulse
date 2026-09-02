@@ -32,6 +32,7 @@ Python 项目。每个交易日有多个运行点：
 | 数据持久化 | `data/last_values.json`（涨跌幅基准）、`data/history.json`（近 90 日历史） | 运行时生成，gitignore 排除 |
 | Web 看板 | `web/app.py`（FastAPI 应用 + 4 端点）、`web/templates/index.html`、`web/static/style.css`、`web/__init__.py` | 只读看板：解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染单页（市场概览表 / 4 组独立 y 轴趋势图 / A 股板块热度 Top5 / 告警记录），提供 `/api/history` `/api/latest` `/api/alerts` 三个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
 | 回测 | `scripts/backtest.py` | 独立回测脚本：复用生产 `check_breach` 语义回放历史触发事件，统计告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率；只读 `data/history.json`，仅写 `reports/backtest_report.md`，不联网、零副作用 |
+| 自动提交推送 | `src/git_ops.py` | cron 入口（daily_report / snapshot_report / opening_analyzer）main() 末尾调用 `auto_commit_push(date, report_type)`：env `AUTO_PUSH` ≠ "0" 启用（`"0"` 关闭）；无改动（`git status --porcelain` 空）跳过、幂等；`git add -A` + `git commit -m "auto: {date} {type}"` + `git push origin master`（经 Clash 代理 `http://127.0.0.1:7890`，仅注入 push 子进程 env 副本）；失败仅记日志、退出码恒 0；纯 stdlib 零新依赖（二十六期） |
 
 ## 数据流
 
@@ -52,6 +53,7 @@ Yahoo Finance (^VIX, ^VXN) ──┐
 
     snapshot_report.py ──> reports/snapshots/YYYY-MM-DD-{market}-{time}.md（仅存盘，不推送）
 ```
+cron 自动提交：daily_report / snapshot_report / opening_analyzer 在 `main()` 末尾调用 `src/git_ops.auto_commit_push(date, report_type)`，将本次 `data/`（history/last_values）、`context/`、`alerts/` 等变更 `git add -A` + commit（`auto: {date} {type}`）+ push 到 `origin/master`（经 Clash 代理 `http://127.0.0.1:7890`），确保 Railway 部署与最新数据同步；无改动跳过、失败仅记日志（详见关键决策表「cron 自动提交推送」）。
 
 ## 关键决策
 
@@ -84,6 +86,7 @@ Yahoo Finance (^VIX, ^VXN) ──┐
 | 测试隔离 | tests/conftest.py 顶层强制 CONFIG_PATH 指向不存在文件，collection 前生效 | 用户定制 config.json 后跑 pytest 不破坏默认断言（PRD 风险表"测试混用生产配置"正解） | 2026-09-01 |
 | 板块聚合（十八期） | `fetch_sector_heat` 内部单点聚合：SECTOR_MAPPING（10 大类 + 新浪实际别名）× `_parse_turnover` 还原成交额 + `aggregate_sectors` 纯函数加权；日报/快照/开盘分析/context/web 五个消费点零改动（web 只读 context 无聚合源，必须取数层聚合）；聚合公式 = Σ(子板块 change×成交额[元]) / Σ成交额[元]，Σ=0 走简单平均；未匹配概念板块归「其他」参与排序；聚合行契约 {name, change, turnover, top_stock} 与概念行同构；top_stock 取类别内成交额最大子板块 | 聚合在取数层一次完成，消费点自动全变大类，零 mock 签名破坏、零重复实现；精确匹配兜底漏配；大盘名替代概念名（超出 PRD 文件表字面，已确认） | 2026-08-31 |
 | 美股去重 + 浅色主题（二十五期） | 美股去重：判定符号集取 GSPC+IXIC（排除 MOVE 浮点抖动 70.965→70.9655），`daily_report.py` 新增纯函数 `_is_us_duplicate_day(history, record)` 在 `append_history` 前加门，非交易日（美股值全同）整条跳过写历史（D1/D2）；混合日（美股未动但 A 股/BTC/GLD 变动，如 09-01）整条跳过、PRD 字面取舍、当日日报/context 仍完整；浅色主题：`web/static/style.css` 加 `:root.light` 变量覆盖 + `.card` 白底，前端在 `index.html` 加预应用脚本（防 FOUC）+ topbar 右上 `🌙/☀️` 切换按钮 + `setTheme(light)`（切 `html.light` 类 + 写 `localStorage["mp-theme"]` + 更新图标） | 美股重复特指 GSPC/IXIC（实测 08-30 与 08-29 全同、09-01 与 08-31 全同）；MOVE 浮点抖动会误判故排除；方案不引入交易日历依赖、不改 src/、零后端变更、web/app.py 不动；浅色主题纯前端、涨跌色（--green/--red/--blue/--orange）不变 | 2026-09-01 |
+| cron 自动提交推送（二十六期） | 新建 `src/git_ops.py`，三入口 main() 末尾调用 `auto_commit_push(date, report_type)`；默认开启（`AUTO_PUSH`≠"0"），`AUTO_PUSH=0` 关闭；无改动跳过（幂等，NF3）；`git add -A` 全量语义；commit message 全 ASCII `auto: {date} {type}`（daily→`daily report`、snapshot→`{market} {time} snapshot`、opening→`{market} opening analysis`，F5）；push 经 Clash 代理 `http://127.0.0.1:7890` 且仅注入子进程 env 副本（F3）；每步 subprocess timeout（15/30/120s）；失败不抛异常、print `[auto-push] Failed`、退出码恒 0（F6 重试由 `scripts/push_retry.sh` + Hermes cron 承担）；pytest 经 conftest `AUTO_PUSH=0` 隔离，无真实推送；零新依赖（纯 stdlib，NF1） | 防 Railway 与最新数据脱节；避免三入口重复实现、单测可覆盖；缺省开保证 cron 自动同步落地；`AUTO_PUSH=0` 供本地开发隔离 | 2026-09-02 |
 
 
 ## 约束
