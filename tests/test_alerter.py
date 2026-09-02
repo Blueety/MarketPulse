@@ -173,7 +173,7 @@ class TestRunAlertChecks:
         # 单指数 check_breach 异常不影响其他指数（决策 H）
         real = an.check_breach
 
-        def flaky(sym, current, last):
+        def flaky(sym, current, last, history=None):
             if sym == "VIX":
                 raise RuntimeError("boom")
             return real(sym, current, last)

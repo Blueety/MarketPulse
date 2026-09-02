@@ -940,8 +940,9 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
     兜底（决策 E）。返回写入路径。"""
-    history = load_history()[-TREND_DAYS:]
-    breaches = collect_breaches(values, last_values)
+    rows = load_history()                      # 单次读（原两次）；动态窗口须排除候选当日
+    breaches = collect_breaches(values, last_values, [r for r in rows if r.get("date") != date])
+    history = rows[-TREND_DAYS:]               # 含当日，既有语义不动
     payload = {
         "date": date,
         "indices": {

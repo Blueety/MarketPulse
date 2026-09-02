@@ -17,7 +17,8 @@ from time import perf_counter
 # 项目根入 path（支持 `python scripts/backtest.py` 与 `from scripts.backtest import ...`）。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.analyzer import REPORTS_DIR, alert_threshold, check_breach, load_history
+from src.analyzer import (REPORTS_DIR, alert_threshold, check_breach, load_history,
+                          ALERT_DYNAMIC, ALERT_LOOKBACK_DAYS, ALERT_K_FACTOR)
 
 # 回测标的：PRD 表 7 个（CYB 有阈值但 PRD 表未列，默认不纳入，决策 A）。
 BACKTEST_SYMBOLS = ["VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"]
@@ -70,9 +71,11 @@ def _load_history_from_path(path: Path) -> list[dict]:
         if isinstance(rec, dict) and rec.get("date")
     ]
 
-
 def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict]:
-    """回放触发事件，复用生产 check_breach 语义（严格大于、实时阈值、缺口断开）。"""
+    """回放触发事件，复用生产 check_breach 语义（严格大于、实时阈值、缺口断开）。
+
+    动态阈值：回放第 i 对 (rows[i-1], rows[i]) 时传 history[:i]（排除候选行 i，
+    窗口含到 prev 行为止的收益，等价于生产「昨日收益是分布最新成员」）。"""
     triggers: list[dict] = []
     for i in range(1, len(history)):
         for sym in symbols:
@@ -81,7 +84,7 @@ def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict
             prev = history[i - 1].get(key)
             if cur is None or prev is None:
                 continue
-            breach = check_breach(sym, cur, prev)
+            breach = check_breach(sym, cur, prev, history[:i])
             if breach is None:
                 continue
             triggers.append(
@@ -90,6 +93,7 @@ def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict
                     "symbol": sym,
                     "change": breach["change"],
                     "threshold": breach["threshold"],
+                    "threshold_mode": breach["threshold_mode"],
                     "level": breach["level"],
                     "price": cur,
                     "index": i,
@@ -214,11 +218,16 @@ def render_report(history, triggers, fwd, run_date, eff_days) -> str:
         f"- 运行日期：{run_date}",
         f"- 数据窗口：{first} ~ {last}",
         f"- 有效交易日：{eff_days}",
-        "- 数据源：`data/history.json`（只读）",
-        "- 触发语义：生产 `check_breach`（严格大于阈值、缺口断开）",
-        "- 阈值来源：config/env 实时配置（见下表，回测目的即验证当前阈值）",
+        "- 阈值来源：config/env 实时配置（下表为回退/固定阈值，动态模式激活时实际生效阈值由历史波动率计算）",
         "",
-        "## 各标的当前阈值",
+        "## 动态阈值参数（二十七期）",
+        "",
+        f"- 动态阈值启用：{'是' if ALERT_DYNAMIC else '否'}",
+        f"- 回看窗口：{ALERT_LOOKBACK_DAYS} 个交易日",
+        f"- k 因子：{ALERT_K_FACTOR}",
+        f"- 回退阈值：下表 config/env 固定阈值（样本不足 / 关闭动态 / 零方差 / 计算值≤0 时生效）",
+        "",
+        "## 各标的当前（回退）阈值",
         "",
         "| 标的 | 阈值(%) |",
         "|---|---|",
@@ -234,12 +243,13 @@ def render_report(history, triggers, fwd, run_date, eff_days) -> str:
         thr = alert_threshold(sym)
         ann = annualized_frequency(sym_triggers, history, sym)
         levels = Counter(t["level"] for t in sym_triggers)
+        modes = Counter(t["threshold_mode"] for t in sym_triggers)
         etr = effective_trigger_rate(sym_triggers, history)
-        small = n_points < MIN_SYMBOL_POINTS
         lines += [
             f"## {sym}",
             "",
-            f"- 阈值：{thr:.2f}%",
+            f"- 回退阈值：{thr:.2f}%",
+            f"- 阈值模式分布：dynamic {modes.get('dynamic', 0)} / fixed {modes.get('fixed', 0)}",
             f"- 有效点：{n_points}",
             f"- 告警次数：{n_alerts}",
             f"- 年化频率：{ann:.2f} 次/年",
@@ -292,7 +302,7 @@ def render_report(history, triggers, fwd, run_date, eff_days) -> str:
         "",
         "## 方法说明",
         "",
-        f"- 触发检测：对历史相邻交易日 (prev, cur) 调用生产 `check_breach(sym, cur, prev)`，严格大于阈值才触发；阈值经 `alert_threshold(sym)` 实时读取 config/env。",
+        f"- 触发检测：对历史相邻交易日 (prev, cur) 调用生产 `check_breach(sym, cur, prev, history[:i])`，严格大于阈值才触发；阈值经 `alert_threshold(sym)` 实时读取 config/env，动态模式激活时按历史波动率（history[:i] 排除候选当日）计算生效阈值，样本不足/关闭时回退固定阈值。",
         f"- 有效交易日：至少一个回测标的有相邻可计算变化的行；全局门槛 {MIN_EFFECTIVE_DAYS} 天，不足则跳过回测。",
         f"- 单标的有效点：该标的有相邻可计算变化的行；门槛 {MIN_SYMBOL_POINTS} 点，不足仅输出计数与告警次数。",
         "- 后效：触发日后第 h 个交易日点对点收益 (p[t+h]-p[t])/p[t]×100%，缺口不阻断；窗口不足的样本不计入该窗口（n 透明展示）。",

@@ -40,14 +40,15 @@ def main(market: str = "us", time: str = "noon") -> int:
     values, errors = fetch_all(market)
     sector_heat = fetch_sector_heat() if market == "a-share" else None
     last_values = load_last_values()  # 只读缓存作告警基准，不写 history/缓存
-    statuses = build_statuses(values, errors, last_values, load_history())
+    history = load_history()          # 文件恒无当日行 → 直接传动态阈值窗口
+    statuses = build_statuses(values, errors, last_values, history)
     path = save_snapshot(
         date,
         render_snapshot(date, values, statuses, market, time, sector_heat=sector_heat),
         suffix=f"{market}-{time}",
     )
     try:  # 告警失败仅记日志，不影响快照生成（决策 H）
-        run_alert_checks(date, values, last_values, f"{market}-{time}", path)
+        run_alert_checks(date, values, last_values, f"{market}-{time}", path, history)
     except Exception as exc:
         log.warning("告警检查失败，不影响快照生成: %s", exc)
     # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0

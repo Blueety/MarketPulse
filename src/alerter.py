@@ -60,17 +60,17 @@ def render_alert(alert: dict, date: str, alert_type: str, report_path: "Path") -
     )
 
 
-def collect_breaches(values: dict, last_values: dict) -> list[dict]:
+def collect_breaches(values: dict, last_values: dict, history: list[dict] | None = None) -> list[dict]:
     """纯计算：遍历 SYMBOLS 调 check_breach 收集告警 dict，不写文件、不改 alerts.log（幂等）。
 
-    run_alert_checks 与 generate_context 共用的单一事实来源；单指数异常仅记日志跳过。"""
+    run_alert_checks 与 generate_context 共用的单一事实来源；单指数异常仅记日志跳过。
+    history 透传给 check_breach 以支持动态阈值（不传则回退固定阈值）。"""
     breaches = []
     for sym in SYMBOLS:
         if sym in ALT_SYMBOLS:
             continue
         try:
-
-            alert = check_breach(sym, values.get(sym), last_values.get(sym))
+            alert = check_breach(sym, values.get(sym), last_values.get(sym), history)
         except Exception as exc:
             log.warning("告警检查 %s 失败: %s", sym, exc)
             continue
@@ -80,13 +80,15 @@ def collect_breaches(values: dict, last_values: dict) -> list[dict]:
 
 
 def run_alert_checks(date: str, values: dict, last_values: dict,
-                     alert_type: str, report_path: "Path") -> list[dict]:
+                     alert_type: str, report_path: "Path",
+                     history: list[dict] | None = None) -> list[dict]:
     """检查各指数告警：check_breach → 当日去重过滤 → 写文件 → 标记已告警。
 
-    单指数异常仅记日志；调用方应再包 try/except（决策 H）。返回本次触发的告警列表。"""
+    单指数异常仅记日志；调用方应再包 try/except（决策 H）。返回本次触发的告警列表。
+    history 透传给 collect_breaches（动态阈值窗口，不含候选当日）。"""
     alerted = _load_alerted(date)
     pending = []
-    for alert in collect_breaches(values, last_values):
+    for alert in collect_breaches(values, last_values, history):
         if alert["symbol"] in alerted:
             log.info("%s 当日已告警（alerts.log），跳过", alert["symbol"])
             continue
@@ -102,6 +104,4 @@ def run_alert_checks(date: str, values: dict, last_values: dict,
     _mark_alerted(date, alerted | {a["symbol"] for a in pending})
     log.info("告警文件已生成: %s（%d 项）", path, len(pending))
     return pending
-
-
 

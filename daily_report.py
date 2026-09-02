@@ -194,7 +194,7 @@ def main() -> int:
         append_history(record)
         log.info("历史已追加: %s", record)
     try:  # 告警检查：save_last_values 前用旧缓存作基准（决策 G），失败仅记日志（决策 H）
-        run_alert_checks(date, values, last_values, "close", report_path)
+        run_alert_checks(date, values, last_values, "close", report_path, history)
     except Exception as exc:
         log.warning("告警检查失败，不影响日报生成: %s", exc)
 
