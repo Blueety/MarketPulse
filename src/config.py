@@ -21,7 +21,7 @@ DEFAULTS = {
         "vix": {"peaceful": 20.0, "panic": 30.0},
         "move": {"normal": 100.0, "tight": 130.0},
     },
-    "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0},
+    "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0, "dynamic": True, "lookback_days": 20, "k_factor": 2.0},
     "trend": {"chart_days": 30, "streak_days": 3},
     "history": {"retention_days": 90},
     # 二十四期：自选股/持仓（值为 list[dict]，白名单合并无法处理，由 _valid_watchlist 单独校验）
@@ -110,6 +110,13 @@ def _merge_valid(base: dict, raw: dict, prefix: tuple = ()) -> dict:
             if isinstance(raw_val, dict):
                 out[key] = _merge_valid(base_val, raw_val, prefix + (key,))
             # 非 dict → 保持默认
+        elif isinstance(base_val, bool):
+            # bool 叶值：仅接受 bool 覆盖（JSON true/false），否则回退默认
+            if isinstance(raw_val, bool):
+                out[key] = raw_val
+            elif key in raw:
+                log.warning("配置 %s 非法（%r），回退默认 %s",
+                            ".".join(prefix + (key,)), raw_val, base_val)
         elif _valid_number(raw_val):
             out[key] = raw_val
         elif key in raw:

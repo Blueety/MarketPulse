@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import statistics
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -45,6 +46,10 @@ ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单�
     "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
     "恐慌": "波动率处于高位，建议以避险为主，防范系统性风险。",
 }
+# 二十七期：动态告警阈值（基于历史波动率）。import 时快照，沿用 ALERT_THRESHOLDS 范式。
+ALERT_DYNAMIC = bool(_CFG["alert"].get("dynamic", True))
+ALERT_LOOKBACK_DAYS = int(_CFG["alert"].get("lookback_days", 20))
+ALERT_K_FACTOR = float(_CFG["alert"].get("k_factor", 2.0))
 
 # 六期A：大盘趋势连续涨跌天数阈值（N）；trend_label 调用时经 TREND_STREAK_DAYS env 复核。
 STREAK_DAYS = int(_CFG["trend"]["streak_days"])
@@ -116,18 +121,66 @@ def compute_changes(current: dict, last_values: dict) -> dict:
             changes[sym] = (value - last_values[sym]) / last_values[sym] * 100.0
     return changes
 
+def _trailing_returns(symbol: str, history, lookback_days: int) -> list[float]:
+    """从最新往回收集连续有效日收益（%）。遇该列非数值行即停（缺口中断，不跨期混算）。
+
+    返回最新 lookback_days 个收益；样本不足时返回全部（由调用方判门槛）。
+    history 已假定不含候选当日（调用方负责排除，纯函数不读日期语义）。"""
+    lower = symbol.lower()
+    rows = sorted((r for r in (history or []) if r.get("date")), key=lambda r: r["date"])
+    closes = []
+    for row in reversed(rows):                # 最新 → 最旧
+        v = row.get(lower)
+        if isinstance(v, (int, float)):
+            closes.append(float(v))
+        else:
+            break                             # 缺口：更老数据跨期，混入会扭曲分布
+    rets = [(closes[i - 1] - closes[i]) / closes[i] * 100.0
+            for i in range(len(closes) - 1, 0, -1)]   # 相邻日收益，新→旧
+    return rets[:lookback_days]
+
+
+def dynamic_alert_threshold(symbol: str, history, lookback_days: int | None = None,
+                            k_factor: float | None = None) -> float | None:
+    """计算动态阈值（%）。样本不足 / 零方差 / 缺口 / 计算值 <=0 → None（调用方回退固定）。
+
+    纯计算、可单测；不触 I/O。阈值 = trailing 收益均值 + k × 样本标准差（ddof=1）。"""
+    lookback_days = ALERT_LOOKBACK_DAYS if lookback_days is None else int(lookback_days)
+    k_factor = ALERT_K_FACTOR if k_factor is None else float(k_factor)
+    rets = _trailing_returns(symbol, history, lookback_days)
+    if len(rets) < lookback_days or len(rets) < 2:
+        return None                           # 样本不足 → 回退固定
+    try:
+        mean = sum(rets) / len(rets)
+        std = statistics.stdev(rets)          # 样本标准差 ddof=1；零方差 → StatisticsError
+    except statistics.StatisticsError:
+        return None
+    value = mean + k_factor * std
+    return value if value > 0 else None       # ≤0（高 drift 病理）无意义 → 回退固定
+
 
 def alert_threshold(symbol: str) -> float:
     """返回指数告警阈值（变化率 %）；env ALERT_THRESHOLD_<SYM> 覆盖默认，非法/非正回退默认。"""
     return env_float(f"ALERT_THRESHOLD_{symbol}", ALERT_THRESHOLDS[symbol])
 
 
-def check_breach(symbol: str, current: float | None, last: float | None) -> dict | None:
-    """判断当日变化率是否超过告警阈值（严格大于，等于不触发）。返回告警 dict 或 None；level：恐慌区间为 ALERT。"""
+def check_breach(symbol: str, current: float | None, last: float | None,
+                 history: list[dict] | None = None) -> dict | None:
+    """判断当日变化率是否超过告警阈值（严格大于，等于不触发）。返回告警 dict 或 None；level：恐慌区间为 ALERT。
+
+    新增可选 history：非空且 ALERT_DYNAMIC 启用且动态值可算 → 生效阈值=动态值、
+    threshold_mode="dynamic"；否则 threshold=alert_threshold(symbol)、threshold_mode="fixed"。
+    告警 dict 新增两键（PRD 需求 5）："threshold_mode" 显式标注模式、"dynamic_threshold" 本次动态
+    计算值（fixed 模式为 None）。既有键（threshold 存生效值）与两返回分支（STOCK_SYMBOLS / 波动率）
+    的 level/state/suggestion 逻辑原样。"""
     if current is None or last is None or last == 0:
         return None
     change = (current - last) / last * 100.0
-    threshold = alert_threshold(symbol)
+    threshold, mode, dyn_val = alert_threshold(symbol), "fixed", None
+    if ALERT_DYNAMIC and history:
+        dyn = dynamic_alert_threshold(symbol, history)
+        if dyn is not None:
+            threshold, mode, dyn_val = dyn, "dynamic", dyn
     if abs(change) <= threshold:
         return None
     if symbol in STOCK_SYMBOLS:  # 大盘无恐慌区间定义，恒 WARN、state=异动
@@ -137,6 +190,8 @@ def check_breach(symbol: str, current: float | None, last: float | None) -> dict
             "last": last,
             "change": change,
             "threshold": threshold,
+            "threshold_mode": mode,
+            "dynamic_threshold": dyn_val,
             "level": "WARN",
             "state": "异动",
             "suggestion": STOCK_SUGGESTION,
@@ -149,6 +204,8 @@ def check_breach(symbol: str, current: float | None, last: float | None) -> dict
         "last": last,
         "change": change,
         "threshold": threshold,
+        "threshold_mode": mode,
+        "dynamic_threshold": dyn_val,
         "level": level,
         "state": state,
         "suggestion": ALERT_SUGGESTIONS[state],
