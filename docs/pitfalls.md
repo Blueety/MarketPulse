@@ -167,3 +167,13 @@
 - **web 浅色主题——uvicorn 模板缓存 / 端口占用**：Jinja2 启动把 `index.html` 读入缓存，旧进程不反映模板改动；且 8000 常被既有看板占用。验证模板/静态改动须另起未缓存端口（如 8001/8002）或用硬刷新；headless 浏览器会缓存 `style.css`，换端口（不同 origin）可强制重新拉取，否则 `:root.light` 规则看似「不生效」实为缓存旧 CSS（`tab.evaluate` 查 `document.styleSheets` 的 `:root.light` 规则可证伪）。
 - **web 浅色主题——`tab.evaluate` 断言**：浏览器 `run` 顶层无 `document`，DOM/计算样式访问必须包在 `tab.evaluate(() => {...})` 内且 `await`；一次 `run` 内完成 初始→点击→刷新→再点击 全流程，避免跨 `run` 上下文重置 `localStorage` 导致持久化断言失真；验证三态：`html.light` 类、`localStorage["mp-theme"]`、computed `background-color`（深 `rgb(11,14,20)` ↔ 浅 `rgb(245,245,245)`）。
 
+
+
+## 模块 web/（context 空壳回退，2026-09-03）
+
+- **失败空壳 context 会遮蔽真实板块数据**：`context/YYYY-MM-DD.json` 由 `daily_report.py` 覆盖写入同名文件；当某次运行全源取数失败（如 09-03 停牌/网络中断），`generate_context` 仍会写出 indices 全 null、`sector_heat` 空结构（`{gainers:[],losers:[]}`）的空壳。`_load_latest_context` 原按文件名字典序严格取最末，空壳会盖掉前一日（09-02）真实板块数据，前端 `renderSector` 因 `gainers` 为空显示「数据暂缺」。
+- **回退落到 `_load_latest_context` 整体**：`_load_latest_context` 语义升级为「最近有效 context」——按文件名倒序遍历，返回第一个 `sector_heat` 为 dict 且 `gainers` 非空的 context（= 最近一次板块取数成功的交易日）；全部无板块数据 → 返回倒序第一个可解析 context（状态列兜底下限）；目录缺失/全坏 → `None`。`_load_sector_heat` 与 `api_latest` 零改动，自动同源回退（板块列与状态列同来自该返回值）。
+- **空壳判定用 `gainers` 非空**：前端唯一渲染字段是 `gainers`（losers 不参与渲染）；`generate_context` 恒同时写 gainers/losers 且同源，故 `gainers` 非空 ⇔ 该次板块取数成功，避免 losers-only 假阳性（后端有数据但前端仍「数据暂缺」）。
+- **`_read_context_file` 逐文件容错**：倒序遍历时坏 JSON / 非 dict / IO 错误 → 记 warning 并 `continue`，跳过坏文件继续向前回退；不再像旧实现那样「最新文件坏 → 整体 `None`」阻断其后更旧的有效 context。
+- **状态列回退的边界**：方案 A 下「仅板块取数失败日」状态列会随回退滞后一天（罕见，与当日数值错配）；全源失败空壳日状态列与数值列同源一致（本次场景，改善）。若此类错位日变多，切方案 C：`api_latest` 状态列按 history 最新日期精确取 context，板块列独立走「最近有板块数据」回退。
+- **真实数据落地后回退自然失效**：不改生产端；`daily_report.py` 覆盖写同名 context，09-03 真实数据落地后 `_load_latest_context` 取最新文件即命中板块数据，回退不再触发，无需清理逻辑。

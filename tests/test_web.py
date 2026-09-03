@@ -13,6 +13,7 @@ from web.app import (
     _compute_latest,
     _last_records,
     _load_alerts,
+    _load_latest_context,
     _load_sector_heat,
     _normalize_series,
     _parse_alert_file,
@@ -214,6 +215,84 @@ def test_load_sector_heat_missing_key(tmp_path, monkeypatch):
 def test_load_sector_heat_no_context_dir(monkeypatch):
     monkeypatch.setattr(web.app, "CONTEXT_DIR", Path("/nonexistent/context/dir"))
     assert _load_sector_heat() == {"gainers": [], "losers": []}
+
+
+def test_load_latest_context_falls_back_from_empty_shell(tmp_path, monkeypatch):
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    # 09-03 全源失败空壳：indices 全 null、sector_heat 空
+    empty_shell = {
+        "date": "2026-09-03",
+        "indices": {k: None for k in ["gspc", "ixic", "sh", "sz", "cyb", "vix", "vxn", "move"]},
+        "sector_heat": {"gainers": [], "losers": []},
+    }
+    (tmp_path / "2026-09-03.json").write_text(json.dumps(empty_shell), encoding="utf-8")
+    # 09-02 真实有板块数据
+    real = {
+        "date": "2026-09-02",
+        "indices": {"gspc": 5500.0},
+        "sector_heat": {
+            "gainers": [{"name": "军工", "change": -0.28, "turnover": "1.2亿", "top_stock": "中航飞机"}],
+            "losers": [],
+        },
+    }
+    (tmp_path / "2026-09-02.json").write_text(json.dumps(real), encoding="utf-8")
+    assert _load_latest_context()["date"] == "2026-09-02"
+    gainers = _load_sector_heat()["gainers"]
+    assert [g["name"] for g in gainers] == ["军工"]
+
+
+def test_load_latest_context_prefers_newest_with_sector(tmp_path, monkeypatch):
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    old = {
+        "date": "2026-09-02",
+        "indices": {},
+        "sector_heat": {"gainers": [{"name": "军工", "change": 1.0}], "losers": []},
+    }
+    (tmp_path / "2026-09-02.json").write_text(json.dumps(old), encoding="utf-8")
+    new = {
+        "date": "2026-09-03",
+        "indices": {},
+        "sector_heat": {"gainers": [{"name": "消费", "change": 2.0}], "losers": []},
+    }
+    (tmp_path / "2026-09-03.json").write_text(json.dumps(new), encoding="utf-8")
+    # 最新文件本身有板块数据 → 不误回退
+    assert _load_latest_context()["date"] == "2026-09-03"
+    assert _load_sector_heat()["gainers"][0]["name"] == "消费"
+
+
+def test_load_latest_context_no_sector_anywhere(tmp_path, monkeypatch):
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    # 旧格式：全部无 sector_heat 键
+    old = {"date": "2026-09-02", "indices": {"gspc": 5400.0}}
+    (tmp_path / "2026-09-02.json").write_text(json.dumps(old), encoding="utf-8")
+    new = {"date": "2026-09-03", "indices": {"gspc": 5500.0}}
+    (tmp_path / "2026-09-03.json").write_text(json.dumps(new), encoding="utf-8")
+    # 语义下限：返回最新的可解析 context（状态列不落空）
+    assert _load_latest_context()["date"] == "2026-09-03"
+    assert _load_sector_heat() == {"gainers": [], "losers": []}
+
+
+def test_load_latest_context_skips_corrupt_newest(tmp_path, monkeypatch):
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    # 最新文件坏 JSON
+    (tmp_path / "2026-09-03.json").write_text("{bad json", encoding="utf-8")
+    real = {
+        "date": "2026-09-02",
+        "indices": {},
+        "sector_heat": {"gainers": [{"name": "军工", "change": 1.0}], "losers": []},
+    }
+    (tmp_path / "2026-09-02.json").write_text(json.dumps(real), encoding="utf-8")
+    assert _load_latest_context()["date"] == "2026-09-02"
+    assert _load_sector_heat()["gainers"][0]["name"] == "军工"
+
+
+def test_load_latest_context_all_corrupt(tmp_path, monkeypatch):
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    (tmp_path / "2026-09-02.json").write_text("{bad", encoding="utf-8")
+    (tmp_path / "2026-09-03.json").write_text("not json", encoding="utf-8")
+    assert _load_latest_context() is None
+    assert _load_sector_heat() == {"gainers": [], "losers": []}
+
 
 
 # ---- 端点（TestClient，夹具打齐三路径常量）----

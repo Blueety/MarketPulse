@@ -170,19 +170,36 @@ def _compute_latest(history: list[dict]):
     return date, indices
 
 
+def _read_context_file(path: Path) -> dict | None:
+    """单文件解析容错：坏 JSON / 非 dict / IO 错误 → None（不阻断回退遍历）。"""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("context 读取失败，跳过该文件: %s (%s)", path.name, exc)
+        return None
+    if not isinstance(data, dict):
+        log.warning("context 非 dict，跳过该文件: %s", path.name)
+        return None
+    return data
+
+
 def _load_latest_context() -> dict | None:
-    """读最新日期 context JSON（文件名 YYYY-MM-DD.json 字典序 = 日期序）；缺失 / 坏 → None。"""
+    """最近有效 context：按文件名倒序返回第一个 sector_heat 有数据（gainers 非空）的
+    context；全部无板块数据 → 返回最新的可解析 context；目录缺失/全坏 → None。"""
     if not CONTEXT_DIR.exists():
         return None
-    files = sorted(CONTEXT_DIR.glob("*.json"))
-    if not files:
-        return None
-    try:
-        return json.loads(files[-1].read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        log.warning("context 读取失败，降级为空: %s", exc)
-        return None
-
+    files = sorted(CONTEXT_DIR.glob("*.json"), reverse=True)
+    fallback = None
+    for path in files:
+        ctx = _read_context_file(path)
+        if ctx is None:
+            continue
+        if fallback is None:
+            fallback = ctx                     # 语义下限：最新的可解析文件
+        sh = ctx.get("sector_heat")
+        if isinstance(sh, dict) and sh.get("gainers"):
+            return ctx                         # 最近一次板块取数成功的交易日
+    return fallback
 
 def _load_sector_heat() -> dict:
     """从最新 context 取 sector_heat（gainers/losers）；缺失 / 坏 → 空结构降级。"""
