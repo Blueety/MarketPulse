@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from src.analyzer import classify_vix, get_market_date
+from src.analyzer import classify_vix, get_market_date, merge_history
 from src.fetcher import fetch_realtime_quotes, fetch_sector_heat, fetch_us_sector_heat
 from src.reporter import render_opening_report, save_opening
 
@@ -107,6 +107,17 @@ def main(market: str = "a-share") -> int:
         render_opening_report(date, market, quotes, gaps, sentiment, sector_heat, errors),
     )
     log.info("开盘分析已生成: %s", path)
+    # 盘中合并写 history：把本次市场子集的实时价并入当日行（R1/R2）。
+    # a-share={SH,SZ,CYB}、us={GSPC,IXIC}；VIX 不入 history（R3：避免与美东前一日收盘重复）。
+    # 取数全失败（quotes 空/全 None）→ hist_values 为空 → merge_history 空操作。
+    sub = {"SH", "SZ", "CYB"} if market == "a-share" else {"GSPC", "IXIC"}
+    hist_values = {
+        s: quotes[s]["current"]
+        for s in sub
+        if s in quotes and quotes[s].get("current") is not None
+    }
+    if hist_values:
+        merge_history(date, hist_values)
     # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
     auto_commit_push(date, f"{market} opening analysis")
     return 0  # 全源失败也恒 0

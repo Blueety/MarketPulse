@@ -111,6 +111,26 @@ def test_compute_latest_single_record(tmp_path, monkeypatch):
 
 def test_compute_latest_empty(tmp_path, monkeypatch):
     assert _compute_latest([]) is None
+def test_compute_latest_backfills_sparse(tmp_path, monkeypatch):
+    """末行仅含部分市场（盘中 snapshot 合并）→ 缺失符号前向回填，涨跌幅置 None（R5）。"""
+    monkeypatch.setattr(ws, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ws, "load_history", lambda: [
+        {"date": "d1", "sh": 3000.0, "sz": 10000.0, "cyb": 2200.0,
+         "gspc": 100.0, "ixic": 200.0, "vix": 15.0, "vxn": 18.0, "move": 100.0},
+        {"date": "d2", "sh": 3030.0, "sz": 10100.0, "cyb": 2210.0},  # 仅 A 股已合并
+    ])
+    result = _compute_latest(load_history())
+    assert result[0] == "d2"
+    idx = {i["symbol"]: i for i in result[1]}
+    # A 股：原始有值 → 计算涨跌幅
+    assert idx["SH"]["value"] == 3030.0
+    assert idx["SH"]["change_pct"] == pytest.approx(1.0)
+    # 美股/波动率：末行 None → 前向回填 d1 值，change_pct 强制 None
+    assert idx["GSPC"]["value"] == 100.0
+    assert idx["GSPC"]["change_pct"] is None
+    assert idx["MOVE"]["value"] == 100.0
+    assert idx["MOVE"]["change_pct"] is None
+
 
 
 # ---- 告警解析纯函数 ----

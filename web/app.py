@@ -144,6 +144,8 @@ def _compute_latest(history: list[dict]):
 
     返回 (date, indices) 或历史为空时返回 None。
     - change_pct = (cur - prev) / prev * 100；prev 缺失 / 为 None / 为 0 → None。
+    - 末行某符号为 None（该市场未开盘/已收盘）→ 值前向回填最近非空行该符号值，
+      change_pct 强制 None（不虚构当日涨跌幅，前端显示数值 + "—"；决策 R5）。
     - status 字段在此置 None，由调用方从最新 context 合并。
     """
     if not history:
@@ -154,9 +156,15 @@ def _compute_latest(history: list[dict]):
     indices = []
     for sym in SYMBOLS:
         key = sym.lower()
-        cur = last.get(key)
+        raw = last.get(key)
+        cur = raw
+        if cur is None:
+            for past in reversed(history[:-1]):
+                if past.get(key) is not None:
+                    cur = past[key]
+                    break
         change_pct = None
-        if prev is not None and cur is not None:
+        if raw is not None and prev is not None:
             base = prev.get(key)
             if base not in (None, 0):
                 change_pct = (cur - base) / base * 100

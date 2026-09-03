@@ -120,6 +120,10 @@ def main() -> int:
     has_history = bool(last_values)
     changes = compute_changes(values, last_values)
     history = load_history()
+    # 读时剔除自身 date 行：盘中其它入口（opening/snapshot）已把当日子集值 merge 进 history，
+    # 若此处不剔除，趋势图末点/相关性/连涨会基于盘中行而非当日收盘（决策 R4/R6）；
+    # append_history 在末尾写全量定稿，不受影响。
+    history = [r for r in history if r.get("date") != date]
 
     # 二十四期：自选股/持仓关联（独立容错，失败不影响主流程/退出码）
     watchlist_view = None

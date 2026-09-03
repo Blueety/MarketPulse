@@ -275,6 +275,7 @@ class TestSnapshotEntryOrchestration:
             calls["merge_date"] = mdate
             calls["merge_values"] = values
         monkeypatch.setattr(snap, "merge_history", fake_merge_history)
+        monkeypatch.setattr(snap, "run_alert_checks", fake_alert)
         return calls
 
     def test_a_share_midday(self, monkeypatch, tmp_path):

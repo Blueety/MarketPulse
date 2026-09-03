@@ -10,6 +10,9 @@ import pytest
 import src.fetcher as ft
 import src.reporter as rep
 import opening_analyzer as oa
+import json
+
+import src.analyzer as an
 from src.reporter import render_report
 
 
@@ -230,17 +233,22 @@ class TestOpeningEntry:
         monkeypatch.setattr(oa, "render_opening_report", lambda *a, **k: "RENDERED")
         monkeypatch.setattr(oa, "save_opening",
                             lambda d, m, c: captured.setdefault("path", tmp_path / f"{d}-{m}.md"))
+        monkeypatch.setattr(oa, "merge_history",
+                            lambda d, v: captured.setdefault("merge", (d, v)))
 
         rc = oa.main("a-share")
         assert rc == 0
-        assert captured["path"] == tmp_path / f"{rep.get_market_date('a-share')}-a-share.md"
+        assert "merge" in captured
+        assert captured["merge"][1] == {"SH": 3015.0}
 
     def test_zero_persistence(self, tmp_path, monkeypatch):
-        # 重定向所有可写目录，断言 data/ context/ 无新增写入
+        # 反转：开盘分析现合并写 history（决策 R1/R3）；仍不写 context
         data_dir = tmp_path / "data"
         ctx_dir = tmp_path / "context"
+        history_file = tmp_path / "history.json"  # 父目录已存在，merge_history 写入不会 FileNotFoundError
         monkeypatch.setattr(rep, "OPENING_DIR", tmp_path / "opening")
-        # 隔离 fetcher 的真实持久化模块（opening_analyzer 不导入，但确保不误用）
+        # 重定向 analyzer 持久化目标到 tmp，防止触碰真实 data/history.json
+        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
         monkeypatch.setattr(oa, "fetch_realtime_quotes",
                             lambda m: ({"SH": {"open": 1.0, "prev_close": 1.0, "current": 1.0}}, {}))
         monkeypatch.setattr(oa, "fetch_sector_heat", lambda: ([], []))
@@ -248,8 +256,12 @@ class TestOpeningEntry:
         monkeypatch.setattr(oa, "render_opening_report", lambda *a, **k: "RENDERED")
         monkeypatch.setattr(oa, "save_opening", lambda d, m, c: tmp_path / "opening" / f"{d}-{m}.md")
 
-        before = set(data_dir.rglob("*")) | set(ctx_dir.rglob("*"))
         rc = oa.main("a-share")
-        after = set(data_dir.rglob("*")) | set(ctx_dir.rglob("*"))
         assert rc == 0
-        assert before == after
+        # history 被合并写入当日行（仅 SH，本市场子集；VIX 不写）
+        hist = json.loads(history_file.read_text(encoding="utf-8"))
+        today = [r for r in hist if r["date"] == oa.get_market_date("a-share")]
+        assert len(today) == 1
+        assert today[0]["sh"] == 1.0
+        # context 仍零写入（保留原零持久化约束中 context 部分）
+        assert not list(ctx_dir.rglob("*"))

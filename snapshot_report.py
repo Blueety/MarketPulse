@@ -39,6 +39,7 @@ def main(market: str = "us", time: str = "noon") -> int:
 
     values, errors = fetch_all(market)
     sector_heat = fetch_sector_heat() if market == "a-share" else None
+    last_values = load_last_values()  # 只读缓存作告警基准，不写 history/缓存
     history = load_history()
     # 读时剔除自身 date 行：本运行尚未 merge 写入，该行若存在（盘中其它入口已写）会污染
     # 动态阈值窗口/连涨串（决策 R4）；快照只在渲染/告警后把本次市场子集合并进当日行。
