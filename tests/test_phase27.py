@@ -291,7 +291,7 @@ class TestWiring:
         monkeypatch.setattr(sr, "build_statuses", lambda *a, **k: {"VIX": ("平静", "ok")})
         monkeypatch.setattr(sr, "render_snapshot", lambda *a, **k: "")
         monkeypatch.setattr(sr, "save_snapshot", lambda *a, **k: tmp_path / "snap.md")
-        monkeypatch.setattr(sr, "auto_commit_push", lambda *a, **k: False)
+        monkeypatch.setattr(sr, "merge_history", lambda *a, **k: None)  # 防止触碰真实 data/history.json
         captured = {}
         monkeypatch.setattr(sr, "run_alert_checks",
                             lambda *a, **k: captured.setdefault("args", a) or None)

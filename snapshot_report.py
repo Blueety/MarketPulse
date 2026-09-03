@@ -17,7 +17,7 @@ import argparse
 import logging
 
 from src.alerter import run_alert_checks
-from src.analyzer import build_statuses, get_market_date, load_history, load_last_values
+from src.analyzer import build_statuses, get_market_date, load_history, load_last_values, merge_history
 from src.fetcher import fetch_all, fetch_sector_heat
 from src.reporter import render_snapshot, save_snapshot
 from src.git_ops import auto_commit_push
@@ -39,8 +39,10 @@ def main(market: str = "us", time: str = "noon") -> int:
 
     values, errors = fetch_all(market)
     sector_heat = fetch_sector_heat() if market == "a-share" else None
-    last_values = load_last_values()  # 只读缓存作告警基准，不写 history/缓存
-    history = load_history()          # 文件恒无当日行 → 直接传动态阈值窗口
+    history = load_history()
+    # 读时剔除自身 date 行：本运行尚未 merge 写入，该行若存在（盘中其它入口已写）会污染
+    # 动态阈值窗口/连涨串（决策 R4）；快照只在渲染/告警后把本次市场子集合并进当日行。
+    history = [r for r in history if r.get("date") != date]
     statuses = build_statuses(values, errors, last_values, history)
     path = save_snapshot(
         date,
@@ -51,6 +53,9 @@ def main(market: str = "us", time: str = "noon") -> int:
         run_alert_checks(date, values, last_values, f"{market}-{time}", path, history)
     except Exception as exc:
         log.warning("告警检查失败，不影响快照生成: %s", exc)
+    # 读时剔除 + 渲染/告警之后，把本次市场子集（sh/sz/cyb 或 gspc/ixic 或 gld/btc）合并写回当日行；
+    # 不整行覆盖，保留同日其它市场数据（决策 R1/R2）。取数全失败（values 空/全 None）→ 空操作。
+    merge_history(date, values)
     # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
     auto_commit_push(date, f"{market} {time} snapshot")
     return 0

@@ -57,6 +57,9 @@ STREAK_DAYS = int(_CFG["trend"]["streak_days"])
 STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理。"
 
 HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
+
+# 历史记录持久化的 10 个指数键（与 load_history 投影、SYMBOLS 大写键一一对应小写）
+_HISTORY_KEYS = frozenset(s.lower() for s in SYMBOLS)
 # 十二期：相关性分析（PRD 定稿 5 组关键对；窗口/最少样本/显著阈值均为 PRD 固定值，不配置化）
 CORRELATION_PAIRS = [   # (指数A, 指数B) —— 顺序即报告与 context 输出顺序
     ("VIX", "GSPC"),    # 恐慌 ↔ 标普500（负相关越强，美股对恐慌越敏感）
@@ -617,6 +620,40 @@ def append_history(record: dict) -> None:
     records = load_history()
     records = [r for r in records if r.get("date") != record.get("date")]
     records.append(record)
+    records = records[-HISTORY_MAX:]
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = HISTORY_FILE.with_name(HISTORY_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, HISTORY_FILE)
+
+
+def merge_history(date: str, values: dict) -> None:
+    """按 date 合并写当日记录：仅把 values 中非 None 且属历史键的字段更新进该日期行；
+    无该日期行则新建（其余键置 None）；同日重复合并幂等（不新增重复行）；裁 90 天；
+    原子写 + 坏文件容错。取数全失败（values 空/全 None）→ 空操作、不报错、退出码恒 0。
+
+    snapshot/opening 各自只取市场子集，写入即合并进同一当日行，避免整行覆盖抹除他市场数据。
+    daily 定稿行（append_history 全 10 键覆盖）与 merge 全量更新等价，故 daily_report 无需调用。
+    """
+    records = load_history()
+    updates = {
+        k.lower(): v
+        for k, v in values.items()
+        if v is not None and k.lower() in _HISTORY_KEYS
+    }
+    if not updates:
+        return
+    row = next((r for r in records if r.get("date") == str(date)), None)
+    if row is None:
+        row = {"date": str(date)}
+        row.update({k: None for k in _HISTORY_KEYS})
+        records.append(row)
+    row.update(updates)
+    # 同 date 去重（保留末次，幂等），再裁剪至最近 90 条
+    dedup: dict[str, dict] = {}
+    for r in records:
+        dedup[r.get("date")] = r
+    records = list(dedup.values())
     records = records[-HISTORY_MAX:]
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp = HISTORY_FILE.with_name(HISTORY_FILE.name + ".tmp")

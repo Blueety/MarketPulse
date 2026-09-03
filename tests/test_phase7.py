@@ -271,7 +271,10 @@ class TestSnapshotEntryOrchestration:
         monkeypatch.setattr(snap, "build_statuses", lambda *a, **k: {})
         monkeypatch.setattr(snap, "render_snapshot", fake_render)
         monkeypatch.setattr(snap, "save_snapshot", fake_save)
-        monkeypatch.setattr(snap, "run_alert_checks", fake_alert)
+        def fake_merge_history(mdate, values):
+            calls["merge_date"] = mdate
+            calls["merge_values"] = values
+        monkeypatch.setattr(snap, "merge_history", fake_merge_history)
         return calls
 
     def test_a_share_midday(self, monkeypatch, tmp_path):
@@ -281,6 +284,8 @@ class TestSnapshotEntryOrchestration:
         assert calls["sector_heat_called"] is True
         assert calls["render_sector_heat"] == ([{"name": "x", "change": 1.0, "turnover": "1亿", "top_stock": "X"}], [])
         assert calls["suffix"] == "a-share-midday"
+        assert calls["merge_date"] is not None
+        assert calls["merge_values"] == {"SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0}
         assert calls["alert_type"] == "a-share-midday"
         assert calls["render_market"] == "a-share"
         assert calls["render_time"] == "midday"
