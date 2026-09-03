@@ -19,7 +19,7 @@ import logging
 from src.alerter import run_alert_checks
 from src.analyzer import build_statuses, get_market_date, load_history, load_last_values, merge_history
 from src.fetcher import fetch_all, fetch_sector_heat
-from src.reporter import render_snapshot, save_snapshot
+from src.reporter import render_snapshot, save_snapshot, generate_context
 from src.git_ops import auto_commit_push
 
 logging.basicConfig(
@@ -57,6 +57,19 @@ def main(market: str = "us", time: str = "noon") -> int:
     # 读时剔除 + 渲染/告警之后，把本次市场子集（sh/sz/cyb 或 gspc/ixic 或 gld/btc）合并写回当日行；
     # 不整行覆盖，保留同日其它市场数据（决策 R1/R2）。取数全失败（values 空/全 None）→ 空操作。
     merge_history(date, values)
+    # 更新 context（含 sector_heat），供 web 看板使用
+    try:
+        changes = {}
+        for sym, val in values.items():
+            prev = last_values.get(sym)
+            if val is not None and prev is not None and prev != 0:
+                changes[sym] = (val - prev) / prev * 100
+        statuses = build_statuses(values, errors, last_values, history)
+        generate_context(date, values, changes, statuses, last_values,
+                         sector_heat=sector_heat if sector_heat else [])
+        log.info("context 已更新: context/%s.json", date)
+    except Exception as exc:
+        log.warning("context 更新失败，不影响快照: %s", exc)
     # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
     auto_commit_push(date, f"{market} {time} snapshot")
     return 0
