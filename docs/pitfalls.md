@@ -46,6 +46,8 @@
 - **reload 接线测试必须 finally 恢复**：用 `importlib.reload` 验证 config→常量后，finally 须恢复 CONFIG_PATH + 再次 reload，否则污染后续用例。
 - **bool 是 int 子类**：`_valid_number` 须显式 `not isinstance(v, bool)`，否则 JSON `true` 被当 `1` 通过校验。
 - **retention 裁剪只在 `append_history`**：`load_history` 不裁剪/不传参。
+- **读时剔除 + merge_history 配套（二十七期）**：`daily_report.py`/`snapshot_report.py`/`opening_analyzer.py` 读 history 后均先剔除自身 date 行（趋势图/相关性/连涨/告警基准用），`merge_history` 写前同样剔除——保证同日多入口（开盘/快照/收盘）各自只更新本市场子集，末点引用最新定稿而非盘中残留。切勿在入口内对 history 整行覆盖（会吞掉其它市场当日数据）。
+- **merge_history 不写 alt/VIX（二十七期）**：仅 a-share={SH,SZ,CYB}、us={GSPC,IXIC} 并入；GLD/BTC 走另类资产展示不进历史、VIX 已有美东前一日收盘值避免重复；取数全失败（values 空/全 None）→ 空操作，绝不写空行或抛异常。
 - **CONFIG_PATH 解析顺序**：显式 `path=` > `CONFIG_PATH` env > 项目根 `config.json`。
 - **优先级链**：env > config.json > 内置默认；config.json 缺键补默认（深合并）、未知键忽略。
 
