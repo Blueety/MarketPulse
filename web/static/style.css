@@ -215,6 +215,8 @@ body {
 .chart-box canvas {
   width: 100% !important;
   height: 340px !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
 }
 
 /* 告警列表：仅左侧色条 + 紧凑行式 */
