@@ -245,6 +245,7 @@
         box.innerHTML = '<p class="empty">暂无告警记录</p>';
         return;
       }
+      box.innerHTML = '';
       alerts.forEach(function (a) {
         const level = a.level || "";
         const cls = level === "ALERT" ? "alert" : (level === "WARN" ? "warn" : "");
