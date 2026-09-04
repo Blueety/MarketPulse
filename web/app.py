@@ -311,11 +311,14 @@ def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
         sym = it["symbol"]
         label = it.get("label", sym)
         pts = _series_tail(series.get(sym) or [])
-        # 涨跌幅：序列相邻日自算（与日报同公式，逐字对齐）
+        # 涨跌幅：序列相邻日自算（与日报 _build_watchlist_view 同公式）
         change_pct = None
         if len(pts) >= 2 and pts[-2][1] not in (None, 0):
             change_pct = round((pts[-1][1] - pts[-2][1]) / pts[-2][1] * 100, 2)
         val = values.get(sym)
+        # 失败行（value 缺失）按决策 1：change_pct 亦为 None（前端其余列「数据暂缺」）
+        if val is None:
+            change_pct = None
         stocks_out.append({
             "symbol": sym,
             "label": label,

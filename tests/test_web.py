@@ -633,6 +633,9 @@ def test_load_watchlist_empty_config(monkeypatch):
     assert out == {"stocks": [], "trend": {"dates": [], "series": []}}
 
 
+def test_load_watchlist_partial_failure(monkeypatch):
+    """失败行 value/change_pct 为 None、成功行正常；历史 series 仍入图（NF3）。"""
+
     stocks = [{"symbol": "OK", "label": "好"}, {"symbol": "BAD", "label": "坏"}]
     values = {"OK": 10.0}
     series = {"OK": [("d1", 9.0), ("d2", 10.0)], "BAD": [("d1", 5.0), ("d2", 6.0)]}
