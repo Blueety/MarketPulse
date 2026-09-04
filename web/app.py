@@ -1,7 +1,8 @@
 """MarketPulse Web 看板：FastAPI 应用。
 
 只读解析现有产物（data/history.json / context/*.json / alerts/*.md），提供单页看板
-与 3 个 JSON API。零侵入日报 / 快照主流程：本进程绝不写 data / alerts / context。
+与 4 个 JSON API（含自选股实时取数 /api/watchlist，经 src.fetcher.fetch_watchlist，零写盘）。
+零侵入日报 / 快照主流程：本进程绝不写 data / alerts / context。
 
 路径常量从 analyzer 复用单一事实来源，但在此模块重新绑定为模块级名字，供解析函数
 直接引用——测试按项目纪律 monkeypatch 这些名字（打在使用方模块 web.app，而非定义方
@@ -22,7 +23,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from src.analyzer import ALERTS_DIR as _ALERTS_DIR
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import HISTORY_FILE as _HISTORY_FILE
-from src.fetcher import SYMBOLS
+from src.config import load_config
+from src.fetcher import SYMBOLS, fetch_watchlist
 
 log = logging.getLogger("marketpulse")
 
@@ -284,7 +286,80 @@ def _load_alerts(limit: int = 10) -> list[dict]:
             out.append(parsed)
         if len(out) >= limit:
             break
-    return out
+# ---- 自选股（实时取数，config.json watchlist.stocks；零写盘）----
+
+def _series_tail(points, n: int = 30) -> list:
+    """截最近 n 点（保序）；空输入安全返回 []。"""
+    if not points:
+        return []
+    return list(points[-n:])
+
+
+def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
+    """构建自选股表格 + 趋势图双结构（同源一次返回）。
+
+    stocks 行按配置序：symbol / label / value（当日收盘价，缺失为 None）/ change_pct
+    （序列相邻日自算，与日报 _build_watchlist_view 同公式）。trend 与 /api/history
+    同构（dates + 索引对齐的 values，归一化基准 100），供前端单图多标的复用。
+    """
+    stocks_out = []
+    trend_items = []
+    all_dates: set[str] = set()
+    for it in stocks_cfg:
+        sym = it["symbol"]
+        label = it.get("label", sym)
+        pts = _series_tail(series.get(sym) or [])
+        # 涨跌幅：序列相邻日自算（与日报同公式，逐字对齐）
+        change_pct = None
+        if len(pts) >= 2 and pts[-2][1] not in (None, 0):
+            change_pct = round((pts[-1][1] - pts[-2][1]) / pts[-2][1] * 100, 2)
+        val = values.get(sym)
+        stocks_out.append({
+            "symbol": sym,
+            "label": label,
+            "value": val,
+            "change_pct": change_pct,
+        })
+        # 趋势图：即便当日价缺失但历史在也入图（A 股盘中无收盘 ≠ 无历史）
+        if pts:
+            for d, _ in pts:
+                all_dates.add(d)
+            trend_items.append({"key": sym.lower(), "label": label, "pts": pts})
+    # 对齐 dates 并集（字符串排序即时间序），按 dates 投影 raw 后归一化
+    dates = sorted(all_dates)
+    trend_series = []
+    for item in trend_items:
+        price_map = {d: c for d, c in item["pts"]}
+        aligned_raw = [price_map.get(d) for d in dates]
+        values_n, change_7d = _normalize_series(aligned_raw)
+        trend_series.append({
+            "key": item["key"],
+            "label": item["label"],
+            "values": values_n,
+            "change_7d": change_7d,
+            "raw": aligned_raw,
+        })
+    return {"stocks": stocks_out, "trend": {"dates": dates, "series": trend_series}}
+
+
+def _load_watchlist() -> dict:
+    """实时取数自选股；配置读取 / 取数 / 拼装任何异常降级空结构（HTTP 200，不 500）。
+
+    单标的失败仅缺席对应行（values 缺键 → value/change_pct 为 None），不影响其他模块。
+    """
+    try:
+        cfg = load_config()
+        stocks = (cfg.get("watchlist") or {}).get("stocks") or []
+        if not stocks:
+            return {"stocks": [], "trend": {"dates": [], "series": []}}
+        values, series, _errors = fetch_watchlist(stocks)
+        return _build_watchlist_payload(stocks, values, series)
+    except Exception as exc:
+        log.warning("自选股取数失败，降级空结构: %s", exc)
+        return {"stocks": [], "trend": {"dates": [], "series": []}}
+
+
+# ---- 端点 ----
 
 
 # ---- 端点 ----
