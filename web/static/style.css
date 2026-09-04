@@ -219,6 +219,9 @@ body {
   touch-action: pan-y;
 }
 
+/* 自选股图：限宽居中，避免全宽 220px 过扁（单标的场景尤甚） */
+#watchlist-section .chart-box { max-width: 640px; margin: 0 auto; }
+
 /* 告警列表：仅左侧色条 + 紧凑行式 */
 .alert-list {
   display: flex;
