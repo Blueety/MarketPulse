@@ -286,6 +286,8 @@ def _load_alerts(limit: int = 10) -> list[dict]:
             out.append(parsed)
         if len(out) >= limit:
             break
+    return out
+
 # ---- 自选股（实时取数，config.json watchlist.stocks；零写盘）----
 
 def _series_tail(points, n: int = 30) -> list:
@@ -361,9 +363,6 @@ def _load_watchlist() -> dict:
 
 # ---- 端点 ----
 
-
-# ---- 端点 ----
-
 @app.get("/api/history")
 def api_history(days: int = Query(30, ge=1, le=90), symbols: str | None = Query(None)) -> dict:
     """最近 N 交易日趋势数据（Chart.js 友好）；days 默认 30，symbols 默认全量。"""
@@ -396,6 +395,12 @@ def api_latest() -> dict:
 def api_alerts() -> list[dict]:
     """最近 10 条告警记录（按日期倒序）。"""
     return _load_alerts(10)
+
+
+@app.get("/api/watchlist")
+def api_watchlist() -> dict:
+    """自选股实时取数（config.json watchlist.stocks）；失败降级空结构（HTTP 200，不 500）。"""
+    return _load_watchlist()
 
 
 @app.get("/", response_class=HTMLResponse)

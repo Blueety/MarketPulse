@@ -10,11 +10,13 @@ import pytest
 import web.app
 from web.app import (
     _build_history_payload,
+    _build_watchlist_payload,
     _compute_latest,
     _last_records,
     _load_alerts,
     _load_latest_context,
     _load_sector_heat,
+    _load_watchlist,
     _normalize_series,
     _parse_alert_file,
     _resolve_symbols,
@@ -561,3 +563,123 @@ def test_resolve_symbols():
     assert _resolve_symbols("GSPC,VIX,GSPC") == ["GSPC", "VIX"]  # 去重
     assert _resolve_symbols("FOO") == []                      # 未知 → 空
     assert _resolve_symbols("FOO,BAR") == []
+
+# ---- 自选股 /api/watchlist：纯函数 + 端点（monkeypatch 打使用方 web.app）----
+
+def test_build_watchlist_payload_contract():
+    """表格行契约 + trend 契约（dates 并集升序 / 对齐含 null / 基准100 / key小写 / raw保留）。"""
+    stocks_cfg = [
+        {"symbol": "515300.SS", "label": "沪深300ETF"},
+        {"symbol": "AAPL"},  # label 缺省回退 symbol
+    ]
+    series = {
+        "515300.SS": [("2026-09-01", 4.00), ("2026-09-02", 4.10), ("2026-09-03", 4.123)],
+        "AAPL": [("2026-09-01", 200.0), ("2026-09-02", 202.0), ("2026-09-03", 205.0)],
+    }
+    values = {"515300.SS": 4.123, "AAPL": 205.0}
+    payload = _build_watchlist_payload(stocks_cfg, values, series)
+    # 表格行契约
+    rows = {r["symbol"]: r for r in payload["stocks"]}
+    assert rows["515300.SS"]["label"] == "沪深300ETF"
+    assert rows["515300.SS"]["value"] == 4.123
+    assert rows["515300.SS"]["change_pct"] == round((4.123 - 4.10) / 4.10 * 100, 2)
+    assert rows["AAPL"]["label"] == "AAPL"  # 缺省回退 symbol
+    assert rows["AAPL"]["change_pct"] == round((205.0 - 202.0) / 202.0 * 100, 2)
+    # trend 契约
+    trend = payload["trend"]
+    assert trend["dates"] == ["2026-09-01", "2026-09-02", "2026-09-03"]  # 升序并集
+    by_key = {s["key"]: s for s in trend["series"]}
+    assert "515300.ss" in by_key  # 小写 key
+    s = by_key["515300.ss"]
+    assert s["values"][0] == 100.0  # 归一化基准 100
+    assert s["raw"] == [4.0, 4.10, 4.123]  # 对齐 dates
+    assert s["change_7d"] == pytest.approx((4.123 - 4.0) / 4.0 * 100)
+    # 所有 series 对齐到同一 dates 长度
+    for ser in trend["series"]:
+        assert len(ser["values"]) == len(trend["dates"])
+        assert len(ser["raw"]) == len(trend["dates"])
+
+
+def test_build_watchlist_change_pct_edge():
+    """单点 / 空序列 / 昨收 None / 昨收 0 → change_pct 为 None（与日报同口径）。"""
+    # 单点
+    payload = _build_watchlist_payload([{"symbol": "X"}], {"X": 4.0}, {"X": [("d2", 4.0)]})
+    assert payload["stocks"][0]["change_pct"] is None
+    # 空序列（同时 value 缺失）
+    payload = _build_watchlist_payload([{"symbol": "X"}], {}, {})
+    assert payload["stocks"][0]["value"] is None
+    assert payload["stocks"][0]["change_pct"] is None
+    # 昨收 None
+    payload = _build_watchlist_payload([{"symbol": "X"}], {"X": 4.0}, {"X": [("d1", None), ("d2", 4.0)]})
+    assert payload["stocks"][0]["change_pct"] is None
+    # 昨收 0
+    payload = _build_watchlist_payload([{"symbol": "X"}], {"X": 4.0}, {"X": [("d1", 0.0), ("d2", 4.0)]})
+    assert payload["stocks"][0]["change_pct"] is None
+
+
+def test_build_watchlist_tail_30():
+    """41 点输入 → trend 仅保留最近 30 点（dates 与 series 同裁）。"""
+    pts = [(f"2026-08-{i:02d}", float(i)) for i in range(1, 42)]  # 41 点
+    payload = _build_watchlist_payload([{"symbol": "X"}], {"X": 41.0}, {"X": pts})
+    assert len(payload["trend"]["dates"]) == 30
+    assert len(payload["trend"]["series"][0]["values"]) == 30
+    assert payload["trend"]["dates"][0] == "2026-08-12"  # 最近 30 的起点
+
+
+def test_load_watchlist_empty_config(monkeypatch):
+    """config watchlist.stocks 为空 → 返回双空结构（F4 前端据此隐藏）。"""
+    monkeypatch.setattr(web.app, "load_config", lambda: {"watchlist": {"stocks": []}})
+    out = _load_watchlist()
+    assert out == {"stocks": [], "trend": {"dates": [], "series": []}}
+
+
+    stocks = [{"symbol": "OK", "label": "好"}, {"symbol": "BAD", "label": "坏"}]
+    values = {"OK": 10.0}
+    series = {"OK": [("d1", 9.0), ("d2", 10.0)], "BAD": [("d1", 5.0), ("d2", 6.0)]}
+    errors = {"BAD": "获取失败"}
+    monkeypatch.setattr(web.app, "load_config", lambda: {"watchlist": {"stocks": stocks}})
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda s: (values, series, errors))
+    out = _load_watchlist()
+    rows = {r["symbol"]: r for r in out["stocks"]}
+    assert rows["OK"]["value"] == 10.0
+    assert rows["OK"]["change_pct"] == round((10.0 - 9.0) / 9.0 * 100, 2)
+    assert rows["BAD"]["value"] is None
+    assert rows["BAD"]["change_pct"] is None
+    by_key = {s["key"]: s for s in out["trend"]["series"]}
+    assert "ok" in by_key and "bad" in by_key  # 两标的均入图
+
+
+def test_load_watchlist_fetch_raises(monkeypatch):
+    """fetch_watchlist 抛异常 → _load_watchlist 不抛、返回空结构（NF3，不 500）。"""
+    def boom(stocks):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(web.app, "fetch_watchlist", boom)
+    monkeypatch.setattr(web.app, "load_config",
+                        lambda: {"watchlist": {"stocks": [{"symbol": "X"}]}})
+    out = _load_watchlist()
+    assert out == {"stocks": [], "trend": {"dates": [], "series": []}}
+
+
+def test_api_watchlist_endpoint(client, monkeypatch):
+    """端点返回 200 + JSON 形状（stocks / trend.dates / trend.series）。"""
+    payload = {
+        "stocks": [{"symbol": "X", "label": "X", "value": 1.0, "change_pct": 2.0}],
+        "trend": {"dates": ["d1"],
+                  "series": [{"key": "x", "label": "X", "values": [100.0],
+                              "change_7d": 0.0, "raw": [1.0]}]},
+    }
+    monkeypatch.setattr(web.app, "_load_watchlist", lambda: payload)
+    r = client.get("/api/watchlist")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["stocks"][0]["symbol"] == "X"
+    assert data["trend"]["dates"] == ["d1"]
+    assert data["trend"]["series"][0]["key"] == "x"
+
+
+def test_api_watchlist_no_config_hidden_semantics(client, monkeypatch):
+    """默认配置 stocks 恒空 → 端点返回 stocks=[]（F4 前端据此隐藏）。"""
+    monkeypatch.setattr(web.app, "load_config", lambda: {"watchlist": {"stocks": []}})
+    r = client.get("/api/watchlist")
+    assert r.status_code == 200
+    assert r.json()["stocks"] == []
