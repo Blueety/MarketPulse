@@ -81,3 +81,21 @@
 - `renderLineChart`（index.html:361 的 `const options`）同样未设 `maintainAspectRatio`，依赖默认 `aspect=2`。
 - 主图在 `.charts-grid` 半宽（1280 视口下每图容器 ≈565px）→ 逻辑高 ≈282px，CSS 显示高 `340px !important` → 内容被轻微**拉伸** ≈1.2×（比值 `canvas.height/rect.height ≈ DPR×0.83`，低于 plan 糊阈值 DPR×1.1），非压缩型失真，用户未报。
 - 结论：主图观感可接受，**不在本次范围**，不补该行。若后续有人报主图糊，再同法补 `maintainAspectRatio:false` 一行（另行小改）。
+
+## 任务 F（追加 2026-09-04）：自选股图表数据点保证 30 个交易日
+
+### 改动内容
+- `src/fetcher.py` 两处（仅 Yahoo 自选股源；A 股源 70 自然日不截、接口层 `_series_tail(30)` 兜底不变，前端零改动）：
+  1. L524 `_fetch_yahoo_watch` 请求参数 `range="1mo"` → `range="3mo"`（加注释：3mo 才含足量交易日，交给 `_series_tail` 截 30）。
+  2. L518 docstring「近 30 日收盘序列（range=1mo）」→ 「近 30 交易日收盘序列（range=3mo…窗口放大到 3 月以保证足量交易日，最终由 web/app.py 的 `_series_tail` 截最近 30 点）」。
+
+### 验证结果
+- `git diff src/fetcher.py`：**仅此 1 文件、2 行**（range 参数 + docstring），干净。
+- `venv/Scripts/python -m pytest tests/ -q`：**432 passed / 4 failed**；4 失败为基线 `未开盘` vs `获取失败` 文案（test_context / test_phase6a / test_reporter ×2），与本次 fetcher 字符串改动无关，无新增失败。
+- 实时 `/api/watchlist` 点数验证：**本环境不可行**——与任务 D/E 一致，`/api/watchlist` 取数（新浪/AkShare）持续失败返回「数据暂缺」，无法量 `trend.series` 长度。按 plan 第 279 行，采用「代码路径确定性分析」验收：
+  - 改前：Yahoo `range=1mo` 仅 ~19-22 交易日 → `_series_tail(30)` 截后仍为 ~20 点（美股/ETF 标的及 A 股回退 Yahoo 场景）。
+  - 改后：Yahoo `range=3mo` ≈63 交易日 → `_series_tail(30)` 截最近 30 点 → 保证 30（与主趋势图 `/api/history` 默认 30 点基准一致）。
+  - A 股源（70 自然日≈48 交易日）本就 >30，`_series_tail` 已截 30，行为不变。
+
+### 风险
+- 仅动 Yahoo range 字符串 + docstring，属数据源窗口扩大；前端/接口层零改动，开销可忽略（单标的单次 3mo 请求，与既有 8 指数同源无新增依赖）。低风险。

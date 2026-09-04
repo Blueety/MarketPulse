@@ -515,13 +515,13 @@ def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
 
 # ---- 二十四期：自选股/持仓取数 ----
 def _fetch_yahoo_watch(symbol: str) -> tuple[float, list]:
-    """Yahoo chart REST 取美股/ETF 当日价 + 近 30 日收盘序列（range=1mo, interval=1d）。
+    """Yahoo chart REST 取美股/ETF 当日价 + 近 30 交易日收盘序列（range=3mo, interval=1d；窗口放大到 3 月以保证足量交易日，最终由 web/app.py 的 _series_tail 截最近 30 点）。
 
     当日价取 meta.regularMarketPrice（缺失回退序列末值）；序列时间戳转美东日期，
     与 history.json 美东 date 键对齐。返回 (value, [(date, close), ...])。
     """
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
-    resp = _SESSION.get(url, params={"interval": "1d", "range": "1mo"}, timeout=TIMEOUT)
+    resp = _SESSION.get(url, params={"interval": "1d", "range": "3mo"}, timeout=TIMEOUT)  # 3mo 才含足量交易日，交给 _series_tail 截 30
     resp.raise_for_status()
     r = resp.json()["chart"].get("result")
     if not r:
