@@ -232,5 +232,54 @@ const options = {
 4. 其它三图（renderLineChart 等）抽查 `canvas.height/rect.height`：若主图比值 >DPR×1.1 且观感糊 → 可同法补一行（另行小改，本次不含）。
 
 ### 风险
-- `maintainAspectRatio:false` 后图表高完全由容器/CSS 决定：任何改变 canvas 显示高的 CSS 都会直接反映，不再自动按比例。当前显示高由双重 `!important` 钉死 220/260/340（含移动端断点），行为确定。低风险。
-- 与任务 D 的 max-width:640 兼容（宽 640 高 220 由同一容器尺寸提供）。
+---
+
+## 【任务 F】自选股图表数据点偏少（只读分析，未改代码）
+
+### 实际点数（口径链）
+| 层 | 位置 | 天数口径 |
+|---|---|---|
+| Yahoo 源（美股/ETF/A股回退） | `src/fetcher.py:515-517` `_fetch_yahoo_watch` `range="1mo"` | **自然月窗口 → 仅 ~19-22 个交易日** |
+| A 股源（新浪 AkShare） | `src/fetcher.py:557-560` `_fetch_a_share_watch` `start=now-70 天` | 70 自然日 ≈ 45-50 交易日（不截） |
+| 接口层截断 | `web/app.py:297-301` `_series_tail(points, n=30)`（`_build_watchlist_payload` L309 调用） | **统一截最近 30 点** |
+| 前端 | `renderWatchChart`（index.html ~L712-855）dates=全部 pts 并集，无再截断 | 30（A股源）或 ~20（Yahoo 源） |
+
+实测：`/api/watchlist` trend.series 长度——A 股源正常路径 **30**；Yahoo 源 **~20**；本次探测时段新浪/AkShare 临时失败（series 为空，前端「数据暂缺」占位），用户此前看到的应为 20-30 点区间。
+
+对比：主趋势图 `/api/history` 默认 `days=30`（app.py:388-391 Query 默认 30），**自选股 30 点与主图基准一致**——不是相对异常；自选股不写 history.json（#31），数据每次实时拉取，与 history 90 日无关。
+
+### 根因结论
+1. **非 bug（主因）**：接口契约即「近 30 日」（fetch_watchlist docstring fetcher.py:577 + `_series_tail(30)`），与主图 30 点对齐，属设计基准。A 股源正常时给 30 点，不少。
+2. **轻微口径偏差（次因，可修）**：Yahoo 源 `range="1mo"` 只含 ~20 个**交易日**（自然月窗口），A 股新浪失败回退 Yahoo 时（或美股/ETF 标的）点数比 30 少 1/3——"近 30 日"实为"近 1 月自然日"。
+3. 与任务 D/E（CSS 限宽、maintainAspectRatio）无任何关系。
+
+### 是否要调：**建议调 1 行（仅 Yahoo 窗口），非必须**
+用户若认可 30 点基准可不改（与主图一致）；若要保证「30 个交易日」：
+
+`src/fetcher.py:517`：
+```python
+params={"interval": "1d", "range": "1mo"}
+```
+→
+```python
+params={"interval": "1d", "range": "3mo"}   # 3mo 才含足量交易日，交给 _series_tail 截 30
+```
+同步改 `_fetch_yahoo_watch` docstring（L505-508「近 30 日收盘序列（range=1mo）」→ range=3mo 按最近 30 交易日截取说明）。
+
+改动前后对比：
+| 场景 | 前 | 后 |
+|---|---|---|
+| A 股源正常 | 30（48 截断） | 30（不变） |
+| A 股回退 Yahoo / 美股 ETF | ~20 | 30（3mo≈63 交易日截 30） |
+
+- A 股源（70 自然日≈48 交易日 >30）**无需改**；`_series_tail` 已兜底截断，内部不再加截。
+- 数据量：Yahoo 单标的 63 点请求，与 SECTOR_TIMEOUT 并行限时兼容，开销可忽略。
+
+### 验证
+1. 修复后 `curl http://127.0.0.1:8000/api/watchlist` → `len(trend.series[0].values) == 30`（需新浪正常；若新浪失败则验证回退 Yahoo 路径也应 30）。
+2. `tab.evaluate` 数 x 轴刻度/数据集长度 == 30；截图与主图点数视觉一致。
+3. 回归：`venv/Scripts/python -m pytest tests/ -v`（涉及 fetcher 网络用例为 mock/本地，全量基线同前 3 条既有失败）。
+
+### 风险
+- 仅动 Yahoo range 参数 + docstring，纯数据源窗口扩大；前端/接口零改动。低风险。
+- Yahoo 3mo 请求仍在其速率限制内（单标的单次），与既有 8 指数 fetch 同源无新增依赖。
