@@ -630,7 +630,7 @@ def test_load_watchlist_empty_config(monkeypatch):
     """config watchlist.stocks 为空 → 返回双空结构（F4 前端据此隐藏）。"""
     monkeypatch.setattr(web.app, "load_config", lambda: {"watchlist": {"stocks": []}})
     out = _load_watchlist()
-    assert out == {"stocks": [], "trend": {"dates": [], "series": []}}
+    assert out == {"hidden": True, "stocks": [], "trend": {"dates": [], "series": []}}
 
 
 def test_load_watchlist_partial_failure(monkeypatch):
@@ -650,6 +650,7 @@ def test_load_watchlist_partial_failure(monkeypatch):
     assert rows["BAD"]["change_pct"] is None
     by_key = {s["key"]: s for s in out["trend"]["series"]}
     assert "ok" in by_key and "bad" in by_key  # 两标的均入图
+    assert out["hidden"] is False
 
 
 def test_load_watchlist_fetch_raises(monkeypatch):
@@ -660,7 +661,9 @@ def test_load_watchlist_fetch_raises(monkeypatch):
     monkeypatch.setattr(web.app, "load_config",
                         lambda: {"watchlist": {"stocks": [{"symbol": "X"}]}})
     out = _load_watchlist()
-    assert out == {"stocks": [], "trend": {"dates": [], "series": []}}
+    assert out["hidden"] is False
+    assert out["stocks"] == []
+    assert out["trend"] == {"dates": [], "series": []}
 
 
 def test_api_watchlist_endpoint(client, monkeypatch):
@@ -686,3 +689,31 @@ def test_api_watchlist_no_config_hidden_semantics(client, monkeypatch):
     r = client.get("/api/watchlist")
     assert r.status_code == 200
     assert r.json()["stocks"] == []
+    assert r.json()["hidden"] is True
+
+
+def test_load_watchlist_config_raises(monkeypatch):
+    """load_config 抛异常 → 视为无配置：hidden=true + 双空结构（不误报有配置）。"""
+    def boom():
+        raise RuntimeError("config unreadable")
+    monkeypatch.setattr(web.app, "load_config", boom)
+    out = _load_watchlist()
+    assert out["hidden"] is True
+    assert out == {"hidden": True, "stocks": [], "trend": {"dates": [], "series": []}}
+
+
+def test_api_watchlist_fetch_raises_endpoint(client, monkeypatch):
+    """有配置 + fetch_watchlist 抛 → 端点 200 + hidden=false + 空 stocks（NF3：不 500、不隐藏）。"""
+    monkeypatch.setattr(
+        web.app, "load_config",
+        lambda: {"watchlist": {"stocks": [{"symbol": "X", "label": "X"}]}},
+    )
+    def boom(stocks):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(web.app, "fetch_watchlist", boom)
+    r = client.get("/api/watchlist")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["hidden"] is False
+    assert data["stocks"] == []
+    assert data["trend"] == {"dates": [], "series": []}

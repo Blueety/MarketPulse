@@ -676,9 +676,6 @@
     function renderWatchlist(payload) {
       const section = document.getElementById("watchlist-section");
       const body = document.getElementById("watchlist-body");
-      if (!payload || !payload.stocks || !payload.stocks.length) {
-        return;  // 保持隐藏（F4：无配置则整卡不可见）
-      }
       section.style.display = "";
       const trendByKey = {};
       (payload.trend && payload.trend.series || []).forEach(function (s) {
@@ -884,17 +881,33 @@
           if (el) el.innerHTML = '<p class="empty">加载失败</p>';
         });
 
-      // 自选股实时取数（每次刷新页面一次，与告警同生命周期；失败不影响主链路）
-      fetch("/api/watchlist")
-        .then(function (r) { return r.json(); })
-        .then(function (data) { renderWatchlist(data); })
+      // 自选股实时取数：hidden=false（有配置）才显示卡片；取数失败/超时占位可见，不静默
+      var wlTimer = null;
+      var wlFetch = fetch("/api/watchlist").then(function (r) { return r.json(); });
+      var wlTimeout = new Promise(function (_, reject) {
+        wlTimer = setTimeout(function () { reject(new Error("watchlist 取数超时（12s）")); }, 12000);
+      });
+      Promise.race([wlFetch, wlTimeout])
+        .then(function (data) {
+          clearTimeout(wlTimer);
+          var sec = document.getElementById("watchlist-section");
+          if (!sec) return;
+          if (data && data.hidden) { sec.style.display = "none"; return; }  // F4：无配置不闪现
+          sec.style.display = "";
+          if (!data || !data.stocks || !data.stocks.length) {
+            var b = document.getElementById("watchlist-body");
+            if (b) b.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（实时取数失败）</td></tr>';
+            return;
+          }
+          renderWatchlist(data);
+        })
         .catch(function (err) {
           console.error("[watchlist] fetch failed:", err);
           var sec = document.getElementById("watchlist-section");
-          if (sec && sec.style.display !== "none") {
-            var b = document.getElementById("watchlist-body");
-            if (b) b.innerHTML = '<tr><td colspan="4">加载失败</td></tr>';
-          }
+          if (!sec) return;
+          sec.style.display = "";  // 异常态：失败占位可见（网络/解析/超时）
+          var b = document.getElementById("watchlist-body");
+          if (b) b.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（取数失败）</td></tr>';
         });
 
     });
