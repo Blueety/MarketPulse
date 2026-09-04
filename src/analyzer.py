@@ -513,7 +513,7 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
             if sym in A_SHARE_SYMBOLS:
                 statuses[sym] = ("休市", "A 股休市或数据缺失。")
             else:
-                statuses[sym] = ("获取失败", "数据获取失败，无法判断状态。")
+                statuses[sym] = ("未开盘", "美股未开盘或数据缺失。")
         elif sym in STOCK_SYMBOLS or sym in ALT_SYMBOLS:
             streak = streaks.get(sym, 0)
             has = _stock_has_data(sym, last_values, history)
