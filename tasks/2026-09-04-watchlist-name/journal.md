@@ -44,3 +44,20 @@
 - `read` 对大文件默认返回结构摘要、且 `:raw` 行选择器在本环境仍被摘要吞掉；用 `path:行号` 纯行号选择器（无 `:raw`）才能取到真实行。
 - 调度归位（daily 改到北京 04:40-05:00 美东收盘后）后 A 的兜底保护自然不再触发；当前保护仅作盘中误跑的兜底。
 - web 模板改动须另起未缓存端口（如 8001）或硬刷新验收（Jinja2 启动缓存）；本次未做浏览器 DOM 验收，已由 Python 契约用例 + JS 语法校验覆盖。
+
+## 任务 D（追加 2026-09-04）：单自选股图表过宽/扁
+
+### 改动清单
+- `web/static/style.css`：在 `.chart-box canvas` 规则（L215-220）后追加 1 规则：
+  `/* 自选股图：限宽居中，避免全宽 220px 过扁（单标的场景尤甚） */`
+  `#watchlist-section .chart-box { max-width: 640px; margin: 0 auto; }`
+- 未改 index.html / Chart.js options / 主图区 / 其它卡（按计划最小改动）。
+
+### 验证结果
+- `git diff web/static/style.css`：仅此一处（L221-223），干净。
+- `tests/test_web.py -q`：**49 passed**（纯样式改动，Python 测试不受影响）。
+- 浏览器实测（另起 8001 端口、主 world `tab.evaluate`，config.json 已配 `515300.SS`）：
+  - 视口 1280：`.chart-box`（画布父容器）实测宽 **640px**、居中生效；`#watchlist-section` 可见。
+  - 视口 375：`.chart-box` 宽 **359px**（满宽，max-width 不约束），符合预期。
+  - 注：自选股 `515300.SS` 本次取数失败（显示「数据暂缺」），`#chart-watchlist` 画布未创建，故画布实时尺寸未能量到；但 `.chart-box` 父容器限宽居中已实测生效，画布 `width:100%` 随之受限。
+- **兜底决策**：画布高度由内联 `style="height:220px !important"` 钉死，Chart.js responsive 的 JS 内联样式（无 !important）无法覆盖 → 高度恒定 220px，无需 `renderWatchChart` 补 `maintainAspectRatio:false`。**仅保留 CSS 一处改动**，未加 JS 兜底行。
