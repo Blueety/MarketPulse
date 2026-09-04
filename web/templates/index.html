@@ -881,6 +881,8 @@
           console.error("[alerts] fetch failed:", err);
           var el = document.getElementById("alert-list");
           if (el) el.innerHTML = '<p class="empty">加载失败</p>';
+        });
+
       // 自选股实时取数（每次刷新页面一次，与告警同生命周期；失败不影响主链路）
       fetch("/api/watchlist")
         .then(function (r) { return r.json(); })
