@@ -153,6 +153,7 @@
       gld: "#ffd700", btc: "#00d4ff"
     };
     const ALL_KEYS = Object.keys(COLORS);
+    const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
     const SHORT = {
       gspc: "标普500", ixic: "纳指", sh: "上证", sz: "深证", cyb: "创业板",
       vix: "VIX", vxn: "VXN", move: "MOVE", gld: "黄金", btc: "比特币"
