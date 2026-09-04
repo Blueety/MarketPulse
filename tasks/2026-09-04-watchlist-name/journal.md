@@ -61,3 +61,23 @@
   - 视口 375：`.chart-box` 宽 **359px**（满宽，max-width 不约束），符合预期。
   - 注：自选股 `515300.SS` 本次取数失败（显示「数据暂缺」），`#chart-watchlist` 画布未创建，故画布实时尺寸未能量到；但 `.chart-box` 父容器限宽居中已实测生效，画布 `width:100%` 随之受限。
 - **兜底决策**：画布高度由内联 `style="height:220px !important"` 钉死，Chart.js responsive 的 JS 内联样式（无 !important）无法覆盖 → 高度恒定 220px，无需 `renderWatchChart` 补 `maintainAspectRatio:false`。**仅保留 CSS 一处改动**，未加 JS 兜底行。
+
+## 任务 E（追加 2026-09-04）：自选股图表分辨率低/模糊
+
+### 改动内容
+- `web/templates/index.html`：`renderWatchChart` 的 `options` 对象（`responsive: true` 之后，约 L778-779）加一行：
+  `maintainAspectRatio: false,   // 高由 CSS 220px 决定，避免 aspect=2 画 320 高被压缩到 220 显示（糊）`
+- 仅此一行，未改其它（index.html 其余函数 / 主趋势图 / CSS / 后端均不动）。
+
+### 验证结果
+- `node --check`（仅隔离校验 watchlist options 片段，规避 `</script>` 截断假阴性）：**JS_OK**。
+- `tests/test_web.py -q`：**49 passed**（纯前端 options 改动，Python 测试不受影响）。
+- 实时 canvas 测量：**本环境不可行**——`/api/watchlist` 取数持续失败（显示「数据暂缺」，画布被 innerHTML 替换，与任务 D 探测一致），无法量 `canvas.height/rect.height`。按 plan 第 209 行说明，验收采用「片段语法校验 + 确定性代码分析」：
+  - 改前：v4 默认 `maintainAspectRatio:true` + `aspectRatio=2`，容器 640px → 逻辑高 320px（物理像素 320×DPR≈400px），CSS `!important` 显示高恒 220px → 内容被纵向压缩 ≈0.69× → 糊/扁。
+  - 改后：`maintainAspectRatio:false` → 绘图高 = 容器实际高 ≈220px（与显示 1:1，物理像素 220×DPR≈275px）→ 无压缩、锐利；高仍 220px（任务 D 意图不变）。
+  - 横向 DPR：全文件无 `devicePixelRatio`/`Chart.defaults` 覆盖，v4 默认取 `window.devicePixelRatio`（实测 1.25）已高清，非问题源。
+
+### 顺带核实主趋势图（不改动）
+- `renderLineChart`（index.html:361 的 `const options`）同样未设 `maintainAspectRatio`，依赖默认 `aspect=2`。
+- 主图在 `.charts-grid` 半宽（1280 视口下每图容器 ≈565px）→ 逻辑高 ≈282px，CSS 显示高 `340px !important` → 内容被轻微**拉伸** ≈1.2×（比值 `canvas.height/rect.height ≈ DPR×0.83`，低于 plan 糊阈值 DPR×1.1），非压缩型失真，用户未报。
+- 结论：主图观感可接受，**不在本次范围**，不补该行。若后续有人报主图糊，再同法补 `maintainAspectRatio:false` 一行（另行小改）。

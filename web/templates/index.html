@@ -776,6 +776,7 @@
 
       const options = {
         responsive: true,
+        maintainAspectRatio: false,   // 高由 CSS 220px 决定，避免 aspect=2 画 320 高被压缩到 220 显示（糊）
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: {
