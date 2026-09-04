@@ -2,29 +2,29 @@
   "date": "2026-09-04",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7735.47,
+      "change_pct": -0.15798216505263854,
+      "status": "连跌1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26560.098,
+      "change_pct": -0.09013672102756137,
+      "status": "连跌1日"
     },
     "SH": {
-      "value": 3930.1164,
-      "change_pct": -0.303684248136631,
-      "status": "连跌1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "SZ": {
-      "value": 13516.969,
-      "change_pct": -0.7937763786628865,
-      "status": "连跌1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "CYB": {
-      "value": 3286.546,
-      "change_pct": -0.7847450039109053,
-      "status": "连跌1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "VIX": {
       "value": null,
@@ -211,7 +211,7 @@
       7686.14,
       7666.6,
       7747.71,
-      null
+      7735.47
     ],
     "ixic": [
       24442.939453125,
@@ -243,7 +243,7 @@
       26370.889,
       26217.828,
       26584.06,
-      null
+      26560.098
     ],
     "sh": [
       3828.469,
@@ -411,81 +411,15 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [
-      {
-        "name": "农业",
-        "change": 3.07,
-        "turnover": "655.0亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "消费",
-        "change": 1.97,
-        "turnover": "332.2亿",
-        "top_stock": "顺鑫农业"
-      },
-      {
-        "name": "地产/基建",
-        "change": 1.43,
-        "turnover": "153.6亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "金融",
-        "change": 0.51,
-        "turnover": "2416.2亿",
-        "top_stock": "中集集团"
-      },
-      {
-        "name": "军工",
-        "change": -0.44,
-        "turnover": "2429.1亿",
-        "top_stock": "湖南天雁"
-      }
-    ],
-    "losers": [
-      {
-        "name": "通信/电子",
-        "change": -1.83,
-        "turnover": "3373.8亿",
-        "top_stock": "通宇通讯"
-      },
-      {
-        "name": "资源/有色",
-        "change": -1.78,
-        "turnover": "651.6亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -1.33,
-        "turnover": "5050.5亿",
-        "top_stock": "电气风电"
-      },
-      {
-        "name": "医药",
-        "change": -0.8,
-        "turnover": "1201.0亿",
-        "top_stock": "*ST香雪"
-      },
-      {
-        "name": "其他",
-        "change": -0.46,
-        "turnover": "22718.0亿",
-        "top_stock": "大北农"
-      }
-    ]
+    "gainers": [],
+    "losers": []
   },
   "us_sector_heat": {
     "gainers": [],
     "losers": []
   },
   "search_keywords": [
-    "农业 surge 2026-09-04",
-    "消费 surge 2026-09-04",
-    "地产/基建 surge 2026-09-04",
-    "金融 surge 2026-09-04",
-    "军工 drop 2026-09-04"
+    "market summary 2026-09-04"
   ],
   "correlation": [],
   "watchlist": {
