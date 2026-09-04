@@ -1,7 +1,7 @@
 """MarketPulse Web 看板：FastAPI 应用。
 
 只读解析现有产物（data/history.json / context/*.json / alerts/*.md），提供单页看板
-与 4 个 JSON API（含自选股实时取数 /api/watchlist，经 src.fetcher.fetch_watchlist，零写盘）。
+与 4 个 JSON API（含自选股实时取数 /api/watchlist，经 src.fetcher.fetch_watchlist，零写盘；响应含 hidden 键：无配置隐藏、有配置必显卡失败占位）。
 零侵入日报 / 快照主流程：本进程绝不写 data / alerts / context。
 
 路径常量从 analyzer 复用单一事实来源，但在此模块重新绑定为模块级名字，供解析函数
@@ -348,20 +348,23 @@ def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
 
 
 def _load_watchlist() -> dict:
-    """实时取数自选股；配置读取 / 取数 / 拼装任何异常降级空结构（HTTP 200，不 500）。
-
-    单标的失败仅缺席对应行（values 缺键 → value/change_pct 为 None），不影响其他模块。
-    """
+    """实时取数自选股。hidden=true 仅=无配置（前端隐藏）；有配置时取数失败
+    仍返回 hidden=false + 空 stocks（前端占位可见，不静默隐藏，NF3）。"""
+    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
     try:
         cfg = load_config()
-        stocks = (cfg.get("watchlist") or {}).get("stocks") or []
-        if not stocks:
-            return {"stocks": [], "trend": {"dates": [], "series": []}}
+    except Exception as exc:
+        log.warning("自选股配置读取失败，视为无配置: %s", exc)
+        return {"hidden": True, **empty}
+    stocks = (cfg.get("watchlist") or {}).get("stocks") or []
+    if not stocks:
+        return {"hidden": True, **empty}
+    try:
         values, series, _errors = fetch_watchlist(stocks)
-        return _build_watchlist_payload(stocks, values, series)
+        return {"hidden": False, **_build_watchlist_payload(stocks, values, series)}
     except Exception as exc:
         log.warning("自选股取数失败，降级空结构: %s", exc)
-        return {"stocks": [], "trend": {"dates": [], "series": []}}
+        return {"hidden": False, **empty}
 
 
 # ---- 端点 ----
