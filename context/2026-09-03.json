@@ -2,54 +2,54 @@
   "date": "2026-09-03",
   "indices": {
     "GSPC": {
-      "value": 7749.21,
-      "change_pct": 1.0775311089661606,
+      "value": 7747.71,
+      "change_pct": 1.0579657214410516,
       "status": "连涨1日"
     },
     "IXIC": {
-      "value": 26592.533,
-      "change_pct": 1.429199245643072,
+      "value": 26584.06,
+      "change_pct": 1.3968815418271872,
       "status": "连涨1日"
     },
     "SH": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3942.0879,
+      "change_pct": 0.017803380952622037,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 13625.122,
+      "change_pct": 0.09973150002713804,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3312.541,
+      "change_pct": 0.00899692444063522,
+      "status": "连涨1日"
     },
     "VIX": {
-      "value": null,
-      "change_pct": null,
-      "status": "获取失败"
+      "value": 14.32,
+      "change_pct": -5.78947368421052,
+      "status": "平静"
     },
     "VXN": {
-      "value": null,
-      "change_pct": null,
-      "status": "获取失败"
+      "value": 20.16,
+      "change_pct": -4.318936877076412,
+      "status": "警惕"
     },
     "MOVE": {
-      "value": null,
-      "change_pct": null,
-      "status": "获取失败"
+      "value": 74.6812,
+      "change_pct": -6.312748311762277,
+      "status": "平静"
     },
     "GLD": {
-      "value": null,
-      "change_pct": null,
-      "status": "获取失败"
+      "value": 410.22,
+      "change_pct": 1.8471622225532687,
+      "status": "连涨1日"
     },
     "BTC": {
-      "value": null,
-      "change_pct": null,
-      "status": "获取失败"
+      "value": 81247.56,
+      "change_pct": 5.040084500013564,
+      "status": "连涨1日"
     }
   },
   "history_30d": {
@@ -115,7 +115,7 @@
       14.92,
       14.92,
       15.2,
-      null
+      14.32
     ],
     "vxn": [
       28.610000610351562,
@@ -147,7 +147,7 @@
       20.18,
       20.18,
       21.07,
-      null
+      20.16
     ],
     "move": [
       76.08999633789062,
@@ -179,7 +179,7 @@
       75.3193,
       75.319,
       79.7133,
-      null
+      74.6812
     ],
     "gspc": [
       7428.77978515625,
@@ -211,7 +211,7 @@
       7686.14,
       7686.14,
       7666.6,
-      7749.21
+      7747.71
     ],
     "ixic": [
       24876.91015625,
@@ -243,7 +243,7 @@
       26370.889,
       26370.889,
       26217.828,
-      26592.533
+      26584.06
     ],
     "sh": [
       3813.315,
@@ -371,7 +371,7 @@
       408.42,
       408.42,
       402.78,
-      null
+      410.22
     ],
     "btc": [
       63871.36328125,
@@ -403,7 +403,7 @@
       78567.58,
       78738.44,
       77349.1,
-      null
+      81247.56
     ]
   },
   "breach": {
@@ -411,19 +411,167 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "资源/有色",
+        "change": 0.89,
+        "turnover": "599.7亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "医药",
+        "change": 0.35,
+        "turnover": "1143.7亿",
+        "top_stock": "富祥股份"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 0.34,
+        "turnover": "4303.2亿",
+        "top_stock": "德尔未来"
+      },
+      {
+        "name": "地产/基建",
+        "change": 0.3,
+        "turnover": "128.1亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "金融",
+        "change": 0.16,
+        "turnover": "2058.6亿",
+        "top_stock": "保利发展"
+      }
+    ],
+    "losers": [
+      {
+        "name": "通信/电子",
+        "change": -0.68,
+        "turnover": "2801.1亿",
+        "top_stock": "硕贝德"
+      },
+      {
+        "name": "农业",
+        "change": -0.48,
+        "turnover": "426.0亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "消费",
+        "change": -0.24,
+        "turnover": "214.3亿",
+        "top_stock": "远东股份"
+      },
+      {
+        "name": "军工",
+        "change": -0.14,
+        "turnover": "1903.7亿",
+        "top_stock": "新雷能"
+      },
+      {
+        "name": "其他",
+        "change": 0.04,
+        "turnover": "19661.7亿",
+        "top_stock": "三安光电"
+      }
+    ]
   },
   "us_sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "金融 (XLF)",
+        "change": 1.56,
+        "turnover": "$1.9B",
+        "top_stock": "XLF"
+      },
+      {
+        "name": "可选消费 (XLY)",
+        "change": 1.39,
+        "turnover": "$659.0M",
+        "top_stock": "XLY"
+      },
+      {
+        "name": "科技 (XLK)",
+        "change": 1.29,
+        "turnover": "$1.1B",
+        "top_stock": "XLK"
+      },
+      {
+        "name": "房地产 (XLRE)",
+        "change": 1.19,
+        "turnover": "$195.3M",
+        "top_stock": "XLRE"
+      },
+      {
+        "name": "工业 (XLI)",
+        "change": 1.03,
+        "turnover": "$1.5B",
+        "top_stock": "XLI"
+      }
+    ],
+    "losers": [
+      {
+        "name": "能源 (XLE)",
+        "change": -0.74,
+        "turnover": "$1.6B",
+        "top_stock": "XLE"
+      },
+      {
+        "name": "原材料 (XLB)",
+        "change": -0.62,
+        "turnover": "$751.8M",
+        "top_stock": "XLB"
+      },
+      {
+        "name": "必需消费 (XLP)",
+        "change": -0.32,
+        "turnover": "$875.2M",
+        "top_stock": "XLP"
+      },
+      {
+        "name": "医疗健康 (XLV)",
+        "change": 0.18,
+        "turnover": "$1.0B",
+        "top_stock": "XLV"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": 0.84,
+        "turnover": "$984.3M",
+        "top_stock": "XLU"
+      }
+    ]
   },
   "search_keywords": [
-    "market summary 2026-09-03"
+    "资源/有色 surge 2026-09-03",
+    "医药 surge 2026-09-03",
+    "光伏/新能源 surge 2026-09-03",
+    "地产/基建 surge 2026-09-03",
+    "金融 surge 2026-09-03"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.63,
+      "n": 27
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "沪深300ETF",
+        "value": 1.322,
+        "change_pct": -0.23,
+        "corr": {
+          "benchmark": "SH",
+          "r": -0.07,
+          "n": 14
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
       "avg_r": null
