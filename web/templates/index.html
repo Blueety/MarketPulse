@@ -174,9 +174,6 @@
       latest: null,   // 最近一次 /api/latest payload
       selSnapshot: null,  // 类别按钮点击前的选中快照（再次点击恢复）
     };
-    // 自选股调色板（symbol 不可枚举，按行循环取色，不污染 COLORS）
-    const WATCH_PALETTE = ["#58a6ff", "#3fb950", "#f85149", "#d29922", "#bc8cff",
-                           "#ffd700", "#00d4ff", "#db61a2", "#39c5cf", "#e3a857"];
     let watchChart = null;  // 自选股 Chart 实例（重渲染前 destroy）
 
     function escapeHtml(s) {
@@ -719,21 +716,50 @@
         box.innerHTML = '<p class="empty">数据暂缺</p>';
         return;
       }
-      const labels = trend.dates;
       const tc = themeColors();
+
+      const allDates = new Set();
+      trend.series.forEach(function (s) {
+        (s.values || []).forEach(function (v, i) {
+          if (v != null) allDates.add(trend.dates[i]);
+        });
+      });
+      const tradingDates = Array.from(allDates).filter(function (d) {
+        var dt = new Date(d);
+        return dt.getDay() !== 0 && dt.getDay() !== 6;
+      }).sort();
+      const dateIndexMap = {};
+      tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
+
+      const palette = Object.values(COLORS);
       const datasets = trend.series.map(function (s, i) {
-        const color = WATCH_PALETTE[i % WATCH_PALETTE.length];
+        const pts = [];
+        let lastVal = null;
+        let lastRaw = null;
+        (s.values || []).forEach(function (v, i2) {
+          const date = trend.dates[i2];
+          if (dateIndexMap[date] === undefined) return;
+          if (v != null) {
+            lastVal = v;
+            lastRaw = s.raw ? s.raw[i2] : null;
+            pts.push({ x: date, y: v, rawVal: lastRaw });
+          } else if (lastVal != null) {
+            // 前向填充：用前一个值连接空缺（黄金周末不断线）
+            pts.push({ x: date, y: lastVal, rawVal: lastRaw, filled: true });
+          }
+        });
+        const color = palette[i % palette.length];
         return {
           label: s.label,
-          data: s.values,   // 归一化基准 100
-          raw: s.raw,       // 对齐 dates 的实际价（tooltip 用）
-          borderColor: color,
+          key: s.key,
+          data: pts,
+          borderColor: color + "d9",
           hoverBorderColor: color,
+          hoverBorderWidth: 2.6,
           backgroundColor: "transparent",
           fill: false,
           tension: 0.25,
           borderWidth: 1.8,
-          spanGaps: true,   // 混合市场/停牌缺口平滑连接
           pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
           pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
           pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
@@ -743,13 +769,22 @@
           pointHitRadius: 10,
         };
       });
+
       const options = {
         responsive: true,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: false,
+            labels: {
+              color: tc.axisTick,
+              usePointStyle: true,
+              boxWidth: 8,
+              font: { size: 12 }
+            }
+          },
           tooltip: {
-            enabled: !('ontouchstart' in window),
+            enabled: !('ontouchstart' in window),  // 移动端禁用悬浮
             backgroundColor: tc.tooltipBg,
             titleColor: tc.tooltipTitle,
             bodyColor: tc.tooltipBody,
@@ -759,13 +794,16 @@
             bodyFont: { size: 12 },
             padding: 8,
             cornerRadius: 4,
+            boxWidth: 8,
             callbacks: {
               title: function (items) { return items.length ? items[0].label : ""; },
               label: function (ctx) {
-                const ds = ctx.dataset;
-                const rv = ds.raw ? ds.raw[ctx.dataIndex] : null;
-                if (rv == null || ctx.parsed.y == null) return ds.label + " —";
-                return ds.label + " " + fmtNum(rv, 2) + " (" + fmtPct(ctx.parsed.y - 100) + ")";
+                const pt = ctx.dataset.data[ctx.dataIndex];
+                const rv = pt && pt.rawVal != null ? pt.rawVal : null;
+                const raw = pt && pt.raw != null ? pt.raw : null;
+                const val = rv !== null ? rv : raw;
+                if (val == null || ctx.parsed.y == null) return ctx.dataset.label + " —";
+                return ctx.dataset.label + " " + fmtNum(val, 2) + " (" + fmtPct(ctx.parsed.y - 100) + ")";
               }
             }
           }
@@ -773,7 +811,7 @@
         scales: {
           x: {
             type: "category",
-            labels: labels,
+            labels: tradingDates,
             grid: { display: false },
             ticks: {
               font: { size: 11 },
@@ -782,7 +820,7 @@
               autoSkip: true,
               maxTicksLimit: 10,
               callback: function (value, index) {
-                const parts = String(labels[index]).split("-");
+                const parts = String(tradingDates[index]).split("-");
                 return Number(parts[1]) + "/" + Number(parts[2]);
               }
             }
@@ -800,8 +838,16 @@
         },
         animation: { duration: 300, easing: "easeOutQuart" }
       };
+      // 缩放/平移：仅当 zoom 插件可用时启用（CDN 失败则静默降级）
+      if (window.ChartZoom && !window.__zoomFailed) {
+        options.plugins.zoom = {
+          wheel: { enabled: true, modifierKey: "ctrl" },
+          pan: { enabled: true, modifierKey: "ctrl" },
+          limits: { y: { min: "original", max: "original" } }
+        };
+      }
       if (watchChart) watchChart.destroy();
-      watchChart = new Chart(canvas, { type: "line", data: { labels: labels, datasets: datasets }, options: options });
+      watchChart = new Chart(canvas, { type: "line", data: { datasets: datasets }, options: options });
     }
 
 
