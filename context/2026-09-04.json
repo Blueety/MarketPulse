@@ -12,18 +12,18 @@
       "status": "获取失败"
     },
     "SH": {
-      "value": 3974.7052,
-      "change_pct": 0.8274117885600644,
+      "value": 3955.851,
+      "change_pct": 0.3491322453768756,
       "status": "连涨2日"
     },
     "SZ": {
-      "value": 13718.963,
-      "change_pct": 0.6887351173809699,
+      "value": 13661.39,
+      "change_pct": 0.266184772510661,
       "status": "连涨2日"
     },
     "CYB": {
-      "value": 3341.866,
-      "change_pct": 0.8852720615382517,
+      "value": 3326.68,
+      "change_pct": 0.42683245279076293,
       "status": "连涨2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3987.559,
       3941.3862,
       3942.0879,
-      3974.7052
+      3955.851
     ],
     "sz": [
       13658.443,
@@ -307,7 +307,7 @@
       13933.107,
       13611.547,
       13625.122,
-      13718.963
+      13661.39
     ],
     "cyb": [
       3378.696,
@@ -339,7 +339,7 @@
       3407.037,
       3312.243,
       3312.541,
-      3341.866
+      3326.68
     ],
     "gld": [
       371.0799865722656,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
+        "name": "农业",
+        "change": 3.36,
+        "turnover": "397.4亿",
+        "top_stock": "亚盛集团"
+      },
+      {
         "name": "消费",
-        "change": 2.1,
-        "turnover": "61.6亿",
-        "top_stock": "东信和平"
+        "change": 2.66,
+        "turnover": "234.2亿",
+        "top_stock": "山西汾酒"
       },
       {
         "name": "地产/基建",
-        "change": 1.53,
-        "turnover": "35.6亿",
+        "change": 2.57,
+        "turnover": "100.6亿",
         "top_stock": "亚盛集团"
       },
       {
-        "name": "农业",
-        "change": 1.13,
-        "turnover": "108.0亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "通信/电子",
-        "change": 1.1,
-        "turnover": "659.0亿",
-        "top_stock": "伊戈尔"
+        "name": "金融",
+        "change": 1.08,
+        "turnover": "1450.5亿",
+        "top_stock": "顺鑫农业"
       },
       {
         "name": "军工",
-        "change": 0.99,
-        "turnover": "438.9亿",
-        "top_stock": "新晨科技"
+        "change": 0.86,
+        "turnover": "1374.8亿",
+        "top_stock": "湖南天雁"
       }
     ],
     "losers": [
       {
-        "name": "医药",
-        "change": 0.15,
-        "turnover": "217.4亿",
-        "top_stock": "悦康药业"
-      },
-      {
         "name": "资源/有色",
-        "change": 0.25,
-        "turnover": "135.0亿",
+        "change": -1.17,
+        "turnover": "399.8亿",
         "top_stock": "亚盛集团"
       },
       {
-        "name": "光伏/新能源",
-        "change": 0.73,
-        "turnover": "928.2亿",
-        "top_stock": "中环海陆"
+        "name": "通信/电子",
+        "change": -0.01,
+        "turnover": "1943.9亿",
+        "top_stock": "科泰电源"
       },
       {
-        "name": "金融",
-        "change": 0.85,
-        "turnover": "426.6亿",
-        "top_stock": "用友网络"
+        "name": "医药",
+        "change": 0.02,
+        "turnover": "688.3亿",
+        "top_stock": "悦康药业"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 0.15,
+        "turnover": "2891.7亿",
+        "top_stock": "锐新科技"
       },
       {
         "name": "其他",
-        "change": 0.87,
-        "turnover": "4492.6亿",
-        "top_stock": "金 螳 螂"
+        "change": 0.59,
+        "turnover": "13671.5亿",
+        "top_stock": "山西汾酒"
       }
     ]
   },
@@ -481,10 +481,10 @@
     "losers": []
   },
   "search_keywords": [
+    "农业 surge 2026-09-04",
     "消费 surge 2026-09-04",
     "地产/基建 surge 2026-09-04",
-    "农业 surge 2026-09-04",
-    "通信/电子 surge 2026-09-04",
+    "金融 surge 2026-09-04",
     "军工 surge 2026-09-04"
   ],
   "correlation": [],
