@@ -350,16 +350,28 @@ def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
 
 def _load_watchlist() -> dict:
     """实时取数自选股。hidden=true 仅=无配置（前端隐藏）；有配置时取数失败
-    仍返回 hidden=false + 空 stocks（前端占位可见，不静默隐藏，NF3）。"""
+    仍返回 hidden=false + 空 stocks（前端占位可见，不静默隐藏，NF3）。
+    优先读环境变量 WATCHLIST_STOCKS（JSON 格式），其次读 config.json。"""
     empty = {"stocks": [], "trend": {"dates": [], "series": []}}
-    try:
-        cfg = load_config()
-    except Exception as exc:
-        log.warning("自选股配置读取失败，视为无配置: %s", exc)
-        return {"hidden": True, **empty}
-    stocks = (cfg.get("watchlist") or {}).get("stocks") or []
-    if not stocks:
-        return {"hidden": True, **empty}
+    # 优先从环境变量读取（Railway 部署用）
+    env_stocks = os.environ.get("WATCHLIST_STOCKS")
+    if env_stocks:
+        try:
+            stocks = json.loads(env_stocks)
+            if not stocks:
+                return {"hidden": True, **empty}
+        except (json.JSONDecodeError, TypeError) as exc:
+            log.warning("WATCHLIST_STOCKS 环境变量解析失败: %s", exc)
+            return {"hidden": True, **empty}
+    else:
+        try:
+            cfg = load_config()
+        except Exception as exc:
+            log.warning("自选股配置读取失败，视为无配置: %s", exc)
+            return {"hidden": True, **empty}
+        stocks = (cfg.get("watchlist") or {}).get("stocks") or []
+        if not stocks:
+            return {"hidden": True, **empty}
     try:
         values, series, _errors = fetch_watchlist(stocks)
         return {"hidden": False, **_build_watchlist_payload(stocks, values, series)}
