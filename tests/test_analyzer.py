@@ -78,7 +78,7 @@ class TestBuildStatuses:
             {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.0, "VXN": None, "MOVE": 95.0},
             {"VXN": "获取失败（已重试）"},
         )
-        assert statuses["VXN"][0] == "获取失败"
+        assert statuses["VXN"][0] == "未开盘"
         assert statuses["MOVE"][0] == "平静"
 
 
@@ -117,7 +117,7 @@ class TestGetUsEasternDate:
 class TestFormatters:
     def test_fmt_value(self):
         assert an.fmt_value(15.234) == "15.23"
-        assert an.fmt_value(None) == "获取失败"
+        assert an.fmt_value(None) == "未开盘"
 
     def test_fmt_change(self):
         assert an.fmt_change(1.23, True, 10.0) == "+1.23%"

@@ -544,8 +544,8 @@ def build_summary(values: dict, statuses: dict, errors: dict) -> str:
 
 # ---- 格式化 ----
 def fmt_value(value: float | None) -> str:
-    """收盘价显示：保留两位小数；None 显示获取失败。"""
-    return "获取失败" if value is None else f"{value:.2f}"
+    """收盘价显示：保留两位小数；None 显示未开盘。"""
+    return "未开盘" if value is None else f"{value:.2f}"
 
 
 def fmt_change(change: float | None, has_history: bool, value: float | None) -> str:
