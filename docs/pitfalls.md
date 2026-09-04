@@ -178,4 +178,9 @@
 - **空壳判定用 `gainers` 非空**：前端唯一渲染字段是 `gainers`（losers 不参与渲染）；`generate_context` 恒同时写 gainers/losers 且同源，故 `gainers` 非空 ⇔ 该次板块取数成功，避免 losers-only 假阳性（后端有数据但前端仍「数据暂缺」）。
 - **`_read_context_file` 逐文件容错**：倒序遍历时坏 JSON / 非 dict / IO 错误 → 记 warning 并 `continue`，跳过坏文件继续向前回退；不再像旧实现那样「最新文件坏 → 整体 `None`」阻断其后更旧的有效 context。
 - **状态列回退的边界**：方案 A 下「仅板块取数失败日」状态列会随回退滞后一天（罕见，与当日数值错配）；全源失败空壳日状态列与数值列同源一致（本次场景，改善）。若此类错位日变多，切方案 C：`api_latest` 状态列按 history 最新日期精确取 context，板块列独立走「最近有板块数据」回退。
+
+## 模块 web/（二十八期：自选股 watchlist）
+
+- **`/api/watchlist` 是 web 看板第 4 个只读 JSON API**：实时取数 `config.json` 的 `watchlist.stocks`（A 股 AkShare / 美股 Yahoo），返回 `{stocks:[{symbol,label,value,change_pct}], trend:{dates,series:[{key,label,values,change_7d,raw}]}}`（trend 与 `/api/history` 同构、归一化基准 100）；配置为空 → 200 + 空结构（前端整卡隐藏），单标的取数失败 → 该行 `value=null`、前端显示「数据暂缺」、不 500；看板索引端点名是 `/api/latest`（**不是** `/api/overview`），验证别用错名字。
+- **内联 `<script>` 不能直接 `node --check`**：`web/templates/index.html` 主脚本里含 `</script>` 字面量，用正则 `<script>(.*?)</script>` 提取会被提前截断，导致 `node --check` 报 `Unexpected end of input`（未改的原始文件也报同样错，非本次引入）。验证 JS 语法：① 用 `node --check` 校验只含本次新增片段（palette/render 函数）的临时文件；② 或浏览器 `tab.evaluate` 看 console 报错。整文件 node 校验是假阴性，勿据此判定「JS 坏了」。
 - **真实数据落地后回退自然失效**：不改生产端；`daily_report.py` 覆盖写同名 context，09-03 真实数据落地后 `_load_latest_context` 取最新文件即命中板块数据，回退不再触发，无需清理逻辑。
