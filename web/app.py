@@ -161,10 +161,12 @@ def _compute_latest(history: list[dict]):
         key = sym.lower()
         raw = last.get(key)
         cur = raw
+        src_date = None
         if cur is None:
             for past in reversed(history[:-1]):
                 if past.get(key) is not None:
                     cur = past[key]
+                    src_date = past["date"]
                     break
         change_pct = None
         if raw is not None and prev is not None:
@@ -177,6 +179,7 @@ def _compute_latest(history: list[dict]):
             "value": cur,
             "change_pct": change_pct,
             "status": None,
+            "source_date": src_date,
         })
     return date, indices
 

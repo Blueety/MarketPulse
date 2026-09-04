@@ -112,3 +112,45 @@ class TestMergeHistory:
         data = an.load_history()
         assert len(data) == 1
         assert data[0]["date"] == "2026-09-03"
+
+
+class TestAppendHistoryPreserve:
+    """append_history(merge_existing=...) 语义（A 定稿保护）。"""
+
+    def _set_file(self, tmp_path, monkeypatch):
+        history_file = tmp_path / "history.json"
+        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
+        return history_file
+
+    def test_merge_existing_preserves_intraday_value(self, tmp_path, monkeypatch):
+        # 当日行已有快照写入的美股盘中值（gspc=7727.09）；日报盘中跑 fetch 到 None
+        self._set_file(tmp_path, monkeypatch)
+        an.append_history({"date": "2026-09-04", "gspc": 7727.09})
+        an.append_history({"date": "2026-09-04", "gspc": None}, merge_existing=True)
+        row = an.load_history()[-1]
+        assert row["gspc"] == 7727.09  # 盘中值保留，未被整行抹空
+
+    def test_merge_existing_false_default_overwrites(self, tmp_path, monkeypatch):
+        # 默认 merge_existing=False 保持既有覆盖语义（回归锁）
+        self._set_file(tmp_path, monkeypatch)
+        an.append_history({"date": "2026-09-04", "gspc": 7727.09})
+        an.append_history({"date": "2026-09-04", "gspc": None})
+        row = an.load_history()[-1]
+        assert row["gspc"] is None
+
+    def test_merge_existing_true_with_real_value_overwrites(self, tmp_path, monkeypatch):
+        # fetch 成功（有值）→ 照常定稿覆盖，行为与现状一致
+        self._set_file(tmp_path, monkeypatch)
+        an.append_history({"date": "2026-09-04", "gspc": 7727.09})
+        an.append_history({"date": "2026-09-04", "gspc": 7750.0}, merge_existing=True)
+        row = an.load_history()[-1]
+        assert row["gspc"] == 7750.0
+
+    def test_merge_existing_true_no_prior_row_creates(self, tmp_path, monkeypatch):
+        # 无当日行 + merge_existing=True → 正常新建行、键值照写
+        self._set_file(tmp_path, monkeypatch)
+        an.append_history({"date": "2026-09-04", "gspc": 7750.0}, merge_existing=True)
+        data = an.load_history()
+        assert len(data) == 1
+        assert data[0]["date"] == "2026-09-04"
+        assert data[0]["gspc"] == 7750.0

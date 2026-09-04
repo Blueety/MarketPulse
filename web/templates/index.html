@@ -229,15 +229,19 @@
         const chg = it.change_pct;
         const cls = chg == null ? "" : (chg >= 0 ? "pos" : "neg");
         const st = it.status || "—";
+        // 前向回填行（美股盘中未收盘，value 来自最近收盘日）标注来源日期，避免与概览日期错配
+        const srcDate = it.source_date && it.source_date !== latest.date ? it.source_date : null;
         let dot = "dot-green";
         if (st.indexOf("休市") >= 0) dot = "dot-gray";
         else if (st.indexOf("失败") >= 0) dot = "dot-orange";
         else if (st.indexOf("异动") >= 0) dot = "dot-red";
         const tr = document.createElement("tr");
+        const valCell = fmtNum(it.value, 2) + (srcDate ? '<span style="color:#8b949e;font-size:11px">（' + srcDate.slice(5) + '收盘）</span>' : "");
+        const chgCell = srcDate ? "未收盘" : fmtPct(chg);
         tr.innerHTML =
           '<td class="name">' + it.label + "</td>" +
-          '<td class="num val">' + fmtNum(it.value, 2) + "</td>" +
-          '<td class="num chg ' + cls + '">' + fmtPct(chg) + "</td>" +
+          '<td class="num val">' + valCell + "</td>" +
+          '<td class="num chg ' + cls + '">' + chgCell + "</td>" +
           '<td class="col-status"><span class="status-dot ' + dot + '"></span>' + st + "</td>";
         tbody.appendChild(tr);
       });

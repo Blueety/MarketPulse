@@ -126,11 +126,39 @@ def test_compute_latest_backfills_sparse(tmp_path):
     # A 股：原始有值 → 计算涨跌幅
     assert by["SH"]["value"] == 3030.0
     assert by["SH"]["change_pct"] == pytest.approx(1.0)
+    assert by["SH"]["source_date"] is None  # 末行本身有值，无回填
     # 美股/波动率：末行 None → 前向回填 d1 值，change_pct 强制 None
     assert by["GSPC"]["value"] == 100.0
     assert by["GSPC"]["change_pct"] is None
+    assert by["GSPC"]["source_date"] == "d1"  # 回填来源日期
     assert by["MOVE"]["value"] == 100.0
     assert by["MOVE"]["change_pct"] is None
+    assert by["MOVE"]["source_date"] == "d1"
+
+
+def test_compute_latest_source_date_none_when_last_has_value(tmp_path):
+    """末行所有符号均有值 → source_date 为 None，不标"回填"。"""
+    hist = [
+        {"date": "d1", "gspc": 100.0},
+        {"date": "d2", "gspc": 105.0},
+    ]
+    _, idx = _compute_latest(hist)
+    g = next(i for i in idx if i["symbol"] == "GSPC")
+    assert g["source_date"] is None
+
+
+def test_compute_latest_source_date_multi_day_chain(tmp_path):
+    """多日 None 链 → source_date 取最近非空行日期（d1 而非更早的 d0）。"""
+    hist = [
+        {"date": "d0", "gspc": 90.0},
+        {"date": "d1", "gspc": 100.0},  # 最近非空
+        {"date": "d2", "gspc": None},   # 末行 None
+        {"date": "d3", "gspc": None},   # 连续 None
+    ]
+    _, idx = _compute_latest(hist)
+    g = next(i for i in idx if i["symbol"] == "GSPC")
+    assert g["value"] == 100.0
+    assert g["source_date"] == "d1"
 
 
 

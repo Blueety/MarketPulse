@@ -615,9 +615,21 @@ def load_history() -> list[dict]:
     ]
 
 
-def append_history(record: dict) -> None:
-    """追加当日记录（同日重复按 date 键覆盖），裁剪至最近 90 条；临时文件 + os.replace 原子写。"""
+def append_history(record: dict, merge_existing: bool = False) -> None:
+    """追加当日记录（同日重复按 date 键覆盖），裁剪至最近 90 条；临时文件 + os.replace 原子写。
+
+    merge_existing=True（日报定稿用）：当日行已存在且本次 record 某键为 None 时，
+    用当日行既有非 None 值补全（防盘中定稿把快照已写入的盘中值整行抹成 None；决策 X）。
+    补全仅限 _HISTORY_KEYS 键、date 键除外；默认 False 保持既有覆盖语义（其余调用零影响）。
+    """
     records = load_history()
+    if merge_existing:
+        prev = next((r for r in records if r.get("date") == record.get("date")), None)
+        if prev is not None:
+            for k, v in record.items():
+                if (k != "date" and k in _HISTORY_KEYS and v is None
+                        and prev.get(k) is not None):
+                    record[k] = prev[k]
     records = [r for r in records if r.get("date") != record.get("date")]
     records.append(record)
     records = records[-HISTORY_MAX:]

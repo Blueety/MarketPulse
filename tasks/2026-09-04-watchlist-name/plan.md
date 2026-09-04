@@ -154,4 +154,41 @@ L198 `append_history(record)` → `append_history(record, merge_existing=True)`�
 - **快照/开盘入口**：不改 merge_history，盘中 merge 语义不变。
 - **web /api/history /api/alerts /api/watchlist**：不涉及。
 - **自选股链路**：不涉及（线上 env 修正属配置操作）。
-- **全量测试**：净增 ~6 条用例；存量 3 条失败（未开盘文案）不在范围、不动。
+---
+
+## 【任务 D】单自选股图表过宽/扁扁的（只读方案，未改代码）
+
+### 现象与根因
+- 自选股卡 `#watchlist-section` 是 `.card` hairline 全宽分区（style.css:99-106，无边框透明、整行铺满），不在 `.charts-grid` 两列网格内。
+- 其图表 canvas：`web/templates/index.html:109` `<canvas id="chart-watchlist" style="height:220px !important">` + style.css:215-220 `.chart-box canvas { width:100% !important; height:340px !important; }`（被内联 220 覆盖，即 commit 7101e47「调小」痕迹）。
+- 结果：**高恒定 220px、宽=整卡全宽**（如容器 ~1160px → 比例 ≈5:1）。对比主趋势图区在 `.charts-grid repeat(2,1fr)`（style.css:177-181）内每图 ~半宽 + 340px 高 ≈1.6:1 协调。单只自选股只有 1 条折线，宽扁更显空旷不协调。
+- 与自选股数量无关（本就单图多线），单只时观感最差。表格行同样全宽，但行高信息密度低、全宽无碍，抱怨集中在图。
+
+### 推荐方案（最小改动，1 处 CSS）
+`web/static/style.css` 在 `.chart-box canvas` 规则（L215-220）后追加：
+
+```css
+/* 自选股图：限宽居中，避免全宽 220px 过扁（单标的场景尤甚） */
+#watchlist-section .chart-box { max-width: 640px; margin: 0 auto; }
+```
+
+- 图表（含其 h3/chart-meta 头）收窄至 ≤640px 居中，比例 ≈2.9:1，接近主图观感；220px 高与 7101e47 的协调意图不变。
+- 移动端天然不受影响（容器 <640px 时 max-width 不生效，既有 260/220px 断点规则照旧）。
+- 不改 index.html、不改 Chart.js options、不动主图区。
+- 备选（不取）：把图表高度调回 340 —— 与 7101e47 意图相悖，且仍全宽仍扁；改 `maintainAspectRatio` —— 依赖 Chart 内部行为，不如 CSS 稳定。若浏览器实测 Chart.js responsive 接管高度导致非 220px，再在 `renderWatchChart` 的 options 对象（index.html ~L838 前）补 `maintainAspectRatio: false` 一行兜底——先验后补，不预埋。
+
+### 改动前后对比
+| | 前 | 后 |
+|---|---|---|
+| 桌面（容器 ~1160px） | 图 1160×220（≈5:1 扁条） | 图 640×220（≈2.9:1），居中，与主图观感协调 |
+| 移动端（<640px） | 容器宽 ×220 | 不变 |
+
+### 验证
+1. 另起 8001 端口（8000 被占且模板/静态有缓存，pitfalls #FastAPI 模板缓存）起 `venv/Scripts/python -m uvicorn web.app:app --port 8001`，浏览器硬刷新。
+2. `tab.evaluate`（主 world，pitfalls #42）量 `document.getElementById('chart-watchlist').getBoundingClientRect()` → 宽 ≈min(容器,640)、高 ≈220；截图对比改前后。
+3. 视口 1280px 与 375px 各验一次（375 下应全宽无居中、高度 220 断点生效）。
+4. 无 CSS/JS 单测基建 → 浏览器断言为准；本改动纯样式，Python 测试不受影响（可跳过 pytest 或跑 test_web.py 冒烟）。
+
+### 风险
+- 仅作用于 `#watchlist-section .chart-box`，其它卡（主图/板块/告警）零影响；纯 CSS 无 JS 行为变化，Chart.js responsive 不感知 max-width（重算基于实际容器宽）。低风险。
+- 若 Chart.js 对 canvas CSS 高度接管与预期不符 → 上述兜底一行（maintainAspectRatio:false），实施时浏览器实测后决定是否加。

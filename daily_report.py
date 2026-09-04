@@ -195,7 +195,8 @@ def main() -> int:
     if _is_us_duplicate_day(history, record):
         log.info("美股数据与最近记录相同（非交易日），跳过历史追加: %s", date)
     else:
-        append_history(record)
+        # 定稿保护：本次 fetch 缺失的美股键保留当日快照盘中值，防盘中运行整行抹空（决策 X）
+        append_history(record, merge_existing=True)
         log.info("历史已追加: %s", record)
     try:  # 告警检查：save_last_values 前用旧缓存作基准（决策 G），失败仅记日志（决策 H）
         run_alert_checks(date, values, last_values, "close", report_path, history)
