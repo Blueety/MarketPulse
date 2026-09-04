@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3930.1164,
-      "change_pct": 0.0,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "SZ": {
-      "value": 13516.969,
-      "change_pct": 0.0,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "CYB": {
-      "value": 3286.546,
-      "change_pct": 0.0,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "VIX": {
       "value": null,
@@ -47,9 +47,9 @@
       "status": "未开盘"
     },
     "BTC": {
-      "value": 79255.01,
-      "change_pct": -0.11862762469763964,
-      "status": "连跌1日"
+      "value": null,
+      "change_pct": null,
+      "status": "未开盘"
     }
   },
   "history_30d": {
@@ -411,167 +411,19 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [
-      {
-        "name": "农业",
-        "change": 3.07,
-        "turnover": "655.0亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "消费",
-        "change": 1.97,
-        "turnover": "332.2亿",
-        "top_stock": "顺鑫农业"
-      },
-      {
-        "name": "地产/基建",
-        "change": 1.43,
-        "turnover": "153.6亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "金融",
-        "change": 0.51,
-        "turnover": "2416.2亿",
-        "top_stock": "中集集团"
-      },
-      {
-        "name": "军工",
-        "change": -0.44,
-        "turnover": "2429.1亿",
-        "top_stock": "湖南天雁"
-      }
-    ],
-    "losers": [
-      {
-        "name": "通信/电子",
-        "change": -1.83,
-        "turnover": "3373.8亿",
-        "top_stock": "通宇通讯"
-      },
-      {
-        "name": "资源/有色",
-        "change": -1.78,
-        "turnover": "651.6亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -1.33,
-        "turnover": "5050.5亿",
-        "top_stock": "电气风电"
-      },
-      {
-        "name": "医药",
-        "change": -0.8,
-        "turnover": "1201.0亿",
-        "top_stock": "*ST香雪"
-      },
-      {
-        "name": "其他",
-        "change": -0.46,
-        "turnover": "22718.0亿",
-        "top_stock": "大北农"
-      }
-    ]
+    "gainers": [],
+    "losers": []
   },
   "us_sector_heat": {
-    "gainers": [
-      {
-        "name": "科技 (XLK)",
-        "change": 0.75,
-        "turnover": "$312.9M",
-        "top_stock": "XLK"
-      },
-      {
-        "name": "工业 (XLI)",
-        "change": 0.41,
-        "turnover": "$291.6M",
-        "top_stock": "XLI"
-      },
-      {
-        "name": "公用事业 (XLU)",
-        "change": 0.24,
-        "turnover": "$189.2M",
-        "top_stock": "XLU"
-      },
-      {
-        "name": "房地产 (XLRE)",
-        "change": -0.08,
-        "turnover": "$54.7M",
-        "top_stock": "XLRE"
-      },
-      {
-        "name": "原材料 (XLB)",
-        "change": -0.26,
-        "turnover": "$167.4M",
-        "top_stock": "XLB"
-      }
-    ],
-    "losers": [
-      {
-        "name": "可选消费 (XLY)",
-        "change": -1.53,
-        "turnover": "$173.9M",
-        "top_stock": "XLY"
-      },
-      {
-        "name": "通信服务 (XLC)",
-        "change": -0.99,
-        "turnover": "$80.3M",
-        "top_stock": "XLC"
-      },
-      {
-        "name": "医疗健康 (XLV)",
-        "change": -0.97,
-        "turnover": "$298.6M",
-        "top_stock": "XLV"
-      },
-      {
-        "name": "金融 (XLF)",
-        "change": -0.91,
-        "turnover": "$300.5M",
-        "top_stock": "XLF"
-      },
-      {
-        "name": "能源 (XLE)",
-        "change": -0.78,
-        "turnover": "$666.2M",
-        "top_stock": "XLE"
-      }
-    ]
+    "gainers": [],
+    "losers": []
   },
   "search_keywords": [
-    "农业 surge 2026-09-04",
-    "消费 surge 2026-09-04",
-    "地产/基建 surge 2026-09-04",
-    "金融 surge 2026-09-04",
-    "军工 drop 2026-09-04"
+    "market summary 2026-09-04"
   ],
-  "correlation": [
-    {
-      "a": "VIX",
-      "b": "GSPC",
-      "pair": "VIX（恐慌指数） ↔ 标普500",
-      "r": -0.64,
-      "n": 27
-    }
-  ],
+  "correlation": [],
   "watchlist": {
-    "stocks": [
-      {
-        "symbol": "515300.SS",
-        "label": "红利低波ETF",
-        "value": 1.328,
-        "change_pct": 0.53,
-        "corr": {
-          "benchmark": "SH",
-          "r": -0.07,
-          "n": 14
-        }
-      }
-    ],
+    "stocks": [],
     "portfolio_risk": {
       "high": false,
       "avg_r": null
