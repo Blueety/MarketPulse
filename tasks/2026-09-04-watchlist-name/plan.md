@@ -191,4 +191,46 @@ L198 `append_history(record)` → `append_history(record, merge_existing=True)`�
 
 ### 风险
 - 仅作用于 `#watchlist-section .chart-box`，其它卡（主图/板块/告警）零影响；纯 CSS 无 JS 行为变化，Chart.js responsive 不感知 max-width（重算基于实际容器宽）。低风险。
-- 若 Chart.js 对 canvas CSS 高度接管与预期不符 → 上述兜底一行（maintainAspectRatio:false），实施时浏览器实测后决定是否加。
+---
+
+## 【任务 E】自选股图表分辨率低/模糊（只读分析，未改代码）
+
+### 现象
+任务 D（max-width:640 居中）上线后，自选股图在部分屏显糊/发扁。
+
+### 根因（代码级，一行）
+`renderWatchChart` 的 Chart.js 配置（`web/templates/index.html` ~L806-808 `const options = { responsive: true, … }`）**未设 `maintainAspectRatio`** → v4 默认 `true`、`aspectRatio=2`；而 canvas 高度被 CSS 钉死 `220px !important`（index.html:109 内联 + style.css:217 双重 !important）。
+
+- Chart.js 4.4.1 responsive 在 `maintainAspectRatio:true` 下按「宽 ÷ 2」推逻辑高：容器 640px → 期望高 **320px**，canvas 物理像素 `heightAttr = 320×DPR`（DPR=1.25 时 ≈400px）。
+- CSS `!important` 使 canvas 实际显示高恒为 **220px** → 320px 高的图被垂直压缩到 220px 显示（≈0.69×）→ 文字/曲线发糊发扁；宽度方向 1:1 无失真。
+- DPR/高分屏维度**排除**：Chart.js v4 默认 `devicePixelRatio: window.devicePixelRatio`（实测 1.25），全文件 grep 无 `devicePixelRatio`/`Chart.defaults` 覆盖 → 横向已按 DPR 高清，不是"未开 DPR"问题。
+- 主趋势图（`.charts-grid` 内半宽 + CSS 340px）同依赖默认 aspect，但半宽容器下期望高(≈280px)与 CSS 340 接近，失真轻微、用户未报；本次只改自选股图（不扩大范围，主图顺带核实即可）。
+
+> 注：本次探测期间 `/api/watchlist` 取数暂失败，前端显示「数据暂缺」占位（canvas 被 innerHTML 替换，无法实测 heightAttr）；上述为渲染成功路径的确定性代码分析，验证步骤见下。
+
+### 最小修复（1 行）
+`web/templates/index.html` `renderWatchChart` 的 `options` 对象（`responsive: true` 之后）加：
+
+```js
+const options = {
+  responsive: true,
+  maintainAspectRatio: false,   // 高由 CSS 220px 决定，避免 aspect=2 画 320 高被压缩到 220 显示（糊）
+  ...
+```
+
+改动前后对比：
+| | 前 | 后 |
+|---|---|---|
+| 逻辑绘图高 | 宽÷2 = 320px | 容器实际高 ≈220px（CSS 决定） |
+| canvas 物理像素 | 640×1.25 × 400px(320×1.25) | 800 × 275px（220×1.25，与显示 1:1） |
+| 显示效果 | 400px 高内容压缩进 220px → 糊/扁 | 1:1 无压缩，锐利；高仍 220px（任务 D 意图不变） |
+
+### 验证
+1. 前置：确认 `/api/watchlist` 有数据（`curl http://127.0.0.1:8000/api/watchlist` 非空；若「数据暂缺」属取数临时失败，先恢复/换 8001 起服务）。
+2. `tab.evaluate`（主 world）量渲染后 canvas：改前 `canvas.height / rect.height ≈ DPR×1.45`、改后 `≈ DPR`；`canvas.width / rect.width ≈ DPR`（前后不变，横向本就清晰）。
+3. 截图对比锐度（改前后同一视口 1280、DPR 125%）。
+4. 其它三图（renderLineChart 等）抽查 `canvas.height/rect.height`：若主图比值 >DPR×1.1 且观感糊 → 可同法补一行（另行小改，本次不含）。
+
+### 风险
+- `maintainAspectRatio:false` 后图表高完全由容器/CSS 决定：任何改变 canvas 显示高的 CSS 都会直接反映，不再自动按比例。当前显示高由双重 `!important` 钉死 220/260/340（含移动端断点），行为确定。低风险。
+- 与任务 D 的 max-width:640 兼容（宽 640 高 220 由同一容器尺寸提供）。
