@@ -81,6 +81,13 @@ def get_market_date(market: str) -> str:
     """返回市场自身交易日 YYYY-MM-DD（设计 B）：a-share 用北京时间、us 用美东时间。"""
     tz = SHANGHAI_TZ if market == "a-share" else EASTERN_TZ
     return datetime.now(tz).strftime("%Y-%m-%d")
+def is_market_holiday(market: str) -> bool:
+    """当日是否休市（周末退化；节假日无法全覆盖——任务 G 同局限）。
+
+    a-share 用北京 TZ、us 用美东 TZ；weekday>=5 视为休市。
+    """
+    tz = SHANGHAI_TZ if market == "a-share" else EASTERN_TZ
+    return datetime.now(tz).weekday() >= 5
 
 def get_us_eastern_date() -> str:
     """返回美东当前日期 YYYY-MM-DD（内部 UTC，显示用美东）。"""

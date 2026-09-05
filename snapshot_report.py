@@ -17,7 +17,7 @@ import argparse
 import logging
 
 from src.alerter import run_alert_checks
-from src.analyzer import build_statuses, get_market_date, load_history, load_last_values, merge_history
+from src.analyzer import build_statuses, get_market_date, is_market_holiday, load_history, load_last_values, merge_history
 from src.fetcher import fetch_all, fetch_sector_heat
 from src.reporter import render_snapshot, save_snapshot, generate_context
 from src.git_ops import auto_commit_push
@@ -29,11 +29,25 @@ logging.basicConfig(
 )
 log = logging.getLogger("marketpulse")
 
+def _is_market_closed(market: str, time: str) -> bool:
+    """非交易日 gate（任务 H.5）：脚本级一处覆盖全 cron。
+
+    a-share 任意时段周末休市；us 仅 open/noon 周末休市——us close/daily 按 ET 判定为
+    有效（北京周六 08:00 = ET 周五收盘后，美股数据有效，不跳），测试钉死该边界。
+    """
+    if market == "a-share" and time in ("open", "midday", "close"):
+        return is_market_holiday("a-share")
+    if market == "us" and time in ("open", "noon"):
+        return is_market_holiday("us")
+    return False
 
 def main(market: str = "us", time: str = "noon") -> int:
     """取数（仅本市场子集）→ 分类 → 渲染单板块快照 → 落盘 → 告警检查（只读缓存基准）。
     market: a-share | us | alt（默认 us）；time: open | midday | close | noon（默认 noon）。
     alt = 另类资产（GLD 黄金 / BTC 比特币），不参与告警。"""
+    if _is_market_closed(market, time):
+        log.info("休市，%s 时段=%s 无盘中数据，跳过生成（不取数/不渲染/不合并/不提交）", market, time)
+        return 0
     date = get_market_date(market)
     log.info("MarketPulse 开始生成 %s 快照（市场=%s，时段=%s）", date, market, time)
 
