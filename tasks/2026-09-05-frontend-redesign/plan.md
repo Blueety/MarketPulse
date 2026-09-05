@@ -82,3 +82,30 @@
 - 业务 JS（fetch/渲染/图表/时间/状态/Dark/Refresh）逻辑保留：改 class/结构不更算法 → 功能回归面≈0（以 pytest + 浏览器功能点击验证兜底：排序、组筛选、range、图例、刷新、主题）。
 - 后端/数据层零改动（§十九）；docs 无涉；生成文件无涉。
 - 待确认后开工（不确定点见 §1 ① ② 与决策 a）。
+---
+
+## 【任务 R：与目标效果图差异对照】(clip_20260905_122955_7.png)
+
+> 注：本环境 vision 模型不可用，未能亲看图；以用户朗读特征为基准 + 8002 新端口 DOM 实测（1440px，dark 默认）逐项对照。PRD 与截图冲突处以**截图为准**（用户纠偏指令），冲突点标注提请定夺。
+
+| # | 项 | 效果图样 | 现状（实测 8002） | 是否改 | 最小改法 |
+|---|---|---|---|---|---|
+| ① | 默认主题 | 深色主（bg #0f172a 系、卡 #334155 系偏亮） | **dark 默认 ✓**（bodyBg #0B0F14、卡 #111827）——色阶更暗、色相偏蓝灰 | 低 | 两可选：维持现色（接近）或将 dark tokens 调向 #0f172a/#1e293b/#334155 三级（改 style.css:21-30 变量值即可） |
+| ② | 表格列数 | **3 列**（指数/收盘价/涨跌幅） | **5 列**（指数/最新价/涨跌/涨跌幅/状态，index.html:58-62）——与 PRD §六(5列)冲突 | **高（需定夺）** | 按截图回 3 列：删「涨跌/状态」th+td（renderOverview 模板串 L248-250 区），「最新价」改名「收盘价」；趋势文本（连跌1日）再入名称列单行小字或省略（I.5/I.6 教训：保持单行，防行高参差）。**若保留 5 列请明示** |
+| ③ | KPI sparkline 位置 | **卡右侧**迷你图 | **卡底部**（.lede-cell 高 148，canvas.kpi-spark relTop 93 全宽 241×40，index.html:316 顺序 label/val/sub/canvas） | 高 | lede-cell 改 CSS grid：左列 label+val+sub、右列 canvas 宽 ~90-110px 高 40 居中；canvas 尺寸经 drawSparklines 依容器重设（index.html:318+ 绘图函数取容器宽） |
+| ④ | KPI 卡边框/圆角 | 无硬边框、靠色阶区分、圆角 8-12 | border:1px solid + radius 10px + bg 同卡色（style.css:218） | 中 | 去 border（或降 --border 透明度），卡 bg 再提亮一档（#1a2436 系）拉开与 body 色阶；左 2px accent 线保留（有信息量） |
+| ⑤ | nav active | 图标+文字蓝青高亮 + 左竖条 | 左竖条 2px ✓ 但 active 文字/图标为浅灰白（.nav-item.active color text-primary，style.css:118-122）；bg 蓝 10% | 中 | `.nav-item.active { color: var(--blue); }` + svg 随 currentColor 变蓝（1 行 CSS） |
+| ⑥ | Header/侧栏底部 | Header：M logo+标题、数据截至、**圆形刷新**；侧栏底部：深色切换+最后更新时间 | Header：MARKETPULSE 文本 + ⟳ 字符按钮 + ☀️ emoji 切换（index.html:26-36）；数据截至 ✓；**侧栏底部 597px 空白无切换/时间** | 中 | a) 刷新/主题换 20px 圆形内联 SVG 图标按钮；b) 侧栏底部加「主题切换 + 数据最后更新 HH:MM」小段（复用 overview-date/applyTheme；不引依赖）；M logo 是否图形化 → 效果图有 M logo：可选 24px 方形 accent 底 M 字标（纯 CSS/文本） |
+| ⑦ | 趋势区顶部控件 | 7/30/90 + 自定义对比下拉 + 分类筛选(全部/美股/A股/波动率/另类) + 顶部彩色圆点图例 | 7/30/90 ✓ + group-bar(JS 分类按钮) + symbol-filter chips（无自定义对比下拉；图例为 chips 非圆点） | 中 | 「自定义对比」下拉：现 symbol-filter 支持多选 → 加 select 多选 UI 或 dropdown 面板复用它；图例 chips 改圆点+灰标签（P3 图例方案已含） |
+| ⑧ | 图表布局 | **左右两个大图**（美股/A股）一屏 | 2×2 四组全显（charts-grid 4 canvas 各 696×340） | **高** | charts-grid 默认只显 美股/A股 两组（分类筛选切换波动率/另类时换出）；或 grid 保持 4 组但收成 2 列×高图、默认高亮前两类——按截图：默认两图 50/50 并排，图高 ≥320 |
+| ⑨ | 整体配色 | 深 bg + 偏亮卡 + 蓝青 accent（#3b82f6 系?） | #0B0F14/#111827 + blue accent（图例蓝） | 低 | 与①同批调 token；涨 #16A085/跌 #F05A5A 已用（PRD 值，效果图绿红直觉同族） |
+
+### Top 3 差异（先做）
+1. **② 表格 3 vs 5 列**——需用户定夺（PRD 5 列 vs 截图 3 列冲突；本次以截图为准倾向回 3 列）。
+2. **③ KPI sparkline 右置** + ④ 卡无边框靠色阶（同一 lede-cell 布局重做）。
+3. **⑧ 趋势区两图一屏布局** + ⑦ 自定义对比下拉/圆点图例。
+
+### 是否动后端：**全部不需要**（纯 index.html/style.css；涨跌列若保留由前端算、状态/趋势文本后端已下发；自定义对比下拉复用现有 /api/history?days + 多选过滤，无新接口）。
+
+### 实施顺序建议
+R-1（②列数定夺后）：表格列数/名称列单行 → R-2（③④）lede-cell grid 右 spark + 卡色阶 → R-3（⑧）趋势区默认两图+筛选换组 → R-4（⑦⑤⑥）控件/图例/侧栏底部/图标化 → R-5 验收（PRD checklist + 截图逐项过）。均并入现有 P3/P4 阶段产物上改，不返工。
