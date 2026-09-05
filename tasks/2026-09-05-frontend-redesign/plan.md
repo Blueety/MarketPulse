@@ -171,3 +171,24 @@ R-1（②列数定夺后）：表格列数/名称列单行 → R-2（③④）le
 ### 风险
 - absolute 标注可能与左侧「指数」列文字重叠（td.padding 12px 内靠左、指数列右缘在 12px 边界）→ left:12px 位于本列 padding 起点，与指数列尾字间距 ≥8px，实测确认；若重叠改 `left: auto; right: 8px`（标注置于格右、数字左让? 数字右对齐仍在右缘——标注与数字同行右端冲突）→ 先按 left 方案实测。
 - td.val 16px 600 数字与 11px 标注同格垂直居中：top:50% translate 对单行 td 生效；行高由 padding 定，无 overflow 风险。
+### T2 修正：去行内标注（用户纠正——绝对定位左置标注制造列左缘阶梯，否决）
+
+**最终方案（A）一句话**：收盘价列恢复**纯数字右对齐、零行内标注**；回填来源语义上移到表格标题一次性说明 + 行 `title` 工具提示兜底（不占视觉流）。B 方案（全行第二行统一小字）否决：10 行全部变双行/占位空行，破坏单行紧凑，行高参差回潮。
+
+改动点：
+1. `web/templates/index.html` renderOverview：
+   - L268：`valCell = fmtNum(it.value, 2)` —— 删除 `src-sub` span 拼接；保留来源语义于行级：`'<td class="num val"' + (srcDate ? ' title="数据回填自 ' + srcDate + '"' : "") + '>' + valCell + '</td>'`（原生 hover 提示，零视觉）。
+   - L59 标题一次性说明：renderOverview 收集本次 `srcDate` 去重集合 `srcDates`；渲染后若非空，将 h2-sub 更新为 `· 最新交易日（部分标的回填至 {集合 join}）`（11px muted，仅一行字）；全部当日数据时保持现文本「· 最新交易日」。
+2. `web/static/style.css`：`.src-sub` 规则删除或留空（不再使用）；无需新规则（h2-sub 已有 11px muted 样式）。可选加 `.h2-sub { font-size: 12px; color: var(--text-muted); }` 微调。
+
+效果对比：
+| | 改动前（T 版 absolute） | 改动后 |
+|---|---|---|
+| 收盘价列 | 数字右缘齐，但左缘 7 行灰标注 / 3 行空 → 阶梯 | **纯数字 10 行右对齐，两缘皆齐** |
+| 回填语义（09-04） | 每行灰字（视觉噪声） | 标题「…（部分标的回填至 09-04）」一次 + 行 title hover |
+| 行高/参差 | 不变（单行） | 单行不变 |
+
+验证：
+1. 8004 新端口 + `tab.evaluate`：`#overview-body tr td.val` 内无 span 子元素、10 行文本右缘一致（Range 量化差 ≤1px）；`#overview h2-sub` 含「回填至 09-04」；`td.val[title]` 存在且值=09-04。
+2. 全当日数据场景（周一开盘后无回填）：h2-sub 回落「· 最新交易日」、无 title——验证时以单测/临时数据或代码审查覆盖分支。
+3. 截图对比；排序/涨跌幅列无涉。
