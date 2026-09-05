@@ -63,13 +63,13 @@ class TestRenderReport:
         data = sample_data()
         data["values"]["VXN"] = None
         data["changes"]["VXN"] = None
-        data["statuses"]["VXN"] = ("获取失败", "数据获取失败，无法判断状态。")
+        data["statuses"]["VXN"] = ("未开盘", "美股未开盘或数据缺失。")
         data["values"]["SH"] = None
         data["changes"]["SH"] = None
         data["statuses"]["SH"] = ("休市", "A 股休市或数据缺失。")
         report = rep.render_report(**data)
-        assert "获取失败" in report
-        assert "| VXN（科技波动） | 获取失败 | — | 获取失败 |" in report
+        assert "未开盘" in report
+        assert "| VXN（科技波动） | 未开盘 | — | 未开盘 |" in report
         assert "| 上证指数 | 休市 | — | 休市 |" in report
 
 
@@ -159,7 +159,7 @@ class TestSnapshot:
             {"VIX": "获取失败（已重试）", "MOVE": "获取失败（已重试）"},
         )
         content = rep.render_snapshot("2026-08-28", values, statuses)
-        assert content.count("获取失败") >= 3
+        assert content.count("未开盘") >= 3
         assert "休市" in content
         assert "| 上证指数 | 休市 | 休市 |" in content
         assert "| 创业板指 | 休市 | 休市 |" in content
