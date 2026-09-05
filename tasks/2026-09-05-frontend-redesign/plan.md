@@ -109,3 +109,30 @@
 
 ### 实施顺序建议
 R-1（②列数定夺后）：表格列数/名称列单行 → R-2（③④）lede-cell grid 右 spark + 卡色阶 → R-3（⑧）趋势区默认两图+筛选换组 → R-4（⑦⑤⑥）控件/图例/侧栏底部/图标化 → R-5 验收（PRD checklist + 截图逐项过）。均并入现有 P3/P4 阶段产物上改，不返工。
+---
+
+## 【任务 S：A股红显 + 周六 cron】（只读实测，未改代码）
+
+### P1 A 股三行红色 —— 根因与位置
+**实测（8002，dark）**：上证/深证/创业板三行**整行红底** `rgb(255,110,94)/7%`（= var(--red) 7% = row-flash 样式）；涨跌幅列文案「休市」却带 `pos` 绿类（rgb(47,214,168)）；名称列「上证指数连跌1日」（trendSub 拼入）。
+
+**根因（index.html renderOverview）**：
+1. **整行红 = row-flash 误配「连跌」**：L262 `else if (st.indexOf("异动") >= 0 || /连[涨跌]\d+日/.test(st)) rowCls = "row-flash"` —— row-flash（语义=异动红、CSS red 7% 背景）把 A 股三行「连跌1日」趋势当异动整行染红。周六休市日趋势并非当日异动 → 误导。
+2. **「休市」绿字 = chg cls 未随文案分支**：L257 `cls = chg==null?"":(chg>=0?"pos":"neg")` 独立计算，而 L268 `chgCell = isWeekend ? "休市" : …` 只换文本不换 cls → A股 chg 原始值 ≥0 → td 得 `pos` 绿，「休市」二字绿显示，红底+绿字自相矛盾。
+
+**是否需改**：需。改法（renderOverview L257-270 区域）：
+- L262 row-flash 匹配去掉 `连[涨跌]`（只留「异动」）；连跌趋势已由 trendSub（L269-270）在名称列表达，无需行级红。
+- 休市/回填分支将 cls 置空：`cls` 与 chgCell 同条件计算（isWeekend||srcDate → ""），避免「休市/未收盘」继承涨跌色。
+- （可选）周六回填行如需弱化用 muted 文本，不用红绿。
+
+### P2 周六 cron —— 脚本 gate 已上线，Hermes 层仍需处理
+**Gate 现状（已实施）**：`analyzer.py:84-90` `is_market_holiday`（周末退化）+ `snapshot_report.py:38-50` `_is_market_closed` → main 入口 `return 0` + log「休市…跳过（不取数/不渲染/不合并/不提交）」。A股 open/midday/close 与美股 open/noon 周六被拦；us close/daily 不拦（ET 周五收盘后数据有效，正确）。
+
+**今日（09-05 周六）实况**：`2026-09-05-a-share-open.md`（09:45）与 `midday.md + midday-analysis.md`（11:45/11:46）均生成了——git log 证明 gate 代码提交于今日 15:20-16:21 批次，**晚于 09:45/11:45 cron** → 产物是 gate 上线前遗留；15:00 A股收盘无 `a-share-close.md` → gate 已拦截（首个 gate 保护时段）。当前 16:29，今日再无 A 股盘中 cron。
+
+**判断**：脚本级 gate **已足够挡住脚本产物**（周六触发 → return 0、无 .md、无 commit）；**残余风险在 Hermes prompt 层**：6 个 Hermes cron 仍是每日 schedule，周六触发后脚本无当日新 .md → Hermes 若照旧生成 analysis/推送会读不到当日文件（可能误读旧文件或空报推送；今日 11:45 analysis 即 gate 前产物 + 已推送）。
+
+**建议**：
+- **Hermes 侧（推荐，需用户操作）**：a) 5 个盘中档（A股午盘/收盘/开盘、美股开盘/午盘）周六/周日 pause 或改工作日 schedule；b) 或 prompt 加休市判定：先检查「当日对应快照 .md 是否存在」，不存在则跳过生成/推送。日报 8:00 档保留周末（美股周五收盘有效，正文注明 A股为最近交易日）。
+- **仓库侧（可选加固）**：gate 已是 return 0 不产文件——倾向保持「不产垃圾文件」，让 Hermes prompt 判文件缺失来跳过（在 Hermes prompt 修，二选一）。
+- 验证：今晚 21:30 美股开盘 cron（北京周六 = ET 周六 09:30 不开盘）→ 脚本 log「休市…跳过」；Hermes 侧确认无多余推送后闭环。
