@@ -517,3 +517,17 @@ def is_market_holiday(market: str) -> bool:
 ### 风险
 - gate 误伤调休工作日（周六补班 A 股开市）——周末退化无法覆盖调休，注释局限；补班日极少，比周末照跑误报代价低。
 - us close 边界若误跳将丢周五美股日报——实现时 us 子集仅 open/noon 跳、close/daily 不跳，测试钉死。
+---
+
+## 【任务 I.6】视觉不整齐排查（浏览器实测 8001，1440px，只读）
+
+### 实测几何证据
+- **行高参差**：`#overview-body` 10 行高 46/46/**50.8×3**/46…——A 股 3 行因 trend-sub（连跌1日）名称列双行（name td 高 50.8 vs 35.8），逐行高交错，是最直观「不整齐」。
+- **数字列未右对齐**：`td.num` computed `text-align:start`（默认左）——数值列左顶排布，无金融表格「数字右对齐」观感（style.css:157-162 只设 mono，无 text-align）。
+- **row-dim 应用过宽**：10 行中 7 行 `row-dim`（opacity:.72）——周六 srcDate/休市 双触发把全表 70% 淡化，「整页褪色灰扑」是丑感主因（index.html:240 + style.css:166）。
+- lede 3 格等高 74px、图表 4 张 696×340 等宽，无问题；container 宽=viewport 1440（max-width:1440，1920 屏两侧 240px 留白 → PRD 重构痛点）。
+
+### 最小修复（并入重构计划，见 2026-09-05-frontend-redesign/plan.md）
+1. trend-sub 移出名称列（名称行恒单行），状态列回归承载趋势文本 → 行高一致。
+2. `td.num/th.num { text-align: right; }`（+ 数值列 th 同步右对齐）。
+3. row-dim 收窄：仅「获取失败/数据异常」行弱化（或 opacity .85 + 不用整体透明），休市/回填行靠文字与颜色表达，不再整行淡。
