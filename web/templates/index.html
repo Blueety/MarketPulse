@@ -174,6 +174,7 @@
       sort: { key: null, dir: 1 },  // key: "value" | "change_pct"；dir: 1 升序 / -1 降序 / null 原序
       history: null,  // 最近一次 /api/history 全量 payload（显隐纯客户端管理）
       latest: null,   // 最近一次 /api/latest payload
+      watch: null,   // 最近一次 /api/watchlist payload（lede 自选格复用）
       selSnapshot: null,  // 类别按钮点击前的选中快照（再次点击恢复）
     };
     let watchChart = null;  // 自选股 Chart 实例（重渲染前 destroy）
@@ -254,6 +255,43 @@
         tbody.appendChild(tr);
       });
       updateSortIndicators();
+    }
+    function renderLede(latest, watch) {
+      var el = document.getElementById('lede');
+      if (!el) return;
+      var idx = (latest && latest.indices) ? latest.indices : {};
+      var cells = [];
+      function make(sym, label, kind) {
+        var d = idx[sym];
+        if (!d || d.value == null) return null;
+        var chg = d.change_pct;
+        var sub, subCls;
+        if (chg == null) { sub = d.status || '—'; subCls = ''; }
+        else { sub = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; subCls = chg >= 0 ? 'pos' : 'neg'; }
+        return { label: label, kind: kind, val: fmtNum(d.value, 2), sub: sub, subCls: subCls };
+      }
+      var us = make('GSPC', '美股', 'accent');
+      var vix = make('VIX', 'VIX', 'neg');
+      var ashare = make('SH', 'A股', 'pos');
+      if (us) cells.push(us);
+      if (vix) cells.push(vix);
+      if (ashare) cells.push(ashare);
+      if (watch && watch.stocks && watch.stocks.length) {
+        for (var i = 0; i < watch.stocks.length; i++) {
+          var s = watch.stocks[i];
+          if (s && s.value != null) {
+            var wc = s.change_pct;
+            var wsub = wc == null ? (s.status || '—') : (wc >= 0 ? '+' : '') + wc.toFixed(2) + '%';
+            cells.push({ label: (s.label || s.symbol || '自选'), kind: 'accent', val: fmtNum(s.value, 2), sub: wsub, subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg') });
+            break;
+          }
+        }
+      }
+      if (!cells.length) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      el.innerHTML = cells.map(function (c) {
+        return '<div class="lede-cell lede-' + c.kind + '">' + '<div class="lede-label">' + c.label + '</div>' + '<div class="lede-val">' + c.val + '</div>' + '<div class="lede-sub ' + c.subCls + '">' + c.sub + '</div>' + '</div>';
+      }).join('');
     }
 
     function renderSector(latest) {
@@ -878,6 +916,7 @@
           state.latest = data;
           renderOverview(data);
           renderSector(data);
+          renderLede(data, state.watch);
         })
         .catch(function (e) { loadFailed(e.message, "overview-body"); });
     }
@@ -959,6 +998,8 @@
             return;
           }
           renderWatchlist(data);
+          state.watch = data;
+          renderLede(state.latest, data);
         })
         .catch(function (err) {
           console.error("[watchlist] fetch failed:", err);

@@ -464,3 +464,56 @@ MarketPulse = 个人使用的「市场波动日报/盘中快照」暗色金融�
 1. 周六实况：截图断言——表 3 列、全页无「未开盘」字样、A 股行名称下有「连跌1日」小字、失败/异动行有 tint（若当日存在）。
 2. `curl /api/latest` 仍返回 status 字段（后端契约未变）；`pytest tests/ -v` 无涉（纯前端改动）。
 3. 排序/`updateSortIndicators` 无 status 列参与，不受影响（回归面=renderOverview 单一函数 + 2 条 CSS 规则）。
+---
+
+## 【任务 H.5】非交易日 cron 照跑 + 报告星期错标（只读分析，未改代码）
+
+### 现象
+2026-09-05 周六 11:45，A 股午盘 cron（172906fab4cb，`45 11 * * *` 每日）照常运行：生成 `reports/snapshots/2026-09-05-a-share-midday.md`（脚本版）+ Hermes 附加的 `-analysis.md`（标题「🕒 A股午盘分析报告 **日期**：2026-09-05（周五）」、AI 正文「周五早盘…」），数据为周五收盘照抄（上证 3930.12 连跌1日）+ auto-commit + 推送。周六 A 股休市本不应生成。
+
+### 星期错标根因（分流取证）
+- **脚本侧无星期**：脚本版标题为「🕛 盘中快照 / **日期**：2026-09-05（北京时间）」（已 read 原文件头）；`reporter.py`/`snapshot_report.py`/`daily_report.py`/`analyzer.py` grep 无任何星期/`%A`/周X 输出 → 脚本从不标星期。
+- **「（周五）」来自 Hermes analysis 版**：Hermes 生成 `-analysis.md`（🔍 AI 分析段所在文件）时把「2026-09-05」的星期错配成美东日期（09-04 周五）的星期——北京周六 = ET 周五，跨时区日期错位（同二十六期根因族，记忆 #44：cron prompts 在 Hermes 侧、不在仓库）→ 「2026-09-05（周五）」自相矛盾。
+- 结论：星期错标 = **Hermes 侧 prompt 缺陷**，仓库脚本不可改（提示用户：Hermes 侧按数据日期 09-04（周五）标注或去掉星期）。
+
+### 脚本侧真实缺陷：非交易日 gate 缺失（任务 G 第 3 项未实施）
+`snapshot_report.py main()`：`get_market_date`（analyzer.py:80-83，a-share=北京自然日）→ fetch → render → **merge_history 照写周六行** → generate_context → auto_commit。无「当日是否交易日」判定 → 周六数据照抄周五、09-05 历史行污染、空转 commit/push/推送。
+
+### 波及 cron 清单（Hermes 侧 schedule，逐档周末行为）
+| cron（job_id） | schedule（北京） | 周末行为 |
+|---|---|---|
+| A 股午盘快照 172906fab4cb | `45 11 * * *` | 周六日照跑（**今日已发生**） |
+| A 股收盘快照 47ea7de041a9 | `0 15 * * *` | 周六日照跑（A股休市） |
+| 开盘分析推送 e21069695925 | A股开盘档（约 9:30-45） | 周六日照跑 |
+| 美股开盘快照 5bc404ba1836 | `30 21 * * *` | 北京周六 21:30 = ET 周六 09:30 不开市 → 照跑误报 |
+| 美股午盘快照 4337889a4cc3 | `0 0 * * *` | 北京周日 00:00 = ET 周六中午 → 照跑误报 |
+| 收盘日报+AI 148928e7be94 | `0 8 * * *` | 北京周六 08:00 = ET 周五 20:00（收盘后）→ 美股数据为周五新收盘，**有内容**；A 股列为周五照抄 → 部分合理，A 股子集建议标注 |
+
+### 修复建议
+**a) 星期标签**：仓库脚本已无星期，无需改；Hermes 侧（cron prompt / analysis 生成）改用「数据实际交易日」或移除星期——本仓库只能提示，无法代改（prompt 不在 repo）。
+
+**b) 非交易日 gate（脚本级，推荐，一处覆盖全 cron）**：优先于改 5+ 个 Hermes schedule（逐个改易错配；脚本自愈、本地/部署/测试一致）。改动点：`src/analyzer.py` 加共享判定 + 三入口 `main()` 开头调用：
+```python
+def is_market_holiday(market: str) -> bool:
+    """当日是否休市（周末退化；节假日无法全覆盖——任务 G 同局限）。
+    a-share 用北京 TZ、us 用美东 TZ；weekday>=5 视为休市。"""
+    tz = SHANGHAI_TZ if market == "a-share" else EASTERN_TZ
+    return datetime.now(tz).weekday() >= 5
+```
+入口语义：
+- `snapshot_report --market a-share --time midday|open|close`：周末 → log「休市，A 股无盘中数据，跳过」+ `return 0`（不 fetch/render/merge/commit）。
+- `snapshot_report --market us --time open|noon`：ET 周末 → 跳过；us close/daily 按 ET 判定（北京周六 08:00 = ET 周五收盘后 → 不跳，数据有效——测试钉死该边界）。
+- gate 在 fetch/merge 前 → 09-05 型历史行污染一并消除（任务 G 第 3 项同源同治）。
+- 取舍：脚本 gate 一处生效且可测试，优于逐档改 Hermes schedule（不可版本化、跨市场时区易错配）；节假日（春节/圣诞等）两法均无法全覆盖，注释同 G 口径。
+
+**c) 协调**：G 改展示（休市文案）、H.5 改生成（不产休市日报告/行），并行不冲突；与 I.5 无交互。实施顺序：H.5 gate 独立先行（数据正确性），其后任务 I/G 视觉与文案批。
+
+### 验证
+1. 单测：`is_market_holiday` monkeypatch datetime——周六 a-share=True、周三 False；ET 周六（北京周日凌晨）us=True、ET 周五 us=False。
+2. 周六复现：`venv/Scripts/python snapshot_report.py --market a-share --time midday` → 仅 log 跳过、无新 `reports/snapshots/2026-09-05-*`、git 无新增。
+3. 回归：周中无法真实跑 → 单测 + 周日 11:45 自然复验；`pytest tests/ -v` 全量。
+4. Hermes 星期修复在 Hermes 侧验证：下次休市日推送标题无错标。
+
+### 风险
+- gate 误伤调休工作日（周六补班 A 股开市）——周末退化无法覆盖调休，注释局限；补班日极少，比周末照跑误报代价低。
+- us close 边界若误跳将丢周五美股日报——实现时 us 子集仅 open/noon 跳、close/daily 不跳，测试钉死。
