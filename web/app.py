@@ -14,6 +14,8 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -37,6 +39,11 @@ CONTEXT_DIR = _CONTEXT_DIR
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
+
+# 自选股实时取数 TTL 缓存（uvicorn 单 worker 下语义一致；降低 Yahoo/AkShare 重复取数）
+_WATCH_TTL = 90  # 秒
+_watch_cache = {"ts": 0.0, "payload": None}
+_watch_lock = threading.Lock()
 
 _TEMPLATES = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -419,10 +426,31 @@ def api_alerts() -> list[dict]:
     return _load_alerts(10)
 
 
+def _watch_failed(payload: dict) -> bool:
+    """fetch 视为失败：有配置(hidden=False) 但无 stocks 数据（取数失败降级）。"""
+    return bool(payload) and not payload.get("hidden") and not payload.get("stocks")
+
+
 @app.get("/api/watchlist")
 def api_watchlist() -> dict:
-    """自选股实时取数（config.json watchlist.stocks）；失败降级空结构（HTTP 200，不 500）。"""
-    return _load_watchlist()
+    """自选股实时取数（TTL 缓存；取数失败且有旧缓存 → 回退旧缓存并标 stale）。"""
+    now = time.time()
+    with _watch_lock:
+        cached = _watch_cache["payload"]
+        if cached is not None and (now - _watch_cache["ts"]) < _WATCH_TTL:
+            return cached
+    fresh = _load_watchlist()
+    if _watch_failed(fresh):
+        with _watch_lock:
+            if _watch_cache["payload"] is not None:
+                stale = dict(_watch_cache["payload"])
+                stale["stale"] = True
+                return stale
+        return fresh  # 无缓存：回退现状（降级空结构，HTTP 200，与原端点一致）
+    with _watch_lock:
+        _watch_cache["ts"] = time.time()
+        _watch_cache["payload"] = fresh
+    return fresh
 
 
 @app.get("/", response_class=HTMLResponse)

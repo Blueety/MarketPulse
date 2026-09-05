@@ -305,16 +305,23 @@
       if (us) cells.push(us);
       if (vix) cells.push(vix);
       if (ashare) cells.push(ashare);
+      var wcell = null;
       if (watch && watch.stocks && watch.stocks.length) {
         for (var i = 0; i < watch.stocks.length; i++) {
           var s = watch.stocks[i];
           if (s && s.value != null) {
             var wc = s.change_pct;
             var wsub = wc == null ? (s.status || '—') : (wc >= 0 ? '+' : '') + wc.toFixed(2) + '%';
-            cells.push({ label: (s.label || s.symbol || '自选'), kind: 'accent', sym: s.symbol, val: fmtNum(s.value, 2), sub: wsub, subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg') });
+            wcell = { label: (s.label || s.symbol || '自选'), kind: 'accent', sym: s.symbol, val: fmtNum(s.value, 2), sub: wsub, subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg') };
             break;
           }
         }
+      }
+      if (wcell) {
+        cells.push(wcell);
+      } else {
+        // 自选格占位：watchlist 未到达 / 取数失败 → 先显「—」，到达后由 success 分支补画
+        cells.push({ label: '自选', kind: 'accent', sym: '', val: '—', sub: '加载中…', subCls: '' });
       }
       if (!cells.length) { el.style.display = 'none'; return; }
       el.style.display = '';

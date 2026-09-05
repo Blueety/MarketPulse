@@ -23,6 +23,14 @@ from web.app import (
 )
 from src.fetcher import SYMBOLS
 
+
+@pytest.fixture(autouse=True)
+def _reset_watch_cache():
+    """TTL 缓存为模块级状态，跨测试会泄漏；每个测试前清空以保证断言隔离。"""
+    web.app._watch_cache["ts"] = 0.0
+    web.app._watch_cache["payload"] = None
+    yield
+
 def make_alert(date: str) -> str:
     """生成指定日期的告警 md（frontmatter date 与文件名日期一致）。"""
     return (
