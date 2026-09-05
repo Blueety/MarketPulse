@@ -631,7 +631,7 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
         section_title = "🌏 美股大盘"
         syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
     rows = [
-        f"| {SYMBOLS[s]['label']} | {'休市' if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
+        f"| {SYMBOLS[s]['label']} | {('休市' if market == 'a-share' else '数据暂缺') if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
         for s in syms
     ]
     table = "\n".join(rows)

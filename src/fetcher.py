@@ -89,8 +89,16 @@ TIMEOUT = 15          # 单次请求超时（秒）
 SECTOR_TIMEOUT = 10   # 板块热度获取限时（秒）；新浪接口无 timeout，超时返回 [] 不中断日报
 RETRIES = 1           # 失败重试次数（共尝试 2 次）
 
+# 二十六期：Yahoo chart 双主机轮换（单主机 403/429 重试逃不出主机级封锁，见 pitfalls 一期证据）
+YAHOO_HOSTS = ("query1", "query2")
+
 _SESSION = requests.Session()
-_SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+# 二十六期：浏览器 UA + Accept json，降低 Yahoo 反爬 403 概率
+_SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+    "Accept": "application/json",
+})
 
 
 def fetch_with_retry(name, fn, retries: int = RETRIES):
@@ -108,6 +116,40 @@ def fetch_with_retry(name, fn, retries: int = RETRIES):
     return None
 
 
+def _yahoo_chart_get(symbol: str, params: dict) -> "requests.Response":
+    """GET Yahoo chart REST，逐主机轮换规避主机级限流（二十六期）。
+
+    query1/query2 轮换：403/429/5xx/连接错误/超时 → 记 warning + sleep(1) 切下一主机；
+    其余确定失败（404 等）→ 立即 raise_for_status 不浪费轮换；全主机失败抛最后异常
+    （由 fetch_with_retry/调用方容错接管，语义不变）。状态码用 getattr(resp, "status_code", None)
+    读取，兼容无 status_code 属性的 fake-session 单测（tests/test_us_sector.py 的 stub）。
+    """
+    last_exc: Exception | None = None
+    for host in YAHOO_HOSTS:
+        url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
+        try:
+            resp = _SESSION.get(url, params=params, timeout=TIMEOUT)
+        except Exception as exc:  # 连接错误 / 超时
+            last_exc = exc
+            log.warning("Yahoo(%s) %s 请求异常，切下一主机: %s", host, symbol, exc)
+            sleep(1)
+            continue
+        code = getattr(resp, "status_code", None)
+        if code is None:
+            return resp  # fake-session 单测 stub：无 status_code 视为成功
+        if 200 <= code < 300:
+            return resp
+        # 主机级限流/封锁：轮换
+        if code in (403, 429) or 500 <= code < 600:
+            last_exc = requests.HTTPError(f"HTTP {code} for {url}")
+            log.warning("Yahoo(%s) %s 返回 %s，切下一主机", host, symbol, code)
+            sleep(1)
+            continue
+        # 其余确定失败（404/400 等）立即失败，不轮换
+        resp.raise_for_status()
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"Yahoo {symbol} 无可用主机")
 def fetch_from_akshare(symbol: str) -> float:
     """从 AkShare 新浪接口获取 A 股指数实时价格。"""
     import akshare as ak
@@ -140,10 +182,8 @@ def fetch_vix_vxn(symbol: str) -> float:
     # A 股走 AkShare
     if symbol.endswith(".SS") or symbol.endswith(".SZ"):
         return fetch_from_akshare(symbol)
-    # 美股/波动率走 Yahoo
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
-    resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
-    resp.raise_for_status()
+    # 美股/波动率走 Yahoo（双主机轮换，二十六期）
+    resp = _yahoo_chart_get(symbol, {"interval": "1d", "range": "5d"})
     result = resp.json()["chart"].get("result")
     if not result:
         raise ValueError("Yahoo 返回空图表数据")
@@ -246,9 +286,7 @@ def fetch_vix_realtime() -> tuple[float | None, float | None]:
     新浪无 VIX 数据，开盘情绪走 Yahoo 兜底；失败返回 (None, None) 不抛（设计：降级「数据暂缺」）。
     """
     try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX"
-        resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
-        resp.raise_for_status()
+        resp = _yahoo_chart_get("^VIX", {"interval": "1d", "range": "5d"})
         result = resp.json()["chart"].get("result")
         if not result:
             return None, None
@@ -467,9 +505,7 @@ def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
 
     def _one(ticker: str, label: str) -> None:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}"
-            resp = _SESSION.get(url, params={"interval": "1d", "range": "5d"}, timeout=TIMEOUT)
-            resp.raise_for_status()
+            resp = _yahoo_chart_get(ticker, {"interval": "1d", "range": "5d"})
             r = resp.json()["chart"].get("result")
             if not r:
                 raise ValueError("Yahoo 返回空图表数据")
@@ -520,9 +556,7 @@ def _fetch_yahoo_watch(symbol: str) -> tuple[float, list]:
     当日价取 meta.regularMarketPrice（缺失回退序列末值）；序列时间戳转美东日期，
     与 history.json 美东 date 键对齐。返回 (value, [(date, close), ...])。
     """
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}"
-    resp = _SESSION.get(url, params={"interval": "1d", "range": "3mo"}, timeout=TIMEOUT)  # 3mo 才含足量交易日，交给 _series_tail 截 30
-    resp.raise_for_status()
+    resp = _yahoo_chart_get(symbol, {"interval": "1d", "range": "3mo"})  # 3mo 才含足量交易日，交给 _series_tail 截 30
     r = resp.json()["chart"].get("result")
     if not r:
         raise ValueError("Yahoo 返回空图表数据")
