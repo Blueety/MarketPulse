@@ -24,15 +24,31 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>MarketPulse 市场看板</h1>
-    <span class="subdate" id="overview-date"></span>
-    <button id="theme-toggle" type="button" class="theme-toggle" title="切换主题">☀️</button>
+    <div class="brand">
+      <span class="brand-mark">MARKETPULSE</span>
+      <span class="brand-sub">市场看板</span>
+    </div>
+    <div class="topbar-right">
+      <span class="subdate" id="overview-date"></span>
+      <button id="refresh-btn" type="button" class="icon-btn" title="刷新数据">⟳</button>
+      <button id="theme-toggle" type="button" class="icon-btn" title="切换主题">☀️</button>
+    </div>
   </header>
-
-  <main class="container">
+  <div class="shell">
+    <aside id="sidebar">
+      <nav class="nav">
+        <a class="nav-item active" href="#overview" data-target="overview"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span>市场概览</span></a>
+        <a class="nav-item" href="#watchlist-section" data-target="watchlist-section"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l1.8 3.6 4 .6-2.9 2.8.7 4-3.6-1.9L4.4 13.8l.7-4L2.2 6.2l4-.6z"/></svg><span>自选列表</span></a>
+        <a class="nav-item disabled" href="#" data-disabled="1"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 6h6M5 9h6M5 12h4"/></svg><span>新闻资讯</span></a>
+        <a class="nav-item disabled" href="#" data-disabled="1"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M8 14V4M13 14v-4"/></svg><span>宏观数据</span></a>
+        <a class="nav-item disabled" href="#" data-disabled="1"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3" width="11" height="11" rx="1"/><path d="M2.5 6.5h11M5.5 2v2M10.5 2v2"/></svg><span>市场日历</span></a>
+        <a class="nav-item disabled" href="#" data-disabled="1"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8h1.5M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1"/></svg><span>设置</span></a>
+      </nav>
+    </aside>
+    <main class="main">
     <!-- 模块 1：市场概览 -->
     <div id="lede" class="lede" aria-label="今日状态"></div>
-    <section class="card">
+    <section class="card" id="overview">
       <h2>市场概览 <span class="h2-sub">· 最新交易日</span></h2>
       <div class="table-scroll">
         <table class="data-table">
@@ -51,7 +67,7 @@
     </section>
 
     <!-- 模块 2：趋势图（4 组独立 y 轴） -->
-    <section class="card">
+    <section class="card" id="trend">
       <h2>近 <span id="range-label">30</span> 日趋势</h2>
       <div class="range-bar" id="range-bar">
         <button type="button" data-days="7">7天</button>
@@ -81,7 +97,7 @@
     </section>
 
     <!-- 模块 3：板块热度 -->
-    <section class="card">
+    <section class="card" id="sectors">
       <h2>A 股热点板块 <span class="h2-sub">· Top 5 领涨</span></h2>
       <div class="table-scroll">
         <table class="data-table">
@@ -112,7 +128,7 @@
 
 
     <!-- 模块 4：告警记录 -->
-    <section class="card">
+    <section class="card" id="alerts">
       <h2>告警记录 <span class="h2-sub">· 最近 10 条</span></h2>
       <div id="alert-list" class="alert-list">
         <p class="empty">加载中…</p>
@@ -933,6 +949,24 @@
           if (state.history) renderCharts(state.history);
         });
       }
+      // 侧栏导航：锚点平滑滚动 + active 态（无内容菜单 disabled 拦截）
+      document.querySelectorAll('#sidebar .nav-item').forEach(function (item) {
+        item.addEventListener('click', function (e) {
+          if (item.classList.contains('disabled')) { e.preventDefault(); return; }
+          var target = item.getAttribute('data-target');
+          var el = target && document.getElementById(target);
+          if (el) {
+            e.preventDefault();
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.querySelectorAll('#sidebar .nav-item').forEach(function (n) { n.classList.remove('active'); });
+            item.classList.add('active');
+          }
+        });
+      });
+      // 刷新按钮
+      var refreshBtn = document.getElementById('refresh-btn');
+      if (refreshBtn) refreshBtn.addEventListener('click', function () { refresh(); });
+
       // 时间范围按钮
       document.getElementById("range-bar").addEventListener("click", function (e) {
         const btn = e.target.closest("button[data-days]");
@@ -1008,5 +1042,6 @@
 
     });
   </script>
+  </div>
 </body>
 </html>
