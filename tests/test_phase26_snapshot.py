@@ -37,8 +37,12 @@ class _FakeYahooResp:
 
 
 def _ok_payload(price: float) -> dict:
-    return {"chart": {"result": [{"meta": {"regularMarketPrice": price}}], "error": None}}}
-
+    return {
+        "chart": {
+            "result": [{"meta": {"regularMarketPrice": price}}],
+            "error": None,
+        }
+    }
 
 def test_yahoo_host_rotation(monkeypatch):
     """D1：query1 返回 403、query2 返回 200 → 取数成功，调用 2 次且顺序 query1→query2。"""
