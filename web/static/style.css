@@ -15,6 +15,7 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-num: 20px;
   --fs-num-sm: 14px;
+  --bg-kpi: #FFFFFF;
 }
 
 /* 深色皮肤：在 Light 主色之上分层覆盖（#0B0F14 底 + #111827 卡片 + 低对比边框 + 更亮 accent） */
@@ -31,6 +32,7 @@
   --blue: #3B82F6;
   --orange: #E0913E;
   --purple: #BC8CFF;
+  --bg-kpi: #1A2436;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -103,6 +105,7 @@ body {
   border-right: 1px solid var(--border);
   padding: 16px 12px;
   background: var(--bg-primary);
+  display: flex; flex-direction: column;
 }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item {
@@ -118,22 +121,29 @@ body {
 .nav-item.active {
   background: color-mix(in srgb, var(--blue) 10%, transparent);
   border-left-color: var(--blue);
-  color: var(--text-primary); font-weight: 600;
+  color: var(--blue); font-weight: 600;
 }
 .nav-item.disabled { opacity: .38; cursor: not-allowed; }
 .nav-item.disabled:hover { background: transparent; color: var(--text-secondary); }
 .brand { display: flex; align-items: baseline; gap: 8px; }
 .brand-mark { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .1em; color: var(--text-primary); }
+  .brand-logo { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; font-family: var(--mono); }
+  .sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sidebar-theme-btn { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s ease; }
+  .sidebar-theme-btn:hover { color: var(--blue); border-color: var(--blue); }
+  .sidebar-updated { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
 .brand-sub { font-size: 12px; color: var(--text-secondary); }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .icon-btn {
-  width: 32px; height: 32px; flex-shrink: 0;
+  width: 20px; height: 20px; flex-shrink: 0; padding: 0;
   background: transparent; border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text-secondary);
-  cursor: pointer; font-size: 15px;
+  border-radius: 50%; color: var(--text-secondary);
+  cursor: pointer; font-size: 14px;
   display: flex; align-items: center; justify-content: center;
   transition: all .15s ease;
 }
+.icon-btn:hover { color: var(--text-primary); border-color: var(--blue); }
+#menu-toggle { width: 28px; height: 28px; }
 .icon-btn:hover { color: var(--text-primary); border-color: var(--blue); }
 
 .main {
@@ -197,7 +207,7 @@ body {
 }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover { background: var(--bg-hover); }
-  .data-table td.name { display: flex; flex-direction: column; gap: 2px; color: var(--text-primary); font-size: 13px; }
+  .data-table td.name { display: flex; flex-direction: row; align-items: baseline; gap: 8px; white-space: nowrap; color: var(--text-primary); font-size: 13px; }
   .trend-sub { font: 11px var(--mono); color: var(--text-secondary); }
 .data-table td.num {
   font-family: var(--mono);
@@ -215,7 +225,8 @@ body {
 .row-dim td { opacity: 0.72; }
   .row-warn td { background: color-mix(in srgb, var(--orange) 10%, transparent); }
 .lede { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 2px 4px; margin-bottom: 4px; }
-.lede-cell { flex: 1 1 200px; min-width: 0; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.lede-cell { flex: 1 1 200px; min-width: 0; background: var(--bg-kpi); border: none; border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: 1fr 96px; align-items: center; column-gap: 10px; }
+.lede-info { min-width: 0; }
 .lede-cell.lede-accent { border-left: 2px solid var(--blue); }
 .lede-cell.lede-pos { border-left: 2px solid var(--green); }
 .lede-cell.lede-neg { border-left: 2px solid var(--red); }
@@ -227,7 +238,7 @@ body {
 .lede-sub { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); }
 .lede-sub.pos { color: var(--green); }
 .lede-sub.neg { color: var(--red); }
-.kpi-spark { width: 100%; height: 40px; display: block; margin-top: 8px; }
+.kpi-spark { width: 96px; height: 40px; display: block; margin: 0; justify-self: end; }
 
 /* 状态圆点（D5：休市灰 / 失败橙 / 异动红 / 其余绿） */
 .status-dot {
@@ -289,6 +300,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
 }
+.chart-box:has(.chart-empty) { display: none; }
 
 /* 自选股图：限宽居中，避免全宽 220px 过扁（单标的场景尤甚） */
 #watchlist-section .chart-box { max-width: 640px; margin: 0 auto; }
@@ -478,6 +490,9 @@ body {
   .data-table td.chg { font-size: 13px; }
   .chart-box h3 { font-size: 11px; }
   .chart-box canvas { height: 280px !important; }
+  .lede-cell { grid-template-columns: 1fr 40px; }
+  .lede-val { font-size: 16px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-spark { width: 40px; }
   .topbar h1 { font-size: 12px; }
   .meta-item { font-size: 10px !important; }
   .col-status { display: none; }
