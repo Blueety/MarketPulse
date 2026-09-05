@@ -444,7 +444,16 @@ body {
   .container { padding: 12px 12px 40px; }
   .card { padding: 14px 0; }
   .charts-grid { grid-template-columns: 1fr; gap: 16px; }
-  #sidebar { display: none; }
+  .shell { flex-direction: column; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 240px;
+    transform: translateX(-100%); transition: transform var(--t-med) ease;
+    z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.28);
+  }
+  body.nav-open .sidebar { transform: translateX(0); }
+  body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
+  .menu-toggle { display: inline-flex; }
+  .lede-cell { flex: 1 1 45%; }
   .chart-box canvas { height: 260px !important; }
   .topbar { padding: 8px 12px; }
   .topbar h1 { font-size: 12px; }
@@ -480,4 +489,18 @@ body {
   .lede { flex-wrap: wrap; }
   .lede-cell { flex: 1 1 45%; }
   .lede-val { font-size: 22px; }
+}
+
+/* P4：微交互 / 焦点 / 减弱动画 / 移动端抽屉背景 */
+:root { --t-fast: .15s; --t-med: .25s; }
+button, .icon-btn, .chip, .nav-item, .th-sort, .range-bar button, .group-bar button {
+  transition: background var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease, opacity var(--t-fast) ease, transform var(--t-fast) ease;
+}
+.data-table tbody tr { transition: background var(--t-fast) ease; }
+.data-table tbody tr:hover { background: var(--bg-hover); }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.nav-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity var(--t-med) ease; z-index: 55; }
+.menu-toggle { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }

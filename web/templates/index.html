@@ -24,6 +24,7 @@
 </head>
 <body>
   <header class="topbar">
+      <button id="menu-toggle" type="button" class="icon-btn" title="菜单">☰</button>
     <div class="brand">
       <span class="brand-mark">MARKETPULSE</span>
       <span class="brand-sub">市场看板</span>
@@ -45,7 +46,7 @@
         <a class="nav-item disabled" href="#" data-disabled="1"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8h1.5M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1"/></svg><span>设置</span></a>
       </nav>
     </aside>
-    <main class="main">
+    <main class="main" id="main">
     <!-- 模块 1：市场概览 -->
     <div id="lede" class="lede" aria-label="今日状态"></div>
     <section class="card" id="overview">
@@ -267,9 +268,9 @@
         const valCell = fmtNum(it.value, 2) + (srcDate ? '<span class="src-sub">（' + srcDate.slice(5) + '收盘）</span>' : "");
         const chgCell = isWeekend ? "休市" : (srcDate ? "未收盘" : fmtPct(chg));
         const dotCls = /失败/.test(st) ? "dot-orange" : /异动/.test(st) ? "dot-red" : (/休市|未开盘|—/.test(st) ? "dot-gray" : "dot-green");
-        const stCell = '<span class="status-dot ' + dotCls + '"></span>' + esc(st);
+        const stCell = '<span class="status-dot ' + dotCls + '"></span>' + escapeHtml(st);
         tr.innerHTML =
-          '<td class="name">' + esc(it.label) + "</td>" +
+          '<td class="name">' + escapeHtml(it.label) + "</td>" +
           '<td class="num val">' + valCell + "</td>" +
           '<td class="num chg ' + cls + '">' + diffCell + "</td>" +
           '<td class="num chg ' + cls + '">' + chgCell + "</td>" +
@@ -959,6 +960,17 @@
           if (state.history) renderCharts(state.history);
         });
       }
+      // 移动端抽屉导航
+      var menuBtn = document.getElementById('menu-toggle');
+      if (menuBtn) menuBtn.addEventListener('click', function () { document.body.classList.toggle('nav-open'); });
+      var navBackdrop = document.createElement('div');
+      navBackdrop.className = 'nav-backdrop';
+      document.body.appendChild(navBackdrop);
+      navBackdrop.addEventListener('click', function () { document.body.classList.remove('nav-open'); });
+      document.querySelectorAll('#sidebar .nav-item').forEach(function (item) {
+        item.addEventListener('click', function () { document.body.classList.remove('nav-open'); });
+      });
+      document.getElementById('main').addEventListener('click', function () { if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open'); });
       // 侧栏导航：锚点平滑滚动 + active 态（无内容菜单 disabled 拦截）
       document.querySelectorAll('#sidebar .nav-item').forEach(function (item) {
         item.addEventListener('click', function (e) {
