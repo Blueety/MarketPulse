@@ -12,6 +12,8 @@
 
 - **Yahoo Finance 对本机 IP 限流（HTTP 429 / ConnectionResetError 10054）**：连续取数会触发 IP 级限流，query1 返回 429，query2 返回 403。脚本按设计容错（单源失败不影响整体，退出码恒 0），但报告会缺数据。应对：等待限流解除、换网络出口、或在脚本前加代理。
 - **yfinance 一次打多个子请求更易触发 429**：改为单请求直连 Yahoo chart REST（`query1.finance.yahoo.com/v8/finance/chart`），复用 Session + 退避，显著降低限流概率。
+- **Yahoo chart 需 query1/query2 双主机轮换**：单主机（query1）遇 403/429 时，对同一主机的重试永远拿不到数据（主机级封锁，非瞬时限流）；`src/fetcher.py` 的 `_yahoo_chart_get` 逐 `YAHOO_HOSTS` 轮换，403/429/5xx/连接错误/超时切下一主机，404 等确定失败立即 `raise_for_status` 不浪费轮换。新增 Yahoo chart 调用点必须走 helper，不得再直连 `query1` 单主机（二十六期，2026-09-05）。
+- **北京 00:00 = 美东前一日，00:00 槽位（us-noon）"报告日期==北京今天"检查必然失败**：美股午盘快照 cron 在北京 00:00 触发，此时美东为前一日，快照文件名永远用美东日期（analyzer.get_market_date 按市场时区），与北京"今天"差 1 天。Hermes 推送 prompt 校验快照必须用 `TZ=America/New_York date` 取美东日期，绝不能和"今天(北京)"比对，否则每晚必然跳过推送（二十六期，2026-09-05）。
 - **半迁移状态会导致 NameError**：一期到二期过渡期间，`fetch_all()` 的 fred 分支引用了已删除的 `has_valid_fred_key`/`fetch_move`，直接运行会崩溃。改代码后必须跑完整闭环验证。
 
 ## 模块 src/（二期：拆分+趋势图+快照）
