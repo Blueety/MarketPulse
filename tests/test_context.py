@@ -162,7 +162,7 @@ class TestGenerateContext:
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["indices"]["VIX"]["value"] is None
         assert data["indices"]["VIX"]["change_pct"] is None
-        assert data["indices"]["VIX"]["status"] == "未开盘"
+        assert data["indices"]["VIX"]["status"] in ("未开盘", "休市")  # 周末（美东）退化为"休市"，工作日"未开盘"
         assert data["breach"] == {"triggered": False, "indices": []}
         assert data["search_keywords"] == ["market summary 2026-08-29"]
 

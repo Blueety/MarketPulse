@@ -506,6 +506,9 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
     values 用 .get 容忍缺失（与 collect_breaches 一致）；不传 last_values/history（旧调用）
     """
     statuses = {}
+
+    # 周末（美股 TZ）直接休市，勿标"未开盘"（节假日无法全覆盖，以周末退化为准；六期 B 语义）
+    us_weekend = datetime.now(EASTERN_TZ).weekday() >= 5
     streaks = compute_streaks(values, last_values, history, symbols=STOCK_SYMBOLS | ALT_SYMBOLS)
     for sym in SYMBOLS:
         val = values.get(sym)
@@ -513,7 +516,10 @@ def build_statuses(values: dict, errors: dict, last_values: dict | None = None,
             if sym in A_SHARE_SYMBOLS:
                 statuses[sym] = ("休市", "A 股休市或数据缺失。")
             else:
-                statuses[sym] = ("未开盘", "美股未开盘或数据缺失。")
+                if us_weekend:
+                    statuses[sym] = ("休市", "周末休市。")
+                else:
+                    statuses[sym] = ("未开盘", "美股未开盘或数据缺失。")
         elif sym in STOCK_SYMBOLS or sym in ALT_SYMBOLS:
             streak = streaks.get(sym, 0)
             has = _stock_has_data(sym, last_values, history)

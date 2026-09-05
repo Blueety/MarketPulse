@@ -78,8 +78,23 @@ class TestBuildStatuses:
             {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 15.0, "VXN": None, "MOVE": 95.0},
             {"VXN": "获取失败（已重试）"},
         )
-        assert statuses["VXN"][0] == "未开盘"
+        assert statuses["VXN"][0] in ("未开盘", "休市")  # 周末（美东）退化为"休市"，工作日"未开盘"
         assert statuses["MOVE"][0] == "平静"
+
+    def test_weekend_us_returns_closed(self, monkeypatch):
+        import datetime as _dt
+
+        class _Sat(_dt.datetime):
+            @staticmethod
+            def now(tz=None):
+                return _dt.datetime(2026, 9, 5, tzinfo=tz)  # 2026-09-05 周六
+
+        monkeypatch.setattr(an, "datetime", _Sat)
+        values = {"GSPC": None, "IXIC": None, "VIX": None, "VXN": None, "MOVE": None, "SH": None}
+        st = an.build_statuses(values, {})
+        for sym in ("GSPC", "IXIC", "VIX", "VXN", "MOVE"):
+            assert st[sym][0] == "休市"  # 周末美股/波动率/alt 退化为"休市"
+        assert st["SH"][0] == "休市"  # A 股失败分支本就"休市"，不变
 
 
 class TestBuildSummary:

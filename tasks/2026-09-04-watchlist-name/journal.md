@@ -99,3 +99,28 @@
 
 ### 风险
 - 仅动 Yahoo range 字符串 + docstring，属数据源窗口扩大；前端/接口层零改动，开销可忽略（单标的单次 3mo 请求，与既有 8 指数同源无新增依赖）。低风险。
+
+## 任务 G（追加 2026-09-04）：非交易日显示「未开盘/未收盘」语义（前端三态 + 后端周末判定）
+
+### 改动内容（仅计划 1、2 两项；第 3 项「非交易日不产生数据行」不在范围，未做）
+- `web/templates/index.html` renderOverview（L233-242）：加 `const isWeekend = (new Date().getDay() % 6) === 0;`（0=周日 6=周六）；涨跌幅格 `chgCell` 由 `srcDate ? "未收盘" : fmtPct(chg)` 改为 `srcDate ? (isWeekend ? "休市" : "未收盘") : fmtPct(chg)`。数值列（09-04收盘）标注不变。
+- `src/analyzer.py` build_statuses（L508-522）：取数失败分支前加 `us_weekend = datetime.now(EASTERN_TZ).weekday() >= 5`（复用既有 `EASTERN_TZ`，未新增依赖）；美股/alt 失败分支改为 `us_weekend → ("休市","周末休市。")` 否则 `("未开盘","美股未开盘或数据缺失。")`。A 股失败分支（本就"休市"）按 plan 注明不改动。
+
+### 验证结果
+- 前端新增片段 `node --check`（隔离，仅校验 isWeekend + chgCell 片段，规避 `</script>` 截断）：**JS_OK**。
+- `venv/Scripts/python -m pytest tests/ -q`：**442 passed, 0 failed**（较基线 432 passed/4 failed 全绿；本次无新增失败）。
+- 复用既有 `EASTERN_TZ` / `SHANGHAI_TZ`（analyzer.py:75-76），未新增时区依赖。
+- 实时 `/api/latest` 验证周六美股=休市：**本环境不可行**——`api_latest`（web/app.py:394-406）状态来自 `_load_latest_context()` 的**缓存 context**（生成时写入，非请求时重算），当前 context 生成于 09-04（周五）故返回「未开盘」；且本机为工作日，`datetime.now(EASTERN_TZ)` 非周末。周末行为由 mock 周六的单元测试覆盖（见下）。
+
+### 对存量失败用例的影响（按任务"关键"提醒同步修正）
+- 存量 4 条基线失败（test_context / test_phase6a / test_reporter ×2，均属「未开盘/获取失败」文案，与本改动无关）— 本环境本次全量已 0 失败（基线 4 失败未复现；test_reporter 直接传入 `("未开盘",…)` 元组、不经 build_statuses，未触碰，保留不动）。
+- 被本次 build_statuses 代码路径触碰、断言美股符号 `未开盘` 的 3 处断言（周末会返 `休市` 致失败），已同步修正为周末鲁棒（最小改动、保持一致）：
+  - `tests/test_analyzer.py:81` `statuses["VXN"][0] == "未开盘"` → `in ("未开盘","休市")`
+  - `tests/test_context.py:165` `data["indices"]["VIX"]["status"] == "未开盘"` → `in ("未开盘","休市")`
+  - `tests/test_phase6a.py:88` `st["GSPC"][0] == "未开盘"` → `in ("未开盘","休市")`
+- 新增 `tests/test_analyzer.py::TestBuildStatuses::test_weekend_us_returns_closed`：monkeypatch `an.datetime.now` 到 2026-09-05（周六），断言 GSPC/IXIC/VIX/VXN/MOVE 全部 → 「休市」、SH（A 股分支）仍「休市」；fake 用真实 `datetime` 子类仅覆盖 `now`，避免影响 `compute_streaks` 等内部 `datetime` 用法。
+
+### 风险 / 局限
+- 节假日（如 12/25）仍会标「未开盘」（非周末），plan 已注明：以周末退化为准，可选后续接交易日历；本次不扩展。
+- 前端 `isWeekend` 用访问者浏览器本地时区：国内用户周六判定正确；跨时区访问者边缘情况 plan 已注明可接受（看板面向国内）。
+- 后端周末判定依赖 `datetime.now`（与 analyzer 既有日期逻辑一致），测试用 monkeypatch 隔离。

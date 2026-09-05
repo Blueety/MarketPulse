@@ -85,7 +85,7 @@ class TestBuildStatusesStock:
     def test_stock_missing_value_tolerated(self):
         values = {"GSPC": None, "IXIC": 17500.0, "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0}
         st = an.build_statuses(values, {})
-        assert st["GSPC"][0] == "未开盘"
+        assert st["GSPC"][0] in ("未开盘", "休市")  # 周末（美东）退化为"休市"，工作日"未开盘"
 
 
 class TestCheckBreachStockAlwaysWarn:
