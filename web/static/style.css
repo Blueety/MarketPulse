@@ -13,7 +13,7 @@
   --orange: #d29922;
   --purple: #bc8cff;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-num: 18px;
+  --fs-num: 20px;
   --fs-num-sm: 14px;
 }
 
@@ -44,6 +44,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+:focus-visible { outline: 1px solid var(--blue); outline-offset: 2px; }
+
 /* 顶栏：收窄、标题克制、日期等宽次级 */
 .topbar {
   background: var(--bg-primary);
@@ -56,12 +58,14 @@ body {
   top: 0;
   z-index: 100;
 }
-.topbar h1 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--text-primary);
-}
+  .topbar h1 {
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-primary);
+  }
 .subdate {
   font-size: 12px;
   color: var(--text-secondary);
@@ -153,10 +157,22 @@ body {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
-.data-table td.val { font-size: var(--fs-num); font-weight: 600; }
+  .data-table td.val { font-size: var(--fs-num); font-weight: 500; }
 .data-table td.chg { font-size: var(--fs-num-sm); font-weight: 600; }
 .pos { color: var(--green) !important; font-weight: 600; }
 .neg { color: var(--red) !important; font-weight: 600; }
+.row-flash td { background: color-mix(in srgb, var(--red) 7%, transparent); }
+.row-dim td { opacity: 0.72; }
+.lede { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 2px 4px; margin-bottom: 4px; }
+.lede-cell { flex: 1 1 150px; min-width: 120px; border-left: 3px solid var(--border); padding: 2px 0 2px 12px; background: var(--bg-elevated); border-radius: 2px; }
+.lede-accent { border-left-color: var(--blue); }
+.lede-pos { border-left-color: var(--green); }
+.lede-neg { border-left-color: var(--red); }
+.lede-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+.lede-val { font-family: var(--mono); font-size: 28px; font-weight: 500; line-height: 1.1; color: var(--text-primary); margin: 2px 0; }
+.lede-sub { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); }
+.lede-sub.pos { color: var(--green); }
+.lede-sub.neg { color: var(--red); }
 
 /* 状态圆点（D5：休市灰 / 失败橙 / 异动红 / 其余绿） */
 .status-dot {
@@ -375,7 +391,7 @@ body {
   .charts-grid { grid-template-columns: 1fr; gap: 16px; }
   .chart-box canvas { height: 260px !important; }
   .topbar { padding: 8px 12px; }
-  .topbar h1 { font-size: 16px; }
+  .topbar h1 { font-size: 12px; }
   .data-table { font-size: 13px; }
   .data-table th, .data-table td { padding: 7px 8px; }
   .data-table td.val { font-size: 16px; }
@@ -396,7 +412,7 @@ body {
   .data-table td.chg { font-size: 13px; }
   .chart-box h3 { font-size: 11px; }
   .chart-box canvas { height: 220px !important; }
-  .topbar h1 { font-size: 14px; }
+  .topbar h1 { font-size: 12px; }
   .meta-item { font-size: 10px !important; }
   .col-status { display: none; }
   .col-turnover { display: none; }
@@ -405,4 +421,7 @@ body {
   .group-bar { gap: 5px; margin-bottom: 8px; }
   .symbol-filter { gap: 5px; }
   .symbol-filter .chip { padding: 2px 7px; font-size: 11px; }
+  .lede { flex-wrap: wrap; }
+  .lede-cell { flex: 1 1 45%; }
+  .lede-val { font-size: 22px; }
 }

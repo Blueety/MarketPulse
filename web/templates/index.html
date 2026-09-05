@@ -31,6 +31,7 @@
 
   <main class="container">
     <!-- 模块 1：市场概览 -->
+    <div id="lede" class="lede" aria-label="今日状态"></div>
     <section class="card">
       <h2>市场概览 <span class="h2-sub">· 最新交易日</span></h2>
       <div class="table-scroll">
@@ -138,22 +139,23 @@
     function themeColors() {
       var dark = getTheme() === 'dark';
       return {
-        tooltipBg: dark ? 'rgba(22, 27, 34, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        tooltipTitle: dark ? '#e6edf3' : '#1d1d1f',
-        tooltipBody: dark ? '#e6edf3' : '#1d1d1f',
-        tooltipBorder: dark ? '#30363d' : '#d2d2d7',
-        axisTick: dark ? '#8b949e' : '#86868b',
-        gridLine: dark ? 'rgba(48, 54, 61, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-        gridLineBar: dark ? 'rgba(48, 54, 61, 0.25)' : 'rgba(0, 0, 0, 0.1)',
+        tooltipBg: dark ? 'rgba(17, 22, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        tooltipTitle: dark ? '#E3E8EF' : '#1d1d1f',
+        tooltipBody: dark ? '#E3E8EF' : '#1d1d1f',
+        tooltipBorder: dark ? '#1E2733' : '#d2d2d7',
+        axisTick: dark ? '#8492A6' : '#86868b',
+        gridLine: dark ? 'rgba(30, 39, 51, 0.10)' : 'rgba(0, 0, 0, 0.06)',
+        gridLineBar: dark ? 'rgba(30, 39, 51, 0.28)' : 'rgba(0, 0, 0, 0.1)',
       };
     }
     const COLORS = {
-      gspc: "#58a6ff", ixic: "#3fb950", sh: "#f85149", sz: "#d29922",
-      cyb: "#bc8cff", vix: "#f85149", vxn: "#d29922", move: "#bc8cff",
-      gld: "#ffd700", btc: "#00d4ff"
+      gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868",
+      cyb: "#C792EA", vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA",
+      gld: "#E5C07B", btc: "#F7931A"
     };
     const ALL_KEYS = Object.keys(COLORS);
     const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
+  if (window.Chart && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
     const SHORT = {
       gspc: "标普500", ixic: "纳指", sh: "上证", sz: "深证", cyb: "创业板",
       vix: "VIX", vxn: "VXN", move: "MOVE", gld: "黄金", btc: "比特币"
@@ -231,6 +233,9 @@
         const st = it.status || "—";
         // 前向回填行（美股盘中未收盘，value 来自最近收盘日）标注来源日期，避免与概览日期错配
         const srcDate = it.source_date && it.source_date !== latest.date ? it.source_date : null;
+        let rowCls = "";
+        if (st.indexOf("异动") >= 0) rowCls = "row-flash";
+        else if (st.indexOf("休市") >= 0 || srcDate) rowCls = "row-dim";
 
         const isWeekend = (new Date().getDay() % 6) === 0;   // 0=周日 6=周六
         let dot = "dot-green";
@@ -238,6 +243,7 @@
         else if (st.indexOf("失败") >= 0) dot = "dot-orange";
         else if (st.indexOf("异动") >= 0) dot = "dot-red";
         const tr = document.createElement("tr");
+        tr.className = rowCls;
         const valCell = fmtNum(it.value, 2) + (srcDate ? '<span style="color:#8b949e;font-size:11px">（' + srcDate.slice(5) + '收盘）</span>' : "");
         const chgCell = isWeekend ? "休市" : (srcDate ? "未收盘" : fmtPct(chg));
         tr.innerHTML =

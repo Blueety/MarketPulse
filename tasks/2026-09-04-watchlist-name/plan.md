@@ -424,4 +424,43 @@ MarketPulse = 个人使用的「市场波动日报/盘中快照」暗色金融�
 ### 自我批判
 - 砍：不加装饰性渐变/玻璃拟态/多余圆角——hairline 分区与紧凑已符合"读数终端"，保留；lede 若过度（每格再放 sparkline）即砍回纯数字；不做品牌 logo 图形（个人工具无必要）。
 - 保留：数据表格密度、mono 数字、状态圆点语义（与 lede/行级色条同源不冲突）。
-- 风险：lede 依赖 VIX/美股数据可用（数据暂缺日为空行需降级隐藏）；调色改动需图表色同步否则图例与 UI 违和；light 皮肤等比色需人工过目。
+---
+
+## 【任务 I.5】状态列优化（只读方案，未改代码）
+
+### 现状
+概览表 4 列（index.html:39-44：名称/当前价/涨跌幅/状态）。状态列 = `it.status` 直出（L231-247）+ dot 圆点映射：休市→dot-gray、失败→dot-orange、异动→dot-red、其余一律 dot-green（连涨/连跌/未开盘/正常全绿）。周六实况：7 行「未开盘」+ A 股「连跌1日」——交易状态文本与涨跌幅列「休市」同因重复；趋势信号（连涨/连跌N日）有价值但混在整列噪声里。
+
+### status 消费方/波及清单
+| 消费点 | 位置 | 若删列影响 |
+|---|---|---|
+| 概览表头「状态」 | index.html:43 | 删 th（无 data-sort，不参与排序逻辑） |
+| 概览行状态文本+dot | index.html:231-247（st/dot/td 构造） | 重构该段；st 变量仍用于行级 class 判定 |
+| dot 圆点 | 同上 + style.css:231-243 | 随列删；异常语义由 row-flash/lede 色条接替 |
+| 后端 statuses 字符串 | daily_report.py（build_statuses 调用）→ 报告正文/context JSON | **不动**：日报 markdown 与 Hermes context 仍消费 status 文本；前端展示层调整不触碰后端契约 |
+| /api/latest indices.status | web/app.py:405-418（合并自 context） | 保留字段（前端可能不再显示，后端零改动） |
+| 其它表格/图表 | 告警/板块/自选股/chart-meta | 均不使用 status → 无波及 |
+
+### 选定方案：A'（删除整列，趋势信号并入名称列第二行）
+理由：与任务 I lede 方向一致（状态叙事上移首屏）、表格 4→3 列更编辑风；10 行内趋势信号不该被删——从 status 字符串提取「连涨/连跌N日」并以名称列 sub-line 呈现，占位不占列宽。
+
+前端改动点（全部 `web/templates/index.html`，同一 renderOverview 区一次重构）：
+1. **L43** 删 `<th class="col-status">状态</th>`。
+2. **L231-249 渲染循环重构**：
+   - 保留 `const st = it.status`，新增趋势提取 `const trend = (st.match(/连[涨跌]\d+日/) || [null])[0];`
+   - 行级 class 接替 dot 语义：`st` 含「失败」→ `row-warn`；含「异动」→ `row-flash`（连涨/连跌不再标红——红留给异常，趋势用小字表达）。
+   - 名称单元格改双行：`td.name` 内 `it.label` + `trend ? '<span class="trend-sub">' + trend + "</span>" : ""`。
+   - 删除状态 td（L247）。
+3. **style.css** 增 `.data-table td.name { display:flex; flex-direction:column; gap:2px; }` 与 `.trend-sub { font: 11px var(--mono); color: var(--text-secondary); }`（pos/neg 趋势色可再议，先 muted 克制）。
+
+不改后端；`/api/latest` 仍下发 status（向前兼容；未来若 context 精简可再议）。
+
+信息丢失规避：删除的「未开盘/休市/获取失败」交易状态——休市已在涨跌幅列（isWeekend 文案），回填行已有「（MM-DD收盘）」标注；「获取失败/异动」异常由 row-warn/row-flash 行级背景（任务 I 改 2 的 CSS 一并落地）保留可见性，非静默丢失。
+
+### 与任务 I 编排建议
+**作为任务 I 的一部分同批实施**：任务 I 改 2（row-flash/row-dim）与 I.5 都重写 renderOverview L219-249 同一段——分开做会二次重构同一函数、双倍冲突面。建议实施批次顺序：① 调色 token（改 1，纯 CSS）→ ② renderOverview 重构（I.5 删列 + trend-sub + row-flash/row-dim 一并）→ ③ lede 状态行（改 3，复用同一 latest 数据）→ ④ 排版对比度（改 4）→ 一次浏览器双视口截图验收。
+
+### 验证
+1. 周六实况：截图断言——表 3 列、全页无「未开盘」字样、A 股行名称下有「连跌1日」小字、失败/异动行有 tint（若当日存在）。
+2. `curl /api/latest` 仍返回 status 字段（后端契约未变）；`pytest tests/ -v` 无涉（纯前端改动）。
+3. 排序/`updateSortIndicators` 无 status 列参与，不受影响（回归面=renderOverview 单一函数 + 2 条 CSS 规则）。
