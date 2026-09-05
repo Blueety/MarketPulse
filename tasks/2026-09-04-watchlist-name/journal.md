@@ -141,3 +141,32 @@
 ### 风险 / 局限
 - 涨跌幅格 `cls`（pos/neg 颜色，L230）未同步中和：周末「休市」仍带 A 股 chg=0 → 绿色（pos）/ 美股周五涨跌色，属轻微视觉瑕疵；状态点已正确转灰（dot-gray）。保持最小改动未动 cls；如需中性色可后续一行 `cls = isWeekend ? "" : cls;` 补全。
 - 前端 `isWeekend` 取访问者本地时区（任务 G 已注明，面向国内看板可接受）。
+## 任务 I（追加 2026-09-05）：前端视觉设计升级（架构师评审）
+按 plan.md【任务 I】严格实施 4 项高杠杆改动 + 品质下限，未扩大范围（未改 Python 后端/数据结构）。
+### 1. 调色板（暗/浅 + 图表同步）
+- `web/static/style.css` 暗色 `:root`（L3-15）8 色替换为定制暗色调：`--bg-primary:#0A0D12 / --bg-elevated:#11161E / --bg-hover:#161D27 / --border:#1E2733 / --text-primary:#E3E8EF / --text-secondary:#A8B2C1 / --text-muted:#5A6675`；并按 plan 等比值同步浅色 `:root` 的 `--green:#2FD6A8 / --red:#FF6E5E / --blue:#66A8E0 / --purple:#C792EA`（其余灰阶沿用语义等价）。
+- `web/templates/index.html` 图表色同步：全局 `COLORS`（L150-154）换为新族色（GSPC #66A8E0 / IXIC #2FD6A8 / SH #FF6E5E / SZ #F0A868 / CYB #C792EA / VIX #FFB454 / VXN #E0913E / MOVE #A78BFA / GLD #E5C07B / BTC #F7931A）；`themeColors()` 的 tooltip/axis/grid rgba（L141-147）同步为 #11161E/#E3E8EF 等新背景+文字，避免图例与 UI 脱节。
+### 2. 涨跌强调进级（行级）
+- `renderOverview`（L235-246）新增 `rowCls`：`st` 含「异动」→ `row-flash`（左红微光），含「休市」或回填行（`srcDate`）→ `row-dim`（降透明度 0.72）；`tr.className = rowCls` 应用。
+- `web/static/style.css` 加 `.row-flash td{background:color-mix(in srgb,var(--red) 7%,transparent)}`、`.row-dim td{opacity:.72}`（L164-165）。
+### 3. 首屏 lede 状态行（Signature）
+- `web/templates/index.html`：概览 section 前（L34）插 `<div id="lede" class="lede">`；新增 `renderLede(latest,watch)`（L259-295）渲染 4 个大读数格（美股=GSPC / VIX / A股=SH / 自选=首支 watchlist 股），数据复用 `/api/latest` 的 indices + `state.watch`（无新接口）；`refresh()`（L919）与 watchlist `.then`（L1001-1002，`state.watch=data` 暂存）调用。
+- 数值格 28px mono；左 3px 色条按 kind：accent=蓝 / pos=绿 / neg=红。
+- `web/static/style.css` 加 `.lede`（flex/gap）+ `.lede-cell`（flex 1 1 150px + 3px 左条）+ `.lede-accent/pos/neg` + `.lede-label`（11px uppercase 字距）+ `.lede-val`（28px mono 500）+ `.lede-sub`（13px mono）（L166-175）。
+- 数据暂缺优雅降级：`renderLede` 仅取 value 非 null 的标的入格；全 null → `el.style.display='none'`（不显示空行、不崩）。实测：/api/latest 可用→美股/VIX/A股 3 格；watchlist 失败→自选格隐藏（仍 3 格）；watchlist 成功→4 格。
+### 4. 排版对比度
+- `--fs-num` 18→20px、`td.val{font-weight:600→500}`（L88）、`.topbar h1` → 12px mono uppercase + 字母距（L59-66），媒体 768/480 同步 12px（L394/L415 段）。
+### 品质下限
+- `:focus-visible{outline:1px solid var(--blue);outline-offset:2px}`（L47）。
+- `prefers-reduced-motion: reduce` → `if(window.Chart&&window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)Chart.defaults.animation=false;`（L158），关 Chart 动画。
+- 375px：`.table-scroll` 表格横向滚动 + `.lede{flex-wrap:wrap}`、`.lede-cell{flex:1 1 45%}`、`.lede-val{font-size:22px}`（480 媒体块 L424-426）。
+### 验证结果
+- 前端新片段（renderLede + reduced-motion + rowCls）隔离 `node --check`：JS_OK。
+- `venv/Scripts/python -m pytest tests/test_web.py -q`：49 passed（纯前端，Python 不受影响）。
+- 浏览器实测（8001，主 world `tab.evaluate`）：1280 视口 → body bg `rgb(10,13,18)`=#0A0D12 已应用；lede 渲染 3–4 格，美股 7718.60/未开盘/蓝条、VIX 14.53/未开盘/红条、A股 3930.12/+0.00%/绿条，新族色左条生效；375 视口 → lede `flex-wrap:wrap`、val 22px、`.table-scroll` `overflow-x:auto`、row-dim 应用于休市行。截图已取（fullPage）。
+- `git diff --stat`：仅 `web/templates/index.html`（+41）+ `plan.md`（前序 +53）；`web/static/style.css` 未出现在 diff（已被仓库自动提交机制 auto-commit，符合约束 #40；已用 grep 确认新调色板/lede/row 规则均落盘正确）。
+### 风险 / 局限
+- `<div id="lede">` 为静态 HTML，JS 仅填充；Flask 模板缓存 → 每次改动后重启 uvicorn 才生效。实测因此发现并修复一处 bug：`/api/latest.indices` 是 list 而非 dict，原 `idx[sym]` 取不到 → 美股/VIX/A股 格全 null，已改为从 list 构建 symbol→item 映射（L262）。
+- 行级 `row-flash`（异动）本次数据无「异动」行，未触发可视化；规则与 `row-dim` 同机制已加，逻辑正确。
+- 自选股 lede 格仅取首支成功股（`break`），多自选时只展示 1 格——符合 plan「允许先 2 格」下限，非缺陷。
+- lede 依赖 `/api/latest`（缓存 context，非请求时重算），周六状态显示「未开盘」（09-04 context）与任务 G/J 一致。

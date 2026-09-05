@@ -259,7 +259,7 @@
     function renderLede(latest, watch) {
       var el = document.getElementById('lede');
       if (!el) return;
-      var idx = (latest && latest.indices) ? latest.indices : {};
+      var idx = {}; if (latest && latest.indices) { if (Array.isArray(latest.indices)) latest.indices.forEach(function (d) { if (d && d.symbol) idx[d.symbol] = d; }); else idx = latest.indices; }
       var cells = [];
       function make(sym, label, kind) {
         var d = idx[sym];
