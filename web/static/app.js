@@ -10,28 +10,38 @@
       document.documentElement.setAttribute('data-theme', theme);
     }
     applyTheme(getTheme());
+    // CSS 变量读取：图表色单一来源在 style.css 的 --c-* token（Light/Dark 两套）。
+    // Chart.js 不随 CSS 变量自动变色，切主题后由既有 renderCharts(state.history) 重渲染生效（pitfall #48）。
+    function cssVar(name, fallback) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback || "";
+    }
     function themeColors() {
-      var dark = getTheme() === 'dark';
       return {
-        tooltipBg: dark ? 'rgba(17, 22, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        tooltipTitle: dark ? '#E3E8EF' : '#1d1d1f',
-        tooltipBody: dark ? '#E3E8EF' : '#1d1d1f',
-        tooltipBorder: dark ? '#1E2733' : '#d2d2d7',
-        axisTick: dark ? '#8492A6' : '#86868b',
-        gridLine: dark ? 'rgba(30, 39, 51, 0.10)' : 'rgba(0, 0, 0, 0.06)',
-        gridLineBar: dark ? 'rgba(30, 39, 51, 0.28)' : 'rgba(0, 0, 0, 0.1)',
+        tooltipBg: cssVar('--c-tip-bg', 'rgba(17, 22, 30, 0.95)'),
+        tooltipTitle: cssVar('--c-tip-title', '#E3E8EF'),
+        tooltipBody: cssVar('--c-tip-body', '#E3E8EF'),
+        tooltipBorder: cssVar('--c-tip-border', '#1E2733'),
+        axisTick: cssVar('--c-axis-tick', '#8492A6'),
+        gridLine: cssVar('--c-grid-line', 'rgba(30, 39, 51, 0.10)'),
+        gridLineBar: cssVar('--c-grid-line-bar', 'rgba(30, 39, 51, 0.28)'),
       };
     }
-    const COLORS_LIGHT = {
-      gspc: "#1677FF", ixic: "#13C2C2", sh: "#F5222D", sz: "#FA8C16", cyb: "#722ED1",
-      vix: "#CF1322", vxn: "#D4380D", move: "#2F54EB", gld: "#D4A017", btc: "#F7931A"
+    const SERIES_VAR = {
+      gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
+      vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc"
     };
-    const COLORS_DARK = {
+    // CSS token 缺失时的保底色（= Dark 现值，与旧 COLORS_DARK 一致）
+    const SERIES_FALLBACK = {
       gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868", cyb: "#C792EA",
       vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A"
     };
-    function colors() { return getTheme() === "light" ? COLORS_LIGHT : COLORS_DARK; };
-    const ALL_KEYS = Object.keys(COLORS_LIGHT);
+    const ALL_KEYS = Object.keys(SERIES_VAR);
+    function colors() {
+      var out = {};
+      ALL_KEYS.forEach(function (k) { out[k] = cssVar(SERIES_VAR[k], SERIES_FALLBACK[k]); });
+      return out;
+    }
     const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
   if (window.Chart && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
     const SHORT = {
@@ -200,7 +210,7 @@
       var sub = cell && cell.querySelector('.lede-sub');
       var cls = sub ? (sub.className || '') : '';
       if (cls.indexOf('pos') >= 0 || cls.indexOf('neg') >= 0) return getComputedStyle(sub).color;
-      return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#9aa4b2';
+      return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#9aa4b2';
     }
     function drawOneSpark(cv, values, color) {
       if (!cv) return;
@@ -269,10 +279,10 @@
       gainers.slice(0, 5).forEach(function (g) {
         const tr = document.createElement("tr");
         tr.innerHTML =
-          "<td>" + (g.name || "—") + "</td>" +
+          "<td>" + escapeHtml(g.name || "—") + "</td>" +
           '<td class="pos">' + fmtPct(g.change) + "</td>" +
-          '<td class="col-turnover">' + (g.turnover || "—") + "</td>" +
-          "<td>" + (g.top_stock || "—") + "</td>";
+          '<td class="col-turnover">' + escapeHtml(g.turnover || "—") + "</td>" +
+          "<td>" + escapeHtml(g.top_stock || "—") + "</td>";
         tbody.appendChild(tr);
       });
     }
@@ -290,13 +300,13 @@
         const card = document.createElement("div");
         card.className = "alert-card " + cls;
         card.innerHTML =
-          '<div class="alert-head"><span class="badge ' + cls + '">' + level + "</span>" +
-          "<span>" + (a.symbol || "") + " · " + (a.date || "") + "</span></div>" +
-          '<div class="alert-meta">类型：' + (a.type || "—") + " ｜ 市场状态：" + (a.state || "—") + "</div>" +
+          '<div class="alert-head"><span class="badge ' + cls + '">' + escapeHtml(level) + "</span>" +
+          "<span>" + escapeHtml(a.symbol || "") + " · " + escapeHtml(a.date || "") + "</span></div>" +
+          '<div class="alert-meta">类型：' + escapeHtml(a.type || "—") + " ｜ 市场状态：" + escapeHtml(a.state || "—") + "</div>" +
           '<div class="alert-row">当前值：' + fmtNum(a.current, 2) + " ｜ 昨日收盘：" + fmtNum(a.last, 2) +
           " ｜ 变化率：" + fmtPct(a.change_pct) + "（阈值 ±" + fmtNum(a.threshold, 1) + "%）</div>" +
-          '<div class="alert-sugg">建议：' + (a.suggestion || "—") + "</div>" +
-          '<div class="alert-report">相关报告：' + (a.report || "—") + "</div>";
+          '<div class="alert-sugg">建议：' + escapeHtml(a.suggestion || "—") + "</div>" +
+          '<div class="alert-report">相关报告：' + escapeHtml(a.report || "—") + "</div>";
         box.appendChild(card);
       });
     }
@@ -447,63 +457,6 @@
       return new Chart(canvas, { type: "line", data: { datasets: datasets }, options: options });
     }
 
-    function renderBarChart(canvas, series) {
-      const ctx = canvas.getContext("2d");
-      const labels = [];
-      const data = [];
-      const bg = [];
-      series.forEach(function (s) {
-        if (s.change_7d == null) return;
-        labels.push(SHORT[s.key] || s.label);
-        data.push(s.change_7d);
-        bg.push(s.change_7d >= 0 ? (getTheme()==="light"?"#16A085":"#3fb950") : (getTheme()==="light"?"#F05A5A":"#f85149"));
-      });
-      const options = {
-        indexAxis: "y",
-        responsive: true,
-        interaction: { mode: "nearest", intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            enabled: true,
-            backgroundColor: themeColors().tooltipBg,
-            titleColor: themeColors().tooltipTitle,
-            bodyColor: themeColors().tooltipBody,
-            borderColor: themeColors().tooltipBorder,
-            borderWidth: 1,
-            titleFont: { size: 11 },
-            bodyFont: { size: 12 },
-            padding: 8,
-            cornerRadius: 4,
-            callbacks: {
-              label: function (ctx) { return state.days + "D 涨跌幅: " + fmtPct(ctx.parsed.x); }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: themeColors().gridLineBar },
-            border: { display: false },
-            ticks: {
-              font: { size: 12 },
-              color: themeColors().axisTick,
-              callback: function (value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + "%"; }
-            }
-          },
-          y: {
-            grid: { display: false },
-            ticks: { font: { size: 12 }, color: themeColors().axisTick }
-          }
-        },
-        animation: { duration: 300, easing: "easeOutQuart" }
-      };
-      return new Chart(canvas, {
-        type: "bar",
-        data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderRadius: 4, barThickness: 32 }] },
-        options: options
-      });
-    }
-
     function renderGroup(g, history) {
       // 从零构建某组图表（首载 / 范围切换 / 空组恢复重建）；会 destroy 旧实例。
       // 显隐纯客户端：series 含该组全部序列，未选中者经 dataset.hidden 隐藏，图例项常驻可点回。
@@ -530,9 +483,7 @@
       }
       if (ph) ph.remove();
       canvas.style.display = "";
-      const chart = (g.type === "bar")
-        ? renderBarChart(canvas, series)
-        : renderLineChart(canvas, history, series);
+      const chart = renderLineChart(canvas, history, series);
       chart.data.datasets.forEach(function (ds) {
         if (!state.selected.has(ds.key)) ds.hidden = true;
       });
@@ -684,7 +635,7 @@
     function renderWatchlist(payload) {
       const section = document.getElementById("watchlist-section");
       const body = document.getElementById("watchlist-body");
-      section.style.display = "";
+      section.classList.remove("hidden");
       const trendByKey = {};
       (payload.trend && payload.trend.series || []).forEach(function (s) {
         trendByKey[s.key] = s;
@@ -982,8 +933,8 @@
           clearTimeout(wlTimer);
           var sec = document.getElementById("watchlist-section");
           if (!sec) return;
-          if (data && data.hidden) { sec.style.display = "none"; return; }  // F4：无配置不闪现
-          sec.style.display = "";
+          if (data && data.hidden) { sec.classList.add("hidden"); return; }  // F4：无配置不闪现
+          sec.classList.remove("hidden");
           if (!data || !data.stocks || !data.stocks.length) {
             var b = document.getElementById("watchlist-body");
             if (b) b.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（实时取数失败）</td></tr>';
@@ -997,7 +948,7 @@
           console.error("[watchlist] fetch failed:", err);
           var sec = document.getElementById("watchlist-section");
           if (!sec) return;
-          sec.style.display = "";  // 异常态：失败占位可见（网络/解析/超时）
+          sec.classList.remove("hidden");  // 异常态：失败占位可见（网络/解析/超时）
           var b = document.getElementById("watchlist-body");
           if (b) b.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（取数失败）</td></tr>';
         });
