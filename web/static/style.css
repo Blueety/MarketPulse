@@ -444,17 +444,17 @@ body {
   .container { padding: 12px 12px 40px; }
   .card { padding: 14px 0; }
   .charts-grid { grid-template-columns: 1fr; gap: 16px; }
-  .shell { flex-direction: column; }
-  .sidebar {
+  .shell { flex-direction: column; align-items: stretch; }
+  #sidebar {
     position: fixed; top: 0; left: 0; bottom: 0; width: 240px;
     transform: translateX(-100%); transition: transform var(--t-med) ease;
     z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.28);
   }
-  body.nav-open .sidebar { transform: translateX(0); }
+  body.nav-open #sidebar { transform: translateX(0); }
   body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   #menu-toggle { display: inline-flex !important; }
   .lede-cell { flex: 1 1 45%; }
-  .chart-box canvas { height: 260px !important; }
+  .chart-box canvas { height: 300px !important; }
   .topbar { padding: 8px 12px; }
   .topbar h1 { font-size: 12px; }
   .data-table { font-size: 13px; }
@@ -476,7 +476,7 @@ body {
   .data-table td.val { font-size: 15px; }
   .data-table td.chg { font-size: 13px; }
   .chart-box h3 { font-size: 11px; }
-  .chart-box canvas { height: 220px !important; }
+  .chart-box canvas { height: 280px !important; }
   .topbar h1 { font-size: 12px; }
   .meta-item { font-size: 10px !important; }
   .col-status { display: none; }
