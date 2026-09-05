@@ -121,3 +121,22 @@
 - 表/图单源污染：state.selected 既管表格行又管趋势组可见 → 解耦 visibleGroups。
 - 主题按钮委托陷阱：删 header #theme-toggle 须改绑 handler，否则侧栏失效。
 - R-3 副作用说明更新：原「表格默认 5 行」已由 visibleGroups 解耦修正（保留原 R-3 行 + 新解耦说明，删重复旧行）。
+
+## 任务 S P1（A股三行红底 bug 修复；纯前端，不动后端）
+
+### 根因（renderOverview, index.html）
+- L262 行级红底 `row-flash` 误配「连跌」：`/连[涨跌]\d+日/.test(st)` 命中趋势文本 → A股「连跌1日」整行染红。
+- L257 `cls` 独立按 chg 算涨跌色、L268 `chgCell` 只换文案不换 cls → 周末/回填行（A股 chg≥0）显示 pos 绿字「休市」，与红底矛盾。
+
+### 改法
+- `row-flash` 仅保留 `st.indexOf("异动")>=0`，去掉 `/连[涨跌]\d+日/`；连跌趋势已由名称列 `trend-sub` 小字表达，不再行级红。
+- `cls` 与 `chgCell` 同条件：`const cls = (isWeekend || srcDate) ? "" : (chg==null?"":(chg>=0?"pos":"neg"));` —— 周末休市 / 回填(未收盘) 用中性色，真实行情照常 pos/neg；`isWeekend` 上提到 cls 之前声明。
+
+### 验证
+- node --check 整文件 OK（rfind 越过 `</script>` 字面量）。
+- 浏览器（新端口 8041；机器即周六 → 休市为真实渲染，tab.evaluate 主世界断言）：A股三行 chgCell="休市"、chgCls="num chg "（中性无 pos/neg）、row-flash=false、名称列仍含「连跌1日」小字。
+- 强制 getDay=1(周一) 合成数据回归：SH +1.25%→pos、SZ -0.50%→neg、CYB 回填→"未收盘"中性且 flash=false、trend 仍显 → pos/neg 颜色无回归。
+- pytest tests/test_web.py：49 passed（1 条既有 StarletteDeprecationWarning，无关）。
+
+### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
+- 趋势文本误染红底（row-flash 误配连跌）+ 休市绿字：row-flash 条件含 `/连[涨跌]\d+日/` 把连跌当异动整行染红；cls 涨跌色独立于 chgCell 文案 → 休市绿字。修法：row-flash 仅留「异动」；cls 与 chgCell 同条件（休市/未收盘中性色）。
