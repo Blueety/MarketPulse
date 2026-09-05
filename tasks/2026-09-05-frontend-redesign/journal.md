@@ -195,3 +195,18 @@
 ### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
 - 模块级 TTL 缓存跨测试泄漏：缓存是模块级状态，pytest 单进程共享 → 污染端点断言。修法：autouse fixture 每测试前清空 `_watch_cache`。
 - 前端解耦骨架：自选格首屏占位「—」避免布局跳动；watchlist 并行取数不阻塞概览/趋势，到达后单独补画第 4 格。
+
+## 任务 V（表格横线连续 + 收盘价居中）
+
+### 改动（纯 CSS + th class 一处）
+1. V1 横线连续：根因 `.data-table td.name{display:flex;…}`（style.css:210）全局生效（CSS 无缩进语义，无 media 作用域），把指数列 td 变 flex 盒破坏 border-collapse 共享 border → 列交界断点。修法：移除 td.name 的 display:flex/flex-direction/align-items/gap，恢复默认 table-cell；子元素间距改 `.trend-sub{margin-left:8px}`。实测移 flex 后横线即连续，未启用兜底（tr+tr td border-top 方案）。
+2. V2 收盘价居中：`.data-table td.num.val` 追加 `text-align:center`（特异性高于 td.num 的 right，仅收盘价列居中）；index.html:63 收盘价 `<th>` 追加 `val` class→`th.num.val`，style.css 新增 `.data-table th.num.val{text-align:center}`。涨跌幅 td.num.chg 仍右对齐、指数列左对齐不变。
+
+### 验证（浏览器 8081 新端口 + tab.evaluate）
+- thValAlign=center、valTdAlign=center（收盘价列居中）；thChgAlign=right、chgTdAlign=right（涨跌幅右对齐）；nameTdAlign=start（指数列左对齐）。
+- 10 行每行 3 个 td 的 bottom y 完全一致（如 row1: 315.05×3）、allRowsContiguous=true → 横线无断点；anyVertBorder=false → 无竖线引入。
+- pytest tests/ 449 passed（8 预存警告，无 API 变化；test_web 无 th class 断言无需同步）。
+- 范围：仅 web/static/style.css + web/templates/index.html。
+
+### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
+- **CSS 缩进无语义→media 内规则全局生效**：以为 2 空格缩进代表"在 768 媒体内"，其实 CSS 只认选择器，缩进不产生作用域；误把本应仅移动端的 td.name flex 写成全局 → 桌面端 flex 破 border-collapse 横线。修法：移动端专属规则必须真的包进 `@media` 块；删除全局 flex 后靠 `.trend-sub{margin-left:8px}` 维持间距。

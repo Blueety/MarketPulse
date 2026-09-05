@@ -207,8 +207,8 @@ body {
 }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover { background: var(--bg-hover); }
-  .data-table td.name { display: flex; flex-direction: row; align-items: baseline; gap: 8px; white-space: nowrap; color: var(--text-primary); font-size: 13px; }
-  .trend-sub { font: 11px var(--mono); color: var(--text-secondary); }
+.data-table td.name { white-space: nowrap; color: var(--text-primary); font-size: 13px; }
+.trend-sub { font: 11px var(--mono); color: var(--text-secondary); margin-left: 8px; }
 .data-table td.num {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -216,7 +216,8 @@ body {
 }
 .data-table th.num { text-align: right; }
 .data-table td.st { text-align: left; white-space: nowrap; }
-  .data-table td.num.val { position: relative; font-size: 16px; font-weight: 600; }
+.data-table td.num.val { position: relative; font-size: 16px; font-weight: 600; text-align: center; }
+.data-table th.num.val { text-align: center; }
 .data-table td.chg { font-size: var(--fs-num-sm); font-weight: 600; }
 .pos { color: var(--green) !important; font-weight: 600; }
 .neg { color: var(--red) !important; font-weight: 600; }
