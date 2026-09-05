@@ -376,4 +376,52 @@ us_weekend = datetime.now(_EASTERN_TZ).weekday() >= 5
 
 ### 风险
 - 选项 2 引入东财源：其字段/除权口径与新浪不同（本函数 `adjust=""` 前复权一致），需对齐 close 取值与日期格式；EM 域名代理可达性在本环境未验证（当前 ProxyError），上线前必须在目标网络验证。中风险，前置验证可消。
-- 选项 3 纯标注无数据风险；低。
+---
+
+## 【任务 I】前端视觉设计评审（frontend-design 方法论，只读，未改代码）
+
+### 主题钉定
+MarketPulse = 个人使用的「市场波动日报/盘中快照」暗色金融读数终端。单一职责：打开 3 秒内读到「今天市场处于什么状态、有什么异常」。受众即用户本人（A股/美股指数、波动率、ETF、自选股），不需要营销叙事，需要**可扫描的编辑级数据排版**。
+
+### 现状痛点（评审，基于 style.css/index.html 实读 + 截图取证）
+1. **三件套默认性（frontend-design 点名项）——颜色是"GitHub Dark 克隆"，不是选择**：`style.css:3-15` 全套 `#0b0e14/#e6edf3/#3fb950/#f85149/#58a6ff/#8b949e` + 表头 11px uppercase（GitHub 风格标签）+ 浅色皮肤抄 Apple `#f5f5f7/#007aff`（:33-46）——**两套皮肤分别是两套平台默认**，无一表达"波动/脉冲"气质。绿涨红跌+灰底即默认模板答案。
+2. **首屏无状态叙事，信息平权**：首显元素 = 左上 18px 文本标题 + 10 行四列表格平铺（`index.html:34-49`）。VIX 恐慌读数、美股涨跌、异常（异动）与普通行同等字号层级；唯一状态编码是 6px 圆点（:231-243）——**最该被记住的东西（今天异常吗？）没有视觉主张**。
+3. **无刻意排版系统**：`body` 用 `-apple-system/Segoe UI` 系统栈 + `ui-monospace`（style.css:52-60, 22）；字阶只有 11/13/18px 小步幅（--fs-num 18px）；数字靠 tabular-nums（好习惯）但未成角色——没有 display/正文/工具的刻意配对，读起来是"紧凑默认表格"而非"终端编辑风"。
+
+次要：动效几乎缺席（仅 theme-toggle 0.15s）；无 `prefers-reduced-motion`/focus-visible 处理；模块间仅 hairline 分隔、无信息分组编码；「数据截至：」日期 12px 灰藏右上（:201）——关键时效信息弱化。
+
+### Token 系统草案
+- **色彩（暗色主皮肤，定制金融读数气质，替换 :root）**：
+  `--bg-primary:#0A0D12`（近黑蓝，非 GH 灰黑）｜ `--bg-elevated:#11161E` ｜ `--border:#1E2733`（偏蓝灰）｜ `--text-primary:#E3E8EF` ｜ `--text-secondary:#8492A6` ｜ `--pos:#2FD6A8`（青绿涨，弃 GH 绿）｜ `--neg:#FF6E5E`（珊瑚红跌，弃 GH 红）｜ `--accent:#66A8E0`（信息蓝，弃 GH #58a6ff 微调明度）。light 皮肤同步等价比（青 #17B890 / 珊瑚 #E85D50）。
+- **字体角色（零新增依赖优先）**：数字/状态=现有 mono 栈强化（`--mono` + 大号 500 字重）；标题=系统 sans 用字重 650 + 字距 0.02em 拉"编辑标签"感（11-12px uppercase 已有雏形，收紧）；正文 13px 不变。可选升级（另议）：自托管一个 mono webfont（国内网络禁 Google Fonts）。
+- **布局概念（ASCII 首屏）**：
+```
+┌───────────────────────────────────────────────┐
+│ MARKETPULSE           数据截至 09-05 (mono)   │  ← 品牌退后
+├───────────────────────────────────────────────┤
+│  ● 美股 收 7747 +0.4%   ● VIX 14.3 平静        │  ← 状态行：3-4 个大读数（28px mono）
+│  ● A股 3930 +0.0% 连跌1 │  ● 自选 1.322 休市     │    一条看完"今天怎样"
+├───────────────────────────────────────────────┤
+│ 表格/图/板块/告警（现有模块，hairline 保留）      │
+└───────────────────────────────────────────────┘
+```
+- **Signature（唯一记忆点）**：「今日状态行」——顶部一条 4 组大 mono 读数（美股/VIX 平静度/A股/自选异动），每格左带 3px 状态色条；整页其余保持克制表格，让这条成为"MarketPulse"的视觉签名。
+
+### 高杠杆改动建议（按杠杆排序，1-4 处，不推倒重做）
+1. **调色板落地（最高杠杆/最低风险/纯 CSS）**：替换 `web/static/style.css:3-15` 与 `:33-46` 两处 :root 变量为上文 8 hex（含 6 灰阶）；同步 JS 图表色 `web/templates/index.html` 的 `COLORS`/`themeColors` 两对象（实施前 read 定位行号）为同族色，避免图表与 UI 脱节。前→后：GH 绿红 → 定制青/珊瑚+蓝灰线；DOM 零改动。
+2. **涨跌强调进行级**：`renderOverview`（index.html:200-243）行级标注——状态含「异动」的行加 `row-flash`、休市/回填行加 `row-dim`；CSS 加 `.data-table tr.row-flash td { background: color-mix(in srgb, var(--neg) 6%, transparent); }` 与 `.row-dim { opacity:.75; }`（style.css 表格段后）。让异常在表格中可扫读（现状只有 6px 圆点）。
+3. **首屏状态行（Signature，中等改动）**：`index.html:34` 概览 section 前插一小节 `<div id="lede">`（数据复用 /api/latest 的 indices，无需新接口），4 个大读数格（美股、VIX、A股、自选——前二者必有数据），CSS 28px mono + 左 3px 色条。DOM +2 处、CSS ~15 行。若求最小，可先只把「VIX + 美股」两格放顶栏下方。
+4. **排版对比度**：`style.css` `--fs-num:18px`→`20px` + `td.val` 字重 600→500（mono 大号细字更"终端"）；h1（.topbar h1 18px）→ 改 12px mono uppercase 字母距（品牌退后、让位数据）；h2 标签维持。DOM 零改动。
+
+### 可落地清单（含品质下限）
+- [ ] 调色板 2 组 :root + COLORS/themeColors 对齐（改 1）
+- [ ] 行级 row-flash/row-dim（改 2）
+- [ ] 首屏 lede 状态行（改 3，可拆两格先行）
+- [ ] 数字 20px/500 + 品牌退后（改 4）
+- [ ] 品质下限：CSS `:focus-visible { outline: 1px solid var(--accent); }`；`@media (prefers-reduced-motion: reduce)` 关 Chart 动画（JS 读 matchMedia 设 `Chart.defaults.animation=false`，1 行）；375px 视口验证表格横向滚动与 lede 折行
+- [ ] 验证：浏览器 1280/375 双视口截图前后对比；`pytest tests/ -v` 不受影响（纯前端）；不引入新依赖/webfont（默认方案）
+
+### 自我批判
+- 砍：不加装饰性渐变/玻璃拟态/多余圆角——hairline 分区与紧凑已符合"读数终端"，保留；lede 若过度（每格再放 sparkline）即砍回纯数字；不做品牌 logo 图形（个人工具无必要）。
+- 保留：数据表格密度、mono 数字、状态圆点语义（与 lede/行级色条同源不冲突）。
+- 风险：lede 依赖 VIX/美股数据可用（数据暂缺日为空行需降级隐藏）；调色改动需图表色同步否则图例与 UI 违和；light 皮肤等比色需人工过目。
