@@ -416,6 +416,14 @@ body {
 .data-table th.th-sort.active { color: var(--blue); }
 .data-table .sort-ind { font-size: 10px; margin-left: 2px; color: var(--blue); }
 
+/* 概览表（宽屏）：固定列宽均衡三列。auto 布局把富余宽度大半分给指数列（内容 ~150px 却占近半表宽），导致收盘价列整体偏右 */
+@media (min-width: 769px) {
+  #overview .data-table { table-layout: fixed; }
+  #overview .data-table th:nth-child(1) { width: 33%; }
+  #overview .data-table th:nth-child(2) { width: 34%; }
+  #overview .data-table th:nth-child(3) { width: 33%; }
+}
+
 /* 图表占位 */
 .chart-empty { padding: 40px 0; text-align: center; }
 
