@@ -239,6 +239,8 @@ body {
   color: var(--text-primary);
   letter-spacing: 0.5px;
   margin-bottom: 0;
+  white-space: nowrap;   /* meta 过长时保持标题单行，不被 flex 挤压竖排 */
+  flex-shrink: 0;
 }
 .chart-head {
   display: flex;

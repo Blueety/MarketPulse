@@ -1,5 +1,12 @@
 # 任务日志：前端优化（清理 + 去重 + JS 抽离），2026-09-05
 
+## 追加：默认四图全显（同日晚间用户需求）
+- `app.js` `DEFAULT_GROUPS` 从 `["chart-gspc-ixic","chart-sh-sz-cyb"]` 改为 `GROUPS.map(g=>g.id)`（推翻此前 R-3「默认两图」决策，用户定夺）。
+- 顺手修：`.chart-box h3` 加 `white-space:nowrap + flex-shrink:0`——四图全显后波动率组 meta 最长，把「波动率」标题挤成竖排；修复后单行。
+- 验证：`node --check` 过、`pytest tests/test_web.py` 49 passed、新端口 8022 浏览器断言（4 Chart 实例 + 4 组按钮 active + 概览表仍 10 行未被牵连）+ 截图目视。
+- **重踩坑**：同端口 reload 后 CSS 304 假阴性（computed style 仍是旧值），换 `?v=timestamp` 破缓存后确认生效——pitfalls 已有此条，验证 CSS 改动必须破缓存或换端口。
+- 未手动 push（用户未要求）；cron 自动机制会扫入推送。
+
 ## 目标
 不改变任何视觉与交互行为的前提下：修 3 个真 bug、清 ~100 行死代码、去重、图表颜色统一 CSS 变量单一来源、约 1000 行内联 JS 抽成 `web/static/app.js`、railpack.json 启动命令对齐。范围 C（用户经 AskUserQuestion 选定）。
 
