@@ -276,6 +276,7 @@ class TestSnapshotEntryOrchestration:
             calls["merge_values"] = values
         monkeypatch.setattr(snap, "merge_history", fake_merge_history)
         monkeypatch.setattr(snap, "run_alert_checks", fake_alert)
+        monkeypatch.setattr(snap, "is_market_holiday", lambda market: False)  # 工作日全流程：关闭周末 gate
         return calls
 
     def test_a_share_midday(self, monkeypatch, tmp_path):

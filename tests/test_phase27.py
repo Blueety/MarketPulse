@@ -295,6 +295,7 @@ class TestWiring:
         captured = {}
         monkeypatch.setattr(sr, "run_alert_checks",
                             lambda *a, **k: captured.setdefault("args", a) or None)
+        monkeypatch.setattr(sr, "is_market_holiday", lambda *a, **k: False)  # 工作日全流程：关闭周末 gate
         seed = {"date": "2026-09-02", "vix": 20.0}
         (tmp_path / "history.json").write_text(
             __import__("json").dumps([seed]), encoding="utf-8")

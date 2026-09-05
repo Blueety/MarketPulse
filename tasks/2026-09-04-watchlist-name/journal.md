@@ -170,3 +170,32 @@
 - 行级 `row-flash`（异动）本次数据无「异动」行，未触发可视化；规则与 `row-dim` 同机制已加，逻辑正确。
 - 自选股 lede 格仅取首支成功股（`break`），多自选时只展示 1 格——符合 plan「允许先 2 格」下限，非缺陷。
 - lede 依赖 `/api/latest`（缓存 context，非请求时重算），周六状态显示「未开盘」（09-04 context）与任务 G/J 一致。
+
+## 任务 H.5（追加 2026-09-05）：非交易日 gate（数据正确性）
+- 目标：周末/非交易日不生成 A 股盘中快照（无盘中数据，旧值会误导）；美股 close/daily 在周六仍有效（北京周六 08:00 = 美东周五收盘后）不跳过。
+### 改动清单
+- `src/analyzer.py`：新增 `is_market_holiday(market)`——`a-share` 用 `SHANGHAI_TZ`、`us` 用 `EASTERN_TZ`；`datetime.now(tz).weekday() >= 5`（周六/周日）视为休市；其余（alt）返回 False（不拦截）。复用既有 `EASTERN_TZ`/`SHANGHAI_TZ`，零新依赖。
+- `snapshot_report.py`：新增模块级 helper `_is_market_closed(market, time)`，GF 边界（tasks/2026-09-05-marketpulse-phase26）规则——A 股 `midday/open/close` 周末跳过；us `open/noon` 按 ET 周末跳过；**us `close` 与 daily 永不跳过**（北京周六 08:00 = ET 周五收盘后，数据有效）。`main()` 开头（fetch/渲染/merge/commit 之前）先调 gate，命中则 `logger.info("休市，<市场>无盘中数据，跳过更新")` + `return 0`。
+- `tests/test_holiday_gate.py`（新增）：`is_market_holiday` 单测（monkeypatch `an.datetime.now` 子类固定周六/周三/ET 周六/ET 周五）+ `_is_market_closed` GF 边界（周六 a-share 全跳、ET 周六 us open/noon 跳、ET 周五 us close 不跳、alt 永不跳），共 7 条。
+- `tests/test_phase7.py` / `tests/test_phase27.py`：既有 `snap.main("a-share","midday")` 全流程编排测试在周六会被 gate 提前 return 而缺 `sector_heat_called`/`args` → KeyError。因该两测试验证逻辑为工作日全流程，补充 `monkeypatch.setattr(snap/sr, "is_market_holiday", lambda: False)` 关闭 gate（gate 行为由 test_holiday_gate.py 专测覆盖）。
+### 验证结果
+- `tests/test_holiday_gate.py -v`：**7 passed**。
+- 实跑周六 A 股午盘快照：`venv/Scripts/python snapshot_report.py --market a-share --time midday` → 仅 log「休市，A股无盘中数据，跳过更新」并 `return 0`；`git status` 显示本次仅 3 项改动（analyzer/snapshot/test），`reports/snapshots/2026-09-05-a-share-midday.md` mtime 为 11:45:43（事故前既存，本次运行未触碰）→ 无新快照生成、无新增改动。
+- 全量 `pytest`：**449 passed / 0 failed**（含 H.5 新增 7 + 修复 2 回归；先前基线 4 文案失败本环境亦转绿）。
+
+## 任务 I.5（追加 2026-09-05）：状态列优化（方案 A'）
+- 目标：删概览表「状态」列（与 lede 重复且噪音），交易状态改由列背景 + 名称下「连X日」小字承载；后端契约不动。
+### 改动清单
+- `web/templates/index.html`：
+  - 删 `<th class="col-status">状态</th>`（thead 4→3 列）。
+  - `renderOverview` 渲染循环（L231-249 区）：保留 `const st=it.status`；加 `const trend=(st.match(/连[涨跌]\d+日/)||[null])[0];`；行级 class 改 st 含「失败」→`row-warn`、含「异动」→`row-flash`（休市/回填维持 `row-dim`）；名称 td 内 `it.label + (trend? '<span class="trend-sub">'+trend+'</span>':"")`；删状态 td（删 `dot` 计算与状态格）。
+  - `colspan="4"`→`"3"`：概览 loading（L48）/ 暂无数据（L208）/ 无选中指标（L228）/ 加载失败（L926）。
+- `web/static/style.css`：`.data-table td.name` 加 `display:flex;flex-direction:column;gap:2px`；新增 `.row-warn td{background:color-mix(in srgb,var(--orange) 10%,transparent)}`；新增 `.trend-sub{font:11px var(--mono);color:var(--text-secondary)}`。
+### 验证结果
+- 前端片段隔离 `node --check`：JS_OK。
+- `tests/test_web.py -q`：49 passed（纯前端三元/类名，Python 不受影响）。
+- 浏览器实测（8001，主 world）：概览 thead = 指数/收盘/涨跌幅（**3 列**）；表内 `hasWeikaiPanInTable=false`（无「未开盘」字样）；上证/深证/创业板行名称下 `trend-sub` =「连跌1日」小字；美股/VIX/MOVE/GLD/BTC 涨跌幅列显示「休市」（周末 isWeekend 文案）。截图已取（fullPage）。
+- 全页 `hasWeikaiPanPage=true`：仅来自任务 I 的 lede（美股/VIX 周末 sub 仍显「未开盘」），非 I.5 引入，属任务 I 既有行为，未改动（不在 I.5 范围）；如需全页无「未开盘」须另行调整 lede，待决策。
+### 风险 / 局限
+- 概览 colspan 4 处均改 3，与删列一致；其余表（板块热度/自选股）列数未变。
+- Flask 模板缓存：每次前端改动须重启 uvicorn（端口 8001 残留旧实例会导致浏览器命中旧模板，本次已 kill 旧 PID 135564 重启验证）。
