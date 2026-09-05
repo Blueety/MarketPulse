@@ -124,3 +124,20 @@
 - 节假日（如 12/25）仍会标「未开盘」（非周末），plan 已注明：以周末退化为准，可选后续接交易日历；本次不扩展。
 - 前端 `isWeekend` 用访问者浏览器本地时区：国内用户周六判定正确；跨时区访问者边缘情况 plan 已注明可接受（看板面向国内）。
 - 后端周末判定依赖 `datetime.now`（与 analyzer 既有日期逻辑一致），测试用 monkeypatch 隔离。
+
+## 任务 J（追加 2026-09-04）：周末所有休市市场统一显示「休市」（前端展示层）
+
+### 改动内容
+- `web/templates/index.html` renderOverview（L242）：涨跌幅格 `chgCell` 由任务 G 的 `srcDate ? (isWeekend ? "休市" : "未收盘") : fmtPct(chg)` 改为 `isWeekend ? "休市" : (srcDate ? "未收盘" : fmtPct(chg))`——把 `isWeekend` 提到最外层。
+- 效果：周六/周日无论是否回填行（美股 `srcDate` 有值、A 股 09-05 行有值且 `srcDate=null`、`chg=0`）→ 涨跌幅列统一显示「休市」；周中（isWeekend=False）→ 完全退回原逻辑（回填未收盘→「未收盘」，否则 `fmtPct`）。
+- 状态列 `st`（L231/247）与状态点 `dot`（L236-239）保持不变：A 股 context 本就「休市」（09-04 context 中 SH/SZ/CYB=「休市」），周末时与涨跌幅列「休市」语义一致；未改动 `cls` 颜色逻辑（见风险）。
+
+### 验证结果
+- 前端片段 `node --check`（隔离校验 isWeekend + chgCell 片段，规避 `</script>` 截断）：**JS_OK**。
+- `venv/Scripts/python -m pytest tests/test_web.py -q`：**49 passed**（纯前端 ternary 改动，Python 测试不受影响）。
+- 变更前后对比：周中（isWeekend=False）→ fmtPct 正常（A 股 +0.00% 仅周中照抄场景）；周六 → 全表涨跌幅列「休市」。
+- 浏览器实测周末路径：**本环境不可行**——本机为工作日，`isWeekend=False`，无法在浏览器触发周末分支；改动为单 ternary 翻转，正确性由代码路径 + node --check + test_web 冒烟保证。
+
+### 风险 / 局限
+- 涨跌幅格 `cls`（pos/neg 颜色，L230）未同步中和：周末「休市」仍带 A 股 chg=0 → 绿色（pos）/ 美股周五涨跌色，属轻微视觉瑕疵；状态点已正确转灰（dot-gray）。保持最小改动未动 cls；如需中性色可后续一行 `cls = isWeekend ? "" : cls;` 补全。
+- 前端 `isWeekend` 取访问者本地时区（任务 G 已注明，面向国内看板可接受）。
