@@ -194,3 +194,11 @@
 - **Chart.js v4 maintainAspectRatio 压缩糊（任务 E）**：默认 `maintainAspectRatio:true`+`aspectRatio:2`，若 canvas 高被 CSS `!important` 钉死（如 220px），绘制高=宽÷2（640÷2=320）×DPR 被压到 220 显示 → 糊/扁。修法 `renderWatchChart` options 设 `maintainAspectRatio:false`，绘制高=容器实际高（≈220，1:1 清晰）。
 - **周末历史行照抄假涨跌（任务 J）**：周六 A 股入口把周五收盘 `merge_history` 进自然日行 → 当日 change 算 0 → 前端显 `+0.00%`，语义错（A 股也休市）。展示层兜底：`renderOverview` 前端 `isWeekend` 统一显「休市」（与美股一致）；数据层根治靠 `is_market_holiday` gate（见 src 七期 B6），非交易日不再生成/merge 行。
 - **`/api/latest` 的 indices 是 list 非 dict（任务 I）**：前端 lede/取值若 `idx[sym]` 把列表当 dict 按符号取 → 全 null（实测美股/VIX/A股格空）。修法：从 `indices` 列表遍历建 `symbol→item` 映射再按 symbol 取，勿当 dict 用。
+
+## 模块 web/（前端重构 2026-09-05）
+
+- **跨端口 CSS 缓存假阴性（验证陷阱）**：headless 对 `/static/style.css` 跨端口命中 304/陈旧副本，导致"菜单按钮仍显示""侧栏不 fixed"等误判。修法：每次验证用全新端口（8014→8015→8016 递进）强制重新拉取；勿用旧端口复测。
+- **侧栏基础规则特异性（#sidebar vs .sidebar）**：基础用 `#sidebar{position:sticky}`（id），768 媒体用 `.sidebar{position:fixed}`（class）→ id 压过 class，移动端不 fixed、抽屉失效。修法：768 媒体选择器统一改 `#sidebar`，与基础同源特异性。
+- **flex column 下 main 不拉伸溢出（align-items:flex-start）**：`.shell` 基础 `align-items:flex-start`，移动端 `flex-direction:column` 后 main 不横向拉伸→按内容（表格 nowrap）撑到 512 横向溢出。修法：768 媒体 `.shell` 加 `align-items:stretch`，main 强制满宽 375 无溢出。
+- **图表色随主题：漏改即图例/线色违和**：切换 Light/Dark 若只改 UI token 不重渲染 Chart.js，线/柱/图例色与主题错位（P2 实测）。修法：theme-toggle 切换后 `if(state.history) renderCharts()` 重渲染；COLORS 拆 LIGHT/DARK 双数组 + `colors()` 取。
+- **renderOverview 函数名误用（esc vs escapeHtml）**：重构误用 `esc()`，实际是 `escapeHtml()`→运行时 ReferenceError 表格卡"加载中"。修法：统一 `escapeHtml`；改动后用浏览器 `tab.evaluate` 看表格是否真正渲染（而非只看 200）。
