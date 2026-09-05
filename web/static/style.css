@@ -202,8 +202,12 @@ body {
 .data-table td.num {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
-  .data-table td.val { font-size: var(--fs-num); font-weight: 500; }
+.data-table th.num { text-align: right; }
+.data-table td.st { text-align: left; white-space: nowrap; }
+.src-sub { color: var(--text-muted); font-size: 11px; }
+  .data-table td.val { font-size: 16px; font-weight: 600; }
 .data-table td.chg { font-size: var(--fs-num-sm); font-weight: 600; }
 .pos { color: var(--green) !important; font-weight: 600; }
 .neg { color: var(--red) !important; font-weight: 600; }
@@ -211,7 +215,10 @@ body {
 .row-dim td { opacity: 0.72; }
   .row-warn td { background: color-mix(in srgb, var(--orange) 10%, transparent); }
 .lede { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 2px 4px; margin-bottom: 4px; }
-.lede-cell { flex: 1 1 150px; min-width: 120px; border-left: 3px solid var(--border); padding: 2px 0 2px 12px; background: var(--bg-elevated); border-radius: 2px; }
+.lede-cell { flex: 1 1 200px; min-width: 0; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.lede-cell.lede-accent { border-left: 2px solid var(--blue); }
+.lede-cell.lede-pos { border-left: 2px solid var(--green); }
+.lede-cell.lede-neg { border-left: 2px solid var(--red); }
 .lede-accent { border-left-color: var(--blue); }
 .lede-pos { border-left-color: var(--green); }
 .lede-neg { border-left-color: var(--red); }
@@ -414,6 +421,7 @@ body {
   color: var(--text-primary);
   border-color: var(--blue);
 }
+.symbol-filter .chip:not(.on) { opacity: .35; }
 .symbol-filter .chip input { display: none; }
 .symbol-filter .chip .dot {
   width: 8px;

@@ -55,12 +55,14 @@
           <thead>
             <tr>
               <th>指数</th>
-              <th class="th-sort" data-sort="value">收盘 <span class="sort-ind"></span></th>
-              <th class="th-sort" data-sort="change_pct">涨跌幅 <span class="sort-ind"></span></th>
+              <th class="th-sort num" data-sort="value">最新价 <span class="sort-ind"></span></th>
+              <th class="num">涨跌</th>
+              <th class="th-sort num" data-sort="change_pct">涨跌幅 <span class="sort-ind"></span></th>
+              <th>状态</th>
             </tr>
           </thead>
           <tbody id="overview-body">
-            <tr><td colspan="3">加载中…</td></tr>
+            <tr><td colspan="5">加载中…</td></tr>
           </tbody>
         </table>
       </div>
@@ -224,7 +226,7 @@
       const tbody = document.getElementById("overview-body");
       tbody.innerHTML = "";
       if (!latest.indices || !latest.indices.length) {
-        tbody.innerHTML = '<tr><td colspan="3">暂无数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">暂无数据</td></tr>';
         return;
       }
       // 按 selected 过滤（单一管线，图表与表格同步）
@@ -244,30 +246,34 @@
         });
       }
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="3">无选中指标</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">无选中指标</td></tr>';
         return;
       }
       rows.forEach(function (it) {
         const chg = it.change_pct;
         const cls = chg == null ? "" : (chg >= 0 ? "pos" : "neg");
         const st = it.status || "—";
-        // 前向回填行（美股盘中未收盘，value 来自最近收盘日）标注来源日期，避免与概览日期错配
         const srcDate = it.source_date && it.source_date !== latest.date ? it.source_date : null;
-        const trend = (st.match(/连[涨跌]\d+日/) || [null])[0];
         let rowCls = "";
         if (st.indexOf("失败") >= 0) rowCls = "row-warn";
-        else if (st.indexOf("异动") >= 0) rowCls = "row-flash";
-        else if (st.indexOf("休市") >= 0 || srcDate) rowCls = "row-dim";
+        else if (st.indexOf("异动") >= 0 || /连[涨跌]\d+日/.test(st)) rowCls = "row-flash";
 
         const isWeekend = (new Date().getDay() % 6) === 0;   // 0=周日 6=周六
         const tr = document.createElement("tr");
         tr.className = rowCls;
-        const valCell = fmtNum(it.value, 2) + (srcDate ? '<span style="color:#8b949e;font-size:11px">（' + srcDate.slice(5) + '收盘）</span>' : "");
+        const prev = (it.value != null && chg != null) ? it.value / (1 + chg / 100) : null;
+        const diff = (it.value != null && prev != null) ? it.value - prev : null;
+        const diffCell = diff != null ? (diff >= 0 ? "+" : "") + fmtNum(diff, 2) : "—";
+        const valCell = fmtNum(it.value, 2) + (srcDate ? '<span class="src-sub">（' + srcDate.slice(5) + '收盘）</span>' : "");
         const chgCell = isWeekend ? "休市" : (srcDate ? "未收盘" : fmtPct(chg));
+        const dotCls = /失败/.test(st) ? "dot-orange" : /异动/.test(st) ? "dot-red" : (/休市|未开盘|—/.test(st) ? "dot-gray" : "dot-green");
+        const stCell = '<span class="status-dot ' + dotCls + '"></span>' + esc(st);
         tr.innerHTML =
-          '<td class="name">' + it.label + (trend ? '<span class="trend-sub">' + trend + "</span>" : "") + "</td>" +
+          '<td class="name">' + esc(it.label) + "</td>" +
           '<td class="num val">' + valCell + "</td>" +
-          '<td class="num chg ' + cls + '">' + chgCell + "</td>";
+          '<td class="num chg ' + cls + '">' + diffCell + "</td>" +
+          '<td class="num chg ' + cls + '">' + chgCell + "</td>" +
+          '<td class="st">' + stCell + "</td>";
         tbody.appendChild(tr);
       });
       updateSortIndicators();
@@ -939,7 +945,7 @@
 
     function loadFailed(msg, boxId) {
       const box = document.getElementById(boxId);
-      if (box) box.innerHTML = '<tr><td colspan="3">加载失败：' + msg + "</td></tr>";
+      if (box) box.innerHTML = '<tr><td colspan="5">加载失败：' + msg + "</td></tr>";
     }
 
     document.addEventListener("DOMContentLoaded", function () {
