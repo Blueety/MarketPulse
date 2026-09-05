@@ -97,3 +97,27 @@
 
 ### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
 - R-3 两图默认 + `:has(.chart-empty)` 隐空组；R-1 趋势文本单行（td.name flex-row nowrap）；R-2/R-5 移动端卡高一致（480 块 spark 40 + lede-val 16px !important + label/sub nowrap，避 768 块 22px 覆盖）；R-4 nav active var(--blue)+SVG currentColor。
+
+## 用户反馈两改动（纯前端；表默认10行 + 删 header 主题按钮）
+
+### 改动 1：表格默认回 10 行（解耦表/图单源）
+- 根因：R-3 把 `state.selected` 收窄成两主板，因它同时驱动「表格行」与「趋势组可见」，表格被牵连只剩 5 行。
+- 解耦：新增 `state.visibleGroups`（趋势区分组可见集，默认 `DEFAULT_GROUPS = [chart-gspc-ixic, chart-sh-sz-cyb]`）；`state.selected` 恢复 `new Set(ALL_KEYS)`（表 10 行全显）。
+- `renderGroup` / `syncSelection` 组显隐改判 `state.visibleGroups.has(g.id)`（与 `anySelected` 取或，空组仍 `:has(.chart-empty)` 隐整格）。
+- `onGroupClick`（类别按钮）：改为切换 `visibleGroups` —— 点单组→仅显该组；再点已独占组→恢复默认两主板（`selSnapshot` 逻辑删除，字段一并移除）。
+- `renderFilter` 类别按钮 active 改判 `visibleGroups.has(g.id)`；「全选」同步 `visibleGroups = 全 4 组`。
+- 单点 symbol 过滤（chips）、排序、刷新等保留不变。
+
+### 改动 2：删 header 右上主题按钮
+- 删去 `<header>` 内 `id="theme-toggle"` 按钮（保留 数据截至 + 刷新）。
+- 侧栏 footer 本用独立 `id="sidebar-theme"` 经 JS 委托 `themeBtn.click()`（`themeBtn` 原绑 `#theme-toggle`）。仅删 DOM 会让 `themeBtn` 变 null、侧栏失效 → 把主题 handler 直接改绑 `getElementById('sidebar-theme')`，并删除委托那两行。侧栏 footer 成为唯一主题入口。
+
+### 验证
+- node --check 整文件 OK（rfind 越过 `</script>` 字面量）。
+- 浏览器（新端口 8031，tab.evaluate 主世界断言）：rowCount=10；headerTheme=false、sidebarTheme=true；默认 visibleGroups=[美股大盘,A股大盘]+自选图常显；点 sidebar-theme dark→light 无报错（sparkline 重绘）；点「波动率」→仅波动率组可见，再点→恢复两主板。
+- pytest tests/test_web.py：49 passed（1 条既有 StarletteDeprecationWarning，无关）。
+
+### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
+- 表/图单源污染：state.selected 既管表格行又管趋势组可见 → 解耦 visibleGroups。
+- 主题按钮委托陷阱：删 header #theme-toggle 须改绑 handler，否则侧栏失效。
+- R-3 副作用说明更新：原「表格默认 5 行」已由 visibleGroups 解耦修正（保留原 R-3 行 + 新解耦说明，删重复旧行）。

@@ -33,7 +33,6 @@
     <div class="topbar-right">
       <span class="subdate" id="overview-date"></span>
       <button id="refresh-btn" type="button" class="icon-btn" title="刷新数据"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2v3h-3"/></svg></button>
-      <button id="theme-toggle" type="button" class="icon-btn" title="切换主题"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4"/></svg></button>
     </div>
   </header>
   <div class="shell">
@@ -190,15 +189,17 @@
       { id: "chart-gld-btc", name: "另类资产", keys: ["gld", "btc"], type: "line" },
     ];
 
+    const DEFAULT_GROUPS = ["chart-gspc-ixic", "chart-sh-sz-cyb"];  // 趋势区默认仅显两主板大图
+
     // 单一状态源：驱动所有视图刷新
     const state = {
       days: 30,
-      selected: new Set(["gspc", "ixic", "sh", "sz", "cyb"]),
+      selected: new Set(ALL_KEYS),
+      visibleGroups: new Set(DEFAULT_GROUPS),  // 趋势区分组可见集（与表格 selected 解耦）
       sort: { key: null, dir: 1 },  // key: "value" | "change_pct"；dir: 1 升序 / -1 降序 / null 原序
       history: null,  // 最近一次 /api/history 全量 payload（显隐纯客户端管理）
       latest: null,   // 最近一次 /api/latest payload
       watch: null,   // 最近一次 /api/watchlist payload（lede 自选格复用）
-      selSnapshot: null,  // 类别按钮点击前的选中快照（再次点击恢复）
     };
     let watchChart = null;  // 自选股 Chart 实例（重渲染前 destroy）
 
@@ -640,9 +641,10 @@
         return g.keys.indexOf(s.key) !== -1;
       });
       const anySelected = series.some(function (s) { return state.selected.has(s.key); });
+      const groupVisible = state.visibleGroups.has(g.id);
       if (charts[g.id]) { charts[g.id].destroy(); delete charts[g.id]; }
       let ph = box.querySelector(".chart-empty");
-      if (!anySelected) {
+      if (!groupVisible || !anySelected) {
         canvas.style.display = "none";
         if (!ph) {
           ph = document.createElement("p");
@@ -687,15 +689,9 @@
 
     function onGroupClick(idx) {
       const g = GROUPS[idx];
-      // 已精确隔离到该组 → 恢复快照；否则快照当前态并仅保留该组
-      const isolated = g.keys.every(function (k) { return state.selected.has(k); })
-        && state.selected.size === g.keys.length;
-      if (isolated) {
-        state.selected = state.selSnapshot ? new Set(state.selSnapshot) : new Set(ALL_KEYS);
-      } else {
-        state.selSnapshot = new Set(state.selected);
-        state.selected = new Set(g.keys);
-      }
+      // 趋势区按「分组可见集」切换：点单组→仅显该组；再点已独占组→恢复默认两主板
+      const sole = state.visibleGroups.size === 1 && state.visibleGroups.has(g.id);
+      state.visibleGroups = sole ? new Set(DEFAULT_GROUPS) : new Set([g.id]);
       syncSelection();
     }
 
@@ -709,8 +705,9 @@
           return g.keys.indexOf(s.key) !== -1;
         });
         const anySelected = series.some(function (s) { return state.selected.has(s.key); });
+        const groupVisible = state.visibleGroups.has(g.id);
         if (charts[g.id]) {
-          if (!anySelected) {
+          if (!groupVisible || !anySelected) {
             // 整组变空 → destroy + 占位
             charts[g.id].destroy();
             delete charts[g.id];
@@ -748,7 +745,7 @@
       GROUPS.forEach(function (g, idx) {
         const btn = document.createElement("button");
         btn.type = "button";
-        const active = g.keys.every(function (k) { return state.selected.has(k); });
+        const active = state.visibleGroups.has(g.id);
         btn.className = "filter-act" + (active ? " active" : "");
         btn.textContent = g.name;
         btn.dataset.group = String(idx);
@@ -764,6 +761,7 @@
       allBtn.textContent = "全选";
       allBtn.addEventListener("click", function () {
         state.selected = new Set(ALL_KEYS);
+        state.visibleGroups = new Set(GROUPS.map(function (g) { return g.id; }));
         syncSelection();
       });
       const clearBtn = document.createElement("button");
@@ -1020,7 +1018,7 @@
 
     document.addEventListener("DOMContentLoaded", function () {
       // 主题切换
-      var themeBtn = document.getElementById('theme-toggle');
+      var themeBtn = document.getElementById('sidebar-theme');
       if (themeBtn) {
         themeBtn.addEventListener('click', function() {
           var next = getTheme() === 'dark' ? 'light' : 'dark';
@@ -1030,8 +1028,6 @@
           repaintSparklines();
         });
       }
-      var sidebarTheme = document.getElementById('sidebar-theme');
-      if (sidebarTheme) sidebarTheme.addEventListener('click', function () { if (themeBtn) themeBtn.click(); });
       // 移动端抽屉导航
       var menuBtn = document.getElementById('menu-toggle');
       if (menuBtn) menuBtn.addEventListener('click', function () { document.body.classList.toggle('nav-open'); });
