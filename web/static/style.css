@@ -227,6 +227,7 @@ body {
 .lede-sub { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); }
 .lede-sub.pos { color: var(--green); }
 .lede-sub.neg { color: var(--red); }
+.kpi-spark { width: 100%; height: 40px; display: block; margin-top: 8px; }
 
 /* 状态圆点（D5：休市灰 / 失败橙 / 异动红 / 其余绿） */
 .status-dot {

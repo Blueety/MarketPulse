@@ -291,7 +291,7 @@
         var sub, subCls;
         if (chg == null) { sub = d.status || '—'; subCls = ''; }
         else { sub = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; subCls = chg >= 0 ? 'pos' : 'neg'; }
-        return { label: label, kind: kind, val: fmtNum(d.value, 2), sub: sub, subCls: subCls };
+        return { label: label, kind: kind, sym: sym, val: fmtNum(d.value, 2), sub: sub, subCls: subCls };
       }
       var us = make('GSPC', '美股', 'accent');
       var vix = make('VIX', 'VIX', 'neg');
@@ -305,7 +305,7 @@
           if (s && s.value != null) {
             var wc = s.change_pct;
             var wsub = wc == null ? (s.status || '—') : (wc >= 0 ? '+' : '') + wc.toFixed(2) + '%';
-            cells.push({ label: (s.label || s.symbol || '自选'), kind: 'accent', val: fmtNum(s.value, 2), sub: wsub, subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg') });
+            cells.push({ label: (s.label || s.symbol || '自选'), kind: 'accent', sym: s.symbol, val: fmtNum(s.value, 2), sub: wsub, subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg') });
             break;
           }
         }
@@ -313,8 +313,72 @@
       if (!cells.length) { el.style.display = 'none'; return; }
       el.style.display = '';
       el.innerHTML = cells.map(function (c) {
-        return '<div class="lede-cell lede-' + c.kind + '">' + '<div class="lede-label">' + c.label + '</div>' + '<div class="lede-val">' + c.val + '</div>' + '<div class="lede-sub ' + c.subCls + '">' + c.sub + '</div>' + '</div>';
+        return '<div class="lede-cell lede-' + c.kind + '">' + '<div class="lede-label">' + c.label + '</div>' + '<div class="lede-val">' + c.val + '</div>' + '<div class="lede-sub ' + c.subCls + '">' + c.sub + '</div>' + '<canvas class="kpi-spark" data-sym="' + (c.sym || '') + '"></canvas>' + '</div>';
       }).join('');
+      drawSparklines(latest, watch);
+    }
+
+    var _sparkSeries = {};
+    function sparkColor(cv) {
+      var cell = cv.closest ? cv.closest('.lede-cell') : null;
+      var sub = cell && cell.querySelector('.lede-sub');
+      var cls = sub ? (sub.className || '') : '';
+      if (cls.indexOf('pos') >= 0 || cls.indexOf('neg') >= 0) return getComputedStyle(sub).color;
+      return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#9aa4b2';
+    }
+    function drawOneSpark(cv, values, color) {
+      if (!cv) return;
+      var ctx = cv.getContext('2d');
+      var pts = [];
+      for (var i = 0; i < values.length; i++) { if (values[i] != null) pts.push(values[i]); }
+      if (pts.length < 2) { ctx.clearRect(0, 0, cv.width, cv.height); return; }
+      var dpr = window.devicePixelRatio || 1;
+      var w = cv.clientWidth || (cv.parentElement ? cv.parentElement.clientWidth : 100) || 100;
+      var h = 40;
+      cv.width = Math.max(1, Math.round(w * dpr));
+      cv.height = Math.max(1, Math.round(h * dpr));
+      cv.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+      var range = (max - min) || 1;
+      var n = pts.length;
+      ctx.beginPath();
+      for (var j = 0; j < n; j++) {
+        var x = (n === 1) ? 0 : (j / (n - 1)) * w;
+        var y = h - ((pts[j] - min) / range) * (h - 6) - 3;
+        if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.strokeStyle = color || '#9aa4b2'; ctx.stroke();
+    }
+    function drawSparklines(latest, watch) {
+      var canvases = document.querySelectorAll('#lede canvas.kpi-spark');
+      if (!canvases.length) return;
+      var map = {};
+      if (watch && watch.trend && watch.trend.series) {
+        watch.trend.series.forEach(function (s) { if (s && s.key) map[s.key] = s.values; });
+      }
+      function paint(m) {
+        _sparkSeries = m;
+        canvases.forEach(function (cv) {
+          var k = (cv.dataset.sym || '').toLowerCase();
+          drawOneSpark(cv, m[k], sparkColor(cv));
+        });
+      }
+      paint(map);
+      function withHist(h) {
+        (h.series || []).forEach(function (s) { if (s && s.key) map[s.key] = s.values; });
+        paint(map);
+      }
+      if (state.history && state.history.series) withHist(state.history);
+      else fetch('/api/history?days=30').then(function (r) { return r.json(); }).then(withHist).catch(function () {});
+    }
+    function repaintSparklines() {
+      var canvases = document.querySelectorAll('#lede canvas.kpi-spark');
+      canvases.forEach(function (cv) {
+        var k = (cv.dataset.sym || '').toLowerCase();
+        drawOneSpark(cv, _sparkSeries[k], sparkColor(cv));
+      });
     }
 
     function renderSector(latest) {
@@ -958,6 +1022,7 @@
           try { localStorage.setItem('mp-theme', next); } catch (e) {}
           applyTheme(next);
           if (state.history) renderCharts(state.history);
+          repaintSparklines();
         });
       }
       // 移动端抽屉导航
