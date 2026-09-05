@@ -13,6 +13,8 @@
 - **Yahoo Finance 对本机 IP 限流（HTTP 429 / ConnectionResetError 10054）**：连续取数会触发 IP 级限流，query1 返回 429，query2 返回 403。脚本按设计容错（单源失败不影响整体，退出码恒 0），但报告会缺数据。应对：等待限流解除、换网络出口、或在脚本前加代理。
 - **yfinance 一次打多个子请求更易触发 429**：改为单请求直连 Yahoo chart REST（`query1.finance.yahoo.com/v8/finance/chart`），复用 Session + 退避，显著降低限流概率。
 - **Yahoo chart 需 query1/query2 双主机轮换**：单主机（query1）遇 403/429 时，对同一主机的重试永远拿不到数据（主机级封锁，非瞬时限流）；`src/fetcher.py` 的 `_yahoo_chart_get` 逐 `YAHOO_HOSTS` 轮换，403/429/5xx/连接错误/超时切下一主机，404 等确定失败立即 `raise_for_status` 不浪费轮换。新增 Yahoo chart 调用点必须走 helper，不得再直连 `query1` 单主机（二十六期，2026-09-05）。
+- **自选股 Yahoo 窗口过窄（任务 F）**：`src/fetcher.py` 的 `_fetch_yahoo_watch` 原 `range="1mo"` 仅含 ~20 交易日，`_series_tail(30)` 截不出 30 点 → 自选股图稀疏/被截短。改 `range="3mo"`（含 ~63 交易日）再交 `_series_tail(30)` 截最新 30；A 股源（70 自然日）与兜底接口不动。
+- **新浪/AkShare 沪 ETF 日线停更（数据源缺口，任务 I/J）**：`515300/510300/512890` 等沪 ETF 自 09-03 起新浪 + `yfinance .SS` 日线均停更（个股正常），属外部数据源缺口非本地 bug；实时价 `meta.regularMarketPrice` 仍正常 → 表格价新、图序列旧的错位观感。应对：观察自愈或改走东财 `fund_etf_hist_em` 备源（须先验证 EM 可达）；勿误判为代码缺陷。
 - **北京 00:00 = 美东前一日，00:00 槽位（us-noon）"报告日期==北京今天"检查必然失败**：美股午盘快照 cron 在北京 00:00 触发，此时美东为前一日，快照文件名永远用美东日期（analyzer.get_market_date 按市场时区），与北京"今天"差 1 天。Hermes 推送 prompt 校验快照必须用 `TZ=America/New_York date` 取美东日期，绝不能和"今天(北京)"比对，否则每晚必然跳过推送（二十六期，2026-09-05）。
 - **半迁移状态会导致 NameError**：一期到二期过渡期间，`fetch_all()` 的 fred 分支引用了已删除的 `has_valid_fred_key`/`fetch_move`，直接运行会崩溃。改代码后必须跑完整闭环验证。
 
@@ -70,6 +72,7 @@
 - **创业板 `399006.SZ` ≠ `399001.SZ`**：SYMBOLS 新增 `CYB`（创业板指），ticker 是 `399006.SZ`（深证成指是 `399001.SZ`，六期B 已用），勿混淆；阈值 `alert.cyb=5`，env `ALERT_THRESHOLD_CYB` 覆盖。
 - **跨市场告警去重独立**：`alerts.log` 按 symbol 去重，A 股标记（SH）不阻塞美股（GSPC）；同一 symbol 午盘触发则收盘跳过。验证跨市场用 `_mark_alerted(date, {"SH"})` 后跑 us 入口。
 - **入口编排 monkeypatch 点**：`snapshot_report.py` 整体编排，测试须 `monkeypatch.setattr(snap, "fetch_all"/"render_snapshot"/"save_snapshot"/"run_alert_checks", ...)` 才能验证参数透传。
+- **周六休市日 cron 照跑污染历史（H.5）**：`snapshot_report.py` 原缺 `is_market_holiday` gate，周六仍生成快照/merge 历史/空转 commit，A 股无盘中数据照抄周五收盘进自然日行（见 web 端 A4 假涨跌）。修复：`src/analyzer.py` 新增 `is_market_holiday(market)`（`a-share`→`SHANGHAI_TZ`、`us`→`EASTERN_TZ`，`weekday>=5` 休市，`alt` 不拦）+ 三入口 `main` 开头 gate；GF 边界：A 股 `midday/open/close` 周末跳，`us open/noon` 按 ET 周末跳，**`us close`/daily 不跳**（北京周日早晨=ET 周五收盘后数据有效）。
 
 ## 模块 src/（八期：A 股板块热度）
 
@@ -139,6 +142,7 @@
 
 - **FRED 公开 API 无 MOVE 序列**：勿再走 FRED 作为 MOVE 数据源。真实数据在 Yahoo `^MOVE`（标名错误但数值真实，与 Investing.com 一致）。
 - **Hermes weixin 出站不可靠**：发送报告成功但对方收不到，用 QQBot 作为推送通道。
+- **星期错标根因在 Hermes 侧 cron prompt**：看板/报告「周X」标注错位（如周六标成周五）根因是 Hermes cron prompt 用北京时间算「今天/星期」而数据按美东日期归档；仓库脚本从不标星期、无时区转换逻辑，无法在代码层代改。应对：Hermes prompt 内统一用 `TZ=America/New_York date` 取美东日期与星期（关联 二十六期日期错位坑 L16）。
 
 ## 历史教训
 
@@ -186,3 +190,7 @@
 - **`/api/watchlist` 是 web 看板第 4 个只读 JSON API**：实时取数 `config.json` 的 `watchlist.stocks`（A 股 AkShare / 美股 Yahoo），返回 `{stocks:[{symbol,label,value,change_pct}], trend:{dates,series:[{key,label,values,change_7d,raw}]}}`（trend 与 `/api/history` 同构、归一化基准 100）；配置为空 → 200 + 空结构（前端整卡隐藏），单标的取数失败 → 该行 `value=null`、前端显示「数据暂缺」、不 500；看板索引端点名是 `/api/latest`（**不是** `/api/overview`），验证别用错名字。
 - **内联 `<script>` 不能直接 `node --check`**：`web/templates/index.html` 主脚本里含 `</script>` 字面量，用正则 `<script>(.*?)</script>` 提取会被提前截断，导致 `node --check` 报 `Unexpected end of input`（未改的原始文件也报同样错，非本次引入）。验证 JS 语法：① 用 `node --check` 校验只含本次新增片段（palette/render 函数）的临时文件；② 或浏览器 `tab.evaluate` 看 console 报错。整文件 node 校验是假阴性，勿据此判定「JS 坏了」。
 - **真实数据落地后回退自然失效**：不改生产端；`daily_report.py` 覆盖写同名 context，09-03 真实数据落地后 `_load_latest_context` 取最新文件即命中板块数据，回退不再触发，无需清理逻辑。
+- **自选股图过宽扁（任务 D）**：单标的时 `#chart-watchlist` 全宽 220px 高 → 极扁。修法 `style.css` 加 `#watchlist-section .chart-box{max-width:640px;margin:0 auto}` 限宽居中；多标的 640 仍合理。
+- **Chart.js v4 maintainAspectRatio 压缩糊（任务 E）**：默认 `maintainAspectRatio:true`+`aspectRatio:2`，若 canvas 高被 CSS `!important` 钉死（如 220px），绘制高=宽÷2（640÷2=320）×DPR 被压到 220 显示 → 糊/扁。修法 `renderWatchChart` options 设 `maintainAspectRatio:false`，绘制高=容器实际高（≈220，1:1 清晰）。
+- **周末历史行照抄假涨跌（任务 J）**：周六 A 股入口把周五收盘 `merge_history` 进自然日行 → 当日 change 算 0 → 前端显 `+0.00%`，语义错（A 股也休市）。展示层兜底：`renderOverview` 前端 `isWeekend` 统一显「休市」（与美股一致）；数据层根治靠 `is_market_holiday` gate（见 src 七期 B6），非交易日不再生成/merge 行。
+- **`/api/latest` 的 indices 是 list 非 dict（任务 I）**：前端 lede/取值若 `idx[sym]` 把列表当 dict 按符号取 → 全 null（实测美股/VIX/A股格空）。修法：从 `indices` 列表遍历建 `symbol→item` 映射再按 symbol 取，勿当 dict 用。
