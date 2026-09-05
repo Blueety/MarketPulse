@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -163,12 +163,16 @@
         gridLineBar: dark ? 'rgba(30, 39, 51, 0.28)' : 'rgba(0, 0, 0, 0.1)',
       };
     }
-    const COLORS = {
-      gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868",
-      cyb: "#C792EA", vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA",
-      gld: "#E5C07B", btc: "#F7931A"
+    const COLORS_LIGHT = {
+      gspc: "#1677FF", ixic: "#13C2C2", sh: "#F5222D", sz: "#FA8C16", cyb: "#722ED1",
+      vix: "#CF1322", vxn: "#D4380D", move: "#2F54EB", gld: "#D4A017", btc: "#F7931A"
     };
-    const ALL_KEYS = Object.keys(COLORS);
+    const COLORS_DARK = {
+      gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868", cyb: "#C792EA",
+      vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A"
+    };
+    function colors() { return getTheme() === "light" ? COLORS_LIGHT : COLORS_DARK; };
+    const ALL_KEYS = Object.keys(COLORS_LIGHT);
     const charts = {};  // group id -> Chart 实例（重渲染前 destroy）
   if (window.Chart && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
     const SHORT = {
@@ -357,7 +361,7 @@
       series.forEach(function (s) {
         const span = document.createElement("span");
         span.className = "meta-item";
-        span.style.color = COLORS[s.key] || "#8b949e";
+        span.style.color = colors()[s.key] || "#8b949e";
         span.textContent = s.label + " " + state.days + "D " + fmtPct(s.change_7d);
         el.appendChild(span);
       });
@@ -399,8 +403,8 @@
           label: s.label,
           key: s.key,
           data: pts,
-          borderColor: COLORS[s.key] + "d9",
-          hoverBorderColor: COLORS[s.key],
+          borderColor: colors()[s.key] + "d9",
+          hoverBorderColor: colors()[s.key],
           hoverBorderWidth: 2.6,
           backgroundColor: "transparent",
           fill: false,
@@ -409,7 +413,7 @@
           pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
           pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
           pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
-          pointBackgroundColor: COLORS[s.key],
+          pointBackgroundColor: colors()[s.key],
           pointBorderColor: "#fff",
           pointBorderWidth: 1.5,
           pointHitRadius: 10,
@@ -504,7 +508,7 @@
         if (s.change_7d == null) return;
         labels.push(SHORT[s.key] || s.label);
         data.push(s.change_7d);
-        bg.push(s.change_7d >= 0 ? "#3fb950" : "#f85149");
+        bg.push(s.change_7d >= 0 ? (getTheme()==="light"?"#16A085":"#3fb950") : (getTheme()==="light"?"#F05A5A":"#f85149"));
       });
       const options = {
         indexAxis: "y",
@@ -710,7 +714,7 @@
         });
         const dot = document.createElement("span");
         dot.className = "dot";
-        dot.style.background = COLORS[key];
+        dot.style.background = colors()[key];
         const text = document.createElement("span");
         text.textContent = SHORT[key] || key;
         label.appendChild(cb);
@@ -793,7 +797,7 @@
       const dateIndexMap = {};
       tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
 
-      const palette = Object.values(COLORS);
+      const palette = Object.values(colors());
       const datasets = trend.series.map(function (s, i) {
         const pts = [];
         let lastVal = null;

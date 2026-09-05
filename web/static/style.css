@@ -1,36 +1,36 @@
 /* MarketPulse 看板 - 金融市场终端风格（深色 / 紧凑 / 数字优先） */
 :root {
-  --bg-primary: #0A0D12;
-  --bg-elevated: #11161E;
-  --bg-hover: #161D27;
-  --border: #1E2733;
-  --text-primary: #E3E8EF;
-  --text-secondary: #8492A6;
-  --text-muted: #5A6675;
-  --green: #2FD6A8;
-  --red: #FF6E5E;
-  --blue: #66A8E0;
-  --orange: #d29922;
-  --purple: #bc8cff;
+  --bg-primary: #F7F8FA;
+  --bg-elevated: #FFFFFF;
+  --bg-hover: #F0F2F5;
+  --border: #E5E7EB;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --green: #16A085;
+  --red: #F05A5A;
+  --blue: #1677FF;
+  --orange: #D97706;
+  --purple: #7C3AED;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-num: 20px;
   --fs-num-sm: 14px;
 }
 
-/* 浅色皮肤（Apple 风格）：data-theme="light" 时覆盖所有颜色变量 */
-[data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-elevated: #f5f5f7;
-  --bg-hover: #ececec;
-  --border: #d2d2d7;
-  --text-primary: #1d1d1f;
-  --text-secondary: #86868b;
-  --text-muted: #aeaeb2;
-  --green: #17B890;
-  --red: #E85D50;
-  --blue: #007aff;
-  --orange: #ff9500;
-  --purple: #af52de;
+/* 深色皮肤：在 Light 主色之上分层覆盖（#0B0F14 底 + #111827 卡片 + 低对比边框 + 更亮 accent） */
+[data-theme="dark"] {
+  --bg-primary: #0B0F14;
+  --bg-elevated: #111827;
+  --bg-hover: #161D27;
+  --border: #1E2733;
+  --text-primary: #E5E7EB;
+  --text-secondary: #9BA3AF;
+  --text-muted: #6B7280;
+  --green: #2FD6A8;
+  --red: #FF6E5E;
+  --blue: #3B82F6;
+  --orange: #E0913E;
+  --purple: #BC8CFF;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
