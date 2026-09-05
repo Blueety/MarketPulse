@@ -1,15 +1,15 @@
 /* MarketPulse 看板 - 金融市场终端风格（深色 / 紧凑 / 数字优先） */
 :root {
-  --bg-primary: #0b0e14;
-  --bg-elevated: #11161f;
-  --bg-hover: #11161f;
-  --border: #1f252d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #4a525c;
-  --green: #3fb950;
-  --red: #f85149;
-  --blue: #58a6ff;
+  --bg-primary: #0A0D12;
+  --bg-elevated: #11161E;
+  --bg-hover: #161D27;
+  --border: #1E2733;
+  --text-primary: #E3E8EF;
+  --text-secondary: #8492A6;
+  --text-muted: #5A6675;
+  --green: #2FD6A8;
+  --red: #FF6E5E;
+  --blue: #66A8E0;
   --orange: #d29922;
   --purple: #bc8cff;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -26,8 +26,8 @@
   --text-primary: #1d1d1f;
   --text-secondary: #86868b;
   --text-muted: #aeaeb2;
-  --green: #34c759;
-  --red: #ff3b30;
+  --green: #17B890;
+  --red: #E85D50;
   --blue: #007aff;
   --orange: #ff9500;
   --purple: #af52de;
