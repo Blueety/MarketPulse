@@ -227,3 +227,25 @@ R-1（②列数定夺后）：表格列数/名称列单行 → R-2（③④）le
 - 缓存使数据最长旧 60-120s：盘中用户强刷想要最新价 → 命中缓存旧值；可接受（看板用途分钟级）或提供 `?fresh=1` 绕过（可选）。
 - 前端补画 lede 自选格：需处理 watch 到达前格子的占位与到达后的重绘不闪烁（transition 200ms 内完成）。
 - 12s 前端超时 > 后端 10s 限时 → 前端超时分支实际几乎不触发（后端先返），保留作兜底。
+---
+
+## 【任务 V：表格横线连续 + 收盘价居中】（只读方案，未改代码）
+
+### V1 行分隔线断开成三段
+**根因**：`.data-table td.name { display:flex; … }`（style.css:210，缩进显示原属 768px media 内但 CSS 无缩进语义 → **全局生效**）把「指数」列 td 从标准 table-cell 改成 flex 容器——`border-collapse:collapse`（L187）的单元格共享 border 机制对非 cell 的 flex 盒失效：该 td 的 `border-bottom`（L203）画在独立 flex 盒底，与相邻 `td.num`/`td.chg` 的 collapse 共享线无法合并 → 「指数|收盘价」「收盘价|涨跌幅」交界处断点，横线呈三段。
+**改法（主案 + 兜底）**：
+1. `web/static/style.css:210`：移除 `td.name` 的 `display:flex/flex-direction/align-items/gap`，恢复默认 table-cell（行线即连续）；内部间距改由子元素承担：`.trend-sub { margin-left: 8px; }`（名称文本与 trend-sub 保持 inline 邻接）。index.html 渲染结构不变。
+2. 兜底（若仍有 1px 断点）：行线从 td 底部上移到相邻行交界——`.data-table td { border-bottom: none; } .data-table tr + tr td { border-top: 1px solid var(--border); }`（同样依赖 collapse 共享，与 1 同机制；1 已修复则不必启用）。
+验证：8004 截图/`tab.evaluate` 量每行 bottom border 各 td 段 y 坐标一致连续；无竖线引入。
+
+### V2 收盘价列居中（用户定夺：右对齐→居中）
+**现状**：收盘价 td 为 `td.num.val`（style.css:215 `td.num{text-align:right}` + L219 `td.num.val`），表头 `th.num`（L217 right）。
+**改法**：
+1. `web/static/style.css:219` `.data-table td.num.val { … }` 追加 `text-align: center;`（特异性 0,2,2 > `td.num` 0,1,1 → 仅收盘价列居中；涨跌幅列 `td.num.chg`（无 val）保持右对齐）。
+2. 表头同步居中：`web/templates/index.html:62` 收盘价 `<th class="th-sort num" data-sort="value">` 追加 `val` class → `class="th-sort num val"`；style.css 加 `.data-table th.num.val { text-align: center; }`（或并入 L217 后）。
+3. 「休市/—」文本在涨跌幅列（chg）→ 右对齐不变；指数列左对齐不变（用户要求保持现状）；居中后小数点不再对齐——用户明确接受。
+验证：`tab.evaluate` 断言 `td.val`/`th.val` computed text-align=center、`td.chg`/名称列未变；截图确认无竖线、横线连续。
+
+### 风险
+- V1 移除 flex 后若名称文本与 trend-sub 无间距观感挤 → 用 `.trend-sub{margin-left:8px}`（已含）；行高不受影响（单行 inline）。
+- V2 `td.num.val` 亦用于其它含 val 的表格？仅 overview 收盘价列使用 val class（watchlist 表独立类）→ 影响面单列。低。
