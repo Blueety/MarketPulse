@@ -31,7 +31,7 @@
       gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
       vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc"
     };
-    // CSS token 缺失时的保底色（= Dark 现值，与旧 COLORS_DARK 一致）
+    // CSS token 缺失时的保底色（= 重构前 Dark 硬编码值）
     const SERIES_FALLBACK = {
       gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868", cyb: "#C792EA",
       vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A"
@@ -325,13 +325,13 @@
       });
     }
 
-    function renderLineChart(canvas, history, series) {
-      const ctx = canvas.getContext("2d");
-
+    // === 线图公共构建器（趋势 4 组图与自选股图共用） ===
+    // 交易日轴：各序列非空值日期并集 → 滤周末 → 排序，附 date→index 映射
+    function buildTradingAxis(dates, series) {
       const allDates = new Set();
       series.forEach(function (s) {
         (s.values || []).forEach(function (v, i) {
-          if (v != null) allDates.add(history.dates[i]);
+          if (v != null) allDates.add(dates[i]);
         });
       });
       const tradingDates = Array.from(allDates).filter(function (d) {
@@ -340,44 +340,53 @@
       }).sort();
       const dateIndexMap = {};
       tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
+      return { tradingDates: tradingDates, dateIndexMap: dateIndexMap };
+    }
 
-      const datasets = series.map(function (s) {
-        const pts = [];
-                  let lastVal = null;
-                  let lastRaw = null;
-                  (s.values || []).forEach(function (v, i) {
-                    const date = history.dates[i];
-                    if (dateIndexMap[date] === undefined) return;
-                    if (v != null) {
-                      lastVal = v;
-                      lastRaw = s.raw ? s.raw[i] : null;
-                      pts.push({ x: date, y: v, rawVal: lastRaw });
-                    } else if (lastVal != null) {
-                      // 前向填充：用前一个值连接空缺（黄金周末不断线）
-                      pts.push({ x: date, y: lastVal, rawVal: lastRaw, filled: true });
-                    }
-                  });
-        return {
-          label: s.label,
-          key: s.key,
-          data: pts,
-          borderColor: colors()[s.key] + "d9",
-          hoverBorderColor: colors()[s.key],
-          hoverBorderWidth: 2.6,
-          backgroundColor: "transparent",
-          fill: false,
-          tension: 0.25,
-          borderWidth: 1.8,
-          pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
-          pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
-          pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
-          pointBackgroundColor: colors()[s.key],
-          pointBorderColor: "#fff",
-          pointBorderWidth: 1.5,
-          pointHitRadius: 10,
-        };
+    // 数据点：跳过非交易日；空缺用前一个值前向填充（黄金周末不断线）
+    function buildLinePts(s, dates, dateIndexMap) {
+      const pts = [];
+      let lastVal = null;
+      let lastRaw = null;
+      (s.values || []).forEach(function (v, i) {
+        const date = dates[i];
+        if (dateIndexMap[date] === undefined) return;
+        if (v != null) {
+          lastVal = v;
+          lastRaw = s.raw ? s.raw[i] : null;
+          pts.push({ x: date, y: v, rawVal: lastRaw });
+        } else if (lastVal != null) {
+          pts.push({ x: date, y: lastVal, rawVal: lastRaw, filled: true });
+        }
       });
+      return pts;
+    }
 
+    function buildLineDataset(s, color, pts) {
+      return {
+        label: s.label,
+        key: s.key,
+        data: pts,
+        borderColor: color + "d9",
+        hoverBorderColor: color,
+        hoverBorderWidth: 2.6,
+        backgroundColor: "transparent",
+        fill: false,
+        tension: 0.25,
+        borderWidth: 1.8,
+        pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
+        pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
+        pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
+        pointBackgroundColor: color,
+        pointBorderColor: "#fff",
+        pointBorderWidth: 1.5,
+        pointHitRadius: 10,
+      };
+    }
+
+    // options：extra.maintainAspectRatio === false 时显式关掉（自选股图高由 CSS 220px 决定，避免 aspect 压缩变糊）
+    function buildLineOptions(tradingDates, extra) {
+      const tc = themeColors();
       const options = {
         responsive: true,
         interaction: { mode: "index", intersect: false },
@@ -385,7 +394,7 @@
           legend: {
             display: false,
             labels: {
-              color: themeColors().axisTick,
+              color: tc.axisTick,
               usePointStyle: true,
               boxWidth: 8,
               font: { size: 12 }
@@ -393,10 +402,10 @@
           },
           tooltip: {
             enabled: !('ontouchstart' in window),  // 移动端禁用悬浮
-            backgroundColor: themeColors().tooltipBg,
-            titleColor: themeColors().tooltipTitle,
-            bodyColor: themeColors().tooltipBody,
-            borderColor: themeColors().tooltipBorder,
+            backgroundColor: tc.tooltipBg,
+            titleColor: tc.tooltipTitle,
+            bodyColor: tc.tooltipBody,
+            borderColor: tc.tooltipBorder,
             borderWidth: 1,
             titleFont: { size: 11 },
             bodyFont: { size: 12 },
@@ -423,7 +432,7 @@
             grid: { display: false },
             ticks: {
               font: { size: 11 },
-              color: themeColors().axisTick,
+              color: tc.axisTick,
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 10,
@@ -434,11 +443,11 @@
             }
           },
           y: {
-            grid: { color: themeColors().gridLine },
+            grid: { color: tc.gridLine },
             border: { display: false },
             ticks: {
               font: { size: 11 },
-              color: themeColors().axisTick,
+              color: tc.axisTick,
               maxTicksLimit: 5,
               callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
             }
@@ -446,6 +455,7 @@
         },
         animation: { duration: 300, easing: "easeOutQuart" }
       };
+      if (extra && extra.maintainAspectRatio === false) options.maintainAspectRatio = false;
       // 缩放/平移：仅当 zoom 插件可用时启用（CDN 失败则静默降级）
       if (window.ChartZoom && !window.__zoomFailed) {
         options.plugins.zoom = {
@@ -454,7 +464,19 @@
           limits: { y: { min: "original", max: "original" } }
         };
       }
-      return new Chart(canvas, { type: "line", data: { datasets: datasets }, options: options });
+      return options;
+    }
+
+    function renderLineChart(canvas, history, series) {
+      const axis = buildTradingAxis(history.dates, series);
+      const datasets = series.map(function (s) {
+        return buildLineDataset(s, colors()[s.key], buildLinePts(s, history.dates, axis.dateIndexMap));
+      });
+      return new Chart(canvas, {
+        type: "line",
+        data: { datasets: datasets },
+        options: buildLineOptions(axis.tradingDates)
+      });
     }
 
     function renderGroup(g, history) {
@@ -678,139 +700,17 @@
         box.innerHTML = '<p class="empty">数据暂缺</p>';
         return;
       }
-      const tc = themeColors();
-
-      const allDates = new Set();
-      trend.series.forEach(function (s) {
-        (s.values || []).forEach(function (v, i) {
-          if (v != null) allDates.add(trend.dates[i]);
-        });
-      });
-      const tradingDates = Array.from(allDates).filter(function (d) {
-        var dt = new Date(d);
-        return dt.getDay() !== 0 && dt.getDay() !== 6;
-      }).sort();
-      const dateIndexMap = {};
-      tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
-
+      const axis = buildTradingAxis(trend.dates, trend.series);
       const palette = Object.values(colors());
       const datasets = trend.series.map(function (s, i) {
-        const pts = [];
-        let lastVal = null;
-        let lastRaw = null;
-        (s.values || []).forEach(function (v, i2) {
-          const date = trend.dates[i2];
-          if (dateIndexMap[date] === undefined) return;
-          if (v != null) {
-            lastVal = v;
-            lastRaw = s.raw ? s.raw[i2] : null;
-            pts.push({ x: date, y: v, rawVal: lastRaw });
-          } else if (lastVal != null) {
-            // 前向填充：用前一个值连接空缺（黄金周末不断线）
-            pts.push({ x: date, y: lastVal, rawVal: lastRaw, filled: true });
-          }
-        });
-        const color = palette[i % palette.length];
-        return {
-          label: s.label,
-          key: s.key,
-          data: pts,
-          borderColor: color + "d9",
-          hoverBorderColor: color,
-          hoverBorderWidth: 2.6,
-          backgroundColor: "transparent",
-          fill: false,
-          tension: 0.25,
-          borderWidth: 1.8,
-          pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
-          pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
-          pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
-          pointBackgroundColor: color,
-          pointBorderColor: "#fff",
-          pointBorderWidth: 1.5,
-          pointHitRadius: 10,
-        };
+        return buildLineDataset(s, palette[i % palette.length], buildLinePts(s, trend.dates, axis.dateIndexMap));
       });
-
-      const options = {
-        responsive: true,
-        maintainAspectRatio: false,   // 高由 CSS 220px 决定，避免 aspect=2 画 320 高被压缩到 220 显示（糊）
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: {
-            display: false,
-            labels: {
-              color: tc.axisTick,
-              usePointStyle: true,
-              boxWidth: 8,
-              font: { size: 12 }
-            }
-          },
-          tooltip: {
-            enabled: !('ontouchstart' in window),  // 移动端禁用悬浮
-            backgroundColor: tc.tooltipBg,
-            titleColor: tc.tooltipTitle,
-            bodyColor: tc.tooltipBody,
-            borderColor: tc.tooltipBorder,
-            borderWidth: 1,
-            titleFont: { size: 11 },
-            bodyFont: { size: 12 },
-            padding: 8,
-            cornerRadius: 4,
-            boxWidth: 8,
-            callbacks: {
-              title: function (items) { return items.length ? items[0].label : ""; },
-              label: function (ctx) {
-                const pt = ctx.dataset.data[ctx.dataIndex];
-                const rv = pt && pt.rawVal != null ? pt.rawVal : null;
-                const raw = pt && pt.raw != null ? pt.raw : null;
-                const val = rv !== null ? rv : raw;
-                if (val == null || ctx.parsed.y == null) return ctx.dataset.label + " —";
-                return ctx.dataset.label + " " + fmtNum(val, 2) + " (" + fmtPct(ctx.parsed.y - 100) + ")";
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            type: "category",
-            labels: tradingDates,
-            grid: { display: false },
-            ticks: {
-              font: { size: 11 },
-              color: tc.axisTick,
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 10,
-              callback: function (value, index) {
-                const parts = String(tradingDates[index]).split("-");
-                return Number(parts[1]) + "/" + Number(parts[2]);
-              }
-            }
-          },
-          y: {
-            grid: { color: tc.gridLine },
-            border: { display: false },
-            ticks: {
-              font: { size: 11 },
-              color: tc.axisTick,
-              maxTicksLimit: 5,
-              callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
-            }
-          }
-        },
-        animation: { duration: 300, easing: "easeOutQuart" }
-      };
-      // 缩放/平移：仅当 zoom 插件可用时启用（CDN 失败则静默降级）
-      if (window.ChartZoom && !window.__zoomFailed) {
-        options.plugins.zoom = {
-          wheel: { enabled: true, modifierKey: "ctrl" },
-          pan: { enabled: true, modifierKey: "ctrl" },
-          limits: { y: { min: "original", max: "original" } }
-        };
-      }
       if (watchChart) watchChart.destroy();
-      watchChart = new Chart(canvas, { type: "line", data: { datasets: datasets }, options: options });
+      watchChart = new Chart(canvas, {
+        type: "line",
+        data: { datasets: datasets },
+        options: buildLineOptions(axis.tradingDates, { maintainAspectRatio: false })
+      });
     }
 
 
