@@ -216,8 +216,8 @@ body {
 }
 .data-table th.num { text-align: right; }
 .data-table td.st { text-align: left; white-space: nowrap; }
-.src-sub { color: var(--text-muted); font-size: 11px; }
-  .data-table td.val { font-size: 16px; font-weight: 600; }
+.src-sub { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); white-space: nowrap; color: var(--text-muted); font-size: 11px; }
+  .data-table td.num.val { position: relative; font-size: 16px; font-weight: 600; }
 .data-table td.chg { font-size: var(--fs-num-sm); font-weight: 600; }
 .pos { color: var(--green) !important; font-weight: 600; }
 .neg { color: var(--red) !important; font-weight: 600; }

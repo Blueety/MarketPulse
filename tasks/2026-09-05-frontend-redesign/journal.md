@@ -140,3 +140,21 @@
 
 ### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
 - 趋势文本误染红底（row-flash 误配连跌）+ 休市绿字：row-flash 条件含 `/连[涨跌]\d+日/` 把连跌当异动整行染红；cls 涨跌色独立于 chgCell 文案 → 休市绿字。修法：row-flash 仅留「异动」；cls 与 chgCell 同条件（休市/未收盘中性色）。
+
+## 任务 T（收盘价列不整齐修复；纯 CSS）
+
+### 根因
+- 带回填标注的 7 行（标普/纳指/VIX/VXN/MOVE/GLD/BTC）`td.val` 内联 `<span class="src-sub">（09-04收盘）</span>` 尾随数字，右对齐时把数字推离右缘 ~65px；A股 3 行纯数字贴右缘 → 两簇右缘参差。
+
+### 改法（web/static/style.css）
+- `.data-table td.num.val { position: relative; }`（合并进原 `td.val` 规则）。
+- `.src-sub` 改绝对定位脱离数字流：`position:absolute; left:12px; top:50%; transform:translateY(-50%); white-space:nowrap; color:var(--text-muted); font-size:11px;`。数字成为唯一流内容 → 10 行右缘统一贴列右缘；标注左置格内垂直居中。
+
+### 验证
+- 浏览器（新端口 8051，tab.evaluate 主世界）：1280 下 10 行 td.val 数字文本右缘差 = 0（完全对齐）；7 个 src-sub 均在 td 左半区（subLeft=743 < 中点）且垂直居中（subCenteredY=true）；A股 3 行无标注、numRight 同样 1045。
+- 375 窄屏：bodyOverflow=0（无横向溢出、布局不破坏）；10 行数字右缘差仍 =0；7 标注均在表左边界内（allSubWithinTable=true），无溢出到名称列。
+- pytest tests/test_web.py：49 passed（1 条既有弃用告警，无关）。
+- git status：仅 `web/static/style.css` 改动（代码范围正确）。
+
+### 收尾
+- 按指示跳过 pitfalls（纯 CSS 2 条、无新坑）。
