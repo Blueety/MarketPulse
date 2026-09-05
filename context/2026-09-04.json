@@ -2,54 +2,54 @@
   "date": "2026-09-04",
   "indices": {
     "GSPC": {
-      "value": null,
+      "value": 7718.6,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "连涨1日"
     },
     "IXIC": {
-      "value": null,
+      "value": 26506.99,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "连涨1日"
     },
     "SH": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3930.1164,
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 13516.969,
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3286.546,
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "VIX": {
-      "value": null,
+      "value": 14.53,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "平静"
     },
     "VXN": {
-      "value": null,
+      "value": 20.04,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "警惕"
     },
     "MOVE": {
-      "value": null,
+      "value": 73.1045,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "平静"
     },
     "GLD": {
-      "value": null,
+      "value": 406.77,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "连涨1日"
     },
     "BTC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 79675.12,
+      "change_pct": 0.5300737454957114,
+      "status": "连涨2日"
     }
   },
   "history_30d": {
@@ -115,7 +115,7 @@
       14.92,
       15.2,
       14.32,
-      null
+      14.53
     ],
     "vxn": [
       30.84000015258789,
@@ -147,7 +147,7 @@
       20.18,
       21.07,
       20.16,
-      null
+      20.04
     ],
     "move": [
       74.18000030517578,
@@ -179,7 +179,7 @@
       75.319,
       79.7133,
       74.6812,
-      null
+      73.1045
     ],
     "gspc": [
       7316.14990234375,
@@ -211,7 +211,7 @@
       7686.14,
       7666.6,
       7747.71,
-      null
+      7718.6
     ],
     "ixic": [
       24442.939453125,
@@ -243,7 +243,7 @@
       26370.889,
       26217.828,
       26584.06,
-      null
+      26506.99
     ],
     "sh": [
       3828.469,
@@ -371,7 +371,7 @@
       408.42,
       402.78,
       410.22,
-      null
+      406.77
     ],
     "btc": [
       63908.16796875,
@@ -403,7 +403,7 @@
       78738.44,
       77349.1,
       81247.56,
-      79255.01
+      79675.12
     ]
   },
   "breach": {
@@ -411,19 +411,167 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "农业",
+        "change": 3.07,
+        "turnover": "655.0亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "消费",
+        "change": 1.97,
+        "turnover": "332.2亿",
+        "top_stock": "顺鑫农业"
+      },
+      {
+        "name": "地产/基建",
+        "change": 1.43,
+        "turnover": "153.6亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "金融",
+        "change": 0.51,
+        "turnover": "2416.2亿",
+        "top_stock": "中集集团"
+      },
+      {
+        "name": "军工",
+        "change": -0.44,
+        "turnover": "2429.1亿",
+        "top_stock": "湖南天雁"
+      }
+    ],
+    "losers": [
+      {
+        "name": "通信/电子",
+        "change": -1.83,
+        "turnover": "3373.8亿",
+        "top_stock": "通宇通讯"
+      },
+      {
+        "name": "资源/有色",
+        "change": -1.78,
+        "turnover": "651.6亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": -1.33,
+        "turnover": "5050.5亿",
+        "top_stock": "电气风电"
+      },
+      {
+        "name": "医药",
+        "change": -0.8,
+        "turnover": "1201.0亿",
+        "top_stock": "*ST香雪"
+      },
+      {
+        "name": "其他",
+        "change": -0.46,
+        "turnover": "22718.0亿",
+        "top_stock": "大北农"
+      }
+    ]
   },
   "us_sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "科技 (XLK)",
+        "change": 0.7,
+        "turnover": "$951.7M",
+        "top_stock": "XLK"
+      },
+      {
+        "name": "工业 (XLI)",
+        "change": 0.41,
+        "turnover": "$1.0B",
+        "top_stock": "XLI"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": 0.12,
+        "turnover": "$811.6M",
+        "top_stock": "XLU"
+      },
+      {
+        "name": "原材料 (XLB)",
+        "change": -0.34,
+        "turnover": "$570.2M",
+        "top_stock": "XLB"
+      },
+      {
+        "name": "房地产 (XLRE)",
+        "change": -0.72,
+        "turnover": "$165.2M",
+        "top_stock": "XLRE"
+      }
+    ],
+    "losers": [
+      {
+        "name": "可选消费 (XLY)",
+        "change": -1.33,
+        "turnover": "$582.8M",
+        "top_stock": "XLY"
+      },
+      {
+        "name": "通信服务 (XLC)",
+        "change": -1.19,
+        "turnover": "$300.6M",
+        "top_stock": "XLC"
+      },
+      {
+        "name": "医疗健康 (XLV)",
+        "change": -1.04,
+        "turnover": "$1.0B",
+        "top_stock": "XLV"
+      },
+      {
+        "name": "能源 (XLE)",
+        "change": -0.87,
+        "turnover": "$1.7B",
+        "top_stock": "XLE"
+      },
+      {
+        "name": "必需消费 (XLP)",
+        "change": -0.8,
+        "turnover": "$830.9M",
+        "top_stock": "XLP"
+      }
+    ]
   },
   "search_keywords": [
-    "market summary 2026-09-04"
+    "农业 surge 2026-09-04",
+    "消费 surge 2026-09-04",
+    "地产/基建 surge 2026-09-04",
+    "金融 surge 2026-09-04",
+    "军工 drop 2026-09-04"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.64,
+      "n": 27
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "红利低波ETF",
+        "value": 1.328,
+        "change_pct": 0.08,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.02,
+          "n": 17
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
       "avg_r": null
