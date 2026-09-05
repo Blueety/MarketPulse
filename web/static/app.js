@@ -55,7 +55,7 @@
       { id: "chart-gld-btc", name: "另类资产", keys: ["gld", "btc"], type: "line" },
     ];
 
-    const DEFAULT_GROUPS = ["chart-gspc-ixic", "chart-sh-sz-cyb"];  // 趋势区默认仅显两主板大图
+    const DEFAULT_GROUPS = GROUPS.map(function (g) { return g.id; });  // 趋势区默认四组全显
 
     // 单一状态源：驱动所有视图刷新
     const state = {
