@@ -152,7 +152,8 @@ body {
 }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover { background: var(--bg-hover); }
-.data-table td.name { color: var(--text-primary); font-size: 13px; }
+  .data-table td.name { display: flex; flex-direction: column; gap: 2px; color: var(--text-primary); font-size: 13px; }
+  .trend-sub { font: 11px var(--mono); color: var(--text-secondary); }
 .data-table td.num {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -163,6 +164,7 @@ body {
 .neg { color: var(--red) !important; font-weight: 600; }
 .row-flash td { background: color-mix(in srgb, var(--red) 7%, transparent); }
 .row-dim td { opacity: 0.72; }
+  .row-warn td { background: color-mix(in srgb, var(--orange) 10%, transparent); }
 .lede { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 2px 4px; margin-bottom: 4px; }
 .lede-cell { flex: 1 1 150px; min-width: 120px; border-left: 3px solid var(--border); padding: 2px 0 2px 12px; background: var(--bg-elevated); border-radius: 2px; }
 .lede-accent { border-left-color: var(--blue); }
