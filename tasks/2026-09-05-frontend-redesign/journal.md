@@ -158,3 +158,22 @@
 
 ### 收尾
 - 按指示跳过 pitfalls（纯 CSS 2 条、无新坑）。
+
+## 任务 T2（去行内标注，纠正 T 方案；纯前端）
+
+### 根因
+- T 方案用 `.src-sub` 绝对定位把「（09-04收盘）」左置格内，虽对齐但仍属行内标注、语义冗余；用户纠正：收盘价列应恢复纯数字右对齐、零标注，来源语义上移标题 + title 提示。
+
+### 改法（web/templates/index.html + web/static/style.css）
+- renderOverview：删除 valCell 内 `src-sub` span；td.val 改为带 `title="数据回填自 {srcDate}"`（有回填时）。
+- 收集本批 `srcDates` 集合；渲染后若非空，把 `#overview-sub` 文案更新为 `· 最新交易日（部分标的回填至 {join}）`；全当日数据保持 `· 最新交易日`。h2-sub 加 `id="overview-sub"`。
+- style.css：删 `.src-sub` 规则（td.num.val 的 position:relative 保留，无副作用）。
+
+### 验证
+- grep：全仓无 `src-sub` 残留。node --check（rfind 越 `</script>` 字面量）：OK。
+- 浏览器（新端口 8061，tab.evaluate 主世界）：10 行 td.val 内无 span；数字右缘差 = 0（完全对齐）；`#overview-sub` 文本 = `· 最新交易日（部分标的回填至 2026-09-04）`；7 行（标普/纳指/VIX/VXN/MOVE/GLD/BTC）td 带 `title="数据回填自 2026-09-04"`，A股 3 行无 title。
+- pytest tests/test_web.py：49 passed（1 条既有弃用告警，无关）。
+- git status：代码改动仅 `web/templates/index.html` + `web/static/style.css`（`plan.md` M 为既有、非本次）。
+
+### 收尾
+- 按指示删规则无坑、跳过 pitfalls。

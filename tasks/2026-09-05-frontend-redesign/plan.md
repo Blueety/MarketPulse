@@ -192,3 +192,38 @@ R-1（②列数定夺后）：表格列数/名称列单行 → R-2（③④）le
 1. 8004 新端口 + `tab.evaluate`：`#overview-body tr td.val` 内无 span 子元素、10 行文本右缘一致（Range 量化差 ≤1px）；`#overview h2-sub` 含「回填至 09-04」；`td.val[title]` 存在且值=09-04。
 2. 全当日数据场景（周一开盘后无回填）：h2-sub 回落「· 最新交易日」、无 title——验证时以单测/临时数据或代码审查覆盖分支。
 3. 截图对比；排序/涨跌幅列无涉。
+---
+
+## 【任务 U：自选股加载慢】（只读分析，未改代码）
+
+### 现象与时序定位
+- 前端：主数据（/api/history L997、/api/latest L1004、/api/alerts L1089）各自独立 fetch 不互阻 → 概览/趋势/告警秒出；/api/watchlist（L1105）独立 fetch + 12s 前端超时（L1106-1108），**自选股区渲染与 lede 自选格须等该响应 resolve** → 其它模块先出、自选股「过一会」。
+- 后端：`/api/watchlist` → `fetch_watchlist`（fetcher.py:609-645）**无缓存/TTL，每次请求实时取数**；A股 515300.SS 走 `_fetch_a_share_watch`（L582-606）：新浪（akshare 内部 requests **无 timeout**，同 L435 板块注释）→ 外层 daemon 线程 `join(SECTOR_TIMEOUT=10s)`（L89/643）截断；新浪失败 pass 后**回退 Yahoo 双主机轮换**（L605-606，主机级 403/429 重试 + sleep(1)）→ 单标的整链最坏吃满 10s。
+
+### 根因一句话
+`/api/watchlist` 每次页面加载实时打新浪/Yahoo 且无缓存；A 股路径新浪阻塞（无 timeout）至外层 10s 截断、失败再叠加 Yahoo 回退轮换 → 慢请求；前端虽已并发，但自选股 UI（含 KPI 自选格）仍须等该响应后才挂载。
+
+### 最小优化（推荐 ①+③ 组合）
+**① 后端短 TTL 内存缓存（首选）**：`web/app.py` `/api/watchlist` 加 60-120s TTL 模块级缓存（`_cache = {"ts": 0, "payload": None}`；命中且 <TTL 直返；未命中取数成功后写缓存；取数失败且有旧缓存 → 回退旧缓存 + payload 标 stale）。页面刷新/重复打开不再实时打新浪；首次访问仍有真实耗时（可接受）。并发共享加 `threading.Lock` 防击穿。改动约 10 行、只动 app.py、不动 fetcher。注意：uvicorn 默认单 worker（本项目部署单进程）缓存一致；若日后多 worker 各持一份，语义仍正确仅各自首访慢。
+
+**③ 前端渲染解耦**：`renderLede`/lede 自选格不等 watch——/api/latest 到即先画 3 格（自选格占位「—」），watchlist 响应到达后单独补画 lede 第 4 格 + watchlist 区（现状 state.watch 复用已具备，改渲染触发顺序）。自选股卡本身渲染前显示「加载中…」骨架（现状占位若为空则补）。改动 index.html renderLede/watchlist 挂载处。
+
+**②（可选，不推荐先做）**：`_fetch_a_share_watch` 新浪失败不叠加回退 Yahoo（或 A股 watchlist 直切 Yahoo 源），可减半最坏耗时——但牺牲新浪代理兼容与数据（H 任务已证新浪沪 ETF 日线停更、Yahoo 同停）→ 收益有限，暂缓。
+
+### 改动前后对比
+| | 前 | 后 |
+|---|---|---|
+| 重复打开/刷新页面 | 每次实时打新浪（1-10s），自选股区晚出 | 60-120s 内缓存直返（<50ms），自选股与主模块几乎同时出 |
+| 首次访问 | 同左 | 同左（不可免，受新浪 10s 上限约束） |
+| lede KPI | 若等 watch 才画自选格 | latest 到先画 3 格、自选格异步补画 |
+
+### 验证
+1. 连续 `curl -w %{time_total} /api/watchlist` ×2：首次（取数耗时）、二次 <50ms（缓存命中）；60s 后第三次回到取数耗时。
+2. 页面加载（8004 新端口 + Network 面板/performance API）：概览/趋势渲染时间 ≈ 旧基线（不被 watchlist 拖慢）；自选股区在 watchlist resolve 后补挂。
+3. 取数失败场景（断网模拟或新浪超时）：接口返回旧缓存 payload + `stale` 标记、前端不报「数据暂缺」崩溃；无缓存时回退「数据暂缺」（现状语义）。
+4. `pytest tests/ -v` 回归（test_web 若断言 api_watchlist 调用次数/新参数需同步——预计新增 TTL 参数默认兼容）。
+
+### 风险
+- 缓存使数据最长旧 60-120s：盘中用户强刷想要最新价 → 命中缓存旧值；可接受（看板用途分钟级）或提供 `?fresh=1` 绕过（可选）。
+- 前端补画 lede 自选格：需处理 watch 到达前格子的占位与到达后的重绘不闪烁（transition 200ms 内完成）。
+- 12s 前端超时 > 后端 10s 限时 → 前端超时分支实际几乎不触发（后端先返），保留作兜底。
