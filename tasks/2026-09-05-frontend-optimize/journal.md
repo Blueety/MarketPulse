@@ -1,5 +1,13 @@
 # 任务日志：前端优化（清理 + 去重 + JS 抽离），2026-09-05
 
+## 追加：概览表收盘价列居中（同日晚间用户反馈）
+- 用户反馈「收盘价列不够居中」。**实测排查**：文字在单元格内已精确居中（偏差 ≤1px），真因是**列在表格中偏右 114px**——auto 表格布局把富余宽度大半分给指数列（内容 ~150px 却占 402px/近半表宽）。
+- 修复：`#overview .data-table` 宽屏（≥769px）改 `table-layout: fixed` + 三列 33/34/33；移动端不受影响（media 外无全局改动）。
+- 验证（8023 本地 + 用户同视口 1158px）：三列 285/293/285，收盘价列中心 = 表格中心（偏差 **-0.2px**），截图目视对称。
+- 教训：用户说「不居中」未必是 text-align 问题；先量列几何（th/td Range rect vs 列 rect vs 表 rect），再定性。
+- IAB 截图 surface 卡死一次：同标签反复超时提示"previous screenshot still completing"，关标签重开解决。
+- 未手动 push；cron 自动机制扫入推送后线上生效。
+
 ## 追加：默认四图全显（同日晚间用户需求）
 - `app.js` `DEFAULT_GROUPS` 从 `["chart-gspc-ixic","chart-sh-sz-cyb"]` 改为 `GROUPS.map(g=>g.id)`（推翻此前 R-3「默认两图」决策，用户定夺）。
 - 顺手修：`.chart-box h3` 加 `white-space:nowrap + flex-shrink:0`——四图全显后波动率组 meta 最长，把「波动率」标题挤成竖排；修复后单行。
