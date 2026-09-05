@@ -203,3 +203,8 @@
 - **图表色随主题：漏改即图例/线色违和**：切换 Light/Dark 若只改 UI token 不重渲染 Chart.js，线/柱/图例色与主题错位（P2 实测）。修法：theme-toggle 切换后 `if(state.history) renderCharts()` 重渲染；COLORS 拆 LIGHT/DARK 双数组 + `colors()` 取。
 - **renderOverview 函数名误用（esc vs escapeHtml）**：重构误用 `esc()`，实际是 `escapeHtml()`→运行时 ReferenceError 表格卡"加载中"。修法：统一 `escapeHtml`；改动后用浏览器 `tab.evaluate` 看表格是否真正渲染（而非只看 200）。
 - **sparkline 绘制循环守卫（单卡序列缺失即崩）**：KPI sparkline `paint` 遍历各 canvas，若某卡 series 为 `undefined`（如历史接口未就绪、watch 卡先渲染时 index 卡无序列），`drawOneSpark` 直接读 `values.length` 抛 TypeError，中断整个 forEach → 全部卡空白且后续 `withHist` 合并 history 永不执行。修法：`drawOneSpark` 顶部加 `if(!values||!values.length){clearRect;return}` 守卫；单卡缺失只清空该卡不阻断其余。
+
+- **趋势图默认只显两图（任务 R-3）**：charts-grid 默认四组全显、50/50 反而挤扁。修法：`state.selected` 初值改为 `{gspc,ixic,sh,sz,cyb}` 仅两主板；空组（无选中指标）用 `.chart-box:has(.chart-empty){display:none}` 隐藏整格（不改 `renderGroup`/`:has()` 受现代 Chromium 支持）；副作用：表格默认也只显 5 行，「全选」可恢复 10。
+- **表格趋势文本单行（任务 R-1）**：trend-sub（连跌N日）移回名称列，若 `.data-table td.name` 为 `flex-direction:column` 会换行 → 行高参差（I.5/I.6 教训）。修法：`td.name` 改 `flex-direction:row; align-items:baseline; gap:8px; white-space:nowrap`，趋势文本内联单行。
+- **移动端 KPI 卡高不一致（任务 R-2/R-5）**：375 屏 sparkline 占 64px + padding 挤压 info 列 → 值/标签换行 → 卡高参差；且 768 块 `.lede-val{22px}` 源序在 480 块后，覆盖 480 的 20px。修法：480 块 spark 改 40px、`.lede-val{font-size:16px !important; white-space:nowrap}`、`.lede-label/.lede-sub{nowrap+ellipsis}` → 卡高一致(84x4)。
+- **nav active 须 var(--blue) 且 SVG 随 currentColor（任务 R-4）**：active 文字若用 text-primary 不显蓝；图标 `<svg>` 用 `stroke="currentColor"` 才能随 active 变蓝。修法：`.nav-item.active{color:var(--blue)}` + SVG currentColor。

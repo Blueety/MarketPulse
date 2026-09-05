@@ -67,3 +67,33 @@
 - 图表图例为 Chart.js 默认（彩色方块+文字），未做"灰标签+彩色点 2px"自定义图例；如需严格贴合 PRD §九可后续加。
 - sparkline 已完成（KPI 卡底部迷你折线，数据缺失优雅留空；见上节）。
 - 侧栏 disabled 菜单（新闻/宏观/日历/设置）为灰态占位，等对应功能后再接。
+
+## 任务 R 收敛（按效果图差异对照收口；纯前端，不动后端）
+目标：把 P1-P4 产物收敛到用户定夺的目标效果图。用户定夺：表格回 3 列（指数/收盘价/涨跌幅）。
+
+### 改动清单（仅 web/templates/index.html + web/static/style.css）
+- R-1 表格 3 列：`renderOverview` 删「涨跌/状态」th+td；「最新价」→「收盘价」；趋势文本(连跌N日)经 `st.match(/连[涨跌]\d+日/)` 提取后内联进名称列单行小字（`.data-table td.name` 改 `flex-direction:row; white-space:nowrap` 防行高参差）；td.num/th.num 右对齐保留；3 处 colspan=5→3（加载中/暂无/无选中/失败）。
+- R-2 KPI 卡：`renderLede` 输出包 `.lede-info`（label+val+sub）与右侧 `<canvas class="kpi-spark">`；`.lede-cell` 改 `display:grid; grid-template-columns:1fr 96px; align-items:center`；去 `border`（border:none），背景提亮靠色阶——新增 `--bg-kpi` token（Light #FFFFFF / Dark #1A2436）；左 2px accent 线保留。
+- R-3 趋势区默认两图：`state.selected` 初值改 `{gspc,ixic,sh,sz,cyb}`（仅两主板）；空组（无选中指标）用 `.chart-box:has(.chart-empty){display:none}` 隐藏整格（不改 renderGroup）；图高 340px 已 ≥320 满足。
+- R-4 控件/图标/侧栏底：
+  - 图例 chips 已含彩色圆点+灰标签+未选中 opacity .35（P3 既有），无需改。
+  - `.nav-item.active{color:var(--blue)}`；SVG `stroke="currentColor"` 随字变蓝。
+  - 刷新/主题按钮换 20px 圆形内联 SVG（替换 ⟳/☀️ emoji）；`.icon-btn` 改 20px 圆；`#menu-toggle` 28px 单独保留。
+  - 侧栏底部加 `.sidebar-footer`：主题切换按钮（复用 #theme-toggle handler，点它即 `themeBtn.click()`）+ `#sidebar-updated`（refresh 成功后写 HH:MM）；`#sidebar` 加 `display:flex;flex-direction:column` 把 footer 推到底。
+  - 顶栏加 24px 方形 accent 「M」字标（`.brand-logo`）。
+  - 「自定义对比下拉」：降级保留现有 chips 多选 UI（已满足多选+彩色圆点），未另做 dropdown 面板（按方案逃逸条款标注）。
+- 主题微调（①⑨）跳过：现状 dark #0B0F14 系列接受，未改 token 干预 #0f172a。
+
+### 副作用（需告知）
+- R-3 共享 `state.selected` 同时驱动表格行：`state.selected` 初值只含两主板 → **表格默认只显 5 行**（标普/纳指/上证/深证/创业板）；点「全选」恢复 10 行。single-source 设计，无法既默认两图又表 10 行而不解耦。
+
+### 验证
+- node --check 整文件 OK（rfind 越过 `</script>` 字面量取末段）。
+- 浏览器（新端口防缓存 8024/8025/8026，tab.evaluate 主世界断言）：
+  - 1280：th=[指数,收盘价,涨跌幅]、rowCount=5、上证/深证/创业板 名称列含「连跌1日」单行；`.lede-cell` display=grid / border 0 / bg #1A2436；sparkline 在 info 右侧且 drawn；trend 图可见 2（美股/A股）+ 自选图常显；nav active 色 rgb(59,130,246)；侧栏底切换+更新时间「更新 HH:MM」；header SVG 图标；brand-logo 存在；侧栏主题按钮点击 dark→light 且 sparkline 重绘。
+  - 375：4 卡等高 84px、grid `1fr 40px`、val 16px 不溢出、3 列、trend 图可见 3（2 trend + watchlist）。
+  - 2560：shell 铺满（main=viewport−sidebar，无 max-width 上限）；light 主题 body #F7F8FA / KPI #FFF / nav #1677FF / sparkline 重绘。
+- 全流程 pytest：449 passed / 0 failed（8 条既有警告，无新增）。
+
+### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
+- R-3 两图默认 + `:has(.chart-empty)` 隐空组；R-1 趋势文本单行（td.name flex-row nowrap）；R-2/R-5 移动端卡高一致（480 块 spark 40 + lede-val 16px !important + label/sub nowrap，避 768 块 22px 覆盖）；R-4 nav active var(--blue)+SVG currentColor。

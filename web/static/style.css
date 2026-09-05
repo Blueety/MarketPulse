@@ -493,6 +493,7 @@ body {
   .lede-cell { grid-template-columns: 1fr 40px; }
   .lede-val { font-size: 16px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .kpi-spark { width: 40px; }
+  .lede-label, .lede-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .topbar h1 { font-size: 12px; }
   .meta-item { font-size: 10px !important; }
   .col-status { display: none; }
