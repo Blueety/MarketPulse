@@ -53,7 +53,17 @@
 4. 侧栏基础规则是 #sidebar(id) 而 768 媒体用 .sidebar(class) → id 特异性压过 class，移动端不 fixed；统一改 #sidebar。
 5. .shell 基础 align-items:flex-start，移动端变 column 后 main 不横向拉伸→按表格 nowrap 撑到 512 溢出；768 加 align-items:stretch 修复。
 
+## Sparkline（KPI 卡迷你走势图）
+- 数据源：index 卡(GSPC/VIX/SH) 复用 refresh() 已加载的 state.history.series（key=小写 symbol：gspc/vix/sh）；第 4 卡(515300.SS) 走 watch.trend.series（key=515300.ss）。若 state.history 未就绪则降级 fetch /api/history?days=30 一次。
+- 渲染：每卡底部加 `<canvas class="kpi-spark" data-sym>`；原生 canvas 画最简折线（1.5px、无轴/网格/标签），高度固定 40px、宽度随卡 100%。颜色取该卡 `.lede-sub` 计算色（pos→绿 / neg→红），无方向用 --muted；主题切换时 `repaintSparklines()` 重读计算色重绘（在 theme-toggle handler 内 renderCharts 之后调用）。
+- CSS：`.kpi-spark{width:100%;height:40px;display:block;margin-top:8px}`；卡片总高桌面/移动一致（375 实测 4 卡等高 141px）。
+- 缺失兜底：序列全 null/不足 2 点 → clearRect 留空，不崩；单卡缺失不阻断其余（drawOneSpark 顶部守卫）。
+验证：
+- node --check 整文件 OK。
+- 浏览器 8023：1280 下 4 卡各 1 canvas（w=201/h=40，drawn=true）；375 下 4 卡等高 141px、canvas w=113 drawn=true；主题切换后 sparkline 仍绘制（切到 light）。
+- 全流程 pytest 449 passed / 0 failed。
+
 ## 风险/后续
 - 图表图例为 Chart.js 默认（彩色方块+文字），未做"灰标签+彩色点 2px"自定义图例；如需严格贴合 PRD §九可后续加。
-- sparkline 按默认处理未做（PRD 标可选）。
+- sparkline 已完成（KPI 卡底部迷你折线，数据缺失优雅留空；见上节）。
 - 侧栏 disabled 菜单（新闻/宏观/日历/设置）为灰态占位，等对应功能后再接。

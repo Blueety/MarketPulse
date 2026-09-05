@@ -202,3 +202,4 @@
 - **flex column 下 main 不拉伸溢出（align-items:flex-start）**：`.shell` 基础 `align-items:flex-start`，移动端 `flex-direction:column` 后 main 不横向拉伸→按内容（表格 nowrap）撑到 512 横向溢出。修法：768 媒体 `.shell` 加 `align-items:stretch`，main 强制满宽 375 无溢出。
 - **图表色随主题：漏改即图例/线色违和**：切换 Light/Dark 若只改 UI token 不重渲染 Chart.js，线/柱/图例色与主题错位（P2 实测）。修法：theme-toggle 切换后 `if(state.history) renderCharts()` 重渲染；COLORS 拆 LIGHT/DARK 双数组 + `colors()` 取。
 - **renderOverview 函数名误用（esc vs escapeHtml）**：重构误用 `esc()`，实际是 `escapeHtml()`→运行时 ReferenceError 表格卡"加载中"。修法：统一 `escapeHtml`；改动后用浏览器 `tab.evaluate` 看表格是否真正渲染（而非只看 200）。
+- **sparkline 绘制循环守卫（单卡序列缺失即崩）**：KPI sparkline `paint` 遍历各 canvas，若某卡 series 为 `undefined`（如历史接口未就绪、watch 卡先渲染时 index 卡无序列），`drawOneSpark` 直接读 `values.length` 抛 TypeError，中断整个 forEach → 全部卡空白且后续 `withHist` 合并 history 永不执行。修法：`drawOneSpark` 顶部加 `if(!values||!values.length){clearRect;return}` 守卫；单卡缺失只清空该卡不阻断其余。

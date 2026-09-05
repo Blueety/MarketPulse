@@ -328,6 +328,7 @@
     }
     function drawOneSpark(cv, values, color) {
       if (!cv) return;
+      if (!values || !values.length) { var c0 = cv.getContext('2d'); if (c0) c0.clearRect(0, 0, cv.width, cv.height); return; }
       var ctx = cv.getContext('2d');
       var pts = [];
       for (var i = 0; i < values.length; i++) { if (values[i] != null) pts.push(values[i]); }
