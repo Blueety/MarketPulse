@@ -177,3 +177,21 @@
 
 ### 收尾
 - 按指示删规则无坑、跳过 pitfalls。
+
+## 任务 U（自选股加载慢优化：后端 TTL 缓存 + 前端渲染解耦）
+
+### 改动
+1. web/app.py `/api/watchlist` 加模块级 TTL 缓存（_WATCH_TTL=90s + _watch_cache + _watch_lock 防并发击穿）：命中且未过期直返；未命中取数。取数失败（_watch_failed：hidden=False 但 stocks 空）→ 有旧缓存回退旧缓存 + `stale:true`，无旧缓存回退降级空结构（与原端点一致，HTTP 200）。缓存仅存成功结果。
+2. web/templates/index.html renderLede：watch 未到达 / 取数失败 → 第 4 格（自选）占位「—」/「加载中…」；watchlist 到达后由 success 分支 `renderLede(state.latest, data)` 补画真实值。概览/趋势仍由 /api/latest 先渲染、不被自选拖慢（watchlist 并行 fetch）。
+3. tests/test_web.py 加 autouse fixture `_reset_watch_cache`：TTL 缓存是模块级状态，跨测试泄漏会污染端点断言（L714/L733），每个测试前清空。
+
+### 验证
+- 后端实测（8071）：cold 取数 4.50s → 缓存命中 0.008s → 62s 后 0.006s（TTL=90s 内仍命中）。body `hidden=False stocks=1 stale=None`。
+- 受控 Python 证明：过期缓存 + 取数失败 → `stale=True` 且回退旧数据；无缓存失败 → 降级空结构（hidden=False, stocks=[], 无 stale）。命中路径不触发取数。
+- 前端：`renderLede(latest,null)` 第 4 格 = `{自选, —, 加载中…}`；`renderLede(latest,state.watch)` → `{红利低波ETF, 1.33, +0.08%}`。运行时真实取数后自动补值。
+- `node --check` 内联脚本 OK；`pytest tests/test_web.py` 49 passed（新增 reset fixture 后端点断言仍绿）。
+- 范围：仅 web/app.py + web/templates/index.html + tests/test_web.py。
+
+### 新坑（已补 docs/pitfalls.md 模块 web/前端重构 节）
+- 模块级 TTL 缓存跨测试泄漏：缓存是模块级状态，pytest 单进程共享 → 污染端点断言。修法：autouse fixture 每测试前清空 `_watch_cache`。
+- 前端解耦骨架：自选格首屏占位「—」避免布局跳动；watchlist 并行取数不阻塞概览/趋势，到达后单独补画第 4 格。

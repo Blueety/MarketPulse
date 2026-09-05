@@ -211,3 +211,5 @@
 - **移动端 KPI 卡高不一致（任务 R-2/R-5）**：375 屏 sparkline 占 64px + padding 挤压 info 列 → 值/标签换行 → 卡高参差；且 768 块 `.lede-val{22px}` 源序在 480 块后，覆盖 480 的 20px。修法：480 块 spark 改 40px、`.lede-val{font-size:16px !important; white-space:nowrap}`、`.lede-label/.lede-sub{nowrap+ellipsis}` → 卡高一致(84x4)。
 - **nav active 须 var(--blue) 且 SVG 随 currentColor（任务 R-4）**：active 文字若用 text-primary 不显蓝；图标 `<svg>` 用 `stroke="currentColor"` 才能随 active 变蓝。修法：`.nav-item.active{color:var(--blue)}` + SVG currentColor。
 - **趋势文本误染红底（row-flash 误配连跌）+ 休市绿字**：renderOverview 行级红底 `row-flash` 条件含 `/连[涨跌]\d+日/`，把 A股「连跌1日」当异动整行染红；且 `cls` 涨跌色独立于 `chgCell` 文案，周末/回填行（chg≥0）显示绿字「休市」与红底矛盾。修法：`row-flash` 仅留 `st.indexOf("异动")>=0`；`cls=(isWeekend||srcDate)?"":(涨跌色)` 与 `chgCell` 同条件（休市/未收盘中性色），连跌趋势已在名称列 `trend-sub` 小字表达。
+- **模块级 TTL 缓存跨测试泄漏**：`/api/watchlist` 的缓存是模块级 `_watch_cache`，pytest 单进程跑多测试共享 → 前一测试缓存污染后一测试端点断言（hidden/空结构误判）。修法：test_web.py 加 autouse fixture `_reset_watch_cache` 每测试前清空。
+- **自选格首屏占位避免布局跳变（任务 U 前端解耦）**：watchlist 取数慢/失败若直接留空白会让 KPI 卡第 4 格在「有/无」间跳动。修法：renderLede 在 watch 未到达 / 取数失败时渲染占位「—」/「加载中…」，watchlist 并行取数到达后由 success 分支 `renderLede(state.latest,data)` 单独补画真实值，概览/趋势不被拖慢。
