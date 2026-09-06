@@ -4,12 +4,12 @@
     "GSPC": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "IXIC": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "SH": {
       "value": 3930.1164,
@@ -29,27 +29,27 @@
     "VIX": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "VXN": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "MOVE": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "GLD": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     },
     "BTC": {
       "value": null,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "休市"
     }
   },
   "history_30d": {
@@ -487,9 +487,29 @@
     "金融 surge 2026-09-05",
     "军工 drop 2026-09-05"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.55,
+      "n": 27
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "红利低波ETF",
+        "value": null,
+        "change_pct": null,
+        "corr": {
+          "benchmark": null,
+          "r": null,
+          "n": 0
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
       "avg_r": null
