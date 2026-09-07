@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3935.7578,
-      "change_pct": 0.14354282229401594,
+      "value": 3932.6992,
+      "change_pct": 0.06571815531977969,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 13779.261,
-      "change_pct": 1.940464611556047,
+      "value": 13774.915,
+      "change_pct": 1.9083124330610046,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3399.585,
-      "change_pct": 3.4394467626499137,
+      "value": 3398.681,
+      "change_pct": 3.4119406817978577,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3930.1164,
       3930.1164,
       3930.1164,
-      3935.7578
+      3932.6992
     ],
     "sz": [
       13448.289,
@@ -307,7 +307,7 @@
       13516.969,
       13516.969,
       13516.969,
-      13779.261
+      13774.915
     ],
     "cyb": [
       3302.553,
@@ -339,7 +339,7 @@
       3286.546,
       3286.546,
       3286.546,
-      3399.585
+      3398.681
     ],
     "gld": [
       371.7099914550781,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "通信/电子",
-        "change": 3.62,
-        "turnover": "3125.0亿",
+        "change": 3.68,
+        "turnover": "3387.7亿",
         "top_stock": "科泰电源"
       },
       {
         "name": "农业",
-        "change": 2.57,
-        "turnover": "524.9亿",
+        "change": 2.58,
+        "turnover": "565.5亿",
         "top_stock": "智慧农业"
       },
       {
         "name": "地产/基建",
         "change": 2.32,
-        "turnover": "131.0亿",
+        "turnover": "143.6亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "光伏/新能源",
-        "change": 2.11,
-        "turnover": "3963.9亿",
+        "change": 2.17,
+        "turnover": "4357.3亿",
         "top_stock": "新赛股份"
       },
       {
         "name": "其他",
-        "change": 0.96,
-        "turnover": "18496.3亿",
+        "change": 0.97,
+        "turnover": "20211.8亿",
         "top_stock": "金 螳 螂"
       }
     ],
     "losers": [
       {
         "name": "消费",
-        "change": -0.69,
-        "turnover": "191.3亿",
+        "change": -0.74,
+        "turnover": "212.0亿",
         "top_stock": "西安饮食"
       },
       {
         "name": "资源/有色",
-        "change": -0.3,
-        "turnover": "440.4亿",
+        "change": -0.22,
+        "turnover": "488.4亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "医药",
-        "change": -0.0,
-        "turnover": "855.8亿",
+        "change": 0.01,
+        "turnover": "947.1亿",
         "top_stock": "健康元"
       },
       {
         "name": "金融",
-        "change": 0.03,
-        "turnover": "1901.7亿",
-        "top_stock": "好当家"
+        "change": 0.01,
+        "turnover": "2072.7亿",
+        "top_stock": "中鼎股份"
       },
       {
         "name": "军工",
-        "change": 0.69,
-        "turnover": "1789.5亿",
+        "change": 0.74,
+        "turnover": "1960.9亿",
         "top_stock": "天通股份"
       }
     ]
