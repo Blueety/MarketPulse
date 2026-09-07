@@ -2,9 +2,9 @@
   "date": "2026-09-07",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7718.6,
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "IXIC": {
       "value": 26506.99,
@@ -211,7 +211,7 @@
       7718.6,
       null,
       7718.6,
-      null
+      7718.6
     ],
     "ixic": [
       25913.900390625,
