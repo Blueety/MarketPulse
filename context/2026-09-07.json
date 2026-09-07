@@ -7,24 +7,24 @@
       "status": "未开盘"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26506.99,
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "SH": {
-      "value": 3932.6992,
-      "change_pct": 0.06571815531977969,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "SZ": {
-      "value": 13774.915,
-      "change_pct": 1.9083124330610046,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "CYB": {
-      "value": 3398.681,
-      "change_pct": 3.4119406817978577,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "VIX": {
       "value": null,
@@ -243,7 +243,7 @@
       26506.99,
       null,
       26506.99,
-      null
+      26506.99
     ],
     "sh": [
       3809.663,
@@ -411,81 +411,15 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [
-      {
-        "name": "通信/电子",
-        "change": 3.68,
-        "turnover": "3387.7亿",
-        "top_stock": "科泰电源"
-      },
-      {
-        "name": "农业",
-        "change": 2.58,
-        "turnover": "565.5亿",
-        "top_stock": "智慧农业"
-      },
-      {
-        "name": "地产/基建",
-        "change": 2.32,
-        "turnover": "143.6亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": 2.17,
-        "turnover": "4357.3亿",
-        "top_stock": "新赛股份"
-      },
-      {
-        "name": "其他",
-        "change": 0.97,
-        "turnover": "20211.8亿",
-        "top_stock": "金 螳 螂"
-      }
-    ],
-    "losers": [
-      {
-        "name": "消费",
-        "change": -0.74,
-        "turnover": "212.0亿",
-        "top_stock": "西安饮食"
-      },
-      {
-        "name": "资源/有色",
-        "change": -0.22,
-        "turnover": "488.4亿",
-        "top_stock": "亚盛集团"
-      },
-      {
-        "name": "医药",
-        "change": 0.01,
-        "turnover": "947.1亿",
-        "top_stock": "健康元"
-      },
-      {
-        "name": "金融",
-        "change": 0.01,
-        "turnover": "2072.7亿",
-        "top_stock": "中鼎股份"
-      },
-      {
-        "name": "军工",
-        "change": 0.74,
-        "turnover": "1960.9亿",
-        "top_stock": "天通股份"
-      }
-    ]
+    "gainers": [],
+    "losers": []
   },
   "us_sector_heat": {
     "gainers": [],
     "losers": []
   },
   "search_keywords": [
-    "通信/电子 surge 2026-09-07",
-    "农业 surge 2026-09-07",
-    "地产/基建 surge 2026-09-07",
-    "光伏/新能源 surge 2026-09-07",
-    "其他 surge 2026-09-07"
+    "market summary 2026-09-07"
   ],
   "correlation": [],
   "watchlist": {
