@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3930.116,
-      "change_pct": -1.01778155959857e-05,
+      "value": 3920.7015,
+      "change_pct": -0.23955779019674228,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 13639.809,
-      "change_pct": 0.9087836185760294,
+      "value": 13703.207,
+      "change_pct": 1.3778088860010052,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3340.433,
-      "change_pct": 1.639624091675582,
+      "value": 3373.12,
+      "change_pct": 2.6341940748737454,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3930.1164,
       3930.1164,
       3930.1164,
-      3930.116
+      3920.7015
     ],
     "sz": [
       13448.289,
@@ -307,7 +307,7 @@
       13516.969,
       13516.969,
       13516.969,
-      13639.809
+      13703.207
     ],
     "cyb": [
       3302.553,
@@ -339,7 +339,7 @@
       3286.546,
       3286.546,
       3286.546,
-      3340.433
+      3373.12
     ],
     "gld": [
       371.7099914550781,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "农业",
-        "change": 1.73,
-        "turnover": "215.3亿",
-        "top_stock": "亚盛集团"
-      },
-      {
         "name": "通信/电子",
-        "change": 1.6,
-        "turnover": "774.7亿",
+        "change": 2.95,
+        "turnover": "2144.2亿",
         "top_stock": "科泰电源"
       },
       {
+        "name": "农业",
+        "change": 2.03,
+        "turnover": "416.0亿",
+        "top_stock": "智慧农业"
+      },
+      {
         "name": "地产/基建",
-        "change": 1.3,
-        "turnover": "47.7亿",
+        "change": 2.01,
+        "turnover": "102.8亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.64,
-        "turnover": "1048.8亿",
-        "top_stock": "五洲新春"
+        "change": 1.8,
+        "turnover": "2778.8亿",
+        "top_stock": "高澜股份"
       },
       {
         "name": "其他",
-        "change": 0.22,
-        "turnover": "4717.8亿",
-        "top_stock": "中工国际"
+        "change": 0.62,
+        "turnover": "13039.1亿",
+        "top_stock": "金 螳 螂"
       }
     ],
     "losers": [
       {
-        "name": "资源/有色",
-        "change": -0.91,
-        "turnover": "116.5亿",
-        "top_stock": "亚盛集团"
-      },
-      {
         "name": "消费",
-        "change": -0.78,
-        "turnover": "52.8亿",
+        "change": -1.02,
+        "turnover": "134.8亿",
         "top_stock": "*ST瑞茂"
       },
       {
-        "name": "军工",
-        "change": -0.13,
-        "turnover": "550.0亿",
-        "top_stock": "天通股份"
-      },
-      {
-        "name": "金融",
-        "change": -0.01,
-        "turnover": "513.3亿",
-        "top_stock": "中鼎股份"
+        "name": "资源/有色",
+        "change": -0.24,
+        "turnover": "300.0亿",
+        "top_stock": "亚盛集团"
       },
       {
         "name": "医药",
-        "change": 0.02,
-        "turnover": "242.3亿",
+        "change": -0.2,
+        "turnover": "604.3亿",
         "top_stock": "ST金花"
+      },
+      {
+        "name": "金融",
+        "change": -0.18,
+        "turnover": "1379.7亿",
+        "top_stock": "中鼎股份"
+      },
+      {
+        "name": "军工",
+        "change": 0.45,
+        "turnover": "1296.7亿",
+        "top_stock": "天通股份"
       }
     ]
   },
@@ -481,8 +481,8 @@
     "losers": []
   },
   "search_keywords": [
-    "农业 surge 2026-09-07",
     "通信/电子 surge 2026-09-07",
+    "农业 surge 2026-09-07",
     "地产/基建 surge 2026-09-07",
     "光伏/新能源 surge 2026-09-07",
     "其他 surge 2026-09-07"
