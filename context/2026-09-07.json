@@ -4,52 +4,52 @@
     "GSPC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "IXIC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "SH": {
-      "value": 3920.7015,
-      "change_pct": -0.23955779019674228,
-      "status": "连跌1日"
+      "value": 3935.7578,
+      "change_pct": 0.14354282229401594,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 13703.207,
-      "change_pct": 1.3778088860010052,
+      "value": 13779.261,
+      "change_pct": 1.940464611556047,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3373.12,
-      "change_pct": 2.6341940748737454,
+      "value": 3399.585,
+      "change_pct": 3.4394467626499137,
       "status": "连涨1日"
     },
     "VIX": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "VXN": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "MOVE": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "GLD": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "BTC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     }
   },
   "history_30d": {
@@ -275,7 +275,7 @@
       3930.1164,
       3930.1164,
       3930.1164,
-      3920.7015
+      3935.7578
     ],
     "sz": [
       13448.289,
@@ -307,7 +307,7 @@
       13516.969,
       13516.969,
       13516.969,
-      13703.207
+      13779.261
     ],
     "cyb": [
       3302.553,
@@ -339,7 +339,7 @@
       3286.546,
       3286.546,
       3286.546,
-      3373.12
+      3399.585
     ],
     "gld": [
       371.7099914550781,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "通信/电子",
-        "change": 2.95,
-        "turnover": "2144.2亿",
+        "change": 3.62,
+        "turnover": "3125.0亿",
         "top_stock": "科泰电源"
       },
       {
         "name": "农业",
-        "change": 2.03,
-        "turnover": "416.0亿",
+        "change": 2.57,
+        "turnover": "524.9亿",
         "top_stock": "智慧农业"
       },
       {
         "name": "地产/基建",
-        "change": 2.01,
-        "turnover": "102.8亿",
+        "change": 2.32,
+        "turnover": "131.0亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "光伏/新能源",
-        "change": 1.8,
-        "turnover": "2778.8亿",
-        "top_stock": "高澜股份"
+        "change": 2.11,
+        "turnover": "3963.9亿",
+        "top_stock": "新赛股份"
       },
       {
         "name": "其他",
-        "change": 0.62,
-        "turnover": "13039.1亿",
+        "change": 0.96,
+        "turnover": "18496.3亿",
         "top_stock": "金 螳 螂"
       }
     ],
     "losers": [
       {
         "name": "消费",
-        "change": -1.02,
-        "turnover": "134.8亿",
-        "top_stock": "*ST瑞茂"
+        "change": -0.69,
+        "turnover": "191.3亿",
+        "top_stock": "西安饮食"
       },
       {
         "name": "资源/有色",
-        "change": -0.24,
-        "turnover": "300.0亿",
+        "change": -0.3,
+        "turnover": "440.4亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "医药",
-        "change": -0.2,
-        "turnover": "604.3亿",
-        "top_stock": "ST金花"
+        "change": -0.0,
+        "turnover": "855.8亿",
+        "top_stock": "健康元"
       },
       {
         "name": "金融",
-        "change": -0.18,
-        "turnover": "1379.7亿",
-        "top_stock": "中鼎股份"
+        "change": 0.03,
+        "turnover": "1901.7亿",
+        "top_stock": "好当家"
       },
       {
         "name": "军工",
-        "change": 0.45,
-        "turnover": "1296.7亿",
+        "change": 0.69,
+        "turnover": "1789.5亿",
         "top_stock": "天通股份"
       }
     ]
