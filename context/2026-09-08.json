@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3946.9889,
-      "change_pct": 0.36335603801073346,
+      "value": 3937.7822,
+      "change_pct": 0.1292496512319092,
       "status": "连涨2日"
     },
     "SZ": {
-      "value": 13782.046,
-      "change_pct": 0.051768014539468325,
-      "status": "连涨2日"
+      "value": 13698.534,
+      "change_pct": -0.5544934397054444,
+      "status": "连跌1日"
     },
     "CYB": {
-      "value": 3393.501,
-      "change_pct": -0.15241206809347027,
+      "value": 3356.992,
+      "change_pct": -1.2266229163607838,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3930.1164,
       3930.1164,
       3932.6992,
-      3946.9889
+      3937.7822
     ],
     "sz": [
       13885.711,
@@ -307,7 +307,7 @@
       13516.969,
       13516.969,
       13774.915,
-      13782.046
+      13698.534
     ],
     "cyb": [
       3488.966,
@@ -339,7 +339,7 @@
       3286.546,
       3286.546,
       3398.681,
-      3393.501
+      3356.992
     ],
     "gld": [
       374.1600036621094,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 2.67,
-        "turnover": "491.9亿",
-        "top_stock": "海南橡胶"
-      },
-      {
-        "name": "地产/基建",
-        "change": 2.41,
-        "turnover": "133.9亿",
-        "top_stock": "海南橡胶"
-      },
-      {
-        "name": "资源/有色",
-        "change": 1.24,
-        "turnover": "446.1亿",
+        "change": 2.64,
+        "turnover": "671.0亿",
         "top_stock": "亚盛集团"
       },
       {
-        "name": "消费",
-        "change": 1.23,
-        "turnover": "142.1亿",
-        "top_stock": "东信和平"
+        "name": "地产/基建",
+        "change": 2.0,
+        "turnover": "179.5亿",
+        "top_stock": "亚盛集团"
       },
       {
-        "name": "军工",
-        "change": 0.9,
-        "turnover": "1348.7亿",
-        "top_stock": "海南橡胶"
+        "name": "医药",
+        "change": 1.77,
+        "turnover": "1313.5亿",
+        "top_stock": "亚泰集团"
+      },
+      {
+        "name": "消费",
+        "change": 0.82,
+        "turnover": "192.7亿",
+        "top_stock": "生 意 宝"
+      },
+      {
+        "name": "资源/有色",
+        "change": 0.78,
+        "turnover": "641.0亿",
+        "top_stock": "亚盛集团"
       }
     ],
     "losers": [
       {
-        "name": "医药",
-        "change": 0.33,
-        "turnover": "666.8亿",
-        "top_stock": "亚泰集团"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": 0.34,
-        "turnover": "3049.3亿",
-        "top_stock": "和邦生物"
-      },
-      {
         "name": "通信/电子",
-        "change": 0.39,
-        "turnover": "2245.1亿",
+        "change": -0.7,
+        "turnover": "3134.0亿",
         "top_stock": "武汉凡谷"
       },
       {
+        "name": "光伏/新能源",
+        "change": -0.2,
+        "turnover": "4447.7亿",
+        "top_stock": "和邦生物"
+      },
+      {
         "name": "其他",
-        "change": 0.64,
-        "turnover": "13553.0亿",
+        "change": 0.29,
+        "turnover": "19516.1亿",
         "top_stock": "广汇能源"
       },
       {
+        "name": "军工",
+        "change": 0.43,
+        "turnover": "1918.9亿",
+        "top_stock": "航发科技"
+      },
+      {
         "name": "金融",
-        "change": 0.65,
-        "turnover": "1401.7亿",
+        "change": 0.49,
+        "turnover": "1970.2亿",
         "top_stock": "广汇能源"
       }
     ]
@@ -483,9 +483,9 @@
   "search_keywords": [
     "农业 surge 2026-09-08",
     "地产/基建 surge 2026-09-08",
-    "资源/有色 surge 2026-09-08",
+    "医药 surge 2026-09-08",
     "消费 surge 2026-09-08",
-    "军工 surge 2026-09-08"
+    "资源/有色 surge 2026-09-08"
   ],
   "correlation": [],
   "watchlist": {
