@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3955.4711,
-      "change_pct": 0.3786323379302123,
+      "value": 3951.5068,
+      "change_pct": 0.2780296531634683,
       "status": "上升趋势"
     },
     "SZ": {
-      "value": 13733.956,
-      "change_pct": 0.22438541398480993,
+      "value": 13723.322,
+      "change_pct": 0.1467831474206593,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3358.445,
-      "change_pct": -0.03783057853698738,
+      "value": 3354.969,
+      "change_pct": -0.14129170441786876,
       "status": "连跌2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3930.1164,
       3932.6992,
       3940.5509,
-      3955.4711
+      3951.5068
     ],
     "sz": [
       14144.204,
@@ -307,7 +307,7 @@
       13516.969,
       13774.915,
       13703.208,
-      13733.956
+      13723.322
     ],
     "cyb": [
       3535.143,
@@ -339,7 +339,7 @@
       3286.546,
       3398.681,
       3359.716,
-      3358.445
+      3354.969
     ],
     "gld": [
       389.6400146484375,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "资源/有色",
-        "change": 1.16,
-        "turnover": "730.3亿",
+        "change": 1.14,
+        "turnover": "785.0亿",
         "top_stock": "闽东电力"
       },
       {
         "name": "军工",
-        "change": 1.09,
-        "turnover": "2056.5亿",
-        "top_stock": "云煤能源"
+        "change": 1.02,
+        "turnover": "2233.9亿",
+        "top_stock": "湖南天雁"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.54,
-        "turnover": "4697.2亿",
+        "change": 0.49,
+        "turnover": "5112.3亿",
         "top_stock": "新赛股份"
       },
       {
         "name": "通信/电子",
-        "change": 0.45,
-        "turnover": "3285.4亿",
+        "change": 0.41,
+        "turnover": "3577.4亿",
         "top_stock": "*ST实达"
       },
       {
         "name": "其他",
-        "change": 0.29,
-        "turnover": "19625.5亿",
+        "change": 0.26,
+        "turnover": "21348.9亿",
         "top_stock": "ST晨鸣"
       }
     ],
     "losers": [
       {
-        "name": "医药",
-        "change": -0.96,
-        "turnover": "1149.8亿",
-        "top_stock": "博腾股份"
-      },
-      {
         "name": "消费",
-        "change": -0.93,
-        "turnover": "212.0亿",
+        "change": -0.97,
+        "turnover": "228.4亿",
         "top_stock": "远东股份"
       },
       {
-        "name": "地产/基建",
-        "change": -0.52,
-        "turnover": "227.9亿",
-        "top_stock": "红棉股份"
-      },
-      {
-        "name": "农业",
-        "change": -0.3,
-        "turnover": "661.2亿",
-        "top_stock": "新农开发"
+        "name": "医药",
+        "change": -0.9,
+        "turnover": "1254.5亿",
+        "top_stock": "博腾股份"
       },
       {
         "name": "金融",
-        "change": -0.03,
-        "turnover": "1966.5亿",
+        "change": -0.05,
+        "turnover": "2137.3亿",
         "top_stock": "山煤国际"
+      },
+      {
+        "name": "农业",
+        "change": 0.01,
+        "turnover": "722.1亿",
+        "top_stock": "新农开发"
+      },
+      {
+        "name": "地产/基建",
+        "change": 0.16,
+        "turnover": "250.3亿",
+        "top_stock": "红棉股份"
       }
     ]
   },
