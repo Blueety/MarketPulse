@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3936.0569,
-      "change_pct": -0.3909875594798437,
+      "value": 3937.7793,
+      "change_pct": -0.34739912379753374,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 13643.208,
-      "change_pct": -0.5837799331677823,
+      "value": 13647.488,
+      "change_pct": -0.5525921493352757,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3340.157,
-      "change_pct": -0.4414943923475865,
+      "value": 3350.075,
+      "change_pct": -0.14587318094445084,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3932.6992,
       3940.5509,
       3951.5068,
-      3936.0569
+      3937.7793
     ],
     "sz": [
       14110.121,
@@ -307,7 +307,7 @@
       13774.915,
       13703.208,
       13723.322,
-      13643.208
+      13647.488
     ],
     "cyb": [
       3515.56,
@@ -339,7 +339,7 @@
       3398.681,
       3359.716,
       3354.969,
-      3340.157
+      3350.075
     ],
     "gld": [
       389.6700134277344,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "金融",
-        "change": -0.56,
-        "turnover": "459.2亿",
-        "top_stock": "南京银行"
-      },
-      {
         "name": "军工",
-        "change": -0.61,
-        "turnover": "498.0亿",
+        "change": -0.1,
+        "turnover": "1445.3亿",
         "top_stock": "云煤能源"
       },
       {
-        "name": "资源/有色",
-        "change": -0.69,
-        "turnover": "150.2亿",
-        "top_stock": "闽东电力"
-      },
-      {
-        "name": "其他",
-        "change": -0.73,
-        "turnover": "4617.8亿",
-        "top_stock": "太极实业"
+        "name": "金融",
+        "change": -0.46,
+        "turnover": "1320.0亿",
+        "top_stock": "南京银行"
       },
       {
         "name": "光伏/新能源",
-        "change": -0.73,
-        "turnover": "1065.7亿",
-        "top_stock": "长城电工"
+        "change": -0.47,
+        "turnover": "3004.1亿",
+        "top_stock": "华银电力"
+      },
+      {
+        "name": "消费",
+        "change": -0.74,
+        "turnover": "148.2亿",
+        "top_stock": "*ST瑞茂"
+      },
+      {
+        "name": "其他",
+        "change": -0.82,
+        "turnover": "12634.0亿",
+        "top_stock": "ST龙元"
       }
     ],
     "losers": [
       {
-        "name": "医药",
-        "change": -1.86,
-        "turnover": "279.9亿",
-        "top_stock": "百利天恒"
-      },
-      {
         "name": "农业",
-        "change": -1.65,
-        "turnover": "175.4亿",
+        "change": -2.16,
+        "turnover": "404.9亿",
         "top_stock": "新农开发"
       },
       {
+        "name": "医药",
+        "change": -1.43,
+        "turnover": "737.0亿",
+        "top_stock": "福瑞医科"
+      },
+      {
+        "name": "资源/有色",
+        "change": -1.2,
+        "turnover": "366.6亿",
+        "top_stock": "闽东电力"
+      },
+      {
         "name": "地产/基建",
-        "change": -0.96,
-        "turnover": "65.8亿",
+        "change": -1.2,
+        "turnover": "144.3亿",
         "top_stock": "红棉股份"
       },
       {
-        "name": "其他",
-        "change": -0.73,
-        "turnover": "4617.8亿",
-        "top_stock": "太极实业"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -0.73,
-        "turnover": "1065.7亿",
-        "top_stock": "长城电工"
+        "name": "通信/电子",
+        "change": -0.86,
+        "turnover": "1977.8亿",
+        "top_stock": "深科技"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "金融 drop 2026-09-10",
     "军工 drop 2026-09-10",
-    "资源/有色 drop 2026-09-10",
-    "其他 drop 2026-09-10",
-    "光伏/新能源 drop 2026-09-10"
+    "金融 drop 2026-09-10",
+    "光伏/新能源 drop 2026-09-10",
+    "消费 drop 2026-09-10",
+    "其他 drop 2026-09-10"
   ],
   "correlation": [],
   "watchlist": {
