@@ -2,54 +2,54 @@
   "date": "2026-09-09",
   "indices": {
     "GSPC": {
-      "value": 7636.66,
-      "change_pct": -0.4803532146915702,
+      "value": 7636.36,
+      "change_pct": -0.4842627633732728,
       "status": "连跌2日"
     },
     "IXIC": {
-      "value": 26249.088,
-      "change_pct": -0.6522134396148114,
+      "value": 26253.34,
+      "change_pct": -0.6361204314137341,
       "status": "连跌2日"
     },
     "SH": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3951.5068,
+      "change_pct": 0.2780296531634683,
+      "status": "上升趋势"
     },
     "SZ": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 13723.322,
+      "change_pct": 0.1467831474206593,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3354.969,
+      "change_pct": -0.14129170441786876,
+      "status": "连跌2日"
     },
     "VIX": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 16.46,
+      "change_pct": 4.707379134860052,
+      "status": "平静"
     },
     "VXN": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 22.32,
+      "change_pct": 2.809765085214184,
+      "status": "警惕"
     },
     "MOVE": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 76.7413,
+      "change_pct": 0.7853612858912065,
+      "status": "平静"
     },
     "GLD": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 403.35,
+      "change_pct": 0.9081356949864894,
+      "status": "连涨1日"
     },
     "BTC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 78303.1,
+      "change_pct": -0.22002969833873337,
+      "status": "连跌2日"
     }
   },
   "history_30d": {
@@ -115,7 +115,7 @@
       14.53,
       null,
       15.72,
-      null
+      16.46
     ],
     "vxn": [
       24.149999618530273,
@@ -147,7 +147,7 @@
       20.04,
       null,
       21.71,
-      null
+      22.32
     ],
     "move": [
       73.58000183105469,
@@ -179,7 +179,7 @@
       73.104,
       null,
       76.1433,
-      null
+      76.7413
     ],
     "gspc": [
       7723.5498046875,
@@ -211,7 +211,7 @@
       7718.6,
       7718.6,
       7673.52,
-      7636.66
+      7636.36
     ],
     "ixic": [
       26363.439453125,
@@ -243,7 +243,7 @@
       26506.99,
       26506.99,
       26421.412,
-      26249.088
+      26253.34
     ],
     "sh": [
       3878.43,
@@ -371,7 +371,7 @@
       406.77,
       null,
       399.72,
-      null
+      403.35
     ],
     "btc": [
       64597.5,
@@ -403,7 +403,7 @@
       80279.13,
       null,
       78475.77,
-      null
+      78303.1
     ]
   },
   "breach": {
@@ -411,19 +411,174 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "资源/有色",
+        "change": 1.09,
+        "turnover": "791.9亿",
+        "top_stock": "闽东电力"
+      },
+      {
+        "name": "军工",
+        "change": 1.0,
+        "turnover": "2256.8亿",
+        "top_stock": "湖南天雁"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 0.48,
+        "turnover": "5167.2亿",
+        "top_stock": "新赛股份"
+      },
+      {
+        "name": "通信/电子",
+        "change": 0.39,
+        "turnover": "3615.6亿",
+        "top_stock": "*ST实达"
+      },
+      {
+        "name": "其他",
+        "change": 0.22,
+        "turnover": "21588.3亿",
+        "top_stock": "ST晨鸣"
+      }
+    ],
+    "losers": [
+      {
+        "name": "消费",
+        "change": -1.0,
+        "turnover": "231.2亿",
+        "top_stock": "远东股份"
+      },
+      {
+        "name": "医药",
+        "change": -0.96,
+        "turnover": "1269.9亿",
+        "top_stock": "博腾股份"
+      },
+      {
+        "name": "金融",
+        "change": -0.09,
+        "turnover": "2162.8亿",
+        "top_stock": "山煤国际"
+      },
+      {
+        "name": "农业",
+        "change": -0.05,
+        "turnover": "730.8亿",
+        "top_stock": "新农开发"
+      },
+      {
+        "name": "地产/基建",
+        "change": 0.08,
+        "turnover": "253.3亿",
+        "top_stock": "红棉股份"
+      }
+    ]
   },
   "us_sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "能源 (XLE)",
+        "change": 0.83,
+        "turnover": "$1.6B",
+        "top_stock": "XLE"
+      },
+      {
+        "name": "科技 (XLK)",
+        "change": 0.0,
+        "turnover": "$1.1B",
+        "top_stock": "XLK"
+      },
+      {
+        "name": "医疗健康 (XLV)",
+        "change": -0.33,
+        "turnover": "$1.3B",
+        "top_stock": "XLV"
+      },
+      {
+        "name": "金融 (XLF)",
+        "change": -0.42,
+        "turnover": "$1.6B",
+        "top_stock": "XLF"
+      },
+      {
+        "name": "通信服务 (XLC)",
+        "change": -0.62,
+        "turnover": "$532.2M",
+        "top_stock": "XLC"
+      }
+    ],
+    "losers": [
+      {
+        "name": "工业 (XLI)",
+        "change": -1.51,
+        "turnover": "$1.1B",
+        "top_stock": "XLI"
+      },
+      {
+        "name": "可选消费 (XLY)",
+        "change": -1.34,
+        "turnover": "$860.1M",
+        "top_stock": "XLY"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": -1.17,
+        "turnover": "$725.3M",
+        "top_stock": "XLU"
+      },
+      {
+        "name": "必需消费 (XLP)",
+        "change": -1.15,
+        "turnover": "$1.0B",
+        "top_stock": "XLP"
+      },
+      {
+        "name": "房地产 (XLRE)",
+        "change": -1.12,
+        "turnover": "$253.2M",
+        "top_stock": "XLRE"
+      }
+    ]
   },
   "search_keywords": [
-    "market summary 2026-09-09"
+    "资源/有色 surge 2026-09-09",
+    "军工 surge 2026-09-09",
+    "光伏/新能源 surge 2026-09-09",
+    "通信/电子 surge 2026-09-09",
+    "其他 surge 2026-09-09"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.71,
+      "n": 23
+    },
+    {
+      "a": "MOVE",
+      "b": "VIX",
+      "pair": "MOVE（债市波动） ↔ VIX（恐慌指数）",
+      "r": 0.62,
+      "n": 23
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "红利低波ETF",
+        "value": 1.32,
+        "change_pct": 0.15,
+        "corr": {
+          "benchmark": "SH",
+          "r": -0.07,
+          "n": 16
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
       "avg_r": null
