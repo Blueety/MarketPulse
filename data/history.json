@@ -1158,15 +1158,15 @@
   },
   {
     "date": "2026-09-10",
-    "gspc": null,
-    "sz": 13635.8,
-    "btc": null,
-    "vxn": null,
-    "gld": null,
-    "sh": 3936.0569,
-    "ixic": null,
-    "move": null,
     "vix": null,
-    "cyb": 3336.354
+    "vxn": null,
+    "move": null,
+    "gspc": null,
+    "ixic": null,
+    "sh": 3936.0569,
+    "sz": 13643.208,
+    "cyb": 3340.157,
+    "gld": null,
+    "btc": null
   }
 ]
