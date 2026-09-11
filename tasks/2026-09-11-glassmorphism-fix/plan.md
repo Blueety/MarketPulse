@@ -304,14 +304,15 @@ body {
 
 #### 4.6.5 顺带发现的非玻璃差距 → **已决定：下一个任务**（需求方 2026-09-11）
 
-以下 **4 条**与玻璃无关、对照效果图可见，**本任务不做**，另开任务处理（会触及 `index.html` + `app.js`，超出玻璃化边界）：
+以下与玻璃无关、对照效果图可见。**本任务不做**（会触及 `index.html` + `app.js`，超出玻璃化边界），另开任务处理；其中**第 4 条已升级为本任务 Step G-9**：
 
 1. **每行标的缺彩色小图标**：效果图的 自选列表 / 市场概览 / 资金流向 / 行业板块 每行都有 ~16px 彩色圆角方块（按品种品牌色），当前实现没有。
 2. **趋势图 y 轴在右侧**：效果图 y 轴刻度（`+6% / +3% / 0 / -3% / -6%`）在**右**侧；当前实现在左侧。
 3. **品牌字风格**：效果图是 `MarketPulse`（常规大小写、非等宽、无字距），当前是 `MARKETPULSE`（等宽大写 + 字距）。
-4. **底部行结构差异** → **已升级为本任务范围内工作**（需求方「按效果图为准」），见 §6 **Step G-9**。
-5. **头像形状**：效果图是深色**圆角方块**，当前是蓝色**圆形**。
-6. **效果图日期仍是错的**：写 `2026-09-11 周四`，实为**周五**（与旧 plan R10 同一错误，**不要照抄**）。
+4. **底部行结构差异** → **已升级为本任务范围内工作**（需求方「按效果图为准」+ 选定方案 ② 双 tab 合并），见 §6 **Step G-9**。
+5. **头像形状**：效果图是深色**圆角方块**，当前是 `MP` 文字的**蓝色圆形**（`index.html:40`）。
+6. **侧栏导航标签与效果图不同**：效果图 nav 为 7 项（市场概览 / 自选列表 / 新闻资讯 / 宏观数据 / 市场日历 / **板块表现** / 设置）；当前实现也是 7 项但标签与分组语义差异较大（市场概览 / **市场趋势** / 市场情绪 / 美股板块 / 自选列表 / 最新资讯 / 告警记录）。**本任务只改 Step G-9 里那 1 处**（「美股板块」→「板块表现」），整体 nav 对齐另开任务。
+7. **效果图日期仍是错的**：写 `2026-09-11 周四`，实为**周五**（与旧 plan R10 同一错误，**不要照抄**）。
 
 ---
 
@@ -321,7 +322,7 @@ body {
 |---|---|---|
 | `web/static/style.css` | **改（主要）** | 412 → ≈465 行：新增 glass token 双套、`body` 氛围层（L1+L2 两层）、`.card`/`.kpi-card` 玻璃化、数据卡 `-strong` 变体、`.topbar` 玻璃化 + `#sidebar` 透明化 + 主题按钮描边统一、`.card.promo` 显式 `backdrop-filter: none`、`@supports` 降级块、退役 `--card-glow`/`--card-shadow` |
 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | **改（扩展，禁止覆盖）** | 387 行 → ≈430 行：**在原脚本上追加玻璃判据断言**（§6 Step G-1 列出的 10 条）。⚠️ 该脚本已由执行者写好并入库，**只做增量扩展** |
-| `web/templates/index.html` | **改（仅 Step G-9）** | 行 4 结构重排：`#fund-flow` / `#risk-appetite` 移入 row-3 中卡作子块，新增「市场关系」子块，`.row-news` 由 4 卡降为 2 卡。⚠️ **保留 `fund-flow-body` / `risk-appetite-body` / `news-body` 三个 id**（`app.js` 的契约） |
+| `web/templates/index.html` | **改（仅 Step G-9）** | ① `#fund-flow` / `#risk-appetite` 从行 4 移入 row-3 中卡作子块 + 新增「市场关系」子块；② 右卡 `#us-sectors` 改「行业板块表现」**双 tab**（A股 / 美股，纯 CSS `:checked`，A 股表从原中卡搬入）；③ `.row-news` 由 4 卡降为 2 卡。⚠️ **保留 `fund-flow-body` / `risk-appetite-body` / `news-body` / `sector-body` / `us-sectors-body` 五个 id**（`app.js` 契约） |
 | `web/static/app.js` | **不改** | 玻璃化纯 CSS |
 | `web/app.py` | **不改** | — |
 | `tests/` | **不改** | 无 Python 逻辑变更 |
@@ -403,42 +404,80 @@ body {
 - 加 §4.5 的降级规则。
 - **验证**：CSS 语法检查通过；在 devtools 里临时禁用 `backdrop-filter`（或改用 `@supports` 断言存在）确认降级态文字可读、卡片不塌。
 
-### Step G-9 · 底部行结构按效果图重排（`index.html` + `style.css`）
+### Step G-9 · 行 3 重排 + 板块卡双 tab 合并（`index.html` + `style.css`）
 
-**依据**：需求方 2026-09-11「**按效果图为准**」。
+**依据**：需求方 2026-09-11「按效果图为准」+ 选定 **方案 ②（双 tab 合并）**。
 
-**差异**：效果图的第 3 行中卡是「市场情绪 & 资金流向」（内含 风险偏好 gauge + 资金流向近5日 bars + 市场关系 4 个 pill），底部行只有「告警记录 + **最新资讯（宽）**」。当前实现把「资金流向 / 风险偏好」拆成了第 4 行的两张独立卡，`.row-news` 是 4 等分。
+> ⚠️ **措辞勘误（重要，照此实施，勿照旧措辞）**：我在 §12 给出的选项 ② 原文写的是「**中卡**做成『行业板块表现』双 tab」—— 那样中卡既要装「市场情绪 & 资金流向」又要装「行业板块表现」，**自相矛盾且行不通**。
+> **正解**：把「A 股热点板块表」并入**右侧卡**（现有 `#us-sectors`，本就是「美股行业板块」），合并后右侧卡 =「行业板块表现」双 tab（A股 / 美股）；**中卡腾出来**做「市场情绪 & 资金流向」。以下以本勘误为准。
 
-**改动**：
+**目标行-3 形态（3 列，对齐效果图）**：
 
-1. `index.html`：把 `#fund-flow`（当前 168-171 行）与 `#risk-appetite`（173-176 行）两个 `<section>` **移入** row-3 的中卡（当前 `#sectors`）内部，改为**子块**：
-   - 中卡 `h2` 改为「市场情绪 & 资金流向」（原副标题「· A 股热点板块 Top 5」的去留见下方**待解决项**）；
-   - 子块各用 `<h3>` 小标题：「风险偏好」「资金流向（近5日）」；
-   - 新增第 3 个子块「市场关系」，含 4 个 pill 按钮（股指vs美债 / 美元vs黄金 / VIXvs股市 / 原油vs经济）；
-   - 三个子块均保留 `data-placeholder="1"`。
-2. `style.css`：
-   - `.row-news` 由 `repeat(4, minmax(0, 1fr))` → **`≥1400px`：`1fr 2.4fr`**（告警记录窄、最新资讯宽，对齐效果图比例）；**`<1400px`：`1fr`（单列堆叠）**，避免 1280 下左卡仅 ≈292px 装不下告警文本；
-   - 中卡内部新增子块布局（纵向堆叠 + 子块间距 + `<h3>` 样式）。
+| 列 | 卡片 | 内容来源 |
+|---|---|---|
+| 左 | `#overview`「市场概览」 | **不变**（6 小卡，真实数据） |
+| 中 | `#sectors`「市场情绪 & 资金流向」 | 3 个子块 ← `#risk-appetite` + `#fund-flow` 从行 4 **搬入**；+ 新增「市场关系」子块 |
+| 右 | `#us-sectors`「行业板块表现」**双 tab** | tab「A股」← 原中卡的 `#sector-body` 表格**搬入**；tab「美股」← 原 `#us-sectors-body` **原地保留** |
 
-**`app.js` 零改动的依据（已核实 `app.js:240-250`）**：
+**改动 1 · `index.html`**：
 
-`renderPlaceholders()` 的契约是 —— `document.getElementById('<id>')` 用来改其 `h2` 文案、`document.getElementById('<id>-body')` 用来填「数据未接入」。搬迁后：
+1. 中卡 `#sectors`（当前 129-141 行）：标题改「市场情绪 & 资金流向」；**移除**原 A 股板块表；依次放入 3 个子块（各带 `<h3>` 小标题）：
+   - 「风险偏好」→ 容器 `#risk-appetite`（内含 `#risk-appetite-body`）
+   - 「资金流向（近5日）」→ 容器 `#fund-flow`（内含 `#fund-flow-body`）
+   - 「市场关系」→ 4 个 `disabled` pill 按钮（股指vs美债 / 美元vs黄金 / VIXvs股市 / 原油vs经济），**静态渲染**
+2. 右卡 `#us-sectors`（143-151 行）：标题改「行业板块表现」；改为**纯 CSS 双 tab**：
+   - DOM 结构（**radio 必须位于面板之前的同级兄弟位置**）：
+     `<input type="radio" name="sector-tab" id="sector-tab-cn" checked>` +
+     `<input type="radio" name="sector-tab" id="sector-tab-us">` →
+     `<div class="tab-labels"><label for="sector-tab-cn">A股</label><label for="sector-tab-us">美股</label></div>` →
+     `<div class="tab-panels"><div class="panel panel-cn">…A股表…</div><div class="panel panel-us">…美股列表…</div></div>`
+   - tab「A股」面板内放原 A 股板块表，**`#sector-body` 原样保留**
+   - tab「美股」面板内放 `#us-sectors-body`，**原样保留**
+3. 行 4 `.row-news`（154-177 行）：删除 `#fund-flow` / `#risk-appetite` 两个 `<section>`（已搬入中卡），只留 `#alerts` + `#news`。
+4. 侧栏导航（47-53 行）：**只改 1 处文案** —— `data-target="us-sectors"` 的 nav 标签「美股板块」→「**板块表现**」。
+   理由：重排后该卡已含 A股 / 美股 双 tab，旧标签「美股板块」只对了一半；且「板块表现」与效果图 nav 用词一致。
+   **其余 6 个 nav 项全部不动**，其中 nav「市场情绪」→ `#sectors` 在重排后**正好就是新卡名**，语义仍然相符，**无需改**（这是巧合，不是设计）。
 
-- `cardEl.querySelector('h2')` 有**空值守卫**（`if (h)`）→ `#fund-flow` / `#risk-appetite` 不再是卡片、内部只有 `<h3>` 时，「改 h2」自动跳过，**不报错**；
-- 只要 `fund-flow-body` / `risk-appetite-body` / `news-body` **三个 id 继续存在**，「数据未接入」照常渲染。
+**改动 2 · `style.css`**：
 
-→ **只需保持三个 `*-body` 的 id 不变，`app.js` 一行都不用改。**
+- `.row-news`：`repeat(4, minmax(0, 1fr))` → **`≥1400px`：`1fr 2.4fr`**（告警窄 + 资讯宽）；**`<1400px`：`1fr`**（单列堆叠，避免 1280 下左卡仅 ≈292px 装不下告警文本）。
+- 中卡子块布局：纵向堆叠 + 子块间距 + `<h3>` 小标题样式。
+- **双 tab 样式（CSS-only 三个要点）**：
+  1. radio 本体**不能 `display:none`**（会让 label 点击与键盘焦点一起失效）→ 用 `position:absolute; opacity:0; pointer-events:none`；
+  2. `.tab-panels > .panel { display: none }`，用**兄弟组合选择器**激活：
+     `#sector-tab-cn:checked ~ .tab-panels > .panel-cn { display: block }`、
+     `#sector-tab-us:checked ~ .tab-panels > .panel-us { display: block }`；
+  3. ⚠️ **两个 `input` 必须是 `.tab-panels` 的前置同级兄弟**，`~` 才生效。若把 input 放进 `.tab-panels` 内部或放到它之后，**tab 完全不工作且不报错** —— 最容易被误判为"CSS 没生效"或"缓存问题"。
+  4. label 激活态复用现有 `.active` 观感（`background: var(--blue); color:#fff`），与 `.range-bar button.active` 统一；键盘切换由 radio 语义自带（方向键），`style.css` 既有全局 `:focus-visible` 描边可直接生效。
+
+**`app.js` 零改动的依据（已核实）**：
+
+- `renderPlaceholders()`（`app.js:240-250`）：契约是 `getElementById(id)` 改其 `h2` 文案 + `getElementById(id + '-body')` 填「数据未接入」。搬迁后 `#fund-flow` / `#risk-appetite` 不再是卡片、内部无 `h2` → `cardEl.querySelector('h2')` 返回 `null`，被 **`if (h)` 守卫跳过，不报错**；只要 `fund-flow-body` / `risk-appetite-body` / `news-body` **三个 id 仍在**，文案照常渲染。
+- `renderSector()`（`app.js:170-188`）写 `#sector-body`（tbody）→ **留在 A股 tab 面板内，id 不变** ✅
+- `renderUsSectors()`（`app.js:191-236`）写 `#us-sectors-body`（div）→ **留在美股 tab 面板内，id 不变** ✅；且它只在 `box` 内部替换 `innerHTML`，**不会破坏 tab 结构** ✅
+
+→ **`#sectors` / `#us-sectors` / `#sector-body` / `#us-sectors-body` 四个 id 一律不改**（同时避免影响 `app.js` 与侧栏锚点），`app.js` 一行都不用改。
 （可选清理：`PLACEHOLDERS` 的 `title` 字段对移入卡内的两个条目将不再生效；追求整洁可删该字段，但**会动 `app.js`**，本次不做，仅在 `journal.md` 记一笔。）
+
+**「市场关系」子块不加入 `data-placeholder`**：4 个 pill 本身就是占位形态，HTML 里静态渲染即可 → 全站 `data-placeholder` 计数**保持 3**，与 `app.js` 的 `PLACEHOLDERS`（3 条）一致，**断言无需改动**。
+
+**`.row-3` 的 `align-items`**：保持默认 `stretch`（三卡**等高**，对齐效果图）；高度取三列最大值 → 必须回归 `scrollHeight`。
 
 **验证**：
 
-- `.row-news` 的 `gridTemplateColumns` 为 **2 段**；
-- 中卡内存在 **3 个子块**，全站 `data-placeholder` 计数仍为 **3**；
-- 3 处占位文案仍显示「数据未接入」；
-- Console **0 error**（重点：确认 `renderPlaceholders` 未因 h2 缺失报错）；
-- 回归：`scrollHeight` @1920×1080 仍 ≤1240（结构变更若顶破该值，需回到 §8.1 复核目标）。
+- `.row-news` 的 `gridTemplateColumns` 为 **2 段**（≥1400px）；
+- `#sectors` 内存在 **3 个子块**；`#risk-appetite-body` / `#fund-flow-body` 均存在且显示「数据未接入」；
+- 全站 `data-placeholder` 计数仍为 **3**；
+- 3 处占位文案仍显示「数据未接入」（`#news` / `#fund-flow` / `#risk-appetite`）；
+- `#sector-body` 与 `#us-sectors-body` 均存在，且**分属不同 tab 面板**；
+- **tab 功能断言**（在 `verify_ui.py` 里用 `tab.evaluate`）：默认 `.panel-cn` 可见；执行 `document.getElementById('sector-tab-us').checked = true` 后 `.panel-us` 可见、`.panel-cn` 隐藏；
+- `#sector-body` 内有 **5 行**（A 股 Top5 真实数据）、`#us-sectors-body` 内 **8 行**（美股 Top8）→ 证明两个渲染函数都仍在正常工作；
+- 侧栏 nav 中 `data-target="us-sectors"` 的标签文本为「**板块表现**」，且点击后仍能滚动到 `#us-sectors`（锚点未因重排失效）；
+- Console **0 error**（重点：确认 `renderPlaceholders` 未因 `h2` 缺失报错）；
+- 回归：`scrollHeight` @1920×1080 仍 ≤1240（三卡等高取最大值，若顶破需回 §8.1 复核）。
 
-**⚠️ 本步有一个待解决项（阻塞，先定再实施）**：当前 row-3 中卡是 **A 股热点板块表**（`#sectors`，**真实数据**、非占位）。效果图的该位置是「市场情绪 & 资金流向」，**效果图中看不到 A 股板块表**。处理方式见 §12 第 5 项。
+**默认激活的 tab：A 股**。理由：A 股板块是本项目 row-3 的原生真实数据、信息量（4 列：板块/涨跌幅/成交额/领涨股）大于美股的条形列表。
+⚠️ 效果图右侧卡标题是「行业板块表现（**美股**）」；若更看重与效果图一致，把 `checked` 从 `#sector-tab-cn` 移到 `#sector-tab-us` 即可（**一处改动，随时可切，不阻塞实施**）。
 
 ### Step G-10 · 全量回归 + 收尾
 
@@ -509,7 +548,8 @@ body {
 - 背景可见 **3 处光斑**（左上蓝 / 右上紫 / 底部青），且卡片覆盖区域仍能看出背景明暗过渡。
 - 卡片呈**半透明**，边缘有 **1px 半透明亮线**，顶边有**可见拾光**，卡片有**柔和外发光**（模糊半径 ≥24px）。
 - promo 卡**保持现状**（本任务不做视觉改造，§4.6.4）—— 外观应与改动前一致，且 `backdropFilter` 为 `none`。
-- **`scrollHeight` 仍 ≤1240**；`.row-kpi` 仍 **5 列同排**；`.row-main` 仍 1.9:1 同排；`.row-3` 仍 **3 列同排**，其中中卡「市场情绪 & 资金流向」内含 **3 个子块**（风险偏好 / 资金流向（近5日）/ 市场关系）。
+- **`scrollHeight` 仍 ≤1240**；`.row-kpi` 仍 **5 列同排**；`.row-main` 仍 1.9:1 同排。
+- `.row-3` 仍 **3 列同排**：中卡「市场情绪 & 资金流向」含 **3 个子块**（风险偏好 / 资金流向（近5日）/ 市场关系）；右卡「行业板块表现」为**双 tab**（A股 默认可见 / 美股）。
 - `.row-news` 为 **2 列 `1fr 2.4fr`**（告警记录窄 + 最新资讯宽，按效果图比例）。
 - `scrollWidth === 1920`；Console error **0**。
 
@@ -585,7 +625,7 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 | 修改（主要） | `web/static/style.css` | 412 → ≈465 行（新增 glass token 双套 + 氛围层 + 卡片玻璃化 + `.topbar`/侧栏半透明与透明化 + 侧栏主题按钮描边统一 + promo 显式 `backdrop-filter:none` + `@supports` 降级；删除 `--card-glow`/`--card-shadow` 相关引用） |
 | 修改（扩展） | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 387 → ≈430 行（+12 条玻璃/回归断言） |
 | 新增 | `tasks/2026-09-11-glassmorphism-fix/plan.md` | 本文件 |
-| 修改（仅 Step G-9） | `web/templates/index.html` | 185 → ≈190 行（行 4 结构重排：2 个占位卡移入 row-3 中卡作子块 + 新增「市场关系」子块 + `.row-news` 降为 2 卡）。**净行数变化很小**，主要是块位置搬移 |
+| 修改（仅 Step G-9） | `web/templates/index.html` | 185 → ≈205 行（① 2 个占位卡移入 row-3 中卡作子块 + 新增「市场关系」子块；② 右卡改双 tab 外壳：2 个 radio + 2 个 label + 2 个 panel 容器；③ `.row-news` 降为 2 卡）。**净行数变化不大**，主要是块位置搬移 + tab 外壳 |
 | 新增 | `tasks/2026-09-11-glassmorphism-fix/journal.md` | 执行完成后写 |
 | 新增 | `docs/pitfalls.md` 追加段 | 3 条（G1 因果链 / R21 变量失效 / R24 cron 抢提交） |
 
@@ -601,12 +641,11 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 2. ~~**强度档位**~~ → **已解决**：效果图为**低强度玻璃**（细描边 + 低 alpha + 柔光束），非霓虹风。`saturate` 由 180% 下调至 **150%**，`--glass-shadow` 减弱（§4.6.2）。
 3. ~~**【需确认】promo 卡形态**~~ → **已决定：本任务不做**（需求方 2026-09-11「先不管他」）。效果图该卡是真实照片底，CSS 无法还原；promo **保持现状**，仅在其上显式 `backdrop-filter: none`（§4.6.4 注记 1）。记为**已知视觉妥协**。
 4. ~~**【需确认】KPI 卡方向着色描边**~~ → **已解决：不做**。需求方 2026-09-11 复核「没有看到」→ 判定为**我的误读**（低置信度观察，可能是图片色度渗出）。KPI 卡与其它卡片共用同一 `--glass-border`，**不引入** `--glass-border-up/down`。
-5. ~~**【需确认】底部行结构**~~ → **已解决：按效果图为准**，升级为 **§6 Step G-9**（`index.html` + `style.css`；经核实 `app.js` 零改动）。
-   **⚠️ 但 Step G-9 引出新的阻塞点（需你定）**：当前 row-3 中卡是 **A 股热点板块表**（`#sectors`，**真实数据**）。效果图该位置是「市场情绪 & 资金流向」，**效果图中看不到 A 股板块表**。三种处理：
-   - **① 保留（推荐）**：A 股板块表降为**该卡内第 4 个子块**（「A 股热点板块 Top 5」小表格）。保数据、改动最小、`app.js` 零改动；代价是中卡变高、与效果图的「3 子块」形态略有偏差。
-   - **② 双 tab 合并**：中卡做成「行业板块表现」双 tab（A股 / 美股），右侧「美股行业板块」卡取消。形态最整洁，可用纯 CSS `:checked` 实现 tab（`app.js` 仍零改动，`#sector-body` / `#us-sectors-body` 两个 id 都保留在各自 tab 面板内）。代价：与效果图右侧卡的存在不一致。
-   - **③ 移除**：与效果图完全一致，但**丢掉一份真实数据**。
-   → **推荐 ①**（若你更看重与效果图的形态一致，选 ③；若更看重整洁，选 ②）。**未定前 G-9 不可开工。**
+5. ~~**【需确认】底部行结构**~~ → **已解决**。
+   - **行 4**：按效果图，`#fund-flow` / `#risk-appetite` 从行 4 **搬入行 3 中卡**，`.row-news` 降为 2 列（告警记录 + 最新资讯）。
+   - **A 股板块表**：需求方 2026-09-11 选定 **方案 ②（双 tab 合并）** —— 把 A 股热点板块表并入**右侧卡**，右侧卡改为「行业板块表现」双 tab（A股 / 美股），纯 CSS `:checked` 实现，`app.js` 零改动。
+   - ⚠️ **选项 ② 的原始措辞有误**（写成"**中卡**做成双 tab"，照做会自相矛盾 —— 中卡已要装市场情绪/资金流向）：正解是"**右卡**双 tab"。已按正解写入 **§6 Step G-9**，并在该步保留勘误说明。
+   - **结论：Step G-9 不再有阻塞项，可以开工。**
 6. ~~**【需确认】背景斜向纹理（L3）**~~ → **已解决：不加**（需求方 2026-09-11 判定为「噪声」）。氛围层降为 **L1 + L2 两层**；§6 Step G-1 的**断言 4 目标值同步由「≥3 层」改为「≥2 层」**（已更新），避免断言与方案不一致而恒 FAIL。
 7. ~~**【需确认】侧栏主题切换按钮**~~ → **已解决：保留，无需改动**。
    **勘误**：我此前误读效果图，认为侧栏底部无主题按钮 —— 实际上「市场已开盘」**左侧那个圆形太阳图标就是主题切换按钮**（需求方 2026-09-11 指出）。经核实 `web/templates/index.html:56` 的 `#sidebar-theme` 用的是**同款太阳 SVG**、`:57-60` 的 `.market-status` 结构也与效果图一致 → **当前实现已符合效果图**，玻璃化时只需把该按钮描边由 `var(--border)` 统一为 `var(--glass-border)`。
@@ -632,5 +671,8 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 - [ ] 已确认 **L3 斜向纹理不加**（氛围层 = **L1 + L2 两层**，断言 4 目标已同步改为 ≥2）
 - [ ] 已确认 **KPI 卡不做方向着色描边**（共用 `--glass-border`）
 - [ ] 已确认 **Step G-9 底部行结构按效果图重排**（`index.html` 允许改；经核实 `app.js` **零改动**）
-- [ ] **【待定，阻塞 G-9】A 股热点板块表在结构重排后放哪**（① 保留为中卡第 4 子块［推荐］/ ② 与美股行业板块双 tab 合并 / ③ 移除）—— **未定前 G-9 不可开工**
+- [x] **A 股热点板块表处理已定：方案 ② 双 tab 合并** —— 并入**右侧卡**，右卡改「行业板块表现」双 tab（A股 / 美股）；中卡做「市场情绪 & 资金流向」。Step G-9 已无阻塞
+- [ ] 已确认双 tab 为**纯 CSS `:checked`**（radio 必须位于 `.tab-panels` 之前的前置兄弟位置），`app.js` 零改动（`#sector-body` / `#us-sectors-body` 保留在各自面板内）
+- [ ] 已确认双 tab **默认激活 A 股**（如需贴合效果图可切到美股，一处改动）
+- [ ] 已确认 Step G-9 顺带改 **1 处 nav 文案**：「美股板块」→「板块表现」（该卡重排后已含 A股/美股 双 tab）；其余 6 个 nav 项不动
 - [ ] 已确认 §4.6.5 剩余 **4 条**非玻璃差距 → **下一个任务**，不并入本次
