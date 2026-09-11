@@ -295,6 +295,114 @@ def assert_glass(w: int, h: int, g: dict) -> None:
           f"{w} #sidebar 透明且无 backdrop-filter", (g["sidebarBg"], g["sidebarBackdrop"]))
 
 
+G9_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const cs = (el) => (el ? getComputedStyle(el) : null);
+  const vis = (el) => !!el && cs(el).display !== 'none';
+  const navItem = [...document.querySelectorAll('#sidebar .nav-item')]
+    .find((a) => a.getAttribute('data-target') === 'us-sectors');
+  const radio = q('#sector-tab-cn'), panels = q('.tab-panels');
+  return {
+    rowNewsCols: cs(q('.row-news')).gridTemplateColumns.trim().split(/\s+/).length,
+    sectorBlocks: q('#sectors') ? q('#sectors').querySelectorAll('.sub-block').length : 0,
+    phCount: document.querySelectorAll('[data-placeholder="1"]').length,
+    phNotes: [...document.querySelectorAll('[data-placeholder="1"] .ph-note')].map((e) => e.textContent),
+    fundFlowBody: !!q('#fund-flow-body'),
+    riskBody: !!q('#risk-appetite-body'),
+    newsBody: !!q('#news-body'),
+    sectorBody: !!q('#sector-body'),
+    usSectorsBody: !!q('#us-sectors-body'),
+    sectorBodyRows: document.querySelectorAll('#sector-body tr').length,
+    usSectorRows: document.querySelectorAll('#us-sectors-body .bar-row').length,
+    panelsCount: document.querySelectorAll('#us-sectors .panel').length,
+    cnVisible: vis(q('.panel-cn')),
+    usVisible: vis(q('.panel-us')),
+    cnInPanel: !!(q('.panel-cn') && q('.panel-cn').contains(q('#sector-body'))),
+    usInPanel: !!(q('.panel-us') && q('.panel-us').contains(q('#us-sectors-body'))),
+    // 坑②：radio 必须是 .tab-panels 的前置同级兄弟（FOLLOWING ⇒ panels 在 radio 之后）
+    radiosBeforePanels: !!(radio && panels && (radio.compareDocumentPosition(panels) & Node.DOCUMENT_POSITION_FOLLOWING)),
+    radioDisplay: radio ? cs(radio).display : null,   // 坑①：不得为 none
+    navLabel: navItem ? navItem.textContent.trim() : null,
+    sectorH: q('#sectors') ? Math.round(q('#sectors').getBoundingClientRect().height) : null,
+    rowNewsH: q('.row-news') ? Math.round(q('.row-news').getBoundingClientRect().height) : null,
+    // row-3 三卡的「自然内容高」（border-box 含 padding，累加非绝对定位子元素 + 其 margin）：
+    // 用于定位"谁把 .row-3 撑高进而顶破 scrollHeight ≤1240"（stretch 等高时 getBoundingClientRect 无法区分）
+    row3ContentH: (() => {
+      const out = {};
+      ['#overview', '#sectors', '#us-sectors'].forEach((sel) => {
+        const el = q(sel);
+        if (!el) { out[sel] = null; return; }
+        const st = getComputedStyle(el);
+        let h = parseFloat(st.paddingTop) + parseFloat(st.paddingBottom);
+        [...el.children].forEach((ch) => {
+          const cst = getComputedStyle(ch);
+          if (cst.position === 'absolute') return;
+          h += ch.getBoundingClientRect().height + parseFloat(cst.marginTop) + parseFloat(cst.marginBottom);
+        });
+        out[sel] = Math.round(h);
+      });
+      return out;
+    })(),
+    scrollH: document.scrollingElement.scrollHeight,
+  };
+}
+"""
+
+
+def assert_g9(page, g9: dict) -> None:
+    """G-9 双 tab + 行 3/行 4 重排断言（含三个 :checked 坑的守卫）。需在 1920 视口调用。"""
+    print("\n--- G-9 行3/行4 重排 + 双 tab ---")
+    print(f"  rowNews 列={g9['rowNewsCols']} 子块={g9['sectorBlocks']} 占位={g9['phCount']} "
+          f"panels={g9['panelsCount']} nav={g9['navLabel']} sectorH={g9['sectorH']} "
+          f"rowNewsH={g9['rowNewsH']} scrollH={g9['scrollH']}")
+    print(f"  row-3 自然内容高={g9['row3ContentH']}")
+
+    check(g9["rowNewsCols"] == 2, "行 4 为 2 列（1fr 2.4fr）", g9["rowNewsCols"])
+    check(g9["sectorBlocks"] == 3, "#sectors 内 3 个子块（风险偏好/资金流向/市场关系）", g9["sectorBlocks"])
+    check(g9["phCount"] == 3, "全站 data-placeholder 计数 = 3", g9["phCount"])
+    check(len(g9["phNotes"]) == 3 and all(n == "数据未接入" for n in g9["phNotes"]),
+          "3 处占位文案仍为「数据未接入」", g9["phNotes"])
+    for key in ("fundFlowBody", "riskBody", "newsBody", "sectorBody", "usSectorsBody"):
+        check(g9[key], f"app.js 契约 id 保留：{key}")
+    check(g9["panelsCount"] == 2, "双 tab 有 2 个 panel", g9["panelsCount"])
+    check(g9["cnInPanel"] and g9["usInPanel"], "sector-body / us-sectors-body 分属不同 tab 面板")
+    check(g9["radiosBeforePanels"] is True, "radio 是 .tab-panels 的前置同级兄弟（坑②）", g9["radiosBeforePanels"])
+    check(g9["radioDisplay"] != "none", "radio 未 display:none（坑①）", g9["radioDisplay"])
+    check(g9["navLabel"] == "板块表现", "侧栏 nav 文案为「板块表现」", g9["navLabel"])
+    check(g9["sectorBodyRows"] >= 1 and g9["usSectorRows"] >= 1,
+          "两个面板各自渲染出行数", (g9["sectorBodyRows"], g9["usSectorRows"]))
+    check(g9["cnVisible"] and not g9["usVisible"],
+          "默认激活 A股 tab（panel-cn 可见 / panel-us 隐藏）", (g9["cnVisible"], g9["usVisible"]))
+
+    after = page.evaluate(
+        """() => {
+            const cn = document.querySelector('.panel-cn'), us = document.querySelector('.panel-us');
+            const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+            document.getElementById('sector-tab-us').checked = true;
+            const lab = document.querySelector('label[for="sector-tab-us"]');
+            return { cn: vis(cn), us: vis(us), labelBg: getComputedStyle(lab).backgroundColor };
+        }"""
+    )
+    page.wait_for_timeout(250)
+    check(after["us"] and not after["cn"], "切到美股 tab：panel-us 可见 / panel-cn 隐藏", after)
+
+    back = page.evaluate(
+        """() => {
+            document.getElementById('sector-tab-cn').checked = true;
+            const a = [...document.querySelectorAll('#sidebar .nav-item')]
+              .find((x) => x.getAttribute('data-target') === 'us-sectors');
+            a.click();
+            const el = document.getElementById('us-sectors');
+            return { cn: getComputedStyle(document.querySelector('.panel-cn')).display !== 'none',
+                     inView: Math.abs(el.getBoundingClientRect().top) < window.innerHeight };
+        }"""
+    )
+    page.wait_for_timeout(700)
+    check(back["cn"], "切回 A股 tab 生效", back)
+    check(back["inView"], "nav「板块表现」锚点仍能定位到 #us-sectors", back)
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
@@ -392,7 +500,7 @@ def main() -> int:
             check(m["rowKpi"] == 5, "row-kpi 5 列同排", m["rowKpi"])
             check(m["rowMain"] == 2, "row-main 主图 + 自选同排", m["rowMain"])
             check(m["row3"] == 3, "row-3 三列同排", m["row3"])
-            check(m["rowNews"] == 4, "row-news 四列", m["rowNews"])
+            check(m["rowNews"] == 2, "row-news 2 列（G-9 行 4 改版：告警窄 + 资讯宽）", m["rowNews"])
             check(m["chartWrapH"] == 432, "主图容器 = 40vh = 432px", m["chartWrapH"])
             check(m["scrollH"] <= 1240, "1920 页面总高 ≤ 1240（≤1.15 屏）", m["scrollH"])
             check(m["kpiBox"] and m["kpiBox"]["w"] >= 260 and m["kpiBox"]["h"] >= 96,
@@ -404,6 +512,16 @@ def main() -> int:
                   "层级 topbar > sidebar > backdrop", (m["zTopbar"], m["zSidebar"], m["zBackdrop"]))
             check(m["marketStatus"] in ("市场已开盘", "休市") and "北京时间" in (m["marketTime"] or ""),
                   "侧栏市场状态 + 北京时间", (m["marketStatus"], m["marketTime"]))
+
+            # G-9 断言需在 1920 视口（行 4 断点 ≥1400px）；三视口循环结束时页面停在 375 → 重新加载
+            page.set_viewport_size({"width": 1920, "height": 1080})
+            page.goto(url, wait_until="load")
+            try:
+                page.wait_for_selector("#watchlist-section:not(.hidden)", timeout=25000)
+            except Exception:
+                pass
+            page.wait_for_timeout(800)
+            assert_g9(page, page.evaluate(G9_JS))
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]
@@ -427,6 +545,8 @@ def main() -> int:
             check(border_before != theme_after["border"], "切换后卡片边框色变化（断言 12）",
                   (border_before, theme_after["border"]))
             check(theme_after["chartAlive"], "切主题后图表实例存活")
+            # §8.4 双主题各自调参：light 档同样跑一遍玻璃判据（GLASS_RANGES 按当前主题自动切区间）
+            assert_glass(1920, 1080, page.evaluate(GLASS_JS))
 
             # 4 个类别 tab 切换（无「Canvas is already in use」）
             errors.clear()

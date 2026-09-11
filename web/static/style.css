@@ -178,7 +178,8 @@ body {
 .row-kpi { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; min-width: 0; }
 .row-main { display: grid; grid-template-columns: 1.9fr 1fr; gap: 16px; min-width: 0; }
 .row-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; }
-.row-news { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+/* G-9 行 4：告警（窄）+ 资讯（宽），比例对齐效果图；<1400px 单列堆叠（见下方断点） */
+.row-news { display: grid; grid-template-columns: 1fr 2.4fr; gap: 16px; min-width: 0; }
 
 /* ===== 卡片（所有模块统一 box）===== */
 .card {
@@ -339,6 +340,72 @@ body {
 .mini-sub { font-family: var(--mono); font-size: 12px; margin-top: 2px; color: var(--text-secondary); }
 .mini-card.is-empty .mini-val { color: var(--text-muted); font-size: 13px; font-weight: 400; }
 
+/* ===== G-9 中卡子块（市场情绪 & 资金流向：风险偏好 / 资金流向 / 市场关系）===== */
+.sub-block + .sub-block { margin-top: 8px; }
+.sub-block h3 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+#sectors .ph-body { min-height: 40px; }   /* 子块内占位压矮，保证 #sectors 高度不超原值（scrollHeight 护栏） */
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* G-9 关键高度约束：右卡默认激活的 A股 tab 里是 4 列表格（thead + 5 行），比美股条形列表高
+   → 它决定 .row-3 的行高（stretch 等高）。实测自然内容高 299 → 会顶破 scrollHeight ≤1240 护栏，
+   故**只**对右卡面板内的表格做紧凑化（不影响其它表格）。 */
+#us-sectors .card-head { margin-bottom: 8px; }
+#us-sectors .tab-labels { margin-bottom: 6px; }
+#us-sectors .data-table th { padding: 4px 8px; }
+#us-sectors .data-table td { padding: 4px 8px; font-size: 12px; }
+.pill {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: not-allowed;
+}
+
+/* ===== G-9 行业板块表现：纯 CSS 双 tab（:checked + 兄弟选择器）=====
+   ⚠️ 三个坑（写成注释钉在这里，防止后续被"顺手重构"改坏）：
+   ① radio **不能** `display:none` —— 会让 label 点击与键盘焦点一起失效；
+   ② 两个 radio **必须**是 `.tab-panels` 的**前置同级兄弟**，`~` 才生效；
+   ③ 把 radio 放进 `.tab-panels` 内部或放到它之后 → tab 完全不工作**且不报错**
+      （现象是"点了没反应 + Console 干净"，最容易被误判为缓存问题）。 */
+.tab-radio { position: absolute; opacity: 0; pointer-events: none; }
+.tab-labels { display: flex; gap: 6px; margin-bottom: 8px; }
+.tab-labels label {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.tab-labels label:hover { color: var(--text-primary); border-color: var(--blue); }
+.tab-panels > .panel { display: none; }
+#sector-tab-cn:checked ~ .tab-panels > .panel-cn { display: block; }
+#sector-tab-us:checked ~ .tab-panels > .panel-us { display: block; }
+#sector-tab-cn:checked ~ .tab-labels label[for="sector-tab-cn"],
+#sector-tab-us:checked ~ .tab-labels label[for="sector-tab-us"] {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+/* radio 本体透明，焦点环补到对应 label 上（键盘可达性） */
+#sector-tab-cn:focus-visible ~ .tab-labels label[for="sector-tab-cn"],
+#sector-tab-us:focus-visible ~ .tab-labels label[for="sector-tab-us"] {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 /* ===== 行业板块（横幅条）===== */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
 .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
@@ -384,10 +451,14 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 @media (max-width: 1499px) {
   .row-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .row-news { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-card { min-height: 88px; }
   .kpi-val { font-size: 22px; }
   .kpi-spark { max-width: 84px; }
+}
+
+/* G-9：<1400px 行 4 改单列堆叠（1280 下 `1fr 2.4fr` 的左卡仅 ≈292px，装不下告警正文） */
+@media (max-width: 1399px) {
+  .row-news { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* 1300– 以下：主图与自选列表堆叠（720p 档位不追求同排） */
