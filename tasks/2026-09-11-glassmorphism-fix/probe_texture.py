@@ -39,13 +39,17 @@ GLOW = (
 CASES = [
     ("base", None, None),
     ("t1", 0.022, 6),
-    ("t2", 0.050, 6),
-    ("t3", 0.080, 6),
-    ("t4", 0.080, 4),
+    ("t2", 0.045, 6),
+    ("t3", 0.055, 6),
+    ("t4", 0.070, 6),
 ]
 
-# 平坦区域取样框（#watchlist-section 内空白处，靠近光斑 → 纹理可见性最有利）
-FLAT = (1500, 470, 1860, 570)
+# 取样框 A：卡片之间的背景缝隙（.row-kpi 与 .row-main 之间 16px 高、全宽）
+#           → 纹理「未被 backdrop-filter 糊掉」的真实可见处
+FLAT_GAP = (320, 178, 1380, 192)
+# 取样框 B：卡片内部（#watchlist-section 空白处）
+#           → 纹理已被 backdrop-filter 模糊，理论上振幅应显著低于 A（磨砂玻璃的正确表现）
+FLAT_INCARD = (1500, 470, 1860, 570)
 
 
 def tex_layer(alpha: float, period: int) -> str:
@@ -63,11 +67,16 @@ def css(alpha, period) -> str:
             "--ambient-2:none;}")
 
 
-def amplitude(path: Path) -> float:
+def amplitude(path: Path, box) -> float:
     """局部高频振幅：区域减去高斯模糊自身后的标准差（越高 = 纹路越明显）。"""
-    im = Image.open(path).convert("L").crop(FLAT)
+    im = Image.open(path).convert("L").crop(box)
     resid = ImageChops.difference(im, im.filter(ImageFilter.GaussianBlur(2)))
     return ImageStat.Stat(resid).stddev[0]
+
+
+def amp_pair(path: Path) -> tuple[float, float]:
+    """返回 (背景缝隙振幅, 卡内振幅)。"""
+    return amplitude(path, FLAT_GAP), amplitude(path, FLAT_INCARD)
 
 
 def main() -> int:
@@ -97,15 +106,17 @@ def main() -> int:
     base_img = Image.open(base_path).convert("RGB")
     for name, alpha, period in CASES:
         path = OUT_DIR / f"tex-{name}.png"
-        amp = amplitude(path)
+        gap, incard = amp_pair(path)
         if alpha is None:
-            print("RESULT %-5s tex=none                  amplitude=%.2f  (baseline)" % (name, amp))
+            print("RESULT %-5s tex=none        gapAmp=%.2f  cardAmp=%.2f  (baseline)"
+                  % (name, gap, incard))
             continue
         diff = ImageChops.difference(base_img, Image.open(path).convert("RGB")).convert("L")
         px = list(diff.getdata())
         n = len(px)
-        print("RESULT %-5s alpha=%.3f period=%dpx  amplitude=%.2f  vs_base>2=%.1f%%  max=%d"
-              % (name, alpha, period, amp, 100.0 * sum(1 for v in px if v > 2) / n, max(px)))
+        print("RESULT %-5s alpha=%.3f/%dpx  gapAmp=%.2f  cardAmp=%.2f  vs_base>2=%.1f%%  max=%d"
+              % (name, alpha, period, gap, incard,
+                 100.0 * sum(1 for v in px if v > 2) / n, max(px)))
     return 0
 
 
