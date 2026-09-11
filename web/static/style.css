@@ -57,14 +57,8 @@
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .07);
   --glass-blur: blur(20px) saturate(150%);
   --glass-shadow: 0 1px 1px rgba(0, 0, 0, .28), 0 12px 40px rgba(0, 0, 0, .36);
-  /* 氛围层（方案 H，2026-09-12）：ambient-1=细纹理单层、ambient-2=3 层光斑渐变。body 恒为
-     `var(--ambient-1), var(--ambient-2)` → 展开后纹理在最前 = 画在最上层；勿把纹理移到最底
-     （会被上层渐变按 (1-α) 衰减约一半）。两变量均不可置 none：`background-image: <层>, none`
-     是非法值，整条声明会被丢弃 → 背景全丢 */
-  --ambient-1: repeating-linear-gradient(115deg, rgba(255, 255, 255, .03) 0 1px, rgba(255, 255, 255, 0) 1px 6px);
-  --ambient-2: radial-gradient(760px 520px at 28% 10%, rgba(150, 200, 255, .32), transparent 58%),
-               radial-gradient(820px 560px at 80% 26%, rgba(140, 185, 255, .18), transparent 60%),
-               linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, .07) 40%, transparent 64%);
+  --ambient-1: radial-gradient(1200px 820px at 78% -8%, rgba(150, 190, 255, .14), transparent 62%);
+  --ambient-2: linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, .07) 40%, transparent 64%);
   --card-shadow: var(--glass-shadow);
   --card-glow: var(--glass-highlight);
   --c-gspc: #66A8E0; --c-ixic: #2FD6A8; --c-sh: #FF6E5E; --c-sz: #F0A868; --c-cyb: #C792EA;
@@ -79,7 +73,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  /* G-3 氛围层：背景渐变（dark 档 4 层=细纹理+3 光斑 / light 2 层；背景不参与布局 → 绝不改变 scrollHeight，R16）；
+  /* G-3 氛围层：两层背景渐变（背景不参与布局 → 绝不改变 scrollHeight，R16）；
      background-attachment: fixed 使光束相对视口固定 → 卡片滚动时"玻璃扫过背景"（§4.6.1） */
   background-color: var(--bg-primary);
   background-image: var(--ambient-1), var(--ambient-2);

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -214,12 +213,6 @@ GLASS_JS = r"""
     return { insetAlpha, blur, raw: sh };
   };
   const countGradients = (bg) => (!bg || bg === 'none') ? 0 : (bg.match(/gradient\(/g) || []).length;
-  // 方案 H（2026-09-12 纹理任务）：按顶层逗号切出 body 背景各层（复用 splitTop，括号内逗号不切），
-  // 供「纹理必须在第一段（最上层）」断言使用
-  const bgLayerList = (() => {
-    const bg = cs(document.body).backgroundImage || '';
-    return (bg && bg !== 'none') ? splitTop(bg) : [];
-  })();
   const cards = [...document.querySelectorAll('.card:not(.card.promo), .kpi-card')];
   const mainCard = q('#overview');
   const si = shadowInfo(mainCard);
@@ -235,7 +228,6 @@ GLASS_JS = r"""
       const o = {}; dataCards.forEach((s) => { const el = q(s); o[s] = el ? alphaOf(cs(el).backgroundColor) : null; }); return o;
     })(),
     bodyLayers: countGradients(cs(document.body).backgroundImage),
-    bodyFirstLayer: bgLayerList.length ? bgLayerList[0] : '',
     bodyBgImage: (cs(document.body).backgroundImage || '').slice(0, 200),
     highlightAlpha: si.insetAlpha,
     shadowBlur: si.blur,
@@ -302,19 +294,6 @@ def assert_glass(w: int, h: int, g: dict) -> None:
         check(a is not None and r["dataLo"] <= a <= r["dataHi"],
               f"{w} 数据卡 {sel} alpha ∈ [{r['dataLo']}, {r['dataHi']}]", a)
     check(g["bodyLayers"] >= 2, f"{w} body 氛围渐变层 ≥ 2", g["bodyLayers"])
-    # 方案 H（2026-09-12 纹理任务）dark 档：细纹理 + 3 层光斑渐变 = 4 层，且纹理必须在
-    # 第一段——background-image 列表最前面的层画在最上面（与 z-index 直觉相反），放最底
-    # 会被上层渐变按 (1-α) 衰减。原 `>= 2` 断言测不出「漏加纹理 / 纹理放错层」（4 ≥ 2 恒过），
-    # 故新增下面三条；light 本轮未同步仍为 2 层，新断言只在 dark 口径生效。
-    if theme == "dark":
-        check(g["bodyLayers"] == 4, f"{w} body 背景层数 == 4（纹理 + 3 层光斑）", g["bodyLayers"])
-        first_layer = g.get("bodyFirstLayer") or ""
-        check("repeating-linear-gradient" in first_layer,
-              f"{w} 背景第一段（最上层）为细纹理 repeating-linear-gradient", first_layer[:90])
-        alphas = [float(m.group(1)) for m in re.finditer(
-            r"rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*[,\s/]+\s*([\d.]+)", first_layer)]
-        check(bool(alphas) and 0.03 <= max(alphas) <= 0.07,
-              f"{w} 纹理 alpha ∈ [0.03, 0.07]", alphas)
     lo, hi = r["highlight"]
     check(g["highlightAlpha"] is not None and lo <= g["highlightAlpha"] <= hi,
           f"{w} 顶边内高光白 alpha ∈ [{lo}, {hi}]", g["highlightAlpha"])
