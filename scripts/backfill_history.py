@@ -26,6 +26,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -37,6 +39,7 @@ if str(BASE) not in sys.path:
 
 from src.analyzer import (  # noqa: E402
     EASTERN_TZ,
+    HISTORY_FILE,
     HISTORY_MAX,
     SHANGHAI_TZ,
     load_history,
@@ -47,6 +50,11 @@ from src.fetcher import A_SHARE_SYMBOLS, SYMBOLS, _yahoo_chart_get  # noqa: E402
 DEFAULT_RANGE = "1y"
 RETENTION_WARN_THRESHOLD = 300   # 低于此值说明 retention 未放宽，回填会被立刻裁剪
 SOURCE_THROTTLE = 0.5            # 源间节流（秒），降低 10 标的连续取数的 429 概率
+
+# 7×24 交易、Yahoo 日线**含周末**的标的。其日期不可作为「交易日」依据，否则会写出
+# 只有 btc 有值的纯周末行（既不符合 history 的交易日口径，也会切断相关性收益链、
+# 夸大回测样本计数）。判定规则：某天若除它之外无任何标的有值 → 判为非交易日，整行丢弃。
+NON_TRADING_CALENDAR_SYMBOLS = frozenset({"BTC"})
 
 
 def fetch_series(sym: str, rng: str) -> list[tuple[str, float]]:
@@ -95,14 +103,24 @@ def collect_series(syms: list[str], rng: str) -> tuple[dict[str, dict[str, float
 
 
 def plan_fills(series: dict[str, dict[str, float]], existing: set[str]) -> dict[str, dict[str, float]]:
-    """按天聚合「待新增」值：date 已存在于既有历史的天整行跳过（既有 None 有真实语义，不覆盖）。"""
-    by_date: dict[str, dict[str, float]] = {}
+    """按天聚合「待新增」值。
+
+    两道过滤：
+    1. date 已存在于既有历史 → 整行跳过（既有 None 有真实语义，如休市/未收盘，不覆盖）。
+    2. 某天若只有 `NON_TRADING_CALENDAR_SYMBOLS` 有值（BTC 的周末 bar）→ 判为非交易日，
+       整行丢弃，保持 history 的「交易日行」口径（与既有 90 行一致）。
+    """
+    raw: dict[str, dict[str, float]] = {}
     for sym, vals in series.items():
         for day, close in vals.items():
             if day in existing:
                 continue
-            by_date.setdefault(day, {})[sym] = close
-    return by_date
+            raw.setdefault(day, {})[sym] = close
+    return {
+        day: vals
+        for day, vals in raw.items()
+        if any(sym not in NON_TRADING_CALENDAR_SYMBOLS for sym in vals)
+    }
 
 
 def count_skipped_blanks(series: dict[str, dict[str, float]], history: list[dict]) -> int:
@@ -116,6 +134,44 @@ def count_skipped_blanks(series: dict[str, dict[str, float]], history: list[dict
             if row is not None and row.get(key) is None:
                 n += 1
     return n
+
+
+def ensure_sorted() -> int:
+    """按 date 升序重排 `data/history.json`（保留原始键序，临时文件 + os.replace 原子写）。
+
+    **必需步骤**：    `analyzer.merge_history` 只做 `records.append(...)`，依赖「每个入口只写『今天』」
+    使末尾天然有序；回填历史日期会 append 出乱序数组，而 `/api/latest`、
+    `_last_records`、趋势窗口、`compute_correlation` 都按**数组顺序**消费 → 会把最旧的
+    回填日期当成「最新日」。故回填后必须整体重排。
+    """
+    if not HISTORY_FILE.exists():
+        return 0
+    data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        return 0
+    data.sort(key=lambda r: str(r.get("date", "")))
+    tmp = HISTORY_FILE.with_name(HISTORY_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, HISTORY_FILE)
+    return len(data)
+
+
+def finalize_and_report() -> int:
+    """重排 + 校验（严格升序 / 无重复）+ 打印，返回退出码（0 正常 / 1 校验失败）。"""
+    ensure_sorted()
+    rows = load_history()
+    dates = [r["date"] for r in rows]
+    if not dates:
+        print("\nhistory.json 为空")
+        return 0
+    ok_order = dates == sorted(dates)
+    ok_unique = len(dates) == len(set(dates))
+    print(f"\nhistory.json 现有 {len(rows)} 行（{dates[0]} ~ {dates[-1]}）")
+    print(f"  日期严格升序: {ok_order} | 无重复: {ok_unique}")
+    if not (ok_order and ok_unique):
+        print("!! 校验失败：history 顺序/唯一性异常，请用备份回滚")
+        return 1
+    return 0
 
 
 def main() -> int:
@@ -143,13 +199,20 @@ def main() -> int:
     print("取数：")
     series, failed = collect_series(syms, args.range)
 
+    raw_days = {d for vals in series.values() for d in vals if d not in existing}
     by_date = plan_fills(series, existing)
     if not by_date:
-        print("\n无新增日期（既有历史已覆盖 Yahoo 返回区间）—— 无操作")
-        return 0
+        print("\n无新增日期（既有历史已覆盖 Yahoo 返回区间）")
+        print("[dry-run] 未写盘" if args.dry_run else "（仅执行排序校验）")
+        if args.dry_run:
+            return 0
+        return finalize_and_report()
 
     days = sorted(by_date)
+    dropped = len(raw_days) - len(days)
     print(f"\n待新增 {len(days)} 行（{days[0]} ~ {days[-1]}）；既有 {len(existing)} 行不改动")
+    if dropped:
+        print(f"    已丢弃 {dropped} 个「仅 BTC 有值」的非交易日（周末 bar），保持 history 交易日口径")
     for sym in syms:
         if series.get(sym):
             print(f"    {sym:5s} 覆盖 {sum(1 for d in days if sym in by_date[d]):3d}/{len(days)} 天")
@@ -166,11 +229,10 @@ def main() -> int:
 
     for day in days:
         merge_history(day, by_date[day])
-    final = load_history()
-    print(f"\n写入完成：history.json 现有 {len(final)} 行（{final[0]['date']} ~ {final[-1]['date']}）")
-    if len(final) >= HISTORY_MAX:
+    code = finalize_and_report()
+    if code == 0 and len(load_history()) >= HISTORY_MAX:
         print(f"注意：已达 HISTORY_MAX={HISTORY_MAX} 上限，更早的行会被裁剪。")
-    return 0
+    return code
 
 
 if __name__ == "__main__":
