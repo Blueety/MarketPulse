@@ -259,3 +259,10 @@
 - **grid 等高（`align-items: stretch`）下 `getBoundingClientRect()` 无法定位"谁把行撑高"**：`.row-3` 三卡等高 → 测量得到的都是同一个行高。**定位法**：累加各卡「非绝对定位子元素高度 + 其 margin + 自身 padding」得到**自然内容高**（本次据此定位 `#us-sectors` 299 > `#sectors` 246 > `#overview` 229 —— 前两轮改动都砍在了非最高卡上，只省 4px）。该探针已固化在 `verify_ui.py::G9_JS` 的 `row3ContentH`。
 - **高度预算是"行内最高卡"决定，不是"最有价值卡"决定**：G-9 把两个占位卡搬进 `#sectors` 后，真正撑高 `.row-3` 的是**右卡默认激活 tab 里的 4 列表格**（A股面板），而非新加的 3 个子块。故收敛高度要按「最高卡」下手（本次只对 `#us-sectors` 面板内表格做紧凑化：`th/td padding 4px 8px` + `font-size 12px` → 299→246，总高 1268→1216）。
 - **验收断言的区间必须与设计参数同源（本次 plan 内部冲突实录）**：plan §6 G-1 的断言 2/3/5/6（KPI alpha <0.2 / 数据卡 0.6~0.8 / 高光 ≥0.08 / 边框 0.08~0.14）是按 §4.2 **早期建议值**且只按 dark 写的；§4.6.2「效果图校准值」把 dark 改为高光 `.07`/边框 `.20`、light 改为 `.66/.88/.92` 后**只同步改了断言 4**（≥3 层→≥2 层），照原区间实现**必然恒 FAIL**。处置：断言改**分主题区间**（dark `highlight∈[0.04,0.15]`、`border∈[0.15,0.30]`；light `≥0.85`/`≥0.75`），并把测量主题固定为 dark（§7.2 基线本就是 dark 数值）。教训：**改设计参数时必须全量 grep 依赖它的断言**，否则"实施全对但验收不过"。
+
+## 模块 web/（玻璃氛围纹理 2026-09-12）
+
+- **背景层序决定纹理实际振幅**：`background-image` 列表**最前面的层画在最上面**（与 z-index 直觉相反）。纹理放最底层会被上面 3 层渐变按 `(1-α)` 逐层衰减（光斑最亮处实测只剩约 52% 振幅），alpha 调再高都事倍功半。MarketPulse 落法：纹理独占 `--ambient-1`（展开后在最前 = 最上层）、光斑 3 层合写进 `--ambient-2`，body 的 `var(--ambient-1), var(--ambient-2)` 写法不动。
+- **背景层数断言用 `>=N` 测不出新增层**：加纹理后 `bodyLayers 4 >= 2` 恒过，纹理漏加/放错层照样全绿（假绿）。新增层必须同时断言三件事：层数 `== N`、第一段（最上层）内容匹配（`/repeating-linear-gradient/`，专防放错层）、alpha 区间；且先跑红（改 CSS 前新断言必须 FAIL）证明断言在测东西。多主题页面注意：light 未同步时新断言要按主题门控（`assert_glass` 里 `if theme == "dark"`），否则 light 档假失败。
+- **任一 `--ambient-*` 变量置 `none` 会让背景全丢**：`background-image: <层>, none` 是非法值（`none` 不能作为多层背景列表中的一层）→ **整条声明被丢弃**，页面变纯色，不是只丢那一层；与 R21「CSS 变量未定义使整条声明 invalid」同属一类失效模式。要去掉某层就从列表里**删除**它。
+- **verify_ui 基线假阴性：Clash 注册表系统代理劫持 localhost 探测**：`wait_ready` 的 `urllib.request.urlopen` 在无代理 env 时仍读 Windows 注册表代理（`getproxies()` → Clash `127.0.0.1:7890`），Clash 对 localhost 转发瞬时异常 → 40s 内探不到 uvicorn，报「服务未就绪」EXIT=1，与页面无关（本次基线首跑即中招，复跑即绿）。应对：复跑；要根治就在探测处改用 `build_opener(urllib.request.ProxyHandler({}))`。另：`probe_texture.py` 是**自注入式标定工具**（`add_style_tag` 覆盖 `--ambient-*`、光斑用旧位置），只能标定参数、**不能验证已落地的生产 CSS**——验生产页面须另写不注入样式的测量脚本（本次落在 `%TEMP%`，不进仓库）。
