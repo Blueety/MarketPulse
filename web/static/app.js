@@ -108,6 +108,10 @@ function fmtPct(v) {
   if (v == null || isNaN(v)) return "—";
   return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
 }
+// Y 轴刻度与悬停气泡共用的涨跌幅格式化（单一事实来源，防气泡与刻度漂移）
+function fmtAxisPct(value) {
+  return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%";
+}
 function buildQuery() {
   return "/api/history?days=" + state.days;
 }
@@ -379,7 +383,7 @@ function buildLineOptions(tradingDates, extra) {
           font: { size: 11 },
           color: tc.axisTick,
           maxTicksLimit: 5,
-          callback: function (value) { return (value >= 100 ? "+" : "") + (value - 100).toFixed(1) + "%"; }
+          callback: fmtAxisPct
         }
       }
     },
@@ -445,6 +449,71 @@ function renderTrendMeta(g, series) {
   });
 }
 
+// === 悬停水平参考线（crosshair）——内联插件，仅挂 #chart-main 实例，不 Chart.register ===
+// Q2 定调：横线 Y 取鼠标在绘图区内的纵向位置（非数据点）→ 一条中性色线 + 一个涨跌幅读数
+// （Q3/Q4），与系列无关。afterDatasetsDraw 绘制 → 线在数据之上、tooltip 之下（R5）。
+const hoverCrosshair = {
+  id: 'hoverCrosshair',
+  afterEvent: function (chart, args) {
+    const e = args.event;
+    const area = chart.chartArea;
+    // 离开画布 / 触屏抬手 → 清线重绘（触屏下 tooltip 被禁，横线+气泡是唯一读数）
+    if (e.type === 'mouseout' || e.type === 'touchend') {
+      if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }
+      return;
+    }
+    if ((e.type !== 'mousemove' && e.type !== 'touchmove') || !area) return;
+    if (e.y < area.top || e.y > area.bottom) {
+      if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }   // 移出绘图区即隐藏
+      return;
+    }
+    // R1 核心：Chart.js 只在激活元素集合变化时自动重绘，同 x 索引内纵向移动集合不变，
+    // 必须手动 chart.draw() 才能实时跟随（勿用 update()，会重算布局/动画）；1px 节流。
+    if (chart.$crossY != null && Math.abs(e.y - chart.$crossY) < 1) return;
+    chart.$crossY = e.y;
+    chart.draw();
+  },
+  afterDatasetsDraw: function (chart) {
+    const y = chart.$crossY;
+    if (y == null) return;
+    const area = chart.chartArea;
+    const axis = chart.scales.y;
+    const tc = themeColors();
+    const ctx = chart.ctx;
+    ctx.save();
+    // 全宽虚线，中性色与系列无关；坐标一律 CSS 像素，勿乘 devicePixelRatio（R2）
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = withAlpha(tc.axisTick, 0.65);
+    ctx.moveTo(area.left, y);
+    ctx.lineTo(area.right, y);
+    ctx.stroke();
+    // Y 轴端百分比气泡：动态贴当前轴侧（R7，勿写死 left），垂直钳制在画布内（R4）
+    const text = fmtAxisPct(axis.getValueForPixel(y));
+    chart.$crosshairLabel = text;   // 可测性挂钩：verify_ui.py 对气泡的唯一客观断言点
+    const f = (window.Chart.defaults && window.Chart.defaults.font) || {};
+    ctx.font = '11px ' + (f.family || 'sans-serif');
+    const bw = ctx.measureText(text).width + 10;
+    const bh = 16;
+    const pad = bh / 2 + 2;
+    const cy = Math.min(Math.max(y, pad), chart.height - pad);
+    const bx = axis.position === 'right' ? area.right + 2 : area.left - 2 - bw;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, cy - bh / 2, bw, bh, 4); else ctx.rect(bx, cy - bh / 2, bw, bh);
+    ctx.fillStyle = tc.tooltipBg;
+    ctx.fill();
+    ctx.strokeStyle = tc.tooltipBorder;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = tc.tooltipBody;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + 5, cy);
+    ctx.restore();
+  }
+};
+
 function renderMainChart() {
   const canvas = document.getElementById('chart-main');
   const emptyEl = document.getElementById('chart-main-empty');
@@ -488,7 +557,8 @@ function renderMainChart() {
   charts.main = new Chart(canvas, {
     type: 'line',
     data: { datasets: datasets },
-    options: buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.days) })
+    options: buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.days) }),
+    plugins: [hoverCrosshair]   // 内联插件仅挂本实例（不 Chart.register，避免影响全局）
   });
   renderTrendMeta(g, series);
 }
