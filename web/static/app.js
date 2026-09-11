@@ -417,7 +417,10 @@ function renderTrendTabs() {
     btn.addEventListener('click', function () {
       if (state.trendGroup === g.id) return;
       state.trendGroup = g.id;
-      renderTrendTabs();
+      // 原地切换 active 类（不重建 DOM，避免按钮节点脱离文档 / 丢失焦点）
+      box.querySelectorAll('button').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
       renderMainChart();   // 纯客户端切换：复用 state.history，不发网络请求
     });
     box.appendChild(btn);

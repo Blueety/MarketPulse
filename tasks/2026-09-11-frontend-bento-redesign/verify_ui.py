@@ -43,6 +43,14 @@ def check(cond: bool, label: str, actual=None, expect=None) -> None:
         print(f"  FAIL  {label}{detail}")
 
 
+def to_int(v, default: int = 0) -> int:
+    """z-index 取值容错：'auto' / None / 非数字 → default。"""
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -86,7 +94,7 @@ MEASURE_JS = r"""
     };
   };
   const cardStyle = (() => {
-    const c = q('.card');
+    const c = q('#overview');   // 勿用 '.card'：首个 .card 是 promo（仅渐变背景，background-color 恒 transparent）
     if (!c) return null;
     const s = cs(c);
     return { boxSizing: s.boxSizing, borderRadius: s.borderRadius, background: s.backgroundColor,
@@ -94,7 +102,34 @@ MEASURE_JS = r"""
   })();
   const sidebar = q('#sidebar');
   const sbRect = sidebar ? sidebar.getBoundingClientRect() : null;
+  // 各视觉行 / 各卡片实际高度（定位「谁把页面撑高」）
+  const sections = {};
+  ['.row-kpi', '.row-main', '.row-3', '.row-news', '.dash'].forEach((sel) => {
+    const el = q(sel);
+    sections[sel] = el ? Math.round(el.getBoundingClientRect().height) : null;
+  });
+  document.querySelectorAll('.card[id]').forEach((el) => {
+    sections['#' + el.id] = Math.round(el.getBoundingClientRect().height);
+  });
+  // 横向溢出定位（定位「谁把页面撑宽」）
+  const overflowers = [];
+  const vw = window.innerWidth;
+  document.querySelectorAll('body *').forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return;
+    if (el.closest && el.closest('.table-scroll')) return;   // 表内横向滚动是设计行为，不计入页面溢出
+    if (r.right > vw + 1 || r.left < -1) {
+      overflowers.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        cls: (el.className && el.className.toString ? el.className.toString().slice(0, 40) : ''),
+        left: Math.round(r.left), right: Math.round(r.right),
+      });
+    }
+  });
   return {
+    sections: sections,
+    overflowers: overflowers.slice(0, 12),
     innerW: window.innerWidth, innerH: window.innerHeight,
     scrollW: document.scrollingElement.scrollWidth,
     scrollH: document.scrollingElement.scrollHeight,
@@ -139,7 +174,13 @@ MEASURE_JS = r"""
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
-    page.wait_for_timeout(4500)   # 等 watchlist(≤12s) / macro 与本机取数
+    # 自选股首次请求走 AkShare 冷启动（服务端限时 10s），须等卡片状态确定后再测量，
+    # 否则 #watchlist-section 仍在 .hidden 态（height=0）会被误判为布局缺陷。
+    try:
+        page.wait_for_selector("#watchlist-section:not(.hidden)", timeout=25000)
+    except Exception:
+        pass   # 无配置时整卡隐藏属预期行为
+    page.wait_for_timeout(1200)
     data = page.evaluate(MEASURE_JS)
     dark = os.path.join(OUT_DIR, f"shot-{w}x{h}.png")
     page.screenshot(path=dark, full_page=True)
@@ -148,6 +189,9 @@ def measure(page, url: str, w: int, h: int) -> dict:
 
 def assert_viewport(w: int, h: int, m: dict) -> None:
     print(f"\n--- {w}x{h} ---")
+    print(f"  scrollH={m['scrollH']} sections={m.get('sections')}")
+    if m.get("overflowers"):
+        print(f"  overflowers={m['overflowers']}")
     check(m["dashExists"], ".dash 骨架存在")
     check(m["scrollW"] == m["innerW"], f"{w} 无横向溢出", m["scrollW"], m["innerW"])
     check(m["chartFailed"] is False, "Chart.js CDN 正常")
@@ -173,6 +217,7 @@ def assert_viewport(w: int, h: int, m: dict) -> None:
     check(m["overviewCards"] == 6, f"{w} 市场概览 6 小卡", m["overviewCards"])
     check(m["sectorRows"] >= 1, f"{w} A 股板块有行", m["sectorRows"])
     check(m["usSectorRows"] >= 1, f"{w} 美股行业板块有行", m["usSectorRows"])
+    check((not m["watchHidden"]) and m["watchRows"] >= 1, f"{w} 自选列表可见且有行", m["watchRows"])
     check(len(m["phNotes"]) == 3 and all(n == "数据未接入" for n in m["phNotes"]),
           f"{w} 3 个占位模块文案", m["phNotes"])
     check(m["tabCount"] == 4, f"{w} 趋势类别 tab 4 个", m["tabCount"])
@@ -224,7 +269,7 @@ def main() -> int:
             sb = m["sidebar"] or {}
             check(abs(sb.get("bottom", 0) - sb.get("innerH", 0)) <= 2,
                   "侧栏贴底（sticky 生效）", (sb.get("bottom"), sb.get("innerH")))
-            check(int(m["zSidebar"] or 0) > 55 and int(m["zTopbar"] or 0) > int(m["zSidebar"] or 0),
+            check(to_int(m["zSidebar"]) > to_int(m["zBackdrop"]) and to_int(m["zTopbar"]) > to_int(m["zSidebar"]),
                   "层级 topbar > sidebar > backdrop", (m["zTopbar"], m["zSidebar"], m["zBackdrop"]))
             check(m["marketStatus"] in ("市场已开盘", "休市") and "北京时间" in (m["marketTime"] or ""),
                   "侧栏市场状态 + 北京时间", (m["marketStatus"], m["marketTime"]))
@@ -253,12 +298,14 @@ def main() -> int:
             tab_result = page.evaluate(
                 """async () => {
                     const out = [];
-                    const btns = [...document.querySelectorAll('#trend-tabs button')];
-                    for (const b of btns) {
-                      b.click();
+                    const n = document.querySelectorAll('#trend-tabs button').length;
+                    for (let i = 0; i < n; i++) {
+                      // 每轮重新取节点：若实现重建了 tab DOM，旧引用会脱离文档导致 classList 断言假失败
+                      document.querySelectorAll('#trend-tabs button')[i].click();
                       await new Promise(r => setTimeout(r, 350));
-                      out.push({ name: b.textContent,
-                                 active: b.classList.contains('active'),
+                      const cur = document.querySelectorAll('#trend-tabs button')[i];
+                      out.push({ name: cur.textContent,
+                                 active: cur.classList.contains('active'),
                                  chart: !!(window.Chart && window.Chart.getChart(document.getElementById('chart-main'))),
                                  meta: document.querySelectorAll('#trend-meta .meta-item').length });
                     }
@@ -282,23 +329,32 @@ def main() -> int:
             page.set_viewport_size({"width": 375, "height": 812})
             page.goto(url, wait_until="load")
             page.wait_for_timeout(3500)
+            # 抽屉：点击后必须等过渡（.25s）结束再读 transform，否则读到的是动画起始值
+            mob_before = page.evaluate(
+                """() => {
+                    const sb = document.getElementById('sidebar');
+                    const r = sb.getBoundingClientRect();
+                    return { pos: getComputedStyle(sb).position, left: Math.round(r.left),
+                             hidden: getComputedStyle(sb).transform };
+                }"""
+            )
+            page.evaluate("() => document.getElementById('menu-toggle').click()")
+            page.wait_for_timeout(600)
             mob = page.evaluate(
                 """() => {
                     const sb = document.getElementById('sidebar');
-                    const before = getComputedStyle(sb).transform;
-                    document.getElementById('menu-toggle').click();
-                    return { pos: getComputedStyle(sb).position,
-                             open: document.body.classList.contains('nav-open'),
+                    const r = sb.getBoundingClientRect();
+                    return { open: document.body.classList.contains('nav-open'),
                              transform: getComputedStyle(sb).transform,
-                             before: before,
+                             left: Math.round(r.left),
                              chartWrapH: Math.round(document.getElementById('chart-main-wrap').getBoundingClientRect().height),
                              scrollW: document.scrollingElement.scrollWidth,
                              innerW: window.innerWidth };
                 }"""
             )
-            page.wait_for_timeout(400)
-            check(mob["pos"] == "fixed", "375 侧栏为 fixed 抽屉", mob["pos"])
-            check(mob["open"] and mob["transform"] != mob["before"], "点击菜单后抽屉展开", mob)
+            check(mob_before["pos"] == "fixed", "375 侧栏为 fixed 抽屉", mob_before["pos"])
+            check(mob_before["left"] < 0, "375 抽屉初始收起（translateX(-100%)）", mob_before["left"])
+            check(mob["open"] and mob["left"] == 0, "点击菜单后抽屉完全展开", mob)
             check(mob["chartWrapH"] == 280, "375 主图高度 280px", mob["chartWrapH"])
             check(mob["scrollW"] == mob["innerW"], "375 无横向溢出", (mob["scrollW"], mob["innerW"]))
             mob_card = page.evaluate(MEASURE_JS)

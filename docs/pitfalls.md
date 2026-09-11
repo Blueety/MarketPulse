@@ -214,3 +214,20 @@
 - **模块级 TTL 缓存跨测试泄漏**：`/api/watchlist` 的缓存是模块级 `_watch_cache`，pytest 单进程跑多测试共享 → 前一测试缓存污染后一测试端点断言（hidden/空结构误判）。修法：test_web.py 加 autouse fixture `_reset_watch_cache` 每测试前清空。
 - **自选格首屏占位避免布局跳变（任务 U 前端解耦）**：watchlist 取数慢/失败若直接留空白会让 KPI 卡第 4 格在「有/无」间跳动。修法：renderLede 在 watch 未到达 / 取数失败时渲染占位「—」/「加载中…」，watchlist 并行取数到达后由 success 分支 `renderLede(state.latest,data)` 单独补画真实值，概览/趋势不被拖慢。
 - **CSS 缩进无语义→media 内规则全局生效**：以为 2 空格缩进代表"在媒体查询内"，其实 CSS 只认选择器、缩进不产生作用域。误把本应仅移动端的 `.data-table td.name{display:flex}` 写成全局 → 桌面端 flex 把指数列 td 变 flex 盒，破坏 border-collapse 共享 border，列交界出现横线断点（任务 V 实测）。修法：移动端专属规则必须真包进 `@media` 块；删除全局 flex、间距改 `.trend-sub{margin-left:8px}`。
+
+## 模块 web/（Bento 栅格重构，2026-09-11）
+
+- **canvas 位图 ≠ 显示尺寸的量化判据（C2）**：`.chart-box canvas{width:100%!important;height:340px!important}` 用 `!important` 覆盖 Chart.js 写入的行内尺寸，两边打架 → 1280 档纵向被拉 **1.405×**、1920 档压 **0.937×**（非等比，表现为"图糊/线变形"）。可直接进验收脚本的判据：`canvas.width === canvas.offsetWidth && canvas.height === canvas.offsetHeight`（DPR=1；DPR>1 时 `=== offset × DPR`）。修法三件套缺一不可：删 `!important` + 容器给**确定高度**（`#chart-main-wrap{height:clamp(300px,40vh,460px)}`）+ `maintainAspectRatio:false`。只删 `!important` 而容器无确定高度 → 高度塌 0、图不可见；只调 `clamp()` 而留 `!important` → 只是换一个错误的拉伸比。
+- **星期/周末判定必须按「数据日」，不是「浏览器当天」**：`new Date().getDay()%6===0` 用的是运行日 → 工作日浏览历史数据永远不显示「休市」。同时 `new Date("2026-09-11")` 按 **UTC 午夜**解析，负时区会退到前一天。修法：`isWeekendDate(s)` 手动解析 `YYYY-MM-DD` → `Date.UTC(y, m-1, d)` + `getUTCDay()`；趋势轴过滤周末也复用同一函数。
+- **context 有键 ≠ 端点暴露（C7）**：`us_sector_heat` 自十一期起就写在 `context/*.json`，但 `web/app.py` 只读 `sector_heat`、从未暴露 → 前端永远拿不到。排查「前端某模块无数据」时，先并列核对 **context 键集** 与 **端点返回键集**，不要只看前端。另注：`us_sector_heat.gainers` 实际恒为 **5 条**（取数层即 Top5），不是 11 只 SPDR ETF 全量。
+- **`_load_latest_context` 会回退到前一有效日**：当日 context 为空壳（全源取数失败、`sector_heat.gainers=[]`）时，返回的是**最近一次板块取数成功**的交易日 → 前端展示的板块/状态数据日 ≠ history 末日，属既有语义不是 bug。断言"数据日==今天"必然失败。
+- **auto-commit cron 会吞掉未提交改动、并把半成品写进仓库**：会话期间外部 Hermes「每日数据更新」cron 连做 4 次 `git add -A`（`cffe16f`/`9fc9b1d`/`9571bf5`/`2b980cd`），把**写到一半**的 `index.html`/`style.css`/`web/app.py`/`tests/` 直接提交，`git status` 变 clean、`git diff` 只剩零星几行，极易误判"改动丢了"。应对：先 `git log --oneline` 核对是否被 auto 提交；验证脚本落 `tasks/<task>/`（有意入库），截图/测量 JSON 落 `$env:TEMP`，仓库内不留临时产物。
+- **`write_to_file` 大文件写入可能被空闲超时中断并把文件截断为 0 字节**：本次 `app.js`（≈700 行）一次写入被取消，落盘 `Length=0`（`LastWriteTime` 已更新，看起来"写过了"）。应对：单次写入控制体量；超长文件分块写（先写头部 + `// __PART2__` 占位，再用 `replace_in_file` 逐块续写）；被取消后先 `Get-Item Length` 核实是否被截断。
+- **bento 栅格必须 `minmax(0,1fr)` + 卡片 `min-width:0`**：否则 grid item 的 min-content（表格 `nowrap`、canvas）会顶破容器产生**页面级横向溢出**（与 flex column 溢出同源）。判据：`document.scrollingElement.scrollWidth === window.innerWidth`，375 与 1280 两档最易踩。
+- **`#lede{display:contents}` 让 4 张 KPI 卡与 promo 卡同处一行栅格**：JS 只需把 KPI 卡写进 `#lede`，它们便成为 `.row-kpi` 的直接 grid item → 1920 五列同排、1280 三列 3+2 自动成立，无需改 DOM 层级、无需 JS 感知栅格列数。
+- **移动端顶栏是横向溢出的高发区**：375 档 brand（logo 24 + `MARKETPULSE` ≈110 + 副标 ≈48）+ 数据日 + 通知 + 头像 + 刷新 + 菜单 ≈ **447px > 375**。修法：`@media ≤768` 隐藏品牌副标、`≤480` 隐藏 `brand-mark`/头像/通知等装饰性占位，并给 `.brand{min-width:0}`。
+- **z-index 只写在媒体查询里会漏掉桌面档**：`#sidebar` 基础规则原缺 `z-index`（仅 768 媒体内有 60）→ 桌面档 `getComputedStyle` 得 `auto`，sticky 侧栏可能被卡片盖住。判据：`.topbar`/`#sidebar`/`.nav-backdrop` 恒为 `100/60/55`，新增卡片层级必须 < 55。
+- **验收脚本用 `document.querySelector('.card')` 取样会命中 promo 卡**：promo 卡背景是 `linear-gradient`（background-image），`getComputedStyle().backgroundColor` 恒为 `rgba(0,0,0,0)` → 主题色断言假失败。取样要指定有**纯色背景**的具体卡片（如 `#overview`）。
+- **验收脚本首屏必须等异步取数落定**：自选股走 AkShare 冷启动（服务端限时 10s），首屏只 `wait_for_timeout(4.5s)` 会读到 `#watchlist-section.hidden`（height=0）→ 误判布局缺陷。修法：`page.wait_for_selector('#watchlist-section:not(.hidden)', timeout=25000)` 再短 settle 后测量。
+- **动画态断言必须等过渡结束**：`el.click()` 后**同一帧**读 `getComputedStyle(el).transform` 得到的是过渡起始值（仍 -240px），会误判"抽屉没动"。修法：click 与读取拆成两次 evaluate，中间 `wait_for_timeout(≥过渡时长)`。
+- **tab active 断言不要在切换后引用旧节点**：`renderTrendTabs()` 若在切换时重建 DOM，测试提前缓存的按钮引用已脱离文档，`classList.contains('active')` 恒 false（但图表其实已切换）。修法二选一：实现改为**原地** `classList.toggle`（不重建 DOM，也避免丢失焦点），或测试每轮重新 `querySelectorAll`。
