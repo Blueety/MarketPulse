@@ -47,7 +47,7 @@
         <a class="nav-item active" href="#overview" data-target="overview"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span>市场概览</span></a>
         <a class="nav-item" href="#trend" data-target="trend"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l3.5-4 3 2.2L14 4"/><path d="M2 14h12"/></svg><span>市场趋势</span></a>
         <a class="nav-item" href="#sectors" data-target="sectors"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V7M8 13V3M13 13v-3"/><path d="M2 14h12"/></svg><span>市场情绪</span></a>
-        <a class="nav-item" href="#us-sectors" data-target="us-sectors"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h5M2 8h9M2 12h6"/></svg><span>美股板块</span></a>
+        <a class="nav-item" href="#us-sectors" data-target="us-sectors"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h5M2 8h9M2 12h6"/></svg><span>板块表现</span></a>
         <a class="nav-item" href="#watchlist-section" data-target="watchlist-section"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l1.8 3.6 4 .6-2.9 2.8.7 4-3.6-1.9L4.4 13.8l.7-4L2.2 6.2l4-.6z"/></svg><span>自选列表</span></a>
         <a class="nav-item" href="#news" data-target="news"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 6h6M5 9h4"/></svg><span>最新资讯</span></a>
         <a class="nav-item" href="#alerts" data-target="alerts"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l6 11H2z"/><path d="M8 6.5v3M8 11.2v.3"/></svg><span>告警记录</span></a>
@@ -117,7 +117,7 @@
           </section>
         </div>
 
-        <!-- 行 3：市场概览（6 小卡）+ A 股热点板块（市场情绪）+ 美股行业板块 -->
+        <!-- 行 3：市场概览（6 小卡）+ 市场情绪 & 资金流向（3 子块）+ 行业板块表现（A股/美股 双 tab） -->
         <div class="row-3">
           <section class="card" id="overview">
             <h2>市场概览 <span class="h2-sub" id="overview-sub">· 最新交易日</span></h2>
@@ -127,31 +127,62 @@
           </section>
 
           <section class="card" id="sectors">
-            <h2>市场情绪 <span class="h2-sub">· A 股热点板块 Top 5</span></h2>
-            <div class="table-scroll">
-              <table class="data-table">
-                <thead>
-                  <tr><th>板块</th><th class="num">涨跌幅</th><th class="col-turnover">成交额</th><th>领涨股</th></tr>
-                </thead>
-                <tbody id="sector-body">
-                  <tr><td colspan="4">加载中…</td></tr>
-                </tbody>
-              </table>
+            <h2>市场情绪 &amp; 资金流向</h2>
+            <div class="sub-block" id="risk-appetite" data-placeholder="1">
+              <h3>风险偏好</h3>
+              <div class="ph-body" id="risk-appetite-body"></div>
+            </div>
+            <div class="sub-block" id="fund-flow" data-placeholder="1">
+              <h3>资金流向（近5日）</h3>
+              <div class="ph-body" id="fund-flow-body"></div>
+            </div>
+            <div class="sub-block" id="market-relation">
+              <h3>市场关系</h3>
+              <div class="pill-row">
+                <button type="button" class="pill" disabled>股指 vs 美债</button>
+                <button type="button" class="pill" disabled>美元 vs 黄金</button>
+                <button type="button" class="pill" disabled>VIX vs 股市</button>
+                <button type="button" class="pill" disabled>原油 vs 经济</button>
+              </div>
             </div>
           </section>
 
           <section class="card" id="us-sectors">
             <div class="card-head">
-              <h2>美股行业板块 <span class="h2-sub">· Top 8</span></h2>
+              <h2>行业板块表现</h2>
               <button type="button" class="link-btn" disabled title="数据未接入">查看全部 →</button>
             </div>
-            <div class="bar-list" id="us-sectors-body">
-              <p class="empty">加载中…</p>
+            <!-- 纯 CSS 双 tab ⚠️ 两个 radio 必须是 .tab-panels 的「前置同级兄弟」，`~` 才生效；
+                 radio 也不能 display:none（会让 label 点击与键盘焦点一起失效）→ 绝对定位 + opacity:0 -->
+            <input type="radio" name="sector-tab" id="sector-tab-cn" class="tab-radio" checked>
+            <input type="radio" name="sector-tab" id="sector-tab-us" class="tab-radio">
+            <div class="tab-labels">
+              <label for="sector-tab-cn">A股</label>
+              <label for="sector-tab-us">美股</label>
+            </div>
+            <div class="tab-panels">
+              <div class="panel panel-cn">
+                <div class="table-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>板块</th><th class="num">涨跌幅</th><th class="col-turnover">成交额</th><th>领涨股</th></tr>
+                    </thead>
+                    <tbody id="sector-body">
+                      <tr><td colspan="4">加载中…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="panel panel-us">
+                <div class="bar-list" id="us-sectors-body">
+                  <p class="empty">加载中…</p>
+                </div>
+              </div>
             </div>
           </section>
         </div>
 
-        <!-- 行 4：告警记录 + 最新资讯 / 资金流向 / 风险偏好（静态占位） -->
+        <!-- 行 4：告警记录（窄）+ 最新资讯（宽）；资金流向/风险偏好已移入行 3 中卡作子块 -->
         <div class="row-news">
           <section class="card" id="alerts">
             <h2>告警记录 <span class="h2-sub">· 最近 10 条</span></h2>
@@ -163,16 +194,6 @@
           <section class="card" id="news" data-placeholder="1">
             <h2>最新资讯</h2>
             <div class="ph-body" id="news-body"></div>
-          </section>
-
-          <section class="card" id="fund-flow" data-placeholder="1">
-            <h2>资金流向（近5日）</h2>
-            <div class="ph-body" id="fund-flow-body"></div>
-          </section>
-
-          <section class="card" id="risk-appetite" data-placeholder="1">
-            <h2>风险偏好</h2>
-            <div class="ph-body" id="risk-appetite-body"></div>
           </section>
         </div>
 

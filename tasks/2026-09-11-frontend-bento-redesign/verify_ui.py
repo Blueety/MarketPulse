@@ -287,6 +287,12 @@ def assert_glass(w: int, h: int, g: dict) -> None:
           f"{w} 卡片边框 alpha ∈ [{lo}, {hi}]", g["borderAlpha"])
     check(g["shadowBlur"] is not None and g["shadowBlur"] >= 24,
           f"{w} 卡片外阴影模糊半径 ≥ 24px", g["shadowBlur"])
+    # G-6：顶栏做玻璃层、侧栏只透明（规避 R19 sticky + blur 残影）
+    check((g["topbarBackdrop"] or "none") != "none", f"{w} .topbar backdrop-filter 生效",
+          g["topbarBackdrop"])
+    check((g["sidebarBackdrop"] or "none") == "none"
+          and (g["sidebarBg"] or "") in ("rgba(0, 0, 0, 0)", "transparent"),
+          f"{w} #sidebar 透明且无 backdrop-filter", (g["sidebarBg"], g["sidebarBackdrop"]))
 
 
 def measure(page, url: str, w: int, h: int) -> dict:
@@ -364,6 +370,10 @@ def main() -> int:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+            # 玻璃判据以 dark 为验收口径（plan §7.2 的「修复前实测」就是 dark 数值；light 的
+            # KPI/数据卡 alpha 天然超出 G-1 的 <0.2 / 0.6~0.8 区间，见 GLASS_RANGES 注释）。
+            # 用 add_init_script 固定主题，避免浏览器默认 light 导致断言口径错配。
+            page.add_init_script("try { localStorage.setItem('mp-theme', 'dark'); } catch (e) {}")
             errors: list[str] = []
             page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
             page.on("pageerror", lambda err: errors.append(f"pageerror: {err}"))
@@ -371,6 +381,9 @@ def main() -> int:
             for (w, h) in VIEWPORTS:
                 m = measure(page, url, w, h)
                 assert_viewport(w, h, m)
+                g = page.evaluate(GLASS_JS)      # G-1 玻璃判据（1~7）
+                assert_glass(w, h, g)
+                m["glass"] = g
                 report["viewports"][f"{w}x{h}"] = m
 
             # 1920 档位：布局列数 / 主图高度 / 侧栏贴底 / 层级 / 主题 / tab 切换
@@ -392,15 +405,17 @@ def main() -> int:
             check(m["marketStatus"] in ("市场已开盘", "休市") and "北京时间" in (m["marketTime"] or ""),
                   "侧栏市场状态 + 北京时间", (m["marketStatus"], m["marketTime"]))
 
-            # 主题切换（深浅双套 token）
+            # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]
+            border_before = (m.get("glass") or {}).get("borderRaw")
             theme_after = page.evaluate(
                 """() => {
                     document.getElementById('sidebar-theme').click();
-                    const c = document.querySelector('.card');
+                    const c = document.getElementById('overview');
                     return { theme: document.documentElement.getAttribute('data-theme'),
                              ls: localStorage.getItem('mp-theme'),
                              bg: getComputedStyle(c).backgroundColor,
+                             border: getComputedStyle(c).borderTopColor,
                              chartAlive: !!(window.Chart && window.Chart.getChart(document.getElementById('chart-main'))) };
                 }"""
             )
@@ -409,6 +424,8 @@ def main() -> int:
                   (m["htmlTheme"], theme_after["theme"]))
             check(theme_after["ls"] == theme_after["theme"], "localStorage 与主题一致", theme_after["ls"])
             check(bg_before != theme_after["bg"], "切换后卡片底色变化", (bg_before, theme_after["bg"]))
+            check(border_before != theme_after["border"], "切换后卡片边框色变化（断言 12）",
+                  (border_before, theme_after["border"]))
             check(theme_after["chartAlive"], "切主题后图表实例存活")
 
             # 4 个类别 tab 切换（无「Canvas is already in use」）
