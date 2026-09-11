@@ -222,18 +222,23 @@ def _load_latest_context() -> dict | None:
             return ctx                         # 最近一次板块取数成功的交易日
     return fallback
 
-def _load_sector_heat() -> dict:
-    """从最新 context 取 sector_heat（gainers/losers）；缺失 / 坏 → 空结构降级。"""
-    ctx = _load_latest_context()
-    if not isinstance(ctx, dict):
-        return {"gainers": [], "losers": []}
-    sh = ctx.get("sector_heat")
+def _sector_payload(ctx: dict | None, key: str) -> dict:
+    """从 context 抽取单个板块热度键（sector_heat / us_sector_heat）→ {gainers, losers}。
+
+    ctx 非 dict / 键缺失 / 非 dict → 双空列表降级（前端安全遍历）。
+    """
+    sh = ctx.get(key) if isinstance(ctx, dict) else None
     if not isinstance(sh, dict):
         return {"gainers": [], "losers": []}
     return {
         "gainers": sh.get("gainers") or [],
         "losers": sh.get("losers") or [],
     }
+
+
+def _load_sector_heat() -> dict:
+    """从最近有效 context 取 A 股 sector_heat（gainers/losers）；缺失 / 坏 → 空结构降级。"""
+    return _sector_payload(_load_latest_context(), "sector_heat")
 
 
 # ---- 告警解析（直接使用本模块 ALERTS_DIR 常量）----
@@ -390,24 +395,83 @@ def _load_watchlist() -> dict:
         return {"hidden": False, **empty}
 
 
+# ---- 宏观标的（美元指数 / 10Y 美债 / 原油；实时取数，零写盘）----
+
+# 内置默认标的（宏观为只读行情，无「未配置即隐藏」语义）：env MACRO_STOCKS > config.json macro.stocks > 此默认
+_MACRO_DEFAULT: list[dict] = [
+    {"symbol": "DX-Y.NYB", "label": "美元指数"},
+    {"symbol": "^TNX", "label": "10Y美债"},
+    {"symbol": "CL=F", "label": "原油"},
+]
+
+_MACRO_TTL = 90  # 秒，与自选股 TTL 同量级
+_macro_cache: dict = {"ts": 0.0, "payload": None}
+_macro_lock = threading.Lock()
+
+
+def _load_macro_stocks() -> list[dict]:
+    """宏观标的配置：env MACRO_STOCKS（JSON）> config.json 的 macro.stocks > 内置默认。
+
+    非法 JSON / 非列表 / 空列表 / 读取异常 → 内置默认（保证端点开箱可用）。
+    仅保留含 symbol 的 dict 项。
+    """
+    def _normalize(items) -> list[dict]:
+        if not isinstance(items, list):
+            return []
+        return [it for it in items if isinstance(it, dict) and it.get("symbol")]
+
+    raw = os.environ.get("MACRO_STOCKS")
+    if raw:
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            log.warning("MACRO_STOCKS 环境变量解析失败，回退内置默认: %s", exc)
+            return list(_MACRO_DEFAULT)
+        picked = _normalize(data)
+        return picked or list(_MACRO_DEFAULT)
+    try:
+        cfg = load_config()
+    except Exception as exc:
+        log.warning("宏观配置读取失败，回退内置默认: %s", exc)
+        return list(_MACRO_DEFAULT)
+    picked = _normalize((cfg.get("macro") or {}).get("stocks"))
+    return picked or list(_MACRO_DEFAULT)
+
+
+def _load_macro() -> dict:
+    """实时取宏观标的（复用自选股取数链路）；失败降级空结构（HTTP 200，不 500）。"""
+    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
+    stocks = _load_macro_stocks()
+    if not stocks:
+        return empty
+    try:
+        values, series, _errors = fetch_watchlist(stocks)
+        return _build_watchlist_payload(stocks, values, series)
+    except Exception as exc:
+        log.warning("宏观标的取数失败，降级空结构: %s", exc)
+        return empty
+
+
 # ---- 端点 ----
 
 @app.get("/api/history")
-def api_history(days: int = Query(30, ge=1, le=90), symbols: str | None = Query(None)) -> dict:
+def api_history(days: int = Query(30, ge=1, le=365), symbols: str | None = Query(None)) -> dict:
     """最近 N 交易日趋势数据（Chart.js 友好）；days 默认 30，symbols 默认全量。"""
     return _build_history_payload(days=days, symbols=symbols)
 
 
 @app.get("/api/latest")
 def api_latest() -> dict:
-    """最新日 10 指数概览 + 板块热度；status 复用最新 context。"""
+    """最新日 10 指数概览 + A 股/美股板块热度；status 与板块同源复用最新有效 context。"""
+    ctx = _load_latest_context()
+    empty_sectors = {"sector_heat": {"gainers": [], "losers": []},
+                     "us_sector_heat": {"gainers": [], "losers": []}}
     records = _last_records(7)
     result = _compute_latest(records)
     if result is None:
-        return {"date": None, "indices": [], "sector_heat": {"gainers": [], "losers": []}}
+        return {"date": None, "indices": [], **empty_sectors}
 
     date, indices = result
-    ctx = _load_latest_context()
     status_map: dict[str, str | None] = {}
     if isinstance(ctx, dict):
         ctx_indices = ctx.get("indices", {})
@@ -417,7 +481,12 @@ def api_latest() -> dict:
     for it in indices:
         it["status"] = status_map.get(it["symbol"])
 
-    return {"date": date, "indices": indices, "sector_heat": _load_sector_heat()}
+    return {
+        "date": date,
+        "indices": indices,
+        "sector_heat": _sector_payload(ctx, "sector_heat"),
+        "us_sector_heat": _sector_payload(ctx, "us_sector_heat"),
+    }
 
 
 @app.get("/api/alerts")
@@ -450,6 +519,22 @@ def api_watchlist() -> dict:
     with _watch_lock:
         _watch_cache["ts"] = time.time()
         _watch_cache["payload"] = fresh
+    return fresh
+
+
+@app.get("/api/macro")
+def api_macro() -> dict:
+    """宏观标的实时取数（TTL 缓存；失败降级空结构，只缓存成功结果）。"""
+    now = time.time()
+    with _macro_lock:
+        cached = _macro_cache["payload"]
+        if cached is not None and (now - _macro_cache["ts"]) < _MACRO_TTL:
+            return cached
+    fresh = _load_macro()
+    if fresh.get("stocks"):
+        with _macro_lock:
+            _macro_cache["ts"] = time.time()
+            _macro_cache["payload"] = fresh
     return fresh
 
 

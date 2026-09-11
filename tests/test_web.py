@@ -15,11 +15,14 @@ from web.app import (
     _last_records,
     _load_alerts,
     _load_latest_context,
+    _load_macro,
+    _load_macro_stocks,
     _load_sector_heat,
     _load_watchlist,
     _normalize_series,
     _parse_alert_file,
     _resolve_symbols,
+    _sector_payload,
 )
 from src.fetcher import SYMBOLS
 
@@ -29,6 +32,8 @@ def _reset_watch_cache():
     """TTL 缓存为模块级状态，跨测试会泄漏；每个测试前清空以保证断言隔离。"""
     web.app._watch_cache["ts"] = 0.0
     web.app._watch_cache["payload"] = None
+    web.app._macro_cache["ts"] = 0.0
+    web.app._macro_cache["payload"] = None
     yield
 
 def make_alert(date: str) -> str:
@@ -448,6 +453,7 @@ def test_endpoints_empty_data(tmp_path, monkeypatch):
     assert lat["date"] is None
     assert lat["indices"] == []
     assert lat["sector_heat"] == {"gainers": [], "losers": []}
+    assert lat["us_sector_heat"] == {"gainers": [], "losers": []}
     assert c.get("/api/alerts").json() == []
 
 
@@ -546,7 +552,10 @@ def test_api_history_days_caps(client):
 
 def test_api_history_days_invalid(client):
     assert client.get("/api/history?days=0").status_code == 422
-    assert client.get("/api/history?days=91").status_code == 422
+    # 上限放宽到 365（1Y 视图）：91 / 365 合法，366 越界
+    assert client.get("/api/history?days=91").status_code == 200
+    assert client.get("/api/history?days=365").status_code == 200
+    assert client.get("/api/history?days=366").status_code == 422
 
 
 def test_api_history_symbols_param(client):
@@ -753,3 +762,142 @@ def test_api_watchlist_fetch_raises_endpoint(client, monkeypatch):
     assert data["hidden"] is False
     assert data["stocks"] == []
     assert data["trend"] == {"dates": [], "series": []}
+
+
+# ---- 板块热度双键（sector_heat / us_sector_heat）：纯函数 + 端点 ----
+
+def test_sector_payload_variants():
+    """_sector_payload：正常 / 单侧缺失 / 键缺失 / 非 dict / ctx None → 双空降级。"""
+    assert _sector_payload(
+        {"sector_heat": {"gainers": [{"name": "军工"}], "losers": []}}, "sector_heat"
+    ) == {"gainers": [{"name": "军工"}], "losers": []}
+    # gainers 为 None → 回落空列表；losers 保留
+    assert _sector_payload(
+        {"us_sector_heat": {"gainers": None, "losers": [{"name": "能源"}]}}, "us_sector_heat"
+    ) == {"gainers": [], "losers": [{"name": "能源"}]}
+    assert _sector_payload({}, "us_sector_heat") == {"gainers": [], "losers": []}
+    assert _sector_payload(None, "sector_heat") == {"gainers": [], "losers": []}
+    assert _sector_payload({"sector_heat": "bad"}, "sector_heat") == {"gainers": [], "losers": []}
+
+
+def test_api_latest_includes_us_sector_heat(tmp_path, monkeypatch):
+    """同一 context 同源暴露 A 股与美股两个板块键（Step 1：context 已有键但端点未暴露）。"""
+    hist = [{"date": "2026-09-10", "gspc": 100.0}, {"date": "2026-09-11", "gspc": 101.0}]
+    hist_p = tmp_path / "history.json"
+    hist_p.write_text(json.dumps(hist), encoding="utf-8")
+    monkeypatch.setattr(web.app, "HISTORY_FILE", hist_p)
+    monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
+
+    ctx_dir = tmp_path / "context"
+    ctx_dir.mkdir()
+    ctx = {
+        "date": "2026-09-11",
+        "indices": {},
+        "sector_heat": {"gainers": [{"name": "军工", "change": 1.0}], "losers": []},
+        "us_sector_heat": {
+            "gainers": [
+                {"name": "能源 (XLE)", "change": 1.11, "turnover": "$1.8B", "top_stock": "XLE"},
+                {"name": "公用事业 (XLU)", "change": 0.86, "turnover": "$855.7M", "top_stock": "XLU"},
+            ],
+            "losers": [],
+        },
+    }
+    (ctx_dir / "2026-09-11.json").write_text(json.dumps(ctx), encoding="utf-8")
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", ctx_dir)
+
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/latest").json()
+    assert data["sector_heat"]["gainers"][0]["name"] == "军工"
+    assert [g["name"] for g in data["us_sector_heat"]["gainers"]] == ["能源 (XLE)", "公用事业 (XLU)"]
+
+
+def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
+    """context 无 us_sector_heat 键（旧格式）→ 该键降级双空，不影响 sector_heat。"""
+    hist_p = tmp_path / "history.json"
+    hist_p.write_text(json.dumps([{"date": "2026-09-10", "gspc": 100.0}]), encoding="utf-8")
+    monkeypatch.setattr(web.app, "HISTORY_FILE", hist_p)
+    monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
+    ctx_dir = tmp_path / "context"
+    ctx_dir.mkdir()
+    (ctx_dir / "2026-09-10.json").write_text(
+        json.dumps({"date": "2026-09-10", "indices": {},
+                    "sector_heat": {"gainers": [{"name": "军工"}], "losers": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", ctx_dir)
+
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/latest").json()
+    assert data["sector_heat"]["gainers"] == [{"name": "军工"}]
+    assert data["us_sector_heat"] == {"gainers": [], "losers": []}
+
+
+# ---- /api/macro：配置三级回退 + 容错 ----
+
+def test_load_macro_stocks_builtin_default(monkeypatch):
+    """env 未设 / config 无 macro.stocks → 内置 3 标的（端点开箱可用）。"""
+    monkeypatch.delenv("MACRO_STOCKS", raising=False)
+    monkeypatch.setattr(web.app, "load_config", lambda: {})
+    assert [s["symbol"] for s in _load_macro_stocks()] == ["DX-Y.NYB", "^TNX", "CL=F"]
+
+
+def test_load_macro_stocks_env_precedence(monkeypatch):
+    """env MACRO_STOCKS 优先于 config.json。"""
+    monkeypatch.setenv("MACRO_STOCKS", json.dumps([{"symbol": "GC=F", "label": "黄金期货"}]))
+    monkeypatch.setattr(web.app, "load_config", lambda: {"macro": {"stocks": [{"symbol": "ZZZ"}]}})
+    assert _load_macro_stocks() == [{"symbol": "GC=F", "label": "黄金期货"}]
+
+
+def test_load_macro_stocks_env_invalid_falls_back(monkeypatch):
+    """env 非法 JSON / 非列表 / 全无效项 → 内置默认（不抛、不空）。"""
+    monkeypatch.setattr(web.app, "load_config", lambda: {})
+    monkeypatch.setenv("MACRO_STOCKS", "{bad json")
+    assert len(_load_macro_stocks()) == 3
+    monkeypatch.setenv("MACRO_STOCKS", json.dumps("not-a-list"))
+    assert len(_load_macro_stocks()) == 3
+    monkeypatch.setenv("MACRO_STOCKS", json.dumps([{"label": "无symbol"}]))
+    assert len(_load_macro_stocks()) == 3
+
+
+def test_load_macro_stocks_config_raises(monkeypatch):
+    """load_config 抛异常 → 内置默认。"""
+    monkeypatch.delenv("MACRO_STOCKS", raising=False)
+
+    def boom():
+        raise RuntimeError("config unreadable")
+    monkeypatch.setattr(web.app, "load_config", boom)
+    assert len(_load_macro_stocks()) == 3
+
+
+def test_load_macro_fetch_raises(monkeypatch):
+    """fetch_watchlist 抛 → 空结构降级（不 500）。"""
+    def boom(stocks):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(web.app, "fetch_watchlist", boom)
+    assert _load_macro() == {"stocks": [], "trend": {"dates": [], "series": []}}
+
+
+def test_api_macro_endpoint(monkeypatch):
+    """端点 200 + 形状（stocks[].symbol / value / change_pct）。"""
+    payload = {
+        "stocks": [{"symbol": "DX-Y.NYB", "label": "美元指数", "value": 97.5, "change_pct": -0.21}],
+        "trend": {"dates": ["d1"], "series": []},
+    }
+    monkeypatch.setattr(web.app, "_load_macro", lambda: payload)
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/macro")
+    assert r.status_code == 200
+    assert r.json()["stocks"][0]["symbol"] == "DX-Y.NYB"
+
+
+def test_api_macro_endpoint_degrades(monkeypatch):
+    """取数失败 → 200 + 空 stocks（前端据此显示「数据未接入」占位）。"""
+    monkeypatch.setattr(web.app, "_load_macro", lambda: {"stocks": [], "trend": {"dates": [], "series": []}})
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/macro")
+    assert r.status_code == 200
+    assert r.json()["stocks"] == []
