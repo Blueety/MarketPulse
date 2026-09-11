@@ -273,3 +273,9 @@
 - **Chart.js 同 x 索引内纵向移动不会自动重绘（R1，"横线卡住"的头号原因）**：Chart.js 只在激活元素集合变化时重绘；`mode:'index'` 下鼠标在同一 x 内上下移动集合不变 → 无重绘。必须在插件 `afterEvent` 里手动 `chart.draw()`（**勿用 `update()`**——会重算布局/动画，还可能触发缩放插件重算），并用 1px 粒度节流（`Math.abs(e.y - chart.$crossY) < 1` 直接 return）防高频 mousemove 无谓重绘。`afterEvent` 里调 `draw()` 不会递归（draw 不派发事件）。
 - **canvas 插件内坐标一律 CSS 像素，绝对不要乘 `devicePixelRatio`（R2）**：Chart.js 已对 ctx 做过 `setTransform(dpr,…)`，再乘一次在 DPR=2 屏上位置偏移一倍——而 verify_ui 跑在 **DPR=1 测不出来**。DPR=2 客观取证法（替代人工目视）：`device_scale_factor=2` 页面 + 禁用 tooltip（`chart.options.plugins.tooltip.enabled=false; chart.draw()`，消除大块干扰）→ 鼠标移到已知高度 → 截图，在 `(rectTop + $crossY) × 2` 位图行 ±4 内验证「>35% 列有高对比（虚线 4on/4off）」、同时在「×2 bug 位」验证无线。⚠️ 截图像素坐标 = **视口** 坐标 × DPR，canvas 内坐标必须先加 `canvas.getBoundingClientRect().top/left` 再乘。
 - **内联插件挂在 `chart.config.plugins`，不在 `options.plugins`**：`new Chart(canvas, { plugins: [myPlugin] })` 后，断言要从 `chart.config.plugins` 里找 `p.id`；`chart.options.plugins` 是选项解析结果，未必含内联插件条目（verify_ui 的 CS-1 两个都查、以 config 为准）。另：给 evaluate 用的 helper（如 `fmtAxisPct`）要写成**顶层 `function` 声明**（进 window），`const` 顶层声明在部分取值路径下不可达。
+
+## 模块 web/（视觉保真 2026-09-12）
+
+- **给列表/网格「加列」必须三处同步，漏一处就错位或溢出**：① `<td colspan="N">` 空态/加载态（grep `colspan` 全仓库清点，本次 5 处 4→5）；② 网格 `grid-template-columns`（本次 `.bar-row` 有**两处**——主档 `:412` 与 375 断点覆盖档 `:521`，只改主档则移动端挤爆）；③ 表头 `<th>` 同步加列。表格溢出靠 `.table-scroll` 容器兜底，网格靠 `minmax(0,1fr)` + 固定图标列宽。
+- **nav 照抄效果图会造出死链接（R3）**：效果图里有、页面无对应区块的项（宏观数据/市场日历/设置）必须渲染为 `<span class="nav-item is-disabled" title="未开放">`——**不带 `href` / `data-target`**（`href="#"` 会跳页顶；`data-target` 指向不存在 id 会被 F-5 类断言抓出）。既有 nav 点击 handler 对无 target 项天然安全（`if (!el) return`）。断言要用「总数 == 10 + disabled == 3 + target 全命中」三件套，只查 target 命中在 7 项旧结构上会假绿。
+- **切主题不重渲染的列表，图标色必须走内联 `var(--c-*)`**：`iconHtml()` 输出 `style="background:var(--c-gspc)"` 让浏览器在绘制时解析 CSS 变量——主题切换即时生效；若在 JS 里 `cssVar()` 取实值写死，切主题后图标仍是旧主题色（渲染函数不在 theme handler 的重渲染名单里）。
