@@ -140,7 +140,47 @@
 **偏离 / 未闭环**：
 
 1. **未跑 `AUTO_PUSH=0 daily_report.py` 冒烟**：当前为**美东盘中**，跑它会用盘中价覆盖 `data/last_values.json`（`09-10 → 09-11 盘中`），破坏"基准不变"基线、并可能让次日涨跌幅基于盘中值。改用**非破坏性等价验证**（直接复算 `daily_report` 同口径的 09-11 涨跌幅，结果正常）。今晚 Hermes cron 会真实跑通该路径。
-2. **CYB（`399006.SZ`）回填段为空**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 新增段该列全空（`cyb 86/259`）。属外部数据源缺口；如需补齐须改走 AkShare `stock_zh_index_daily(symbol="sz399006")`（含 Sina 源挂起风险，需复用 `fetch_sector_heat` 的 daemon 线程限时模式）。
+2. **CYB（`399006.SZ`）回填段为空**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 新增段该列全空（`cyb 86/259`）。属外部数据源缺口 → **已解决**，见文末「追加 · CYB 补齐（AkShare）」。
 3. `seed_history.py` / `seed_history_market.py` **未修改**，已在 `AGENTS.md` / `docs/pitfalls.md` 标注"勿再使用"。
 4. **`plan.md` 未改**：我曾在 `plan.md` 追加「附录 A · Step 10 执行前只读核对」（已被提交为 `7efc75b`），但架构侧在 `6808ca4` 按新任务 `2026-09-11-glassmorphism-fix/plan.md` §0 的「**不要再向旧 plan 追加内容**」将其还原。→ 本任务记录以 `journal.md` 为准，不再改 `plan.md`。
 5. `reports/backtest_report.md` 被回测重新生成（正常产物）。
+
+---
+
+### 2026-09-11 23:5x · 追加：CYB 补齐（AkShare）
+
+**目标**：补齐 `399006.SZ`（创业板指）在回填段的缺口（Yahoo `range=1y` 只返回 1 天，导致 `cyb 86/259`）。
+
+**只读核对（先做）**：实测 `ak.stock_zh_index_daily(symbol='sz399006')` → akshare 1.18.94 返回 **3956 行**（2010-06-01 起），列 `date/open/high/low/close/volume`；末尾 `2026-09-09 3354.969 / 09-10 3338.422 / 09-11 3322.039` 与既有 `data/history.json` 的 `cyb` 值**逐值相同** → 口径吻合（北京交易日），可放心作为权威补数源。
+
+**改动（均在 `scripts/backfill_history.py`）**：
+
+| 新增/改动 | 说明 |
+|---|---|
+| `AKSHARE_TIMEOUT=15` / `AKSHARE_FALLBACK_MIN=30` | 常量 |
+| `_akshare_symbol(ticker)` | `000001.SS → sh000001`、`399006.SZ → sz399006` |
+| `fetch_akshare_index(sym, window_start)` | **daemon 线程 + `join(15s)` 限时**（新浪源无 timeout，复用 `fetch_sector_heat` 范式）；按 `>= window_start` 裁剪 |
+| `fill_akshare_gaps(series, syms)` | A 股标的 Yahoo `< 30` 天 → 改用 AkShare；**窗口基准排除 7×24 标的（BTC）**，否则窗口被 BTC 自然日提前一天，造出「SH/SZ 为空但 CYB 有值」的错位首行 |
+| `patch_targets` / `apply_patch_targets` | 把补到的 A 股键**只写进既有行中该键为 `None`** 的位置（经 `merge_history`，不整行覆盖、不新增日期行）；`--no-patch-existing` 关闭 |
+| `count_skipped_blanks(..., exclude=)` | 「刻意跳过」计数排除正在补写的符号（否则 157 个 CYB 键被误报为"跳过"） |
+| 报告 | 「A 股覆盖补齐」段 + 「AkShare 空缺补写」段（dry-run 也打印计划） |
+
+**执行与验证**：
+
+| 项 | 结果 |
+|---|---|
+| Dry-run | `CYB Yahoo 仅 1 天 → 改用 AkShare: 243 天`；窗口起 `2025-09-11`（对齐 SH/SZ）；**无新增日期**；补写目标 **157 键/157 行** |
+| 正式执行 | `AkShare 空缺补写完成: 157 个键`；`history.json 263 行、严格升序 True、无重复 True` |
+| 非 `cyb` 键逐值改动 | **0** |
+| `cyb` 改动 | 补写 **157 行（全部 None→数值）**；**非法覆盖 0** |
+| 补写行是否都是 A 股交易日 | 缺 `sh`/`sz` 的行 **0**；补写区间恰为回填段 `2025-09-11 ~ 2026-05-13` |
+| 覆盖率对齐 | **`cyb 247/263` == `sh 247/263` == `sz 247/263`**（原 `cyb 92→` 现完全一致） |
+| `last_values.json` | SHA256 **UNCHANGED** |
+| `/api/history?days=365` | 259 dates；`gspc 252 / sh 243 / sz 243 / cyb 243 / vix 251` |
+| `pytest tests/` | **459 passed** |
+| `scripts/backtest.py` | 有效交易日 261（不变；CYB 不在 `BACKTEST_SYMBOLS`） |
+| `verify_ui.py` | **ALL PASSED**（含 1Y 档 ≥200 交易日） |
+
+**备份**：`%TEMP%\mp-backfill-before\` 下有三份 —— `history.json`（回填前 90 行，`CB82FF28…`）、`history-prepatch.json`（AkShare 补写前 263 行，`14B3C69E…`）、`last_values.json`（`4831EFC3…`）。
+
+**纪律沉淀**：`docs/pitfalls.md` 新增「CYB 缺口 → AkShare 补齐四条纪律」与「补写既有行空缺的安全边界（三条判据同时成立才写）」；`AGENTS.md` / `docs/commands.md` / `docs/architecture.md` 同步更新（architecture 的「未闭环 CYB」已改为「已闭环」）。

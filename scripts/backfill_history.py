@@ -348,10 +348,10 @@ def main() -> int:
         for sym in syms:
             if series.get(sym):
                 print(f"    {sym:5s} 覆盖 {sum(1 for d in days if sym in by_date[d]):3d}/{len(days)} 天")
-        skipped = count_skipped_blanks(series, history, exclude=frozenset(patch_syms))
-        if skipped:
-            print(f"    （另有 {skipped} 个「既有行中为空、有值」的键被刻意跳过："
-                  f"休市/未收盘的空值有真实语义，不用通用历史 bar 回填）")
+    skipped = count_skipped_blanks(series, history, exclude=frozenset(patch_syms))
+    if skipped:
+        print(f"    （另有 {skipped} 个「既有行中为空、有值」的键被刻意跳过："
+              f"休市/未收盘的空值有真实语义，不用通用历史 bar 回填）")
     if failed:
         print(f"    取数失败标的: {failed}")
 
