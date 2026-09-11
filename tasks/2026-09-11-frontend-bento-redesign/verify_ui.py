@@ -234,6 +234,21 @@ GLASS_JS = r"""
     shadowRaw: si.raw,
     borderAlpha: mainCard ? alphaOf(cs(mainCard).borderTopColor) : null,
     borderRaw: mainCard ? cs(mainCard).borderTopColor : null,
+    // G-8 降级块存在性（无头 Chromium 恒支持 backdrop-filter，无法真实触发降级分支 →
+    // plan §6 G-8 允许「改用 @supports 断言存在」作为等价验证）
+    hasFallbackRule: (() => {
+      try {
+        for (const sheet of document.styleSheets) {
+          let rules;
+          try { rules = sheet.cssRules; } catch (e) { continue; }
+          for (const r of rules) {
+            if (r.constructor && r.constructor.name === 'CSSSupportsRule'
+                && /backdrop-filter/.test(r.conditionText || '')) return true;
+          }
+        }
+      } catch (e) { /* 跨域样式表等 */ }
+      return false;
+    })(),
     topbarBackdrop: q('.topbar') ? cs(q('.topbar')).backdropFilter : null,
     sidebarBg: q('#sidebar') ? cs(q('#sidebar')).backgroundColor : null,
     sidebarBackdrop: q('#sidebar') ? cs(q('#sidebar')).backdropFilter : null,
@@ -293,6 +308,8 @@ def assert_glass(w: int, h: int, g: dict) -> None:
     check((g["sidebarBackdrop"] or "none") == "none"
           and (g["sidebarBg"] or "") in ("rgba(0, 0, 0, 0)", "transparent"),
           f"{w} #sidebar 透明且无 backdrop-filter", (g["sidebarBg"], g["sidebarBackdrop"]))
+    check(g["hasFallbackRule"] is True, f"{w} 存在 backdrop-filter 的 @supports 降级块（G-8）",
+          g["hasFallbackRule"])
 
 
 G9_JS = r"""
