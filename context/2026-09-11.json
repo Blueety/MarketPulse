@@ -2,29 +2,29 @@
   "date": "2026-09-11",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7672.41,
+      "change_pct": 1.063134739254713,
+      "status": "连涨1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26387.668,
+      "change_pct": 1.1730167387318244,
+      "status": "连涨1日"
     },
     "SH": {
-      "value": 3888.1106,
-      "change_pct": -1.176620517529013,
-      "status": "连跌2日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "SZ": {
-      "value": 13471.257,
-      "change_pct": -1.0751692470150949,
-      "status": "连跌2日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "CYB": {
-      "value": 3322.039,
-      "change_pct": -0.4907408350412204,
-      "status": "下跌趋势"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "VIX": {
       "value": null,
@@ -211,7 +211,7 @@
       7673.52,
       7636.36,
       7591.7,
-      null
+      7672.41
     ],
     "ixic": [
       26690.619140625,
@@ -243,7 +243,7 @@
       26421.412,
       26253.34,
       26081.725,
-      null
+      26387.668
     ],
     "sh": [
       3940.037,
@@ -411,81 +411,15 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [
-      {
-        "name": "通信/电子",
-        "change": -0.74,
-        "turnover": "3604.1亿",
-        "top_stock": "*ST实达"
-      },
-      {
-        "name": "军工",
-        "change": -0.91,
-        "turnover": "2416.5亿",
-        "top_stock": "通达股份"
-      },
-      {
-        "name": "消费",
-        "change": -1.15,
-        "turnover": "246.2亿",
-        "top_stock": "远东股份"
-      },
-      {
-        "name": "其他",
-        "change": -1.51,
-        "turnover": "23315.7亿",
-        "top_stock": "凯盛新能"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -1.66,
-        "turnover": "5699.8亿",
-        "top_stock": "江苏新能"
-      }
-    ],
-    "losers": [
-      {
-        "name": "地产/基建",
-        "change": -3.67,
-        "turnover": "194.4亿",
-        "top_stock": "融发核电"
-      },
-      {
-        "name": "资源/有色",
-        "change": -3.51,
-        "turnover": "817.1亿",
-        "top_stock": "闽东电力"
-      },
-      {
-        "name": "农业",
-        "change": -2.44,
-        "turnover": "566.4亿",
-        "top_stock": "万向德农"
-      },
-      {
-        "name": "医药",
-        "change": -2.26,
-        "turnover": "1170.5亿",
-        "top_stock": "南京新百"
-      },
-      {
-        "name": "金融",
-        "change": -1.7,
-        "turnover": "2430.2亿",
-        "top_stock": "上汽集团"
-      }
-    ]
+    "gainers": [],
+    "losers": []
   },
   "us_sector_heat": {
     "gainers": [],
     "losers": []
   },
   "search_keywords": [
-    "通信/电子 drop 2026-09-11",
-    "军工 drop 2026-09-11",
-    "消费 drop 2026-09-11",
-    "其他 drop 2026-09-11",
-    "光伏/新能源 drop 2026-09-11"
+    "market summary 2026-09-11"
   ],
   "correlation": [],
   "watchlist": {
