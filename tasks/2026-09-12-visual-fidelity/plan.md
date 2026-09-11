@@ -139,7 +139,8 @@ y: {
 
 ⚠️ 两点：
 1. **`saturate`/网格不要动**，只加 `position`。
-2. 后续的 crosshair 任务已设计为**动态读 `yScale.left/right`**（见 `tasks/2026-09-11-chart-hover-crosshair/plan.md` §3.3），因此本任务先做或后做都安全 —— 但**反过来：crosshair 一定不要写死 `chartArea.left`**。
+2. **crosshair 任务已完成**（`2026-09-11-chart-hover-crosshair`，内联插件在 `app.js:452-562`），且已按设计**动态读轴侧**（`app.js:492` 注释「R7 勿写死 left」）→ 本任务把 y 轴移到右侧后，气泡应**自动改贴右侧，不需要改 crosshair**。
+   ⚠️ **但必须回归验证**：轴移到右侧后重跑 crosshair 验收，确认气泡仍贴在**当前轴侧**而非仍贴左边。**这是本次唯一的跨任务回归点**（断言 F-7）。
 
 ### V3 · 品牌字
 
@@ -246,6 +247,7 @@ y: {
 | F-4 | `.avatar` 的 `border-radius` | 非 50%（圆角方块） |
 | F-5 | 所有 `.nav-item` 的 `data-target` 都能 `document.getElementById(...)` 命中，**或**该项带 disabled/占位标记 | true |
 | F-6 | **回归**：`scrollHeight` @1920 ≤1240、`scrollWidth === innerWidth`、console error 0、backdrop 11/11 | 不变 |
+| F-7 | **跨任务回归**：`chart.scales.y.position === 'right'` 时，crosshair 的 `$crosshairLabel` 仍产生且气泡贴**右侧**（气泡左边缘接近 `chartArea.right`） | true |
 
 - **验证**：先跑一次，F-1~F-5 应 **FAIL**，改完应 **PASS**（证明断言在测东西）。
 
@@ -330,7 +332,7 @@ venv/Scripts/python -m pytest tests/ -v
 | **R1** | **加列引发横向溢出** | **高** | `.bar-row` 网格与两张表格都要加列；375 与 1280 最易溢出。判据：`scrollWidth === innerWidth`；名称列须 `minmax(0,1fr)` + `min-width:0` + ellipsis |
 | **R2** | **`colspan` 未同步 → 表格错位** | **高** | 自选列表空态 `colspan="4"`（`app.js:687`）与 A 股板块加载态 `colspan="4"`（`index.html`）都要改 **5**。加列时一并 grep `colspan` |
 | **R3** | **nav 照抄效果图 → 死导航** | **高** | 宏观数据 / 市场日历 / 设置 3 项无对应区块。见 §12 Q1；断言 F-5 专防此项 |
-| **R4** | **`app.js` 与 crosshair 任务冲突** | **中** | 两者都改 `app.js`。**必须串行**：本任务完成并提交后，再开始 crosshair |
+| **R4** | ~~`app.js` 与 crosshair 任务冲突~~ | ✅ **已解除** | crosshair **已完成**（`2026-09-11-chart-hover-crosshair` 有 journal；插件在 `app.js:452-562`）→ 本任务**无需**与其串行。⚠️ 但保留一处跨任务回归：y 轴移到右侧后须复核 crosshair 气泡仍贴当前轴侧（见 §3 V2 第 2 点、断言 **F-7**） |
 | **R5** | 图标颜色在 light 主题下不可见 | **中** | 复用 `--c-*`（双套已定义）最安全；新增 `ICON_COLORS` 若写死深色 → 浅底看不见。判据：双主题目视 |
 | **R6** | `scrollHeight` 被图标顶破 | **中** | 加图标/加行高会让总高上升几 px；当前 1216，余量 24px。若超过 1240，优先收紧行内 padding，不要动栅格 |
 | **R7** | y 轴移到右侧后刻度被裁切 | **中** | Chart.js 会自动布局，但需目视确认 `+6%/-6%` 未被切；必要时给 `scales.y` 加 `afterFit` 或调整 `layout.padding` |
@@ -343,7 +345,7 @@ venv/Scripts/python -m pytest tests/ -v
 
 | 类型 | 文件 | 规模 |
 |---|---|---|
-| 修改 | `web/static/app.js` | +约 60 / −5 行：`ICON_COLORS` + `iconHtml()` + 4 处渲染插入 + `OVERVIEW_CARDS.color` + `position:'right'` |
+| 修改 | `web/static/app.js` | +约 85 / −5 行：`ICON_COLORS` + `ICON_CHARS` + `iconHtml()` + 4 处渲染插入 + `OVERVIEW_CARDS.color/char` + `position:'right'` |
 | 修改 | `web/static/style.css` | +约 25 / −6 行：`.ico`、`.bar-row` 网格、`.brand-mark`、`.avatar` |
 | 修改 | `web/templates/index.html` | +约 12 / −10 行：品牌文本、2 处 `colspan`、nav 标签 |
 | 修改（扩展） | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | +约 25 行（F-1~F-6 断言） |
@@ -351,7 +353,7 @@ venv/Scripts/python -m pytest tests/ -v
 | 新增 | `tasks/2026-09-12-visual-fidelity/journal.md` | 执行完成后写 |
 | 新增 | `docs/pitfalls.md` 追加段 | 2 条（加列必须同步 colspan/网格；nav 照抄会产生死链接） |
 
-**净代码变更估算**：约 **+122 / −46 行**。
+**净代码变更估算**：约 **+155 / −46 行**（含 Q2 的字符映射数据）。
 
 ---
 
@@ -367,6 +369,14 @@ venv/Scripts/python -m pytest tests/ -v
 
 ## 12. 待确认（阻塞项）
 
+### 12.1 决议（需求方 2026-09-12）
+
+- **Q1 → 采用推荐方案**：「4 映射 + 3 保留 + 3 占位」的 **10 项** nav。完整清单与占位项实现（`<span class="nav-item is-disabled">`，**不带 `href` / `data-target`**）见 **§3 V5**。
+- **Q2 → 图标内含 1 个字符**。字符由数据驱动（`OVERVIEW_CARDS.char` / `ICON_CHARS` 按 symbol 查 / 板块名首字符）；样式 16px 方块 + 9px 白字。**可读性处于下限**，调整顺序见 **§3 V1**。
+- **Q3 → ⏳ 未答，按默认执行**：A 股热点板块表**也加图标**（效果图 A 股 tab 内同样有图标，且 V1 已列为 4 处之一）。若不同意，请在开工前指出。
+
+> **至此无未决阻塞项，可开工。** 下表保留原始候选方案供追溯。
+
 | # | 问题 | 说明与建议 |
 |---|---|---|
 | **Q1** | **侧栏导航如何处理 3 个无对应区块的项（宏观数据 / 市场日历 / 设置）？** | **推荐**：能映射的 4 项改名对齐效果图；无区块的 3 项按现有 disabled 模式渲染为**不可点占位**（灰化 + `title="未开放"`）；保留 3 项有真实内容的（市场趋势 / 市场情绪 / 告警记录）。最终 10 项而非 7 项 —— **有意为之**：删掉真实内容的导航入口是损失，造死链接是缺陷，占位是两者之间的正确解。<br>**替代**：若你更看重与效果图**完全一致**，则删除 市场趋势/市场情绪/告警记录 三个入口并重排为 7 项（代价：这 3 个区块失去导航入口）。 |
@@ -378,7 +388,10 @@ venv/Scripts/python -m pytest tests/ -v
 ## 13. 确认
 
 - [ ] 人已审阅本计划
-- [ ] 已确认 **Q1**（nav 处置方式）与 **Q2**（图标是否含字母）
+- [x] **Q1 已定**：10 项 nav（4 映射 + 3 保留 + 3 占位）—— 见 §3 V5
+- [x] **Q2 已定**：图标**内含 1 个字符**，数据驱动 —— 见 §3 V1
+- [ ] **Q3 按默认执行**：A 股热点板块表也加图标（未答，若不同意请指出）
+- [ ] 已知悉**图标字符的可读性风险**：16px 方块 + 9px 汉字处在可读下限，落地须目视并按 §3 V1 的顺序调整
 - [ ] 已确认图标用 **CSS 色块**、零新依赖
 - [ ] 已确认加列时**同步 `colspan` 与 `grid-template-columns`**（R1/R2）
 - [ ] 已确认 `ICON_COLORS` 若新增色值须**补 light 档**（R5）
