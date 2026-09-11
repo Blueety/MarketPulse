@@ -27,7 +27,9 @@
 
 **一句话验收标准**
 
-1920×1080 下：全站 `backdrop-filter` 生效元素 **≥16 个**、卡片背景 alpha **<0.2（展示型）/ 0.6~0.8（数据型）**、`body` 有 **≥3 层** `radial-gradient` 氛围层、卡片外发光模糊半径 **≥24px**；**且 `scrollHeight` 仍 ≤1240、无横向溢出、Console error 恒 0**。
+1920×1080 下：**所有非 promo 卡片与 KPI 卡全部** `backdrop-filter !== 'none'`（“全覆盖”断言为 true）、卡片背景 alpha **<0.2（展示型）/ 0.6~0.8（数据型）**、`body` 有 **≥2 层**氛围渐变、卡片外发光模糊半径 **≥24px**；**且 `scrollHeight` 仍 ≤1240、无横向溢出、Console error 恒 0**。
+
+（用“全覆盖”而不用“计数”，是为避免 Step G-9 结构重排改变卡片数量后断言失效。）
 
 **必须保持（回归护栏，不得回退）**
 
@@ -44,7 +46,8 @@
 **Out of Scope（本次不做）**
 
 - 不改 `web/app.py`、`web/static/app.js`、API 契约、`src/*`（玻璃化是纯 CSS 层）。
-- 不改 `index.html` 结构（**例外**：若 §4.4 选择调整 promo 的内联 SVG，允许只动该段）。
+- **不改 `app.js`**（玻璃化纯 CSS；Step G-9 的结构搬迁经核实也**不需要**动 `app.js`，见 §6 Step G-9 说明）。
+- `index.html` **允许结构性改动，但仅限 Step G-9**（底部行按效果图重排）；其余部分不动。
 - 不动 `data/` `context/` `alerts/` `reports/`（生成物）。
 - 不改 `tests/`（本任务无 Python 逻辑变更；验收走 `verify_ui.py`）。
 - 不新增任何依赖、不引入字体外链、不新增二进制图片资源（§4.4 promo 例外需 §12 确认）。
@@ -215,15 +218,12 @@ body {
 
 ⚠️ 退役时须确认**无遗漏引用**：CSS 变量未定义会让**整条声明 invalid**（不是只丢那一段）。例如 `box-shadow: var(--glass-shadow), var(--glass-highlight)` 中若变量名拼错，**整条 `box-shadow` 会被丢弃** → 表现为「卡片突然没阴影」，容易被误判为选择器写错（见 R21）。
 
-### 4.3 顶栏 / 侧栏（可选，收益高）
+### 4.3 顶栏 / 侧栏（**已按效果图定稿**，见 §4.6.3）
 
-`.topbar`、`#sidebar` 当前 `background: var(--bg-primary)`（alpha=1），改为：
+- **`.topbar` → 玻璃化**：`background` 改 `rgba(11,15,20,.72)`（light `rgba(247,248,250,.72)`）+ `backdrop-filter: var(--glass-blur)`，底边 1px `var(--glass-border)`。滚动时内容在顶栏下模糊穿过，是效果图里最明显的玻璃线索。
+- **`#sidebar` → 只改透明**：`background: transparent`，保留 1px 右分隔线，**不加** `backdrop-filter`。依据：效果图侧栏与页面同层、仅靠分隔线区分，本身不是玻璃层；同时规避 R19（sticky + blur 残影）与 R18（层叠上下文）。
 
-- `rgba(11,15,20,.72)`（light：`rgba(247,248,250,.72)`）
-- `backdrop-filter: blur(12px) saturate(160%)`
-
-→ 滚动时内容在顶栏/侧栏下模糊穿过，是效果图里最明显的玻璃线索。
-⚠️ 引入 R18（层叠上下文）与 R19（sticky + blur 残影）风险，须实测（§6 Step G-5 / G-8）。
+⚠️ `.topbar` 仍受 R18/R19 约束（`position: sticky` + `z-index: 100`），须实测（§6 Step G-6）。
 
 ### 4.4 promo 卡（必须单独改 —— G6）
 
@@ -255,9 +255,10 @@ body {
 |---|---|---|
 | **L1 右上大范围柔光** | 页面右上区（promo 卡后方一带）明显更亮 | `radial-gradient(1200px 820px at 78% -8%, rgba(150,190,255,.14), transparent 62%)` |
 | **L2 斜向光束** | 一条宽约页面 1/3 的冷色斜带，方向约 **120~150°**（左下 → 右上），斜穿趋势图与市场情绪卡区域 | `linear-gradient(148deg, transparent 18%, rgba(120,160,220,.07) 40%, transparent 64%)` |
-| **L3 极淡斜向纹理** | 背景可见规则平行斜纹（间距约 5~8px）。**置信度中等**：可能是有意纹理，也可能是效果图的生成噪声 | `repeating-linear-gradient(115deg, rgba(255,255,255,.012) 0 2px, transparent 2px 7px)` —— **见 §12 第 6 项，确认后再加** |
+| ~~**L3 极淡斜向纹理**~~ | ~~背景可见规则平行斜纹（间距约 5~8px）~~ → **需求方 2026-09-11 判定为「噪声」，不加** | — |
 
-- 层序：L1 → L2 → L3 → `background-color: var(--bg-primary)`，沿用 §4.1 的 `body` 多层 `background-image` 方案。
+- 层序：**L1 → L2 →** `background-color: var(--bg-primary)`（**仅两层**，L3 已否决），沿用 §4.1 的 `body` 多层 `background-image` 方案。
+  → 因此 §6 Step G-1 的**断言 4 目标值由「≥3 层」下调为「≥2 层」**（判据随之更新，避免断言与方案不一致而恒 FAIL）。
 - ⚠️ `background-attachment: fixed` 下所有层相对**视口**定位 → 滚动时光束不动、卡片在光束上滑过 → 正是「玻璃扫过背景」的观感（效果图即此语义）。
 - ⚠️ 三层都用 `px` 尺寸，小视口下仍能覆盖卡片区域，避免 §8.2「卡片全落在纯色区、看不出玻璃」。
 
@@ -285,7 +286,7 @@ body {
 |---|---|---|---|
 | 顶栏搜索框 | 半透明填充 + 1px 冷色描边 + **≈8~10px 圆角矩形**（非全圆胶囊） | `border-radius:999px` 全胶囊 + 不透明 `var(--bg-elevated)` | 半径改 8~10px + 底改半透明 |
 | 日期 chip | 无填充（纯描边）+ 1px 边框 | 已是 `transparent` 底 + 999px | 保留，仅统一描边色 |
-| KPI 卡 | 边缘可见**淡红 / 淡蓝着色描边**，与涨跌方向疑似相关（三张下跌卡偏淡红、VIX「未开盘」偏中性蓝）。**置信度中等** | 无方向着色 | 见 §12 第 4 项；确认后加 `--glass-border-down` / `--glass-border-up` 变体 |
+| KPI 卡 | ~~边缘可见淡红 / 淡蓝着色描边~~ → **需求方 2026-09-11 复核「没有看到」**，判定为我的误读（低置信度观察，可能是图片色度渗出） | 无方向着色 | **不做**。KPI 卡与其它卡片使用同一 `--glass-border`（不做 `--glass-border-up/down` 变体） |
 | 侧栏 | 与页面**同层、透明**，仅靠 1px 右分隔线区分 | `background: var(--bg-primary)`（不透明） | 侧栏改**透明**（**不参与**玻璃层，避免 R19）；1px 右分隔线保留 |
 | 侧栏底部按钮组 | **主题切换按钮（太阳图标）就在「市场已开盘 / 北京时间」左侧** —— 与当前实现的结构、图标完全一致 | `#sidebar-theme`（太阳 SVG，`index.html:56`）+ `.market-status`（`ms-dot` 绿点 + `ms-row` + `ms-time`，`:57-60`） | ✅ **结构无需改动**；只需把该按钮描边由 `var(--border)` 统一为 `var(--glass-border)`，并随侧栏一起改透明。⚠️ **勘误**：本节初稿曾写「底部无主题切换按钮」，属**对效果图的误读**，已更正（详见 §12 第 7 项） |
 
@@ -301,14 +302,14 @@ body {
 2. `.card.promo` 未声明 `box-shadow` → 会继承新的 `--glass-shadow`。这是**期望行为**（比现状更协调），无需额外处理。
 3. 保留 `.card.promo` 现有的 `border-color: transparent` 与 `border-radius: var(--radius-card)`，**不动**。
 
-#### 4.6.5 顺带发现的非玻璃差距（**不计入本任务验收**，供裁剪）
+#### 4.6.5 顺带发现的非玻璃差距 → **已决定：下一个任务**（需求方 2026-09-11）
 
-以下与玻璃无关，但对照效果图可见：
+以下 **4 条**与玻璃无关、对照效果图可见，**本任务不做**，另开任务处理（会触及 `index.html` + `app.js`，超出玻璃化边界）：
 
 1. **每行标的缺彩色小图标**：效果图的 自选列表 / 市场概览 / 资金流向 / 行业板块 每行都有 ~16px 彩色圆角方块（按品种品牌色），当前实现没有。
 2. **趋势图 y 轴在右侧**：效果图 y 轴刻度（`+6% / +3% / 0 / -3% / -6%`）在**右**侧；当前实现在左侧。
 3. **品牌字风格**：效果图是 `MarketPulse`（常规大小写、非等宽、无字距），当前是 `MARKETPULSE`（等宽大写 + 字距）。
-4. **底部行结构差异**：效果图把「风险偏好 + 资金流向（近5日）」放在第 3 行的**「市场情绪 & 资金流向」卡内部**，底部行只有「告警记录 + 最新资讯」；当前实现把「资金流向 / 风险偏好」拆成第 4 行独立卡。见 §12 第 5 项。
+4. **底部行结构差异** → **已升级为本任务范围内工作**（需求方「按效果图为准」），见 §6 **Step G-9**。
 5. **头像形状**：效果图是深色**圆角方块**，当前是蓝色**圆形**。
 6. **效果图日期仍是错的**：写 `2026-09-11 周四`，实为**周五**（与旧 plan R10 同一错误，**不要照抄**）。
 
@@ -318,9 +319,9 @@ body {
 
 | 文件 | 动作 | 说明 |
 |---|---|---|
-| `web/static/style.css` | **改（主要）** | 412 → ≈470 行：新增 glass token 双套、`body` 氛围层、`.card`/`.kpi-card` 玻璃化、数据卡 `-strong` 变体、`.topbar`/`#sidebar` 半透明、`.card.promo` 暗调玻璃、`@supports` 降级块、退役 `--card-glow`/`--card-shadow` |
+| `web/static/style.css` | **改（主要）** | 412 → ≈465 行：新增 glass token 双套、`body` 氛围层（L1+L2 两层）、`.card`/`.kpi-card` 玻璃化、数据卡 `-strong` 变体、`.topbar` 玻璃化 + `#sidebar` 透明化 + 主题按钮描边统一、`.card.promo` 显式 `backdrop-filter: none`、`@supports` 降级块、退役 `--card-glow`/`--card-shadow` |
 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | **改（扩展，禁止覆盖）** | 387 行 → ≈430 行：**在原脚本上追加玻璃判据断言**（§6 Step G-1 列出的 10 条）。⚠️ 该脚本已由执行者写好并入库，**只做增量扩展** |
-| `web/templates/index.html` | 不改（**例外**：仅当 §4.4 需调整 promo 内联 SVG 时动该段） | — |
+| `web/templates/index.html` | **改（仅 Step G-9）** | 行 4 结构重排：`#fund-flow` / `#risk-appetite` 移入 row-3 中卡作子块，新增「市场关系」子块，`.row-news` 由 4 卡降为 2 卡。⚠️ **保留 `fund-flow-body` / `risk-appetite-body` / `news-body` 三个 id**（`app.js` 的契约） |
 | `web/static/app.js` | **不改** | 玻璃化纯 CSS |
 | `web/app.py` | **不改** | — |
 | `tests/` | **不改** | 无 Python 逻辑变更 |
@@ -337,10 +338,11 @@ body {
 
 | # | 断言 | 目标值 |
 |---|---|---|
-| 1 | 全站 `backdrop-filter !== 'none'` 元素数 | **≥16** |
+| 1 | **全覆盖语义断言（不用计数，避免结构变更后失效）**：`[...document.querySelectorAll('.card:not(.card.promo), .kpi-card')].every(el => getComputedStyle(el).backdropFilter !== 'none')` | **true**（当前实现为 false：全站 0 处） |
+| 1b | `.card.promo` 的 `backdropFilter` | **`none`**（Step G-7 显式禁用） |
 | 2 | `.kpi-card` 的 `backgroundColor` alpha | **< 0.2** |
 | 3 | 数据卡（`#overview`/`#trend`/`#alerts`）alpha | **0.6 ~ 0.8** |
-| 4 | `body` 的 `backgroundImage` 层数（`radial-gradient` 计数） | **≥ 3** |
+| 4 | `body` 的 `backgroundImage` 层数（`radial-gradient` / `linear-gradient` 计数） | **≥ 2**（L3 已否决，见 §4.6.1） |
 | 5 | 卡片 `inset` 高光的白色 alpha | **≥ 0.08** |
 | 6 | 卡片 `borderTopColor` alpha | **0.08 ~ 0.14** |
 | 7 | 卡片外阴影模糊半径 | **≥ 24px** |
@@ -363,7 +365,7 @@ body {
 
 - 按 §4.1 给 `body` 叠 3 层 `radial-gradient` + `background-attachment: fixed`，`background-color` 保留 `var(--bg-primary)` 作最底。
 - **验证**：
-  - 断言 4 PASS（`body.backgroundImage` 含 ≥3 层 `radial-gradient`）；
+  - 断言 4 PASS（`body.backgroundImage` 含 **≥2 层**氛围渐变：L1 右上柔光 + L2 斜向光束）；
   - **断言 8 必须仍是 PASS** —— `scrollHeight` 不得因氛围层变化（背景不参与布局，这是硬约束）。
 
 ### Step G-4 · 卡片玻璃化
@@ -380,10 +382,14 @@ body {
 - `#overview` / `#trend` / `#alerts` 用 `--glass-bg-strong`。
 - **验证**：断言 3 PASS；**目视 12px 表格小字与趋势图 meta 文案仍清晰**（对照 §2.2 截图）。
 
-### Step G-6 · 顶栏 / 侧栏半透明（可选）
+### Step G-6 · 顶栏玻璃化 + 侧栏透明化
 
-- 按 §4.3 改 `.topbar`、`#sidebar`。
-- **验证**：断言 1 数值 **≥18**；**实际滚动**观察顶栏/侧栏无模糊残影（R19）；断言 11 仍 PASS（层叠未被 `backdrop-filter` 打乱）。
+依据效果图（§4.6.3）：
+
+- `.topbar`：`background` 由 `var(--bg-primary)` → `rgba(11,15,20,.72)`（light `rgba(247,248,250,.72)`）+ `backdrop-filter: var(--glass-blur)` + 1px `var(--glass-border)` 底边。
+- `#sidebar` → **只改透明**：`background: transparent`，保留 1px 右分隔线；**不加** `backdrop-filter`（规避 R19，且效果图的侧栏本身不是玻璃层）。
+- `#sidebar-theme`（太阳按钮）描边由 `var(--border)` → `var(--glass-border)`。
+- **验证**：断言 1（全覆盖）仍 PASS（`.topbar` 不在该选择器集合内，故另加一条：`.topbar` 的 `backdropFilter !== 'none'`）；`#sidebar` 的 `backgroundColor` 应为 `rgba(0, 0, 0, 0)` 且 `backdropFilter === 'none'`；**实际滚动**观察顶栏无模糊残影（R19）；断言 11 仍 PASS（层叠未被 `backdrop-filter` 打乱）。
 
 ### Step G-7 · promo 卡 → **本任务不做视觉改造**（需求方 2026-09-11「先不管他」）
 
@@ -397,7 +403,44 @@ body {
 - 加 §4.5 的降级规则。
 - **验证**：CSS 语法检查通过；在 devtools 里临时禁用 `backdrop-filter`（或改用 `@supports` 断言存在）确认降级态文字可读、卡片不塌。
 
-### Step G-9 · 全量回归 + 收尾
+### Step G-9 · 底部行结构按效果图重排（`index.html` + `style.css`）
+
+**依据**：需求方 2026-09-11「**按效果图为准**」。
+
+**差异**：效果图的第 3 行中卡是「市场情绪 & 资金流向」（内含 风险偏好 gauge + 资金流向近5日 bars + 市场关系 4 个 pill），底部行只有「告警记录 + **最新资讯（宽）**」。当前实现把「资金流向 / 风险偏好」拆成了第 4 行的两张独立卡，`.row-news` 是 4 等分。
+
+**改动**：
+
+1. `index.html`：把 `#fund-flow`（当前 168-171 行）与 `#risk-appetite`（173-176 行）两个 `<section>` **移入** row-3 的中卡（当前 `#sectors`）内部，改为**子块**：
+   - 中卡 `h2` 改为「市场情绪 & 资金流向」（原副标题「· A 股热点板块 Top 5」的去留见下方**待解决项**）；
+   - 子块各用 `<h3>` 小标题：「风险偏好」「资金流向（近5日）」；
+   - 新增第 3 个子块「市场关系」，含 4 个 pill 按钮（股指vs美债 / 美元vs黄金 / VIXvs股市 / 原油vs经济）；
+   - 三个子块均保留 `data-placeholder="1"`。
+2. `style.css`：
+   - `.row-news` 由 `repeat(4, minmax(0, 1fr))` → **`≥1400px`：`1fr 2.4fr`**（告警记录窄、最新资讯宽，对齐效果图比例）；**`<1400px`：`1fr`（单列堆叠）**，避免 1280 下左卡仅 ≈292px 装不下告警文本；
+   - 中卡内部新增子块布局（纵向堆叠 + 子块间距 + `<h3>` 样式）。
+
+**`app.js` 零改动的依据（已核实 `app.js:240-250`）**：
+
+`renderPlaceholders()` 的契约是 —— `document.getElementById('<id>')` 用来改其 `h2` 文案、`document.getElementById('<id>-body')` 用来填「数据未接入」。搬迁后：
+
+- `cardEl.querySelector('h2')` 有**空值守卫**（`if (h)`）→ `#fund-flow` / `#risk-appetite` 不再是卡片、内部只有 `<h3>` 时，「改 h2」自动跳过，**不报错**；
+- 只要 `fund-flow-body` / `risk-appetite-body` / `news-body` **三个 id 继续存在**，「数据未接入」照常渲染。
+
+→ **只需保持三个 `*-body` 的 id 不变，`app.js` 一行都不用改。**
+（可选清理：`PLACEHOLDERS` 的 `title` 字段对移入卡内的两个条目将不再生效；追求整洁可删该字段，但**会动 `app.js`**，本次不做，仅在 `journal.md` 记一笔。）
+
+**验证**：
+
+- `.row-news` 的 `gridTemplateColumns` 为 **2 段**；
+- 中卡内存在 **3 个子块**，全站 `data-placeholder` 计数仍为 **3**；
+- 3 处占位文案仍显示「数据未接入」；
+- Console **0 error**（重点：确认 `renderPlaceholders` 未因 h2 缺失报错）；
+- 回归：`scrollHeight` @1920×1080 仍 ≤1240（结构变更若顶破该值，需回到 §8.1 复核目标）。
+
+**⚠️ 本步有一个待解决项（阻塞，先定再实施）**：当前 row-3 中卡是 **A 股热点板块表**（`#sectors`，**真实数据**、非占位）。效果图的该位置是「市场情绪 & 资金流向」，**效果图中看不到 A 股板块表**。处理方式见 §12 第 5 项。
+
+### Step G-10 · 全量回归 + 收尾
 
 - 跑完整 `verify_ui.py` → **退出码 0**（断言 1~12 全绿）。
 - 跑 `venv/Scripts/python -m pytest tests/ -v` → 全绿（无 Python 改动，应无变化）。
@@ -428,10 +471,11 @@ body {
 
 | 测量点 | 取法 | 修复前实测 | 目标 |
 |---|---|---|---|
-| 全站 `backdrop-filter` 元素数 | 遍历 `querySelectorAll('*')` 统计 `backdropFilter !== 'none'` | **0** | **≥16** |
+| **卡片 `backdrop-filter` 全覆盖** | `[...querySelectorAll('.card:not(.card.promo), .kpi-card')].every(el => getComputedStyle(el).backdropFilter !== 'none')` | **false**（全站 0 处） | **true** |
+| `.topbar` / `#sidebar` | `.topbar` 的 `backdropFilter`；`#sidebar` 的 `backgroundColor` + `backdropFilter` | `none`；`rgb(11,15,20)` + `none` | `.topbar` ≠ `none`；`#sidebar` 为 `rgba(0, 0, 0, 0)` 且 `none` |
 | `.kpi-card` 背景 alpha | 解析 `getComputedStyle(el).backgroundColor` 第 4 位 | **1** | **< 0.2** |
 | 数据卡背景 alpha | 同上（取 `#overview`/`#trend`/`#alerts`） | **1** | **0.6 ~ 0.8** |
-| `body` 氛围层数 | `getComputedStyle(document.body).backgroundImage` 中 `radial-gradient` 计数 | **0** | **≥ 3** |
+| `body` 氛围层数 | `getComputedStyle(document.body).backgroundImage` 中渐变层计数 | **0** | **≥ 2** |
 | 卡片盒尺寸（不得变） | `offsetWidth × offsetHeight` | 记录 | 与修复前一致 |
 | 卡片 `clientHeight` | `el.clientHeight` | `offsetHeight − 2`（1px 上下边框） | 同上 |
 | KPI 卡 `clientHeight` | 同上 | 记录 | 与修复前一致（border-box 下 border 不变则不变） |
@@ -464,8 +508,9 @@ body {
 
 - 背景可见 **3 处光斑**（左上蓝 / 右上紫 / 底部青），且卡片覆盖区域仍能看出背景明暗过渡。
 - 卡片呈**半透明**，边缘有 **1px 半透明亮线**，顶边有**可见拾光**，卡片有**柔和外发光**（模糊半径 ≥24px）。
-- promo 卡为**暗调玻璃**（不再是亮蓝青渐变）。
-- **`scrollHeight` 仍 ≤1240**；`.row-kpi` 仍 **5 列同排**；`.row-main` 仍 1.9:1 同排；`.row-3` 仍 3 列同排。
+- promo 卡**保持现状**（本任务不做视觉改造，§4.6.4）—— 外观应与改动前一致，且 `backdropFilter` 为 `none`。
+- **`scrollHeight` 仍 ≤1240**；`.row-kpi` 仍 **5 列同排**；`.row-main` 仍 1.9:1 同排；`.row-3` 仍 **3 列同排**，其中中卡「市场情绪 & 资金流向」内含 **3 个子块**（风险偏好 / 资金流向（近5日）/ 市场关系）。
+- `.row-news` 为 **2 列 `1fr 2.4fr`**（告警记录窄 + 最新资讯宽，按效果图比例）。
 - `scrollWidth === 1920`；Console error **0**。
 
 ### 8.2 1280×720（小窗口）
@@ -473,7 +518,8 @@ body {
 - `scrollWidth === 1280` —— **无横向溢出**（本档最易踩 `min-content` 溢出，必须验证）。
 - 光斑用 **px 尺寸**而非百分比 → 小视口下仍覆盖卡片区域，**不得出现「卡片全落在纯色区、看不出玻璃」**。
 - `.row-kpi` 仍 3+2 两行；`.row-main` 仍堆叠；`.row-3` 仍 2+1。
-- `backdrop-filter` 全量生效（断言 1 ≥16）。
+- `.row-news` 退化为**单列堆叠**（`<1400px` 断点），避免 1280 下左卡仅 ≈292px 装不下告警文本。
+- `backdrop-filter` **全覆盖断言为 true**（§7.2，不用计数）。
 - `scrollHeight` 允许比 1080p 长，但 ≤2400。
 - 卡片 `offsetWidth × offsetHeight` 与修复前一致（玻璃化不得改变尺寸）。
 
@@ -539,7 +585,7 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 | 修改（主要） | `web/static/style.css` | 412 → ≈465 行（新增 glass token 双套 + 氛围层 + 卡片玻璃化 + `.topbar`/侧栏半透明与透明化 + 侧栏主题按钮描边统一 + promo 显式 `backdrop-filter:none` + `@supports` 降级；删除 `--card-glow`/`--card-shadow` 相关引用） |
 | 修改（扩展） | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 387 → ≈430 行（+12 条玻璃/回归断言） |
 | 新增 | `tasks/2026-09-11-glassmorphism-fix/plan.md` | 本文件 |
-| 可选修改 | `web/templates/index.html` | 仅 §12 选择「promo 允许调整内联 SVG」时，动 `.promo-visual` 一段 |
+| 修改（仅 Step G-9） | `web/templates/index.html` | 185 → ≈190 行（行 4 结构重排：2 个占位卡移入 row-3 中卡作子块 + 新增「市场关系」子块 + `.row-news` 降为 2 卡）。**净行数变化很小**，主要是块位置搬移 |
 | 新增 | `tasks/2026-09-11-glassmorphism-fix/journal.md` | 执行完成后写 |
 | 新增 | `docs/pitfalls.md` 追加段 | 3 条（G1 因果链 / R21 变量失效 / R24 cron 抢提交） |
 
@@ -554,14 +600,19 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 1. ~~**【阻塞精度】效果图需重新发送**~~ → **已解决**：2026-09-11 需求方已重发效果图，校准结果见 **§4.6**。**实施以 §4.6.2 参数为准**，§4.2 仅作推导记录。
 2. ~~**强度档位**~~ → **已解决**：效果图为**低强度玻璃**（细描边 + 低 alpha + 柔光束），非霓虹风。`saturate` 由 180% 下调至 **150%**，`--glass-shadow` 减弱（§4.6.2）。
 3. ~~**【需确认】promo 卡形态**~~ → **已决定：本任务不做**（需求方 2026-09-11「先不管他」）。效果图该卡是真实照片底，CSS 无法还原；promo **保持现状**，仅在其上显式 `backdrop-filter: none`（§4.6.4 注记 1）。记为**已知视觉妥协**。
-4. **【需确认】KPI 卡的方向着色描边**：效果图 KPI 卡边缘有淡红 / 淡蓝描边，且疑似与涨跌方向相关（§4.6.3），**置信度中等** —— 是否实现 `--glass-border-up/down` 变体？
-5. **【需确认】底部行结构**：效果图把「风险偏好 / 资金流向（近5日）」放在第 3 行的**「市场情绪 & 资金流向」卡内部**，而当前实现把它们拆成第 4 行独立卡（§4.6.5 第 4 条）。**以哪边为准？**
-6. **【需确认】背景斜向纹理（L3）**：效果图背景可见规则平行斜纹（§4.6.1），可能是生成噪声。加还是不加？
+4. ~~**【需确认】KPI 卡方向着色描边**~~ → **已解决：不做**。需求方 2026-09-11 复核「没有看到」→ 判定为**我的误读**（低置信度观察，可能是图片色度渗出）。KPI 卡与其它卡片共用同一 `--glass-border`，**不引入** `--glass-border-up/down`。
+5. ~~**【需确认】底部行结构**~~ → **已解决：按效果图为准**，升级为 **§6 Step G-9**（`index.html` + `style.css`；经核实 `app.js` 零改动）。
+   **⚠️ 但 Step G-9 引出新的阻塞点（需你定）**：当前 row-3 中卡是 **A 股热点板块表**（`#sectors`，**真实数据**）。效果图该位置是「市场情绪 & 资金流向」，**效果图中看不到 A 股板块表**。三种处理：
+   - **① 保留（推荐）**：A 股板块表降为**该卡内第 4 个子块**（「A 股热点板块 Top 5」小表格）。保数据、改动最小、`app.js` 零改动；代价是中卡变高、与效果图的「3 子块」形态略有偏差。
+   - **② 双 tab 合并**：中卡做成「行业板块表现」双 tab（A股 / 美股），右侧「美股行业板块」卡取消。形态最整洁，可用纯 CSS `:checked` 实现 tab（`app.js` 仍零改动，`#sector-body` / `#us-sectors-body` 两个 id 都保留在各自 tab 面板内）。代价：与效果图右侧卡的存在不一致。
+   - **③ 移除**：与效果图完全一致，但**丢掉一份真实数据**。
+   → **推荐 ①**（若你更看重与效果图的形态一致，选 ③；若更看重整洁，选 ②）。**未定前 G-9 不可开工。**
+6. ~~**【需确认】背景斜向纹理（L3）**~~ → **已解决：不加**（需求方 2026-09-11 判定为「噪声」）。氛围层降为 **L1 + L2 两层**；§6 Step G-1 的**断言 4 目标值同步由「≥3 层」改为「≥2 层」**（已更新），避免断言与方案不一致而恒 FAIL。
 7. ~~**【需确认】侧栏主题切换按钮**~~ → **已解决：保留，无需改动**。
    **勘误**：我此前误读效果图，认为侧栏底部无主题按钮 —— 实际上「市场已开盘」**左侧那个圆形太阳图标就是主题切换按钮**（需求方 2026-09-11 指出）。经核实 `web/templates/index.html:56` 的 `#sidebar-theme` 用的是**同款太阳 SVG**、`:57-60` 的 `.market-status` 结构也与效果图一致 → **当前实现已符合效果图**，玻璃化时只需把该按钮描边由 `var(--border)` 统一为 `var(--glass-border)`。
-8. **顶栏 / 侧栏是否也玻璃化**（Step G-6）：会引入 R19（sticky + blur 残影）风险。注意 §4.6.3 显示效果图的**侧栏本身是透明而非玻璃层**，因此 G-6 建议只对 `.topbar` 做，侧栏改透明即可。
+8. ~~**顶栏 / 侧栏是否也玻璃化**~~ → **已定稿**（2026-09-11）：**只对 `.topbar` 做玻璃**；`#sidebar` **只改透明**（不加 `backdrop-filter`），依据是效果图侧栏与页面同层。见 §4.3 / §6 Step G-6。
 9. **验收脚本位置**：维持原决定 —— **扩展现有** `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（单一事实来源，避免两份脚本漂移）。若希望长期沉淀为仓库级工具，可改放 `scripts/verify_ui.py`（需同步改其 `ROOT = parents[2]` → `parents[1]`）——**本次不动，避免无关 churn**（R25）。
-10. **【可选】§4.6.5 的 5 条非玻璃差距**（彩色小图标 / y 轴右侧 / 品牌字 / 头像形状）：是否并入本次？**默认不并入**（会扩大 diff 到 `index.html` 与 `app.js`，超出「玻璃化」边界）。
+10. ~~**【可选】§4.6.5 的非玻璃差距**~~ → **已决定：下一个任务**（需求方 2026-09-11）。剩余 **4 条**（彩色小图标 / y 轴在右 / 品牌字 / 头像形状）**不并入**本次（会触及 `index.html` + `app.js`，超出玻璃化边界）。原第 4 条（底部行结构）已升级为本任务 **Step G-9**。
 
 ---
 
@@ -578,3 +629,8 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 - [ ] 已确认 **promo 卡本任务不做视觉改造**（仅显式 `backdrop-filter:none`），记为已知视觉妥协
 - [ ] 已确认 **侧栏主题切换按钮保留**（`#sidebar-theme`，勘误：效果图底部那个太阳图标就是它）
 - [ ] 已确认侧栏改**透明**、仅 `.topbar` 做玻璃层（规避 R19）
+- [ ] 已确认 **L3 斜向纹理不加**（氛围层 = **L1 + L2 两层**，断言 4 目标已同步改为 ≥2）
+- [ ] 已确认 **KPI 卡不做方向着色描边**（共用 `--glass-border`）
+- [ ] 已确认 **Step G-9 底部行结构按效果图重排**（`index.html` 允许改；经核实 `app.js` **零改动**）
+- [ ] **【待定，阻塞 G-9】A 股热点板块表在结构重排后放哪**（① 保留为中卡第 4 子块［推荐］/ ② 与美股行业板块双 tab 合并 / ③ 移除）—— **未定前 G-9 不可开工**
+- [ ] 已确认 §4.6.5 剩余 **4 条**非玻璃差距 → **下一个任务**，不并入本次
