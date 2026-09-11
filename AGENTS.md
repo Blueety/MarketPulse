@@ -16,7 +16,8 @@
 - `src/config.py`: 配置加载层（config.json + env 覆盖 + 内置默认，白名单校验，零依赖）。
 - `src/alerter.py`: 告警层（告警文件渲染 + alerts.log 去重 + collect_breaches 纯计算 + run_alert_checks 编排）。
 | `src/reporter.py`: 报告渲染（日报/快照/趋势图/分市场趋势图 + 相关性分析章节）+ generate_context 上下文 JSON 生成（含 sector_heat / us_sector_heat / correlation 键）。 |
-- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py / test_backtest.py）。
+- `web/`: 只读看板（bento 栅格仪表盘，2026-09-11 重构）：`app.py`（FastAPI，**5 个 JSON API**：`/api/history`（`days` 上限 **365**）/ `/api/latest`（`sector_heat` + **`us_sector_heat`**）/ `/api/alerts` / `/api/watchlist` / **`/api/macro`**（美元指数 / 10Y美债 / 原油，env `MACRO_STOCKS` > `config.json` `macro.stocks` > 内置默认））；`templates/index.html`（`.dash` + `.row-kpi/.row-main/.row-3/.row-news` 四视觉行、9 类模块、3 个 `data-placeholder="1"` 静态占位）；`static/app.js`（趋势**四图合一 + 4 类别 tab**、KPI sparkline、自选迷你条）；`static/style.css`（卡片 token 双主题）。进程绝不写 `data/` `alerts/` `context/`。**UI 验收必须跑** `venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright 三视口，自动挑空闲端口；截图/JSON 落 `%TEMP%`），不要以 `curl 200` 或肉眼看代替。
+- `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_web.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py / test_backtest.py）。
 - `alerts/`: 告警输出（`YYYY-MM-DD-{market}-{time}.md`（盘中快照复合名）/ `YYYY-MM-DD-close.md`（日报）；gitignore 排除）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。
 - `docs/`: 项目知识和规则。
