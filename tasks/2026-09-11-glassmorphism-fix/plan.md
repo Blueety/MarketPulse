@@ -340,7 +340,7 @@ body {
 | # | 断言 | 目标值 |
 |---|---|---|
 | 1 | **全覆盖语义断言（不用计数，避免结构变更后失效）**：`[...document.querySelectorAll('.card:not(.card.promo), .kpi-card')].every(el => getComputedStyle(el).backdropFilter !== 'none')` | **true**（当前实现为 false：全站 0 处） |
-| 1b | `.card.promo` 的 `backdropFilter` | **`none`**（Step G-7 显式禁用） |
+| 1b | `.card.promo` 的 `backdropFilter` | **`none`**（Step G-7 显式禁用）。⚠️ **此条基线即 PASS**（promo 当前本就没有 backdrop-filter）—— 它是 **G-4 之后的回归护栏**：`.card` 加上 blur 后 promo 会继承，若 G-7 没做就会变红。**不属于"基线应红"的那一批** |
 | 2 | `.kpi-card` 的 `backgroundColor` alpha | **< 0.2** |
 | 3 | 数据卡（`#overview`/`#trend`/`#alerts`）alpha | **0.6 ~ 0.8** |
 | 4 | `body` 的 `backgroundImage` 层数（`radial-gradient` / `linear-gradient` 计数） | **≥ 2**（L3 已否决，见 §4.6.1） |
@@ -353,7 +353,8 @@ body {
 | 11 | **回归**：375 下 `#menu-toggle` → `body.nav-open` 抽屉可开可关 | true |
 | 12 | **回归**：切主题后 `.card` 的 `backgroundColor` 与 `borderTopColor` 均改变 | true |
 
-- **验证**：先跑一次脚本，**断言 1~7 应全部 FAIL、8~12 应全部 PASS** —— 这是「基线红、护栏绿」的起点，可证明断言真的在测东西（不是恒真）。
+- **验证**：先跑一次脚本，期望 **断言 1、2、3、4、5、6、7 全部 FAIL；1b 与 8~12 全部 PASS** —— 这是「基线红、护栏绿」的起点，可证明断言真的在测东西（不是恒真）。
+  ⚠️ **`1b` 基线就是绿的**（promo 本来就没有 `backdrop-filter`），它是 G-4 之后的回归护栏，别误以为"基线不该绿"。其余基线状态：1 全覆盖=假、2/3 卡片 alpha=1、4 渐变层数=0、5 高光 alpha=0.03、6 边框 alpha=1、7 阴影模糊=8px。
   `venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`
 
 ### Step G-2 · 定义 glass token（双主题双套）

@@ -171,6 +171,124 @@ MEASURE_JS = r"""
 """
 
 
+GLASS_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const cs = (el) => (el ? getComputedStyle(el) : null);
+  const alphaOf = (color) => {
+    if (!color) return null;
+    const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/.exec(color);
+    if (!m) return null;
+    return m[4] === undefined ? 1 : parseFloat(m[4]);
+  };
+  // 按顶层逗号切分 box-shadow（括号内逗号不算）
+  const splitTop = (s) => {
+    const out = []; let depth = 0, cur = '';
+    for (const ch of s) {
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  };
+  // inset 段取白色 alpha 最大值；非 inset 段取最大模糊半径（第 3 个长度）
+  const shadowInfo = (el) => {
+    const sh = el ? (cs(el).boxShadow || '') : '';
+    if (!sh || sh === 'none') return { insetAlpha: null, blur: null, raw: sh };
+    let insetAlpha = null, blur = null;
+    for (const seg of splitTop(sh)) {
+      if (/inset/.test(seg)) {
+        const a = alphaOf(seg);
+        if (a !== null && (insetAlpha === null || a > insetAlpha)) insetAlpha = a;
+      } else {
+        const nums = seg.match(/-?[\d.]+px/g) || [];
+        if (nums.length >= 3) {
+          const b = Math.abs(parseFloat(nums[2]));
+          if (blur === null || b > blur) blur = b;
+        }
+      }
+    }
+    return { insetAlpha, blur, raw: sh };
+  };
+  const countGradients = (bg) => (!bg || bg === 'none') ? 0 : (bg.match(/gradient\(/g) || []).length;
+  const cards = [...document.querySelectorAll('.card:not(.card.promo), .kpi-card')];
+  const mainCard = q('#overview');
+  const si = shadowInfo(mainCard);
+  const dataCards = ['#overview', '#trend', '#alerts'];
+  return {
+    theme: document.documentElement.getAttribute('data-theme'),
+    cardCount: cards.length,
+    coveredCount: cards.filter((el) => cs(el).backdropFilter !== 'none').length,
+    glassCovered: cards.length > 0 && cards.every((el) => cs(el).backdropFilter !== 'none'),
+    promoBackdrop: q('.card.promo') ? cs(q('.card.promo')).backdropFilter : null,
+    kpiAlpha: (() => { const k = q('.kpi-card'); return k ? alphaOf(cs(k).backgroundColor) : null; })(),
+    dataCardAlphas: (() => {
+      const o = {}; dataCards.forEach((s) => { const el = q(s); o[s] = el ? alphaOf(cs(el).backgroundColor) : null; }); return o;
+    })(),
+    bodyLayers: countGradients(cs(document.body).backgroundImage),
+    bodyBgImage: (cs(document.body).backgroundImage || '').slice(0, 200),
+    highlightAlpha: si.insetAlpha,
+    shadowBlur: si.blur,
+    shadowRaw: si.raw,
+    borderAlpha: mainCard ? alphaOf(cs(mainCard).borderTopColor) : null,
+    borderRaw: mainCard ? cs(mainCard).borderTopColor : null,
+    topbarBackdrop: q('.topbar') ? cs(q('.topbar')).backdropFilter : null,
+    sidebarBg: q('#sidebar') ? cs(q('#sidebar')).backgroundColor : null,
+    sidebarBackdrop: q('#sidebar') ? cs(q('#sidebar')).backdropFilter : null,
+    cardBox: mainCard ? { w: mainCard.offsetWidth, h: mainCard.offsetHeight } : null,
+    scrollH: document.scrollingElement.scrollHeight,
+    scrollW: document.scrollingElement.scrollWidth,
+    innerW: window.innerWidth,
+  };
+}
+"""
+
+# G-1 断言 5/6 的目标区间（**分主题**）。
+# plan §6 G-1 给的是单一区间（highlight ≥0.08 / border 0.08~0.14），按 §4.2 早期建议值（.10）
+# 且只按 dark 写；§4.6.2「效果图校准值」把 dark 改成 highlight .07 / border .20，
+# 两者对不上（照原区间实现必然恒 FAIL）。按 plan §12.1「实施以 §4.6.2 为准」，此处按校准值
+# 给区间，并在 journal 记录该偏差。断言 2/3 同理：只在 dark 生效（light 的 .66/.88 天然超区间）。
+GLASS_RANGES = {
+    "dark": {"kpiMax": 0.2, "dataLo": 0.6, "dataHi": 0.8,
+             "highlight": (0.04, 0.15), "border": (0.15, 0.30)},
+    "light": {"kpiMax": 1.0, "dataLo": 0.5, "dataHi": 1.01,
+              "highlight": (0.85, 1.01), "border": (0.75, 1.01)},
+}
+
+
+def assert_glass(w: int, h: int, g: dict) -> None:
+    """G-1 玻璃判据断言（1~7）。数值区间随当前主题取（dark 为主验收口径）。"""
+    theme = g.get("theme") or "dark"
+    r = GLASS_RANGES.get(theme, GLASS_RANGES["dark"])
+    print(f"\n--- 玻璃判据 {w}x{h}（theme={theme}）---")
+    print(f"  body 层={g['bodyLayers']} 覆盖={g['coveredCount']}/{g['cardCount']} "
+          f"kpiAlpha={g['kpiAlpha']} dataAlpha={g['dataCardAlphas']} "
+          f"highlight={g['highlightAlpha']} border={g['borderAlpha']} blur={g['shadowBlur']}")
+    if g.get("shadowRaw"):
+        print(f"  shadow={g['shadowRaw'][:120]}")
+
+    check(g["glassCovered"], f"{w} 卡片 backdrop-filter 全覆盖（{g['coveredCount']}/{g['cardCount']}）",
+          g["coveredCount"], g["cardCount"])
+    check((g["promoBackdrop"] or "none") == "none", f"{w} promo 卡显式 backdrop-filter=none（1b）",
+          g["promoBackdrop"])
+    check(g["kpiAlpha"] is not None and g["kpiAlpha"] < r["kpiMax"],
+          f"{w} .kpi-card 背景 alpha < {r['kpiMax']}", g["kpiAlpha"])
+    for sel, a in (g["dataCardAlphas"] or {}).items():
+        check(a is not None and r["dataLo"] <= a <= r["dataHi"],
+              f"{w} 数据卡 {sel} alpha ∈ [{r['dataLo']}, {r['dataHi']}]", a)
+    check(g["bodyLayers"] >= 2, f"{w} body 氛围渐变层 ≥ 2", g["bodyLayers"])
+    lo, hi = r["highlight"]
+    check(g["highlightAlpha"] is not None and lo <= g["highlightAlpha"] <= hi,
+          f"{w} 顶边内高光白 alpha ∈ [{lo}, {hi}]", g["highlightAlpha"])
+    lo, hi = r["border"]
+    check(g["borderAlpha"] is not None and lo <= g["borderAlpha"] <= hi,
+          f"{w} 卡片边框 alpha ∈ [{lo}, {hi}]", g["borderAlpha"])
+    check(g["shadowBlur"] is not None and g["shadowBlur"] >= 24,
+          f"{w} 卡片外阴影模糊半径 ≥ 24px", g["shadowBlur"])
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
