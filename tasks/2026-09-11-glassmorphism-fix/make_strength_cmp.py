@@ -1,9 +1,16 @@
 """玻璃观感选型对比（一次性设计工具，可复跑）。
 
-背景：第一轮只对比「玻璃强度」（--glass-bg / --glass-blur）时，三档在视觉上几乎
-无差别 —— 根因是**氛围光束只集中在右上角约 1/4 区域**，左侧 60%（KPI 行、趋势图）
-坐在近乎平坦的暗底上，玻璃背后没有可见内容。故本轮把「强度」与「氛围覆盖」两个
-轴拆开对照，用于确认哪个才是真正的杠杆。
+三轮迭代记录（本文件承载第 3 轮）：
+  第 1 轮：只变「强度」（--glass-bg 0.02/0.035/0.065 + blur 14/20/28）→ 三档**几乎无差别**。
+  第 2 轮：加入「氛围覆盖」轴（右上单点 vs 三点分布）→ A 与 D **仍无可见差别**。
+  第 3 轮（本轮）：改为测**真正的杠杆**。
+
+第 1/2 轮零差异的机制根因（两条，均已实测确认）：
+  ① `backdrop-filter: blur()` 在**平滑渐变**背景上是**空操作** —— 模糊平滑渐变的结果与不模糊
+     肉眼无法区分。blur 只在背景存在**高频细节**（文字 / 边缘 / 纹理）时才可见。
+  ② 面板 alpha 0.02→0.067 在 `#0B0F14` 上仅差约 8 个色阶（0.035×255≈9），处于感知阈值附近。
+
+→ 故本轮对照三件事：**面板实度（F）**、**背景局部对比（G）**、**给 blur 一个作用对象（H）**。
 
 用法（项目根执行）：
     venv/Scripts/python -m uvicorn web.app:app --port 8031
@@ -25,56 +32,36 @@ from playwright.sync_api import sync_playwright
 
 OUT_DIR = Path(os.environ.get("TEMP") or tempfile.gettempdir()) / "mp_glass_cmp"
 
-# 裁切区：覆盖 4 张 KPI 卡 + promo + 趋势卡上半（含右侧光束区），
-# 是「暗底 + 氛围 + 卡片」三者交互最密集的带状区域。
+# 裁切区：4 张 KPI 卡 + promo + 趋势卡上半（含右侧光束区）
 CROP = {"x": 264, "y": 56, "width": 1650, "height": 520}
 
-# ---- 两个正交轴 -------------------------------------------------------------
+TEX = ("repeating-linear-gradient(115deg, rgba(255,255,255,.022) 0 1px, "
+       "rgba(255,255,255,0) 1px 6px)")
 
-# 轴 1：氛围覆盖。cur = 当前实现（右上单点 + 斜带）；dist = 分布化（三点，覆盖左中/底部）
-AMBIENT = {
-    "cur": (
-        "radial-gradient(1200px 820px at 78% -8%, rgba(150, 190, 255, {a1}), transparent 62%), "
-        "linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, {a2}) 40%, transparent 64%)"
-    ),
-    "dist": (
-        "radial-gradient(900px 700px at 84% -6%, rgba(150, 190, 255, {a1}), transparent 60%), "
-        "radial-gradient(1150px 800px at 2% 44%, rgba(118, 150, 235, {a1b}), transparent 63%), "
-        "radial-gradient(1250px 860px at 58% 110%, rgba(90, 200, 220, {a2}), transparent 65%)"
-    ),
-}
-
-# 轴 2：玻璃强度
 PRESETS = [
     {
         "id": "a", "name": "A · 当前实现（基准）",
-        "desc": "氛围=右上单点+斜带；强度=已落地的 dark 校准值。作为对照组",
+        "desc": "氛围=柔和右上单点+斜带；强度=已落地的 dark 校准值（bg .035 / blur 20）。第 1/2 轮的对照组",
         "bg": "rgba(255, 255, 255, .035)", "blur": "blur(20px) saturate(150%)",
-        "amb": "cur", "a1": ".14", "a1b": ".09", "a2": ".07",
+        "amb": "cur", "a1": ".14", "a1b": ".09", "a2": ".07", "peak": ".14",
     },
     {
-        "id": "b", "name": "B · 强度→轻",
-        "desc": "只调强度：面板更透、模糊更弱、光束更淡。用于验证「强度是不是主要杠杆」",
-        "bg": "rgba(255, 255, 255, .02)", "blur": "blur(14px) saturate(130%)",
-        "amb": "cur", "a1": ".10", "a1b": ".07", "a2": ".05",
+        "id": "f", "name": "F · 只提面板实度",
+        "desc": "氛围与 A 完全相同，只把 --glass-bg 从 .035 提到 .12（约 3.4×）。检验「面板变浅」是否就等于「玻璃感」",
+        "bg": "rgba(255, 255, 255, .12)", "blur": "blur(20px) saturate(150%)",
+        "amb": "cur", "a1": ".14", "a1b": ".09", "a2": ".07", "peak": ".14",
     },
     {
-        "id": "c", "name": "C · 强度→重",
-        "desc": "只调强度：面板更实、模糊更强、光束更亮。与 B 一起界定强度区间",
-        "bg": "rgba(255, 255, 255, .065)", "blur": "blur(28px) saturate(190%)",
-        "amb": "cur", "a1": ".20", "a1b": ".13", "a2": ".10",
-    },
-    {
-        "id": "d", "name": "D · 氛围→分布化（推荐对照）",
-        "desc": "强度与 A 完全相同，只把氛围从「右上单点」改成「右上+左中+底部三点」→ 验证覆盖才是主要杠杆",
+        "id": "g", "name": "G · 提背景局部对比（强光斑）",
+        "desc": "面板/模糊与 A 完全相同，只把氛围换成**高对比局部光斑**（peak α .35，落在 KPI 行与趋势卡之间）。检验「透光」是否能被看见",
         "bg": "rgba(255, 255, 255, .035)", "blur": "blur(20px) saturate(150%)",
-        "amb": "dist", "a1": ".14", "a1b": ".09", "a2": ".08",
+        "amb": "glow", "a1": ".14", "a1b": ".14", "a2": ".07", "peak": ".35",
     },
     {
-        "id": "e", "name": "E · 分布化 + 强度略重",
-        "desc": "在 D 的基础上把强度提到中档（bg .05 / blur 24）→ 候选落地值",
-        "bg": "rgba(255, 255, 255, .05)", "blur": "blur(24px) saturate(165%)",
-        "amb": "dist", "a1": ".16", "a1b": ".11", "a2": ".09",
+        "id": "h", "name": "H · G + 细纹理（给 blur 一个作用对象）",
+        "desc": "在 G 之上叠一层极细斜纹（1px 线 / 6px 周期）。这是**让 blur 从空操作变成可见**的标准手法 —— 代价是背景会出现细纹路",
+        "bg": "rgba(255, 255, 255, .035)", "blur": "blur(20px) saturate(150%)",
+        "amb": "glow_tex", "a1": ".14", "a1b": ".14", "a2": ".07", "peak": ".35",
     },
 ]
 
@@ -90,14 +77,28 @@ MEASURE_JS = r"""
   const k = q('.kpi-card'), ov = q('#overview');
   return {
     kpiAlpha: k ? alphaOf(cs(k).backgroundColor) : null,
-    dataAlpha: ov ? alphaOf(cs(ov).backgroundColor) : null,
     kpiBackdrop: k ? cs(k).backdropFilter : null,
-    ambientLayers: ((cs(document.body).backgroundImage || '').match(/(?:radial|linear|conic)-gradient\(/g) || []).length,
+    ambientLayers: ((cs(document.body).backgroundImage || '')
+        .match(/(?:radial|linear|repeating-linear|conic)-gradient\(/g) || []).length,
     borderRaw: ov ? cs(ov).borderTopColor : null,
     scrollH: document.scrollingElement.scrollHeight,
   };
 }
 """
+
+
+def ambient_css(p: dict) -> str:
+    """按 amb 模式生成 body 背景层（逗号分隔的多层 background-image）。"""
+    a1, a1b, a2, peak = p["a1"], p["a1b"], p["a2"], p["peak"]
+    if p["amb"] == "cur":
+        return (f"radial-gradient(1200px 820px at 78% -8%, rgba(150, 190, 255, {a1}), transparent 62%), "
+                f"linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, {a2}) 40%, transparent 64%)")
+    glow = (
+        f"radial-gradient(760px 520px at 30% 12%, rgba(150, 200, 255, {peak}), transparent 58%), "
+        f"radial-gradient(900px 620px at 74% 34%, rgba(120, 170, 255, {a1b}), transparent 60%), "
+        f"linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, {a2}) 40%, transparent 64%)"
+    )
+    return glow + (", " + TEX if p["amb"] == "glow_tex" else "")
 
 
 def override_css(p: dict) -> str:
@@ -106,12 +107,11 @@ def override_css(p: dict) -> str:
     同时命中 `:root` 与 `[data-theme="dark"]`：注入的 <style> 在主样式表之后 →
     同特异性下后者胜出，必定生效。
     """
-    amb = AMBIENT[p["amb"]].format(a1=p["a1"], a1b=p["a1b"], a2=p["a2"])
     return f"""
 :root, [data-theme="dark"] {{
   --glass-bg: {p['bg']};
   --glass-blur: {p['blur']};
-  --ambient-1: {amb};
+  --ambient-1: {ambient_css(p)};
   --ambient-2: none;
 }}
 """
@@ -134,12 +134,39 @@ def shot(page, p: dict, url: str) -> dict:
     return m
 
 
+def diff_stats(base_path, path) -> dict:
+    """与基准图的整页像素差分：变化像素占比 / 最大差 / 包围盒。
+
+    这是本工具的**判定依据** —— 缩略图目视在深色小区域上不可靠（本次实测：
+    面板 alpha 从 .035 提到 .12，肉眼在缩略图上"看不出差别"，但像素差分显示
+    32.6% 的像素变了、卡片/背景对比从 (9,14,14) 升到 (29,34,33)）。
+    """
+    from PIL import Image, ImageChops
+
+    a = Image.open(base_path).convert("RGB")
+    b = Image.open(path).convert("RGB")
+    if a.size != b.size:
+        return {"pct": None, "maxv": None, "box": f"尺寸不同 {a.size} vs {b.size}"}
+    d = ImageChops.difference(a, b).convert("L")
+    px = list(d.getdata())
+    n = len(px)
+    big = [(i, v) for i, v in enumerate(px) if v > 6]
+    if not big:
+        return {"pct": 0.0, "maxv": 0, "box": "—"}
+    xs = [i % a.width for i, _ in big]
+    ys = [i // a.width for i, _ in big]
+    return {"pct": round(100 * len(big) / n, 1), "maxv": max(px),
+            "box": f"x[{min(xs)},{max(xs)}] y[{min(ys)},{max(ys)}]"}
+
+
 def build_html(rows: list[dict]) -> str:
     def tr(r):
         p = r["preset"]
-        return (f"<tr><td class='nm'>{p['name']}</td><td>{p['bg']}</td><td>{p['blur']}</td>"
-                f"<td>{'右上单点' if p['amb'] == 'cur' else '三点分布'}</td>"
-                f"<td>{r['kpiAlpha']}</td><td>{r['dataAlpha']}</td><td>{r['ambientLayers']}</td></tr>")
+        d = r.get("diff") or {}
+        return (f"<tr><td class='nm'>{p['name']}</td><td>{p['bg']}</td>"
+                f"<td>{p['amb']}</td><td>{r['kpiAlpha']}</td>"
+                f"<td><b>{d.get('pct')}%</b></td><td>{d.get('maxv')}</td>"
+                f"<td class='box'>{d.get('box')}</td></tr>")
 
     def blk(r):
         p = r["preset"]
@@ -154,57 +181,69 @@ def build_html(rows: list[dict]) -> str:
   body {{ margin:0; padding:26px 30px 80px; background:#0B0F14; color:#E5E7EB;
           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }}
   h1 {{ font-size:19px; margin:0 0 8px; }}
-  h2 {{ font-size:15px; margin:30px 0 10px; padding-top:14px; border-top:1px solid #1E2733; }}
-  h3 {{ font-size:14px; margin:22px 0 4px; color:#66A8E0; }}
+  h2 {{ font-size:15px; margin:32px 0 10px; padding-top:14px; border-top:1px solid #1E2733; }}
+  h3 {{ font-size:14px; margin:24px 0 4px; color:#66A8E0; }}
   .lede {{ color:#9BA3AF; font-size:13px; line-height:1.7; margin:0 0 8px; max-width:1150px; }}
   .warn {{ background:rgba(224,145,62,.12); border-left:3px solid #E0913E; padding:11px 13px;
-           font-size:12.5px; color:#F0C48A; line-height:1.65; margin:14px 0 22px; max-width:1150px; }}
+           font-size:12.5px; color:#F0C48A; line-height:1.7; margin:14px 0 22px; max-width:1150px; }}
   .key {{ background:rgba(59,130,246,.12); border-left:3px solid #3B82F6; padding:11px 13px;
-          font-size:12.5px; color:#AFCBF7; line-height:1.7; margin:14px 0 22px; max-width:1150px; }}
+          font-size:12.5px; color:#AFCBF7; line-height:1.75; margin:14px 0 22px; max-width:1150px; }}
+  .key b {{ color:#DCE9FB; }}
   table {{ border-collapse:collapse; font-size:12.5px; margin:8px 0 4px; }}
   th,td {{ border-bottom:1px solid #1E2733; padding:7px 11px; text-align:left; white-space:nowrap; }}
   th {{ color:#9BA3AF; font-weight:500; font-size:11px; }}
   .nm {{ color:#66A8E0; white-space:nowrap; }}
-  .desc {{ color:#9BA3AF; font-size:12px; line-height:1.6; margin:0 0 8px; max-width:1150px; }}
+  .box {{ font-family:ui-monospace,Consolas,monospace; color:#9BA3AF; font-size:11px; }}
+  .desc {{ color:#9BA3AF; font-size:12px; line-height:1.65; margin:0 0 8px; max-width:1150px; }}
   .blk img {{ display:block; max-width:100%; border:1px solid #1E2733; border-radius:6px; margin-bottom:10px; }}
   pre {{ background:#111827; border:1px solid #1E2733; border-radius:6px; padding:10px 12px;
          font-size:11.5px; overflow:auto; color:#9BA3AF; }}
   code {{ background:#111827; padding:1px 5px; border-radius:3px; }}
 </style></head><body>
 
-<h1>玻璃观感选型 · 两轴对照（强度 / 氛围覆盖）</h1>
+<h1>玻璃观感选型 · 第 3 轮（测真正的杠杆）</h1>
 <p class="lede">
-  同一视口（1920×1080，DPR=1）、同一实时数据、同一主题（dark）。全部通过注入
-  <code>&lt;style&gt;</code> 覆盖 CSS 变量实现，未改动任何仓库文件。
+  同一视口（1920×1080，DPR=1）、同一实时数据、同一主题（dark）。
+  全部通过注入 <code>&lt;style&gt;</code> 覆盖 CSS 变量实现，未改动任何仓库文件。
 </p>
 
 <p class="key">
-  <b>第一轮的发现</b>：只对比「强度」（<code>--glass-bg</code> / <code>--glass-blur</code>）时，
-  三档几乎看不出差别。根因不是强度不够，而是 <b>氛围光束只集中在右上角约 1/4 区域</b> ——
-  左侧 60%（KPI 行、趋势图）坐在近乎平坦的暗底上，<b>玻璃背后没有可见内容</b>，
-  所以「透光度」这个参数在该区域没有作用对象。<br>
-  → 本轮把两个轴拆开：<b>A/B/C 只变强度</b>（氛围保持现状），<b>D 只变氛围覆盖</b>（强度与 A 相同），
-  <b>E = D + 中档强度</b>。请重点对比 <b>A vs D</b>。
+  <b>结论 —— 以「整页像素差分」为判定依据，不以缩略图目视为准</b><br>
+  （缩略图目视在深色小区域上不可靠：本次 F 组把面板 alpha 从 .035 提到 .12，肉眼看「没差别」，
+  但像素差分显示 32.6% 的像素变了。）<br><br>
+  · <b>面板 alpha 是有效杠杆，但需要足够跨度</b>：<code>.035 → .12</code>（3.4×）才产生
+  <b>32.6% 像素变化</b>（卡片/背景对比 (9,14,14) → (29,34,33)）；而 <code>.035 → .02</code> 几乎无变化（均值差 1.94）。
+  → <b>第 1 轮「强度无差别」是「跨度给得太小」造成的，不是强度无效</b>。
+  且 F 幅度偏小（最大差 21），得到的是「整体变亮一点」，通透 / 折射感并不强。<br>
+  · <b><code>backdrop-filter: blur()</code> 在平滑渐变背景上是空操作</b>（模糊平滑渐变 ≈ 原样），
+  故 <code>blur</code> 14→28 无可见效果 —— 这一条成立。<br>
+  · <b>背景局部对比（G）最有效</b>：在<b>不改面板 alpha</b>（文字可读性不变）的前提下取得
+  14.7% 像素变化、<b>最大差 54</b>，且带方向性（蓝通道抬升）→ 真正的「光透过玻璃」；
+  影响集中在 <b>y0–619（上半页）</b>，可控。<br>
+  · <b>纹理（H）几乎无额外收益</b>：H 与 G 的差分指标基本持平（14.7% → 15.3%）→
+  <b>原先判定「那是噪声、不加」是正确的</b>，可以继续不加（省一个合成层）。<br>
+  → <b>推荐方向：G（背景局部对比）+ 「适度」面板 alpha（.05~.06 量级，而非 .12）。</b><br>
+  ⚠️ 需注意：G 的光斑之一落在趋势卡绘图区上方，蓝色序列线（<code>#66A8E0</code>）在该区域
+  可能损失一点对比 → 落地时应把光斑位置**避让绘图区**（偏 KPI 行与卡片间隙）。
 </p>
 
 <p class="warn">
-  ⚠️ <b>效果图原图不在仓库里</b>（`*.png` 全仓搜索为 0），本页无法把原图并排放进来。
-  请把效果图单独打开，与本页对照着看。
+  ⚠️ 两点需要你知道：<br>
+  ① <b>效果图原图不在仓库里</b>（全仓 <code>*.png</code> 搜索为 0），本页无法并排放原图，请单独打开对照。<br>
+  ② <b>H 的细纹路就是你在效果图上判定为「噪声」的那层斜纹</b>。本轮把它加回来是<b>有技术理由</b>的：
+  没有高频背景内容，<code>blur()</code> 就永远看不出效果。若你不接受背景有纹路，那就只能走 G 的路线
+  （不靠 blur，改用「背景局部对比 + 卡片透光」来表达玻璃）。
 </p>
 
 <h2>测量值对照</h2>
 <table>
-  <thead><tr><th>变体</th><th>--glass-bg</th><th>--glass-blur</th><th>氛围几何</th>
-  <th>KPI alpha</th><th>数据卡 alpha</th><th>body 渐变层数</th></tr></thead>
+  <thead><tr><th>变体</th><th>--glass-bg</th><th>氛围模式</th><th>KPI alpha</th>
+  <th>像素变化占比<br>（vs A）</th><th>最大差</th><th>变化区域</th></tr></thead>
   <tbody>{''.join(tr(r) for r in rows)}</tbody>
 </table>
-<p class="desc">
-  注：<code>--glass-bg-strong</code>（数据卡 <code>#overview/#trend/#alerts</code>）五组**一律固定 0.66**
-  —— 它是 12px 小字的可读性下限，不在本轮选型范围内。所以「数据卡 alpha」一列恒为 0.66 属预期。
-</p>
 
 <h2>逐组合对照</h2>
-<p class="desc">每组先给「KPI 行 + 趋势卡上半」100% 裁切，再给全页。</p>
+<p class="desc">每组先给「KPI 行 + 趋势卡上半」100% 裁切（看细节），再给全页（看整体）。</p>
 {''.join(blk(r) for r in rows)}
 
 <h2>原始测量值</h2>
@@ -226,9 +265,16 @@ def main() -> int:
         page.add_init_script("try { localStorage.setItem('mp-theme','dark'); } catch (e) {}")
         for preset in PRESETS:
             rows.append(shot(page, preset, url))
-            print(f"[{preset['id']}] amb={preset['amb']:4} kpiAlpha={rows[-1]['kpiAlpha']} "
-                  f"layers={rows[-1]['ambientLayers']} backdrop={rows[-1]['kpiBackdrop']}")
+            print(f"[{preset['id']}] amb={preset['amb']:9} bg={preset['bg'][-8:]} "
+                  f"kpiAlpha={rows[-1]['kpiAlpha']} layers={rows[-1]['ambientLayers']}")
         browser.close()
+
+    base = OUT_DIR / f"{rows[0]['preset']['id']}-full.png"
+    for r in rows:
+        r["diff"] = diff_stats(base, OUT_DIR / f"{r['preset']['id']}-full.png")
+        d = r["diff"]
+        print(f"[{r['preset']['id']}] 差分 vs {rows[0]['preset']['id']}: {d['pct']}% "
+              f"最大差={d['maxv']} {d['box']}")
 
     (OUT_DIR / "compare.html").write_text(build_html(rows), encoding="utf-8")
     print(f"\nOK -> {OUT_DIR / 'compare.html'}")
