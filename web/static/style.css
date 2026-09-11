@@ -210,7 +210,7 @@ body {
 .kpi-sub { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-sub.pos { color: var(--green); }
 .kpi-sub.neg { color: var(--red); }
-.kpi-spark { width: 96px; height: 56px; display: block; margin: 0; justify-self: end; }
+.kpi-spark { width: 100%; max-width: 96px; height: 56px; display: block; margin: 0; justify-self: end; }
 
 /* promo 卡（全球市场动态：CSS 渐变 + 内联 SVG，不引二进制资源） */
 .card.promo {
@@ -345,7 +345,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .row-news { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-card { min-height: 88px; }
   .kpi-val { font-size: 22px; }
-  .kpi-spark { width: 84px; }
+  .kpi-spark { max-width: 84px; }
 }
 
 /* 1300– 以下：主图与自选列表堆叠（720p 档位不追求同排） */
