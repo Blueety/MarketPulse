@@ -11,6 +11,7 @@
 | `venv/Scripts/python daily_report.py` | 运行主脚本（完整闭环：取数→报告→趋势图→写历史→写缓存） | 改了数据获取/报告生成/错误处理逻辑 |
 | `venv/Scripts/python -m uvicorn web.app:app --port 8000` | 启动 Web 看板（bento 栅格；只读展示 history / context / alerts，5 个 JSON API） | 改了 `web/` 模块 / 提交前 |
 | `venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | **Web UI 验收（Playwright，改动前端后必跑）**：自动挑空闲端口起 uvicorn → 1920×1080 / 1280×720 / 375×812 三视口断言（页面总高 / 零横向溢出 / **canvas 位图 == 显示尺寸** / 栅格列数 5·2·3·4 / 卡片 token / 模块行数 / 4 类别 tab 切换 / 主题切换 / 移动端抽屉 / console error=0）；截图与 JSON 报告落 `%TEMP%\marketpulse-verify\`（不落仓库）；退出码 0=全通过 | 改了 `web/templates` / `web/static` 后 |
+| `venv/Scripts/python scripts/backfill_history.py [--dry-run] [--symbols SH,SZ]` | 历史数据回填（补 1Y）：走 `_yahoo_chart_get` 双主机轮换、按符号所属市场时区归档日期、**只新增不改既有行**、经 `merge_history` 按 date 合并、收尾按 date 升序重排并断言（**不碰 `last_values.json`**）；`--dry-run` 只打印计划不写盘。**执行前必须先备份 `data/history.json`**；前置：`history.retention_days=365`，否则新增行会被 `HISTORY_MAX` 立即裁掉 | 需要补齐 1Y 历史 / 改了回填逻辑后 |
 | `venv/Scripts/python scripts/backtest.py [--history PATH]` | 运行独立回测脚本（验证告警阈值有效性）：复用生产 `check_breach` 语义回放 `data/history.json`，输出各标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率，生成 `reports/backtest_report.md`；`--history` 指定只读历史文件（用于数据不足验证）；全程 <5s、不联网、零副作用 | 改了 `scripts/backtest.py` / 阈值逻辑后回归 |
 | `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` | 独立重渲染日报图片（Hermes 追加 AI 解读后重渲染含解读图）；依赖 imgkit + 本地 wkhtmltoimage（先 `pip install -r requirements.txt` 装 imgkit，再 winget 装 wkhtmltopdf）；失败仅退出码非 0，不影响日报 md | 改了 `src/image_renderer.py` / 模板 / 重渲染入口后 |
 

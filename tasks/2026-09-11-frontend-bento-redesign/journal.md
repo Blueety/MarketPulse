@@ -88,3 +88,59 @@
 - **`context/2026-09-03.json` 有非本任务改动**（cron 重生成），提交本任务时勿一并带入。
 - **R8/R9 已按计划容忍**：`config.json` 的 `watchlist.stocks` 只有 1 只（`515300.SS`），自选卡已加 `min-height:240px` 防塌陷；该沪 ETF 日线自 09-03 起停更（`pitfalls.md:17`），迷你条/趋势基于旧序列，**非本次引入**。
 - **下次注意**：改前端后必须 `Ctrl+Shift+R` 或换端口验证（Jinja2 模板缓存 + 跨端口 CSS 缓存，`pitfalls.md` 已有两处记载）；`verify_ui.py` 每次运行自动挑空闲端口，天然规避该问题。
+
+---
+
+### 2026-09-11 23:0x–23:5x · Step 10（1Y 历史回填）
+
+**目标**：让 1Y 视图真的有 ~1 年数据（原仅 90 行 = 2026-05-14 起 4 个月）。
+
+**需求方决策**：① 授权执行者改 `config.json`；② 采用**方案 B**（新增回填脚本，不动早期 `seed_history.py`）。
+
+**只读核对先行（关键）**：核对实际代码后发现 plan §7 Step 10 / §11 R5 **只识别了 2 个缺陷，实际有 5 个**，其中 3 个会破坏生产数据：
+
+| # | plan 说法 | 实测 |
+|---|---|---|
+| S1 | 「统一改 `_EASTERN_TZ`」 | **半错**：history 日期口径是**按符号所属市场时区**（`get_market_date`：a-share→上海、us→美东）。统一转美东会让 A 股（上证 09:30 北京 = 前日 21:30 ET）整体**早一天** |
+| S2 | 未提及 | `HISTORY_MAX = retention_days = 90`，每次写都 `records[-90:]` → 回填**立刻被裁掉** |
+| S3 | 未提及 | `append_history` 默认**整行覆盖**；seed 新行只有 4 键起步 → 拉取失败的键不存在，会**抹掉既有值** |
+| S4 | 未提及 | `seed_history.py:106` 用**小写键**整文件覆盖 `last_values.json`，而消费方按**大写 symbol** 取值 → 跑一次就让次日涨跌幅退化为"首次运行" + 告警基准全失效 |
+| S5 | 未提及 | 逐条 `append_history` 重写整个文件 90 次 + 键序不一致 |
+
+**改动**：
+
+| 文件 | 内容 |
+|---|---|
+| `config.json`（gitignore 排除） | `history.retention_days` `90 → 365`；实测 `HISTORY_MAX = 365`；`.env` 无 `HISTORY_RETENTION_DAYS` 覆盖；`pytest` 不受影响（conftest 隔离） |
+| `scripts/backfill_history.py`（新增 ≈230 行） | `--dry-run` / `--symbols` / `--range`；走 `_yahoo_chart_get`（双主机轮换）；按 `A_SHARE_SYMBOLS` 分市场时区；**只新增 date 不存在的行**；丢弃「仅 BTC 有值」的非交易日；经 `merge_history` 按 date 合并；收尾 `ensure_sorted()` 按 date 升序重排 + 断言；**不调用 `save_last_values`**；源间节流 0.5s |
+| `data/history.json` | 90 → **263 行**（新增 173 行：2025-09-11 ~ 2026-05-13，与既有段无重叠无缺口） |
+| `tasks/.../verify_ui.py` | 新增「1Y 档主图实际渲染 ≥200 个交易日」断言 |
+| `docs/pitfalls.md` / `docs/commands.md` / `AGENTS.md` / `docs/architecture.md` | 记录回填纪律与新命令 |
+
+**执行中发现并修复的 bug（S6，我引入的）**：`analyzer.merge_history` 对不存在的 date 只做 `records.append(...)`、**不排序**（依赖"每天只写今天"使末尾天然有序）。回填历史日期导致整段旧数据被 append 到尾部 → 首次写入后实测打印 **`2026-05-14 ~ 2026-05-13`**（即 `/api/latest` 会把最旧日期当"最新日"）。修法：收尾 `ensure_sorted()` 重排 + 原子写 + 断言，现 `严格升序 True / 无重复 True`。**该坑已写入 `pitfalls.md`**。
+
+**另一处必须处理的源问题**：`BTC-USD` 是 7×24，Yahoo 近 1y 返回 **366 个自然日** bar（比 `^GSPC` 的 252 个交易日多 114 个）→ 直接回填会写出 ~110 个「只有 btc 有值」的纯周末行（超 `HISTORY_MAX`、偏离交易日口径、切断 `compute_correlation` 收益链、夸大回测样本）。修法：某天若除 `BTC` 外无任何标的有值 → 整行丢弃（实测丢弃 **104** 行）。
+
+**验证结果（全部实跑）**：
+
+| 验收项 | 实测 |
+|---|---|
+| 既有 90 行逐键比对（非空值不得变/不得丢） | 改动数 **0** |
+| `data/last_values.json` 未被动 | SHA256 `4831efc3…` 前后一致；`date` 仍 `2026-09-10` |
+| date 严格升序 / 无重复 | `True` / `True` |
+| 新增周末行 | **0**（回填前后均为历史遗留的 4 个） |
+| 日期口径抽查（金标准） | `2025-12-25` 仅 `sh/sz/btc`（美股圣诞休市）；`2026-01-01` **整行不存在**（中美双休）；`2026-01-02` 仅美股类（中国元旦假）；`2026-02-17` 仅美股类（春节） |
+| `/api/history?days=365` | **259 dates**（2025-09-11 ~ 2026-09-11）；`gspc 252/259`、`vix 251/259`、`cyb 86/259` |
+| `/api/history`（默认 30） | 仍 30 dates |
+| 涨跌幅消费点 | `GSPC +1.06%`、`SH -1.18%`（基准 `2026-09-10`）→ 正常，**非"首次运行"** |
+| `pytest tests/` | **459 passed** |
+| `scripts/backtest.py` | 有效交易日 **261**、触发事件 **304**、0.78s（原样本 90） |
+| `verify_ui.py` | **ALL PASSED**（含 1Y 档 257 点/条、`scrollHeight` 仍 1235） |
+
+**偏离 / 未闭环**：
+
+1. **未跑 `AUTO_PUSH=0 daily_report.py` 冒烟**：当前为**美东盘中**，跑它会用盘中价覆盖 `data/last_values.json`（`09-10 → 09-11 盘中`），破坏"基准不变"基线、并可能让次日涨跌幅基于盘中值。改用**非破坏性等价验证**（直接复算 `daily_report` 同口径的 09-11 涨跌幅，结果正常）。今晚 Hermes cron 会真实跑通该路径。
+2. **CYB（`399006.SZ`）回填段为空**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 新增段该列全空（`cyb 86/259`）。属外部数据源缺口；如需补齐须改走 AkShare `stock_zh_index_daily(symbol="sz399006")`（含 Sina 源挂起风险，需复用 `fetch_sector_heat` 的 daemon 线程限时模式）。
+3. `seed_history.py` / `seed_history_market.py` **未修改**，已在 `AGENTS.md` / `docs/pitfalls.md` 标注"勿再使用"。
+4. **`plan.md` 未改**：我曾在 `plan.md` 追加「附录 A · Step 10 执行前只读核对」（已被提交为 `7efc75b`），但架构侧在 `6808ca4` 按新任务 `2026-09-11-glassmorphism-fix/plan.md` §0 的「**不要再向旧 plan 追加内容**」将其还原。→ 本任务记录以 `journal.md` 为准，不再改 `plan.md`。
+5. `reports/backtest_report.md` 被回测重新生成（正常产物）。
