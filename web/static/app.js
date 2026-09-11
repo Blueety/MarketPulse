@@ -77,13 +77,31 @@ const PLACEHOLDERS = [
 
 // 市场概览 6 小卡：indices = /api/latest，macro = /api/macro
 const OVERVIEW_CARDS = [
-  { id: 'GSPC', label: '美股 · 标普500', source: 'indices' },
-  { id: 'SH', label: 'A股 · 上证指数', source: 'indices' },
-  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10 },
-  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro' },
-  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%' },
-  { id: 'CL=F', label: '原油', source: 'macro' }
+  { id: 'GSPC', label: '美股 · 标普500', source: 'indices', char: '美' },
+  { id: 'SH', label: 'A股 · 上证指数', source: 'indices', char: 'A' },
+  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, char: '金' },
+  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', char: '元' },
+  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', char: '债' },
+  { id: 'CL=F', label: '原油', source: 'macro', char: '油' }
 ];
+
+// === V1 品牌色行图标（16px 圆角方块 + 1 字符）===
+// 底色单一事实来源：值为 style.css 的 --c-* 变量名，iconHtml 经内联 var() 引用 →
+// 双主题自动跟随（渲染函数不在切主题时重跑，写死色值会漏切）。无板块/品种 brand 色，
+// 用 ICON_PALETTE 按行序循环。字符：OVERVIEW_CARDS.char / ICON_CHARS 按 symbol 查 /
+// 板块名首字符；查不到色 → 中性灰（--text-muted，双主题可见）。
+const ICON_COLORS = {
+  "GSPC": "--c-gspc", "SH": "--c-sh", "GLD": "--c-gld",
+  "DX-Y.NYB": "--c-ixic", "^TNX": "--c-move", "CL=F": "--c-vxn",
+  "515300.SS": "--c-gspc"
+};
+const ICON_CHARS = { "515300.SS": "红" };
+const ICON_PALETTE = ["--c-gspc", "--c-ixic", "--c-sh", "--c-sz", "--c-cyb", "--c-move", "--c-vix", "--c-gld"];
+const ICON_FALLBACK_VAR = "--text-muted";
+function iconHtml(colorVar, char) {
+  const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
+  return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
+}
 
 // 单一状态源：驱动所有视图刷新
 const state = {
@@ -157,14 +175,15 @@ function renderOverview() {
     if (!d || d.value == null) {
       // macro 未接数据 → 「数据未接入」；indices 缺失 → 「数据暂缺」
       var note = c.source === 'macro' ? '数据未接入' : '数据暂缺';
-      return '<div class="mini-card is-empty"><div class="mini-label">' + escapeHtml(c.label) + '</div>' +
-        '<div class="mini-val">' + note + '</div><div class="mini-sub">—</div></div>';
+      return '<div class="mini-card is-empty"><div class="mini-label">' + iconHtml(ICON_COLORS[c.id], c.char) +
+        escapeHtml(c.label) + '</div><div class="mini-val">' + note + '</div><div class="mini-sub">—</div></div>';
     }
     var val = c.scale ? d.value * c.scale : d.value;
     var chg = d.change_pct;
     var cls = chg == null ? '' : (chg >= 0 ? 'pos' : 'neg');
     var sub = chg == null ? (d.status || '—') : fmtPct(chg);
-    return '<div class="mini-card"><div class="mini-label">' + escapeHtml(c.label) + '</div>' +
+    return '<div class="mini-card"><div class="mini-label">' + iconHtml(ICON_COLORS[c.id], c.char) +
+      escapeHtml(c.label) + '</div>' +
       '<div class="mini-val">' + fmtNum(val, 2) + escapeHtml(c.suffix || '') + '</div>' +
       '<div class="mini-sub ' + cls + '">' + escapeHtml(sub) + '</div></div>';
   }).join('');
@@ -177,12 +196,13 @@ function renderSector(latest) {
   tbody.innerHTML = "";
   const gainers = (latest && latest.sector_heat && latest.sector_heat.gainers) || [];
   if (!gainers.length) {
-    tbody.innerHTML = '<tr><td colspan="4">数据暂缺</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5">数据暂缺</td></tr>';
     return;
   }
-  gainers.slice(0, 5).forEach(function (g) {
+  gainers.slice(0, 5).forEach(function (g, i) {
     const tr = document.createElement("tr");
     tr.innerHTML =
+      '<td class="col-ico">' + iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (g.name || "—").charAt(0)) + "</td>" +
       "<td>" + escapeHtml(g.name || "—") + "</td>" +
       '<td class="num chg pos">' + fmtPct(g.change) + "</td>" +
       '<td class="col-turnover num">' + escapeHtml(g.turnover || "—") + "</td>" +
@@ -203,11 +223,12 @@ function renderUsSectors(latest) {
   }
   let maxAbs = 0.01;
   rows.forEach(function (r) { maxAbs = Math.max(maxAbs, Math.abs(r.change || 0)); });
-  box.innerHTML = rows.map(function (r) {
+  box.innerHTML = rows.map(function (r, i) {
     const chg = r.change || 0;
     const width = Math.min(100, Math.abs(chg) / maxAbs * 100).toFixed(1);
     const cls = chg >= 0 ? 'pos' : 'neg';
     return '<div class="bar-row">' +
+      iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (r.name || '—').charAt(0)) +
       '<span class="bar-name">' + escapeHtml(r.name || '—') + '</span>' +
       '<span class="bar-track"><i class="' + cls + '" style="width:' + width + '%"></i></span>' +
       '<span class="bar-val ' + cls + '">' + fmtPct(r.change) + '</span></div>';
@@ -377,6 +398,7 @@ function buildLineOptions(tradingDates, extra) {
         }
       },
       y: {
+        position: "right",   // V2：效果图刻度在右侧（crosshair 气泡动态读轴侧，自动跟随）
         grid: { color: tc.gridLine },
         border: { display: false },
         ticks: {
@@ -684,16 +706,19 @@ function renderWatchlist(payload) {
   const stocks = (payload && payload.stocks) || [];
   body.innerHTML = '';
   if (!stocks.length) {
-    body.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（实时取数失败）</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="empty">数据暂缺（实时取数失败）</td></tr>';
     return;
   }
   let maxAbs = 0.01;
   stocks.forEach(function (s) { maxAbs = Math.max(maxAbs, Math.abs(s.change_pct || 0)); });
   stocks.forEach(function (row) {
+    const ico = iconHtml(ICON_COLORS[row.symbol],
+      ICON_CHARS[row.symbol] || (row.label || '—').charAt(0));
     const tr = document.createElement('tr');
     if (row.value == null) {
       // 失败行：名称保留、其余列「数据暂缺」
-      tr.innerHTML = '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
+      tr.innerHTML = '<td class="col-ico">' + ico + '</td>' +
+        '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
         '<td class="empty">数据暂缺</td><td class="empty">数据暂缺</td><td class="col-bar"></td>';
       body.appendChild(tr);
       return;
@@ -702,6 +727,7 @@ function renderWatchlist(payload) {
     const cls = chg == null ? '' : (chg >= 0 ? 'pos' : 'neg');
     const width = chg == null ? 0 : Math.min(100, Math.abs(chg) / maxAbs * 100).toFixed(1);
     tr.innerHTML =
+      '<td class="col-ico">' + ico + '</td>' +
       '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
       '<td class="num">' + fmtNum(row.value, 2) + '</td>' +
       '<td class="num chg ' + cls + '">' + fmtPct(chg) + '</td>' +
@@ -871,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!sec) return;
       sec.classList.remove('hidden');
       const b = document.getElementById('watchlist-body');
-      if (b) b.innerHTML = '<tr><td colspan="4" class="empty">数据暂缺（取数失败）</td></tr>';
+      if (b) b.innerHTML = '<tr><td colspan="5" class="empty">数据暂缺（取数失败）</td></tr>';
       state.watch = { stocks: [] };
       renderLede();
     });

@@ -104,7 +104,7 @@ body {
 }
 .brand { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
 .brand-logo { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; font-family: var(--mono); }
-.brand-mark { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .1em; color: var(--text-primary); }
+.brand-mark { font-size: 14px; font-weight: 700; color: var(--text-primary); }
 .brand-sub { font-size: 12px; color: var(--text-secondary); }
 .topsearch {
   display: flex; align-items: center; gap: 8px;
@@ -117,7 +117,7 @@ body {
 .topsearch input::placeholder { color: var(--text-muted); }
 .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
 .date-chip { font-family: var(--mono); font-size: 12px; color: var(--text-secondary); padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; }
-.avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; font-family: var(--mono); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar { width: 26px; height: 26px; border-radius: 6px; background: var(--bg-hover); border: 1px solid var(--border); color: var(--text-secondary); font-size: 10px; font-weight: 700; font-family: var(--mono); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .is-placeholder { opacity: .5; cursor: not-allowed; }
 .icon-btn {
   width: 20px; height: 20px; flex-shrink: 0; padding: 0;
@@ -159,6 +159,10 @@ body {
   border-left-color: var(--blue);
   color: var(--blue); font-weight: 600;
 }
+/* V5 导航占位（宏观数据/市场日历/设置）：无区块的项渲染为不可点占位，禁 href="#" 防跳页顶 */
+.nav-item.is-disabled { opacity: .45; cursor: not-allowed; }
+.nav-item.is-disabled:hover { background: transparent; color: var(--text-secondary); }
+.nav-divider { height: 1px; background: var(--border); margin: 8px 14px; flex-shrink: 0; }
 .sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
 .sidebar-theme-btn { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .15s ease; flex-shrink: 0; }
 .sidebar-theme-btn:hover { color: var(--blue); border-color: var(--blue); }
@@ -336,7 +340,11 @@ body {
 /* ===== 市场概览 6 小卡 ===== */
 .mini-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .mini-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 0; }
-.mini-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+/* V1 品牌色行图标：16px 圆角方块 + 1 字符（border-box 下尺寸恒定；底色由内联 var(--c-*) 提供） */
+.ico { width: 16px; height: 16px; border-radius: 5px; font-size: 9px; line-height: 1; color: #fff;
+       display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
+       flex-shrink: 0; font-style: normal; }
 .mini-val { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--text-primary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-sub { font-family: var(--mono); font-size: 12px; margin-top: 2px; color: var(--text-secondary); }
 .mini-card.is-empty .mini-val { color: var(--text-muted); font-size: 13px; font-weight: 400; }
@@ -409,7 +417,7 @@ body {
 
 /* ===== 行业板块（横幅条）===== */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
+.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
 .bar-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { display: block; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
 .bar-track i { display: block; height: 100%; border-radius: 3px; }
@@ -518,7 +526,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .chart-wrap { height: 280px; }
   .seg { gap: 5px; }
   .seg button { padding: 3px 9px; font-size: 11px; }
-  .bar-row { grid-template-columns: minmax(0, 1fr) 48px 52px; gap: 6px; }
+  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 52px; gap: 6px; }
 }
 
 /* G-8 降级（方案 B）：不支持 backdrop-filter 的环境（老浏览器 / 关闭该特性）→

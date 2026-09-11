@@ -501,6 +501,90 @@ def assert_crosshair(page) -> None:
           "CS-7b 重建后的新实例仍带 hoverCrosshair", c7["plugins"])
 
 
+FIDELITY_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const navBad = [];
+  document.querySelectorAll('#sidebar .nav-item').forEach(function (el) {
+    const t = el.getAttribute('data-target');
+    if (t) { if (!document.getElementById(t)) navBad.push(el.textContent.trim() + '→' + t); }
+    else if (!el.classList.contains('is-disabled')) navBad.push(el.textContent.trim());
+  });
+  const c = window.Chart && window.Chart.getChart(document.getElementById('chart-main'));
+  const av = q('.avatar');
+  return {
+    ovIcons: document.querySelectorAll('#overview .mini-card .ico').length,
+    ovCards: document.querySelectorAll('#overview .mini-card').length,
+    watchIcons: document.querySelectorAll('#watchlist-body tr .ico').length,
+    watchRows: document.querySelectorAll('#watchlist-body tr').length,
+    usIcons: document.querySelectorAll('#us-sectors-body .bar-row .ico').length,
+    usRows: document.querySelectorAll('#us-sectors-body .bar-row').length,
+    secIcons: document.querySelectorAll('#sector-body tr .ico').length,
+    secRows: document.querySelectorAll('#sector-body tr').length,
+    yPos: c ? c.scales.y.position : null,
+    brandText: q('.brand-mark') ? q('.brand-mark').textContent.trim() : null,
+    avatarRadius: av ? getComputedStyle(av).borderRadius : null,
+    navCount: document.querySelectorAll('#sidebar .nav-item').length,
+    navDisabled: document.querySelectorAll('#sidebar .nav-item.is-disabled').length,
+    navBad: navBad,
+    icoSize: (() => { const i = q('.ico'); return i ? [i.offsetWidth, i.offsetHeight] : null; })()
+  };
+}
+"""
+
+
+def assert_fidelity(page, m: dict) -> None:
+    """V1~V5 视觉保真断言（visual-fidelity 任务，F-1~F-7a）。
+
+    在 1920 dark 下跑一次；末尾把鼠标移出绘图区，保证后续 assert_crosshair 的基线干净。
+    红跑预期：F-1a~d/F-2/F-3/F-4/F-5/F-7a FAIL（测的就是本次改动），F-6 回归护栏 PASS。
+    """
+    print("\n--- 视觉保真（V1 图标 / V2 y轴右侧 / V3 品牌字 / V4 头像 / V5 导航）---")
+    f = page.evaluate(FIDELITY_JS)
+    # F-1 四处列表：图标数 == 行/卡数（Q2：内含 1 字符，数据驱动）
+    check(f["ovCards"] > 0 and f["ovIcons"] == f["ovCards"],
+          "F-1a 市场概览图标数 == 卡数", (f["ovIcons"], f["ovCards"]))
+    check(f["watchRows"] > 0 and f["watchIcons"] == f["watchRows"],
+          "F-1b 自选列表图标数 == 行数", (f["watchIcons"], f["watchRows"]))
+    check(f["usRows"] > 0 and f["usIcons"] == f["usRows"],
+          "F-1c 美股行业板块图标数 == 行数", (f["usIcons"], f["usRows"]))
+    check(f["secRows"] > 0 and f["secIcons"] == f["secRows"],
+          "F-1d A股热点板块图标数 == 行数", (f["secIcons"], f["secRows"]))
+    if f["icoSize"]:
+        check(f["icoSize"][0] == 16 and f["icoSize"][1] == 16, "F-1e 图标尺寸 16×16", f["icoSize"])
+    # F-2 / F-3 / F-4 / F-5
+    check(f["yPos"] == "right", "F-2 趋势图 y 轴 position=right", f["yPos"])
+    check(f["brandText"] == "MarketPulse", "F-3 品牌字为 MarketPulse", f["brandText"])
+    check(f["avatarRadius"] is not None and f["avatarRadius"] != "50%",
+          "F-4 头像为圆角方块（radius≠50%）", f["avatarRadius"])
+    check(f["navCount"] == 10 and f["navDisabled"] == 3 and not f["navBad"],
+          "F-5 nav=10 项（7 真实+3 占位）且 data-target 全命中", f)
+    # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
+    check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
+    check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
+    g = m.get("glass") or {}
+    check(g.get("glassCovered") is True, "F-6c backdrop 全覆盖",
+          (g.get("coveredCount"), g.get("cardCount")))
+    # F-7a 跨任务：y 轴移右后 crosshair 读数仍产生（气泡贴右侧由 %TEMP% 像素探针另行取证）
+    r = page.evaluate(
+        """() => { const cv = document.getElementById('chart-main');
+                   const c = window.Chart.getChart(cv);
+                   const rect = cv.getBoundingClientRect(), a = c.chartArea;
+                   return { cx: rect.left + (a.left + a.right) / 2,
+                            cy: rect.top + a.top + (a.bottom - a.top) * 0.4 }; }"""
+    )
+    page.mouse.move(r["cx"], r["cy"])
+    page.wait_for_timeout(500)
+    f7 = page.evaluate(
+        "() => { const c = window.Chart.getChart(document.getElementById('chart-main'));"
+        " return { pos: c.scales.y.position, label: c.$crosshairLabel }; }"
+    )
+    check(f7["pos"] == "right" and bool(f7["label"]),
+          "F-7a 轴在右时 crosshair 读数仍产生", f7)
+    page.mouse.move(10, 500)
+    page.wait_for_timeout(900)   # 鼠标移出 + tooltip 收场，给 assert_crosshair 留干净基线
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
@@ -691,6 +775,8 @@ def main() -> int:
             check(bool(pts) and max(pts["points"] or [0]) >= 200,
                   "1Y 档主图实际渲染 ≥200 个交易日（历史回填生效）", pts)
 
+            # 视觉保真（visual-fidelity 任务）：F-1~F-7a；末尾移出鼠标给 crosshair 留干净基线
+            assert_fidelity(page, m)
             # 悬停水平参考线（chart-hover-crosshair 任务）：鼠标交互与视口无关，1920 跑一次
             assert_crosshair(page)
 
