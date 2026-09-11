@@ -61,7 +61,7 @@
      `var(--ambient-1), var(--ambient-2)` → 展开后纹理在最前 = 画在最上层；勿把纹理移到最底
      （会被上层渐变按 (1-α) 衰减约一半）。两变量均不可置 none：`background-image: <层>, none`
      是非法值，整条声明会被丢弃 → 背景全丢 */
-  --ambient-1: repeating-linear-gradient(115deg, rgba(255, 255, 255, .05) 0 1px, rgba(255, 255, 255, 0) 1px 6px);
+  --ambient-1: repeating-linear-gradient(115deg, rgba(255, 255, 255, .03) 0 1px, rgba(255, 255, 255, 0) 1px 6px);
   --ambient-2: radial-gradient(760px 520px at 28% 10%, rgba(150, 200, 255, .32), transparent 58%),
                radial-gradient(820px 560px at 80% 26%, rgba(140, 185, 255, .18), transparent 60%),
                linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, .07) 40%, transparent 64%);
