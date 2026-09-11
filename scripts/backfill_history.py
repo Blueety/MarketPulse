@@ -13,6 +13,13 @@
    自动按 `HISTORY_MAX` 裁剪、临时文件 + `os.replace` 原子写。
 5. **不调用 `save_last_values`**：`data/last_values.json` 是次日涨跌幅与告警的基准，
    键名必须保持大写（`seed_history.py` 用小写键整文件覆盖会让次日涨跌幅与告警全部失效）。
+6. **A 股覆盖补齐走 AkShare**：Yahoo 对 `399006.SZ`（创业板指）近 1y **只返回 1 天**，而同日的
+   `000001.SS`/`399001.SZ` 各 243 天。故 A 股标的 Yahoo 返回 < `AKSHARE_FALLBACK_MIN`(30) 天时
+   改用 `ak.stock_zh_index_daily`（daemon 线程 + `join(AKSHARE_TIMEOUT=15s)` 限时，新浪源无
+   timeout），窗口按所有 Yahoo 序列的最早日期裁剪；对「已存在但该键为 `None`」的 A 股交易日行
+   **只补 `None` 位置**（非空值一律不覆盖，`--no-patch-existing` 可关闭该行为）。
+7. **收尾按 date 升序重排 + 断言**：`merge_history` 对不存在的 date 只 `append`、不排序
+   （依赖"每个入口只写今天"），回填历史日期必须整体重排，否则 `/api/latest` 会把最旧日期当"最新日"。
 
 前置条件：`config.json` 的 `history.retention_days`（或 env `HISTORY_RETENTION_DAYS`）
 已放宽到 365 —— 否则 `merge_history` 的新增行会被立即裁回 90 行（脚本会提示）。
@@ -20,8 +27,9 @@
 用法（项目根执行；**执行前请先备份 `data/history.json`**）：
 
     venv/Scripts/python scripts/backfill_history.py --dry-run    # 只打印计划，不写盘
-    venv/Scripts/python scripts/backfill_history.py              # 执行回填
+    venv/Scripts/python scripts/backfill_history.py              # 执行回填（含 A 股 AkShare 补齐）
     venv/Scripts/python scripts/backfill_history.py --symbols SH,SZ   # 只回填指定标的
+    venv/Scripts/python scripts/backfill_history.py --no-patch-existing   # 不补既有行空缺
 """
 from __future__ import annotations
 
@@ -29,6 +37,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,6 +59,8 @@ from src.fetcher import A_SHARE_SYMBOLS, SYMBOLS, _yahoo_chart_get  # noqa: E402
 DEFAULT_RANGE = "1y"
 RETENTION_WARN_THRESHOLD = 300   # 低于此值说明 retention 未放宽，回填会被立刻裁剪
 SOURCE_THROTTLE = 0.5            # 源间节流（秒），降低 10 标的连续取数的 429 概率
+AKSHARE_TIMEOUT = 15             # 秒；AkShare 走新浪源无 timeout，须 daemon 线程 + join 限时
+AKSHARE_FALLBACK_MIN = 30        # A 股标的 Yahoo 返回少于该天数 → 改用 AkShare（实测 399006.SZ 仅 1 天）
 
 # 7×24 交易、Yahoo 日线**含周末**的标的。其日期不可作为「交易日」依据，否则会写出
 # 只有 btc 有值的纯周末行（既不符合 history 的交易日口径，也会切断相关性收益链、
@@ -102,6 +113,111 @@ def collect_series(syms: list[str], rng: str) -> tuple[dict[str, dict[str, float
     return series, failed
 
 
+def _akshare_symbol(ticker: str) -> str:
+    """Yahoo 风格 A 股 ticker（`000001.SS` / `399006.SZ`）→ AkShare 指数代码（`sh000001` / `sz399006`）。"""
+    code, _, suffix = ticker.partition(".")
+    if not code or not suffix:
+        raise ValueError(f"非 A 股指数 ticker: {ticker}")
+    return ("sh" if suffix.upper() == "SS" else "sz") + code
+
+
+def fetch_akshare_index(sym: str, window_start: str) -> list[tuple[str, float]]:
+    """经 AkShare 取 A 股指数日线 → [(YYYY-MM-DD, close)]（升序，仅保留 >= window_start）。
+
+    新浪源在 akshare 内部无 timeout，故用 daemon 线程 + `join(AKSHARE_TIMEOUT)` 限时
+    （与 `src/fetcher.fetch_sector_heat` 同一范式）；超时/异常抛出，由调用方容错。
+    AkShare 返回的是**北京交易日**日期，与 history 的 A 股行口径一致。
+    """
+    ak_sym = _akshare_symbol(SYMBOLS[sym]["ticker"])
+    holder: dict = {}
+
+    def _worker() -> None:
+        try:
+            import akshare as ak
+            df = ak.stock_zh_index_daily(symbol=ak_sym)
+            if df is None or len(df) == 0:
+                raise ValueError(f"AkShare {ak_sym} 返回空数据")
+            for col in ("date", "close"):
+                if col not in df.columns:
+                    raise KeyError(f"AkShare {ak_sym} 缺少必需列: {col}")
+            rows = [(str(d)[:10], float(c)) for d, c in zip(df["date"], df["close"]) if c is not None]
+            holder["rows"] = sorted(rows)
+        except Exception as exc:  # noqa: BLE001 —— 交给调用方统一容错
+            holder["error"] = exc
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(AKSHARE_TIMEOUT)
+    if t.is_alive():
+        raise TimeoutError(f"AkShare {ak_sym} 取数超时（>{AKSHARE_TIMEOUT}s）")
+    if "error" in holder:
+        raise holder["error"]
+    return [(d, c) for d, c in holder.get("rows", []) if d >= window_start]
+
+
+def fill_akshare_gaps(series: dict[str, dict[str, float]], syms: list[str]) -> tuple[list[str], str | None]:
+    """A 股标的 Yahoo 覆盖不足时改用 AkShare 补齐（窗口与 Yahoo 各标的对齐）。
+
+    实测 `399006.SZ`（创业板指）Yahoo 近 1y **只返回 1 天**，而 `000001.SS`/`399001.SZ` 各 243 天。
+    AkShare 返回全历史（2010 起），故按 Yahoo 序列的**最早日期**裁剪，避免回填远超 1Y。
+    窗口基准**排除 7×24 标的**（BTC）——否则窗口会被 BTC 的自然日提前一天，造出
+    「SH/SZ 为空但 CYB 有值」的错位首行。
+    返回 (已补齐的符号列表, 窗口起始日)。
+    """
+    all_days = [
+        d for sym, vals in series.items()
+        if sym not in NON_TRADING_CALENDAR_SYMBOLS
+        for d in vals
+    ]
+    if not all_days:
+        return [], None
+    window_start = min(all_days)
+    filled: list[str] = []
+    for sym in syms:
+        if sym not in A_SHARE_SYMBOLS:
+            continue
+        have = len(series.get(sym) or {})
+        if have >= AKSHARE_FALLBACK_MIN:
+            continue
+        try:
+            rows = fetch_akshare_index(sym, window_start)
+        except Exception as exc:  # noqa: BLE001 —— 单标的容错
+            print(f"    {sym:5s} AkShare 补齐失败: {exc}")
+            continue
+        if len(rows) <= have:
+            print(f"    {sym:5s} Yahoo {have} 天，AkShare 仅 {len(rows)} 天 → 保留 Yahoo 结果")
+            continue
+        print(f"    {sym:5s} Yahoo 仅 {have} 天 → 改用 AkShare: {len(rows)} 天")
+        series[sym] = dict(rows)
+        filled.append(sym)
+    return filled, window_start
+
+
+def patch_targets(series: dict[str, dict[str, float]],
+                  syms_to_patch: list[str]) -> list[tuple[str, str, float]]:
+    """列出「既有行中该键为 None」的待补写项 [(date, sym, close)]（只读，绝不覆盖非空值）。
+
+    仅用于 AkShare 权威补数：既有行的 `None` 在**A 股交易日行**上属于 Yahoo 覆盖缺口的产物，
+    不是休市语义（该行同时有 `sh`/`sz` 等值即为证）。仍只写 `None` 位置，非空值一律不动。
+    """
+    rows = {r["date"]: r for r in load_history()}
+    out: list[tuple[str, str, float]] = []
+    for sym in syms_to_patch:
+        key = sym.lower()
+        for day, close in sorted((series.get(sym) or {}).items()):
+            row = rows.get(day)
+            if row is not None and row.get(key) is None:
+                out.append((day, sym, close))
+    return out
+
+
+def apply_patch_targets(targets: list[tuple[str, str, float]]) -> int:
+    """执行补写：逐项走 `merge_history`（只更新非 None 键、不整行覆盖、不新增日期行）。"""
+    for day, sym, close in targets:
+        merge_history(day, {sym: close})
+    return len(targets)
+
+
 def plan_fills(series: dict[str, dict[str, float]], existing: set[str]) -> dict[str, dict[str, float]]:
     """按天聚合「待新增」值。
 
@@ -123,11 +239,17 @@ def plan_fills(series: dict[str, dict[str, float]], existing: set[str]) -> dict[
     }
 
 
-def count_skipped_blanks(series: dict[str, dict[str, float]], history: list[dict]) -> int:
-    """统计既有行中「Yahoo 有值但该行原为空」的键数（仅用于报告"刻意不补"的量）。"""
+def count_skipped_blanks(series: dict[str, dict[str, float]], history: list[dict],
+                         exclude: frozenset[str] = frozenset()) -> int:
+    """统计既有行中「有值但该行原为空」的键数（报告"刻意不补"的量）。
+
+    `exclude` 为已由 AkShare 权威补写的符号（它们在补写清单里，不该计入"刻意跳过"）。
+    """
     rows = {r["date"]: r for r in history}
     n = 0
     for sym, vals in series.items():
+        if sym in exclude:
+            continue
         key = sym.lower()
         for day, _close in vals.items():
             row = rows.get(day)
@@ -179,6 +301,8 @@ def main() -> int:
     ap.add_argument("--symbols", default="", help="逗号分隔的大写符号，默认全部 SYMBOLS（10 个）")
     ap.add_argument("--range", default=DEFAULT_RANGE, help=f"Yahoo chart range，默认 {DEFAULT_RANGE}")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划，不写盘")
+    ap.add_argument("--no-patch-existing", action="store_true",
+                    help="禁止把 AkShare 补的数写进既有行的空缺键（默认允许，仅写 None 位置）")
     args = ap.parse_args()
 
     syms = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or list(SYMBOLS)
@@ -199,29 +323,41 @@ def main() -> int:
     print("取数：")
     series, failed = collect_series(syms, args.range)
 
+    # A 股覆盖补齐：Yahoo 对部分 A 股指数历史覆盖不足（实测 399006.SZ 仅 1 天）→ 改用 AkShare
+    print("\nA 股覆盖补齐（Yahoo 覆盖不足时改走 AkShare）：")
+    ak_filled, window_start = fill_akshare_gaps(series, syms)
+    if ak_filled:
+        print(f"    窗口起始日（各标的统一）: {window_start}")
+    else:
+        print("    无需补齐")
+
+    patch_syms = [] if args.no_patch_existing else list(ak_filled)
+    targets = patch_targets(series, patch_syms) if patch_syms else []
+
     raw_days = {d for vals in series.values() for d in vals if d not in existing}
     by_date = plan_fills(series, existing)
-    if not by_date:
-        print("\n无新增日期（既有历史已覆盖 Yahoo 返回区间）")
-        print("[dry-run] 未写盘" if args.dry_run else "（仅执行排序校验）")
-        if args.dry_run:
-            return 0
-        return finalize_and_report()
-
     days = sorted(by_date)
     dropped = len(raw_days) - len(days)
-    print(f"\n待新增 {len(days)} 行（{days[0]} ~ {days[-1]}）；既有 {len(existing)} 行不改动")
-    if dropped:
-        print(f"    已丢弃 {dropped} 个「仅 BTC 有值」的非交易日（周末 bar），保持 history 交易日口径")
-    for sym in syms:
-        if series.get(sym):
-            print(f"    {sym:5s} 覆盖 {sum(1 for d in days if sym in by_date[d]):3d}/{len(days)} 天")
-    skipped = count_skipped_blanks(series, history)
-    if skipped:
-        print(f"    （另有 {skipped} 个「既有行中为空、Yahoo 有值」的键被刻意跳过："
-              f"休市/未收盘的空值有真实语义，不用历史 bar 回填）")
+
+    if not days:
+        print("\n无新增日期（既有历史已覆盖取数区间）")
+    else:
+        print(f"\n待新增 {len(days)} 行（{days[0]} ~ {days[-1]}）；既有 {len(existing)} 行不改动")
+        if dropped:
+            print(f"    已丢弃 {dropped} 个「仅 BTC 有值」的非交易日（周末 bar），保持 history 交易日口径")
+        for sym in syms:
+            if series.get(sym):
+                print(f"    {sym:5s} 覆盖 {sum(1 for d in days if sym in by_date[d]):3d}/{len(days)} 天")
+        skipped = count_skipped_blanks(series, history, exclude=frozenset(patch_syms))
+        if skipped:
+            print(f"    （另有 {skipped} 个「既有行中为空、有值」的键被刻意跳过："
+                  f"休市/未收盘的空值有真实语义，不用通用历史 bar 回填）")
     if failed:
-        print(f"    失败标的（本次未回填）: {failed}")
+        print(f"    取数失败标的: {failed}")
+
+    if targets:
+        print(f"\nAkShare 空缺补写: {len(targets)} 个键 / {len({d for d, _, _ in targets})} 行"
+              f"（仅写既有行中该键为 None 的位置，绝不覆盖非空值；--no-patch-existing 可关闭）")
 
     if args.dry_run:
         print("\n[dry-run] 未写盘")
@@ -229,6 +365,8 @@ def main() -> int:
 
     for day in days:
         merge_history(day, by_date[day])
+    if targets:
+        print(f"AkShare 空缺补写完成: {apply_patch_targets(targets)} 个键")
     code = finalize_and_report()
     if code == 0 and len(load_history()) >= HISTORY_MAX:
         print(f"注意：已达 HISTORY_MAX={HISTORY_MAX} 上限，更早的行会被裁剪。")
