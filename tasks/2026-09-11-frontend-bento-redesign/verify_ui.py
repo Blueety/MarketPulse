@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -420,6 +421,86 @@ def assert_g9(page, g9: dict) -> None:
     check(back["inView"], "nav「板块表现」锚点仍能定位到 #us-sectors", back)
 
 
+def assert_crosshair(page) -> None:
+    """CS-1~CS-7 悬停水平参考线断言（chart-hover-crosshair 任务）。
+
+    在 1920 视口（dark）跑一次即可——鼠标交互与视口无关。画布指纹统一用
+    canvas.toDataURL()（同实例前后比对，DPR 无关）；chart 实例统一经
+    window.Chart.getChart(canvas) 获取。红跑预期：CS-1/CS-2/CS-4/CS-7b FAIL
+    （它们测的就是插件行为本身），CS-3/CS-5/CS-6/CS-7a PASS（回归护栏）。
+    """
+    print("\n--- 悬停水平参考线（crosshair）---")
+    info = page.evaluate(
+        """() => {
+            const c = window.Chart && window.Chart.getChart(document.getElementById('chart-main'));
+            if (!c) return null;
+            const r = document.getElementById('chart-main').getBoundingClientRect();
+            const a = c.chartArea;
+            return { area: {left: a.left, top: a.top, right: a.right, bottom: a.bottom},
+                     rect: {left: r.left, top: r.top},
+                     plugins: (c.config.plugins || []).map(function (p) { return p && p.id; }),
+                     optPlugin: c.options.plugins ? (c.options.plugins.hoverCrosshair !== undefined) : false };
+        }"""
+    )
+    check(bool(info), "chart-main 实例可达")
+    if not info:
+        return
+    # CS-1 内联插件已挂载（内联插件登记在 chart.config.plugins；options.plugins 作兜底）
+    has_plugin = "hoverCrosshair" in (info["plugins"] or []) or info["optPlugin"]
+    check(has_plugin, "CS-1 插件 hoverCrosshair 已挂载", info["plugins"])
+    # CS-5 布局回归（与 1920 专项「总高 ≤1240」同口径，就地复核）
+    sh = page.evaluate("() => document.scrollingElement.scrollHeight")
+    check(sh <= 1240, "CS-5 scrollHeight @1920 ≤ 1240", sh)
+
+    cx = info["rect"]["left"] + (info["area"]["left"] + info["area"]["right"]) / 2
+    h = info["area"]["bottom"] - info["area"]["top"]
+    y1 = info["rect"]["top"] + info["area"]["top"] + h * 0.3
+    y2 = info["rect"]["top"] + info["area"]["top"] + h * 0.7
+    snap = "() => document.getElementById('chart-main').toDataURL()"
+    baseline = page.evaluate(snap)
+    page.mouse.move(cx, y1)
+    page.wait_for_timeout(600)   # tooltip 出场动画稳定后再取指纹
+    snap1 = page.evaluate(snap)
+    # CS-6 tooltip 与横线并存（R5：横线画在 tooltip 之下，不得遮盖）
+    tip = page.evaluate(
+        "() => { const c = window.Chart.getChart(document.getElementById('chart-main'));"
+        " return c.tooltip ? c.tooltip.opacity : null; }"
+    )
+    check(tip is not None and tip > 0, "CS-6 悬停后 tooltip 仍显示（opacity>0）", tip)
+    page.mouse.move(cx, y2)
+    page.wait_for_timeout(400)
+    snap2 = page.evaluate(snap)
+    # CS-2 核心判据：同 x 不同 Y 画布指纹必然变化（横线跟手；无插件时两次相同）
+    check(snap1 != snap2, "CS-2 不同 Y 位置画布指纹不同（横线实时跟随）")
+    # CS-4 气泡文本 = 刻度同源格式化函数对该高度的输出，且格式 [+-]d.d%
+    c4 = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+            if (c.$crossY == null) return null;
+            return { label: c.$crosshairLabel,
+                     expect: fmtAxisPct(c.scales.y.getValueForPixel(c.$crossY)) }; }"""
+    )
+    ok4 = bool(c4) and c4["label"] == c4["expect"] \
+        and re.fullmatch(r"[+-]?\d+\.\d%", c4["label"] or "") is not None
+    check(ok4, "CS-4 气泡文本 = fmtAxisPct(getValueForPixel($crossY)) 且格式匹配", c4)
+    # CS-3 移出绘图区即隐藏（等 tooltip 出场动画结束再与进入前基线比对）
+    page.mouse.move(10, 500)
+    page.wait_for_timeout(900)
+    snap3 = page.evaluate(snap)
+    check(snap3 == baseline, "CS-3 移出绘图区后画布回到基线（横线+气泡+tooltip 全消失）")
+    # CS-7 切 tab 重建后不丢：实例唯一（R9）+ 新实例仍带插件（重建走同一条 renderMainChart）
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[1].click()")
+    page.wait_for_timeout(1200)
+    c7 = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+            return { alive: !!c,
+                     count: window.Chart.instances ? Object.keys(window.Chart.instances).length : null,
+                     plugins: c ? (c.config.plugins || []).map(function (p) { return p && p.id; }) : null }; }"""
+    )
+    check(c7["alive"] and c7["count"] == 1, "CS-7a 切 tab 后实例存活且唯一（R9）", c7)
+    check("hoverCrosshair" in (c7["plugins"] or []),
+          "CS-7b 重建后的新实例仍带 hoverCrosshair", c7["plugins"])
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
@@ -609,6 +690,9 @@ def main() -> int:
             )
             check(bool(pts) and max(pts["points"] or [0]) >= 200,
                   "1Y 档主图实际渲染 ≥200 个交易日（历史回填生效）", pts)
+
+            # 悬停水平参考线（chart-hover-crosshair 任务）：鼠标交互与视口无关，1920 跑一次
+            assert_crosshair(page)
 
             # 375 档：抽屉 + 单列
             page.set_viewport_size({"width": 375, "height": 812})
