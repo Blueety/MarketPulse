@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3871.7045,
-      "change_pct": -1.5936112909209483,
+      "value": 3862.7303,
+      "change_pct": -1.8217068528505802,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 13413.646,
-      "change_pct": -1.4982298733924337,
+      "value": 13298.769,
+      "change_pct": -2.3418176530933694,
       "status": "连跌2日"
     },
     "CYB": {
-      "value": 3305.566,
-      "change_pct": -0.9841775545452378,
+      "value": 3270.35,
+      "change_pct": -2.0390471905588963,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3940.5509,
       3951.5068,
       3934.4036,
-      3871.7045
+      3862.7303
     ],
     "sz": [
       14311.008,
@@ -307,7 +307,7 @@
       13703.208,
       13723.322,
       13617.67,
-      13413.646
+      13298.769
     ],
     "cyb": [
       3563.116,
@@ -339,7 +339,7 @@
       3359.716,
       3354.969,
       3338.422,
-      3305.566
+      3270.35
     ],
     "gld": [
       398.4700012207031,
@@ -411,9 +411,9 @@
     "indices": [
       {
         "name": "SH",
-        "current": 3871.7045,
+        "current": 3862.7303,
         "previous": 3934.4036,
-        "change_pct": -1.59,
+        "change_pct": -1.82,
         "threshold": 1.5376559692663965,
         "level": "WARN"
       }
@@ -422,66 +422,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "通信/电子",
-        "change": -0.86,
-        "turnover": "697.4亿",
-        "top_stock": "武汉凡谷"
+        "name": "消费",
+        "change": -1.99,
+        "turnover": "157.8亿",
+        "top_stock": "*ST瑞茂"
       },
       {
         "name": "农业",
-        "change": -1.36,
-        "turnover": "151.5亿",
+        "change": -2.18,
+        "turnover": "414.9亿",
         "top_stock": "新农开发"
       },
       {
+        "name": "金融",
+        "change": -2.41,
+        "turnover": "1604.0亿",
+        "top_stock": "上汽集团"
+      },
+      {
         "name": "军工",
-        "change": -1.53,
-        "turnover": "530.6亿",
-        "top_stock": "*ST实达"
+        "change": -2.56,
+        "turnover": "1598.6亿",
+        "top_stock": "通达股份"
       },
       {
         "name": "其他",
-        "change": -1.8,
-        "turnover": "5165.7亿",
+        "change": -2.6,
+        "turnover": "15359.8亿",
         "top_stock": "凯盛新能"
-      },
-      {
-        "name": "消费",
-        "change": -1.91,
-        "turnover": "58.0亿",
-        "top_stock": "*ST瑞茂"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": -4.02,
-        "turnover": "222.5亿",
+        "change": -5.29,
+        "turnover": "583.7亿",
         "top_stock": "闽东电力"
       },
       {
         "name": "地产/基建",
-        "change": -2.81,
-        "turnover": "56.0亿",
-        "top_stock": "ST洲际"
-      },
-      {
-        "name": "医药",
-        "change": -2.1,
-        "turnover": "239.9亿",
-        "top_stock": "沃森生物"
+        "change": -4.22,
+        "turnover": "144.1亿",
+        "top_stock": "博云新材"
       },
       {
         "name": "光伏/新能源",
-        "change": -2.07,
-        "turnover": "1198.0亿",
-        "top_stock": "华银电力"
+        "change": -3.31,
+        "turnover": "3689.9亿",
+        "top_stock": "江苏新能"
       },
       {
-        "name": "金融",
-        "change": -2.06,
-        "turnover": "540.3亿",
-        "top_stock": "上汽集团"
+        "name": "医药",
+        "change": -3.0,
+        "turnover": "777.6亿",
+        "top_stock": "南京新百"
+      },
+      {
+        "name": "通信/电子",
+        "change": -2.89,
+        "turnover": "2256.7亿",
+        "top_stock": "武汉凡谷"
       }
     ]
   },
@@ -491,10 +491,10 @@
   },
   "search_keywords": [
     "SH drop 2026-09-11",
-    "通信/电子 drop 2026-09-11",
+    "消费 drop 2026-09-11",
     "农业 drop 2026-09-11",
-    "军工 drop 2026-09-11",
-    "其他 drop 2026-09-11"
+    "金融 drop 2026-09-11",
+    "军工 drop 2026-09-11"
   ],
   "correlation": [],
   "watchlist": {
