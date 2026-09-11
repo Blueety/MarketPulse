@@ -57,8 +57,9 @@
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .07);
   --glass-blur: blur(20px) saturate(150%);
   --glass-shadow: 0 1px 1px rgba(0, 0, 0, .28), 0 12px 40px rgba(0, 0, 0, .36);
-  --ambient-1: radial-gradient(1200px 820px at 78% -8%, rgba(150, 190, 255, .14), transparent 62%);
-  --ambient-2: linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, .07) 40%, transparent 64%);
+  --ambient-1: radial-gradient(760px 520px at 28% 10%, rgba(150, 200, 255, .32), transparent 58%);
+  --ambient-2: radial-gradient(820px 560px at 80% 26%, rgba(140, 185, 255, .18), transparent 60%),
+               linear-gradient(148deg, transparent 18%, rgba(120, 160, 220, .07) 40%, transparent 64%);
   --card-shadow: var(--glass-shadow);
   --card-glow: var(--glass-highlight);
   --c-gspc: #66A8E0; --c-ixic: #2FD6A8; --c-sh: #FF6E5E; --c-sz: #F0A868; --c-cyb: #C792EA;
