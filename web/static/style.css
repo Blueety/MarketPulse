@@ -425,7 +425,7 @@ body {
 
 /* ===== 行业板块（横幅条）===== */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
+.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
 .bar-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { display: block; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
 .bar-track i { display: block; height: 100%; border-radius: 3px; }
@@ -534,7 +534,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .chart-wrap { height: 280px; }
   .seg { gap: 5px; }
   .seg button { padding: 3px 9px; font-size: 11px; }
-  .bar-row { grid-template-columns: 22px minmax(0, 1fr) 48px 52px; gap: 6px; }
+  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 52px; gap: 6px; }
 }
 
 /* G-8 降级（方案 B）：不支持 backdrop-filter 的环境（老浏览器 / 关闭该特性）→

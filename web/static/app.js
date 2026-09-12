@@ -76,15 +76,15 @@ const PLACEHOLDERS = [
 ];
 
 // 市场概览 6 小卡：indices = /api/latest，macro = /api/macro。
-// flag：市场归属旗标（需求方 2026-09-12）——美国市场相关（美股/美元/10Y/美股上市的黄金 ETF/美油）→
-// 'us'，中国市场（A股）→ 'cn'；CSS 画旗（Windows 无旗 Emoji），见 style.css 的 .ico-flag-*。
+// 图标（需求方 2026-09-12 参照效果图定稿）：市场类 → 旗（美股 'us' / A股 'cn'，twemoji 简化素材）；
+// 品种类 → 圆形图形素材（/static/icons/*.svg：dollar/bond/gold/oil），char 作 SVG 失败时的兜底字符。
 const OVERVIEW_CARDS = [
   { id: 'GSPC', label: '美股 · 标普500', source: 'indices', flag: 'us' },
   { id: 'SH', label: 'A股 · 上证指数', source: 'indices', flag: 'cn' },
-  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, flag: 'us' },
-  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', flag: 'us' },
-  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', flag: 'us' },
-  { id: 'CL=F', label: '原油', source: 'macro', flag: 'us' }
+  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, icon: 'gold', char: '金' },
+  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', icon: 'dollar', char: '元' },
+  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', icon: 'bond', char: '债' },
+  { id: 'CL=F', label: '原油', source: 'macro', icon: 'oil', char: '油' }
 ];
 
 // === V1 品牌色行图标（16px 圆角方块 + 1 字符）===
@@ -104,13 +104,19 @@ function iconHtml(colorVar, char) {
   const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
   return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
 }
-// 旗标变体：真旗 SVG 素材（web/static/flags/，取自 twemoji，自托管零运行时依赖）铺在上层；
+// 旗标变体：真旗 SVG 素材（web/static/flags/，取自 twemoji 后做图标级简化）铺在上层；
 // 加载失败（离线）时 onerror 移除 <img>，露出底层 CSS 画旗（.ico-flag-us/cn）兜底。
 // Windows 无旗 Emoji（🇺🇸 渲染成 "US" 字母），不能用 Emoji 字符。
 function iconFlagHtml(which) {
   const k = which === 'cn' ? 'cn' : 'us';
   return '<i class="ico ico-flag ico-flag-' + k + '">' +
     '<img class="ico-flag-img" src="/static/flags/' + k + '.svg" alt="" onerror="this.remove()"></i>';
+}
+// 圆形图形素材变体（/static/icons/*.svg）：底层铺品牌色块，img 失败自动露出（onerror 移除）
+function iconAssetHtml(colorVar, name) {
+  const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
+  return '<i class="ico" style="background:' + bg + '">' +
+    '<img class="ico-flag-img" src="/static/icons/' + name + '.svg" alt="" onerror="this.remove()"></i>';
 }
 
 // 单一状态源：驱动所有视图刷新
@@ -181,7 +187,9 @@ function renderOverview() {
   var idxMap = sourceMap('indices');
   var macMap = sourceMap('macro');
   box.innerHTML = OVERVIEW_CARDS.map(function (c) {
-    const ico = c.flag ? iconFlagHtml(c.flag) : iconHtml(ICON_COLORS[c.id], c.char);
+    const ico = c.flag ? iconFlagHtml(c.flag)
+      : c.icon ? iconAssetHtml(ICON_COLORS[c.id], c.icon)
+      : iconHtml(ICON_COLORS[c.id], c.char);
     var d = (c.source === 'indices' ? idxMap : macMap)[c.id];
     if (!d || d.value == null) {
       // macro 未接数据 → 「数据未接入」；indices 缺失 → 「数据暂缺」
