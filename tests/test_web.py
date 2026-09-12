@@ -958,3 +958,84 @@ def test_api_macro_endpoint_degrades(monkeypatch):
     r = TestClient(web.app.app).get("/api/macro")
     assert r.status_code == 200
     assert r.json()["stocks"] == []
+
+
+# ---- 风险偏好（三十二期：/api/latest 新增 risk_appetite，纯函数合成零新增取数）----
+
+def _ra_indices(vix=None, move=None):
+    return [{"symbol": "VIX", "value": vix}, {"symbol": "MOVE", "value": move}]
+
+
+def _ra_records(closes):
+    """vix 收盘序列 → 宽 records（None 语义保留）。"""
+    return [{"date": f"2026-09-{i:02d}", "vix": v} for i, v in enumerate(closes, start=1)]
+
+
+def _ra_clean_env(monkeypatch):
+    for k in ("STATUS_THRESHOLD_VIX_CALM", "STATUS_THRESHOLD_VIX_PANIC",
+              "STATUS_THRESHOLD_MOVE_CALM", "STATUS_THRESHOLD_MOVE_PANIC"):
+        monkeypatch.delenv(k, raising=False)
+
+
+def test_risk_appetite_high_when_vix_calm_and_falling(monkeypatch):
+    """VIX 平静(+1) + 5 日回落超 5%(+1)、MOVE 平静(0) → score 2 → high。"""
+    _ra_clean_env(monkeypatch)
+    records = _ra_records([15.5, 15.2, 15.0, 14.8, 14.5, 14.2])   # (14.2-15.5)/15.5 ≈ -8.4%
+    out = web.app._compute_risk_appetite(_ra_indices(14.2, 98.1), records)
+    assert out["level"] == "high" and out["score"] == 2
+    by_name = {f["name"]: f for f in out["factors"]}
+    assert by_name["VIX"] == {"name": "VIX", "value": 14.2, "state": "平静", "impact": 1}
+    assert by_name["MOVE"]["state"] == "平静" and by_name["MOVE"]["impact"] == 0
+    assert by_name["VIX 5日"]["change_pct"] == pytest.approx(-8.4, abs=0.1)
+    assert by_name["VIX 5日"]["impact"] == 1
+
+
+def test_risk_appetite_low_when_panic(monkeypatch):
+    """VIX 恐慌(-1) + MOVE 恐慌(-1) + 5 日持平(0) → score -2 → low。"""
+    _ra_clean_env(monkeypatch)
+    out = web.app._compute_risk_appetite(_ra_indices(32.0, 140.0), _ra_records([20.0] * 6))
+    assert out["level"] == "low" and out["score"] == -2
+
+
+def test_risk_appetite_neutral_when_mixed(monkeypatch):
+    """VIX 平静(+1) 与 MOVE 恐慌(-1) 对冲、5 日温和(+0.9%) → score 0 → neutral。"""
+    _ra_clean_env(monkeypatch)
+    records = _ra_records([15.0, 15.05, 15.1, 15.12, 15.14, 15.13])   # ≈ +0.9%
+    out = web.app._compute_risk_appetite(_ra_indices(15.0, 140.0), records)
+    assert out["level"] == "neutral" and out["score"] == 0
+
+
+def test_risk_appetite_vix_missing_level_null(monkeypatch):
+    """VIX 值缺失（取数失败/前向回填不可得）→ level=None，factors 尽列可得项。"""
+    _ra_clean_env(monkeypatch)
+    out = web.app._compute_risk_appetite(_ra_indices(None, 98.1), _ra_records([20.0] * 6))
+    assert out["level"] is None
+    # 5 日因子由 records 独立计算（与 indices 的 VIX 缺失无关）→ 尽列可得项
+    assert [f["name"] for f in out["factors"]] == ["MOVE", "VIX 5日"]
+
+
+def test_risk_appetite_5d_insufficient(monkeypatch):
+    """非空收盘不足 6 个 → VIX 5日 因子缺省（不入 factors、不计分）。"""
+    _ra_clean_env(monkeypatch)
+    out = web.app._compute_risk_appetite(_ra_indices(22.0, 98.1), _ra_records([22.0] * 3))
+    assert out["level"] == "neutral" and out["score"] == 0
+    assert "VIX 5日" not in {f["name"] for f in out["factors"]}
+
+
+def test_risk_appetite_5d_none_gaps_use_last_six_non_null(monkeypatch):
+    """5 日窗口取最近 6 个非 None 收盘（None 间隙跳过，保持时间序）。"""
+    _ra_clean_env(monkeypatch)
+    records = _ra_records([16.0, None, 15.5, 15.2, None, 15.0, None, 14.9, 14.2])
+    out = web.app._compute_risk_appetite(_ra_indices(14.2, 98.1), records)
+    by_name = {f["name"]: f for f in out["factors"]}
+    assert by_name["VIX 5日"]["change_pct"] == pytest.approx(-11.25, abs=0.1)   # (14.2-16)/16
+
+
+def test_api_latest_includes_risk_appetite(client):
+    """/api/latest 恒含 risk_appetite 键（client 夹具数据：VIX 警惕 0 + MOVE 平静 0
+    + 5 日 (23-18)/18≈+27.8% → -1 → low）。"""
+    r = client.get("/api/latest")
+    assert r.status_code == 200
+    ra = r.json()["risk_appetite"]
+    assert ra["level"] == "low" and ra["score"] == -1
+    assert [f["name"] for f in ra["factors"]] == ["VIX", "MOVE", "VIX 5日"]

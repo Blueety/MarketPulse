@@ -25,6 +25,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src import storage as st
 from src.analyzer import ALERTS_DIR as _ALERTS_DIR
+from src.analyzer import classify_move, classify_vix
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import load_watchlist_snapshot
 from src.config import load_config
@@ -400,6 +401,50 @@ def _watchlist_config() -> list[dict]:
     return (cfg.get("watchlist") or {}).get("stocks") or []
 
 
+# ---- 风险偏好（三十二期：纯函数合成，数据零新增取数）----
+
+_RISK_VIX_5D_PCT = 5.0   # VIX 5 日变化打分阈值（%）；模块级常量，V1 不入 config（plan §5.5）
+
+
+def _compute_risk_appetite(indices: list[dict], records: list[dict]) -> dict:
+    """风险偏好合成（纯函数）：VIX 状态 + MOVE 状态 + VIX 5 日变化三点打分。
+
+    状态词表复用 analyzer.classify_vix/classify_move（阈值 env 调用时复核，单一事实来源，
+    前端零阈值拷贝）。VIX value 缺失 → level=None（前端「数据暂缺」）；factors 尽列可得项。
+    5 日变化 = 最近 6 个非 None vix 收盘首尾比（%），不足 6 个 → 因子缺省不计分。
+    """
+    vix = next((it.get("value") for it in indices if it.get("symbol") == "VIX"), None)
+    move = next((it.get("value") for it in indices if it.get("symbol") == "MOVE"), None)
+    factors: list[dict] = []
+    score = 0
+    if vix is not None:
+        state = classify_vix(vix)[0]
+        impact = 1 if state == "平静" else (-1 if state == "恐慌" else 0)
+        score += impact
+        factors.append({"name": "VIX", "value": vix, "state": state, "impact": impact})
+    if move is not None:
+        state = classify_move(move)[0]
+        impact = -1 if state == "恐慌" else 0   # 债市波动只在剧烈时拉低偏好，平静不给正分
+        score += impact
+        factors.append({"name": "MOVE", "value": move, "state": state, "impact": impact})
+    closes = [r.get("vix") for r in records if r.get("vix") is not None][-6:]
+    if len(closes) >= 6 and closes[0]:
+        change_pct = (closes[-1] - closes[0]) / closes[0] * 100
+        impact = 1 if change_pct <= -_RISK_VIX_5D_PCT else (
+            -1 if change_pct >= _RISK_VIX_5D_PCT else 0)
+        score += impact
+        factors.append({"name": "VIX 5日", "change_pct": round(change_pct, 1), "impact": impact})
+    level = None
+    if vix is not None:
+        if score >= 1:
+            level = "high"
+        elif score <= -1:
+            level = "low"
+        else:
+            level = "neutral"
+    return {"level": level, "score": score, "factors": factors}
+
+
 def _load_watchlist() -> dict:
     """自选股：快照文件优先（报告链路落盘，请求路径零联网），配置比对失败 / 无快照 /
     快照构建异常时回退既有实时取数路径（慢但正确，防改配置后展示旧标的）。
@@ -502,10 +547,11 @@ def api_latest() -> dict:
     ctx = _load_latest_context()
     empty_sectors = {"sector_heat": {"gainers": [], "losers": []},
                      "us_sector_heat": {"gainers": [], "losers": []}}
-    records = _last_records(7)
+    records = _last_records(10)   # 三十二期：7→10，供风险偏好 5 日变化取数
     result = _compute_latest(records)
     if result is None:
-        return {"date": None, "indices": [], **empty_sectors}
+        return {"date": None, "indices": [], **empty_sectors,
+                "risk_appetite": {"level": None, "score": 0, "factors": []}}
 
     date, indices = result
     status_map: dict[str, str | None] = {}
@@ -522,6 +568,7 @@ def api_latest() -> dict:
         "indices": indices,
         "sector_heat": _sector_payload(ctx, "sector_heat"),
         "us_sector_heat": _sector_payload(ctx, "us_sector_heat"),
+        "risk_appetite": _compute_risk_appetite(indices, records),
     }
 
 
