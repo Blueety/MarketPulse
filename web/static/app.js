@@ -722,10 +722,16 @@ function renderWatchlist(payload) {
   const body = document.getElementById('watchlist-body');
   if (!body) return;
   if (section) section.classList.remove('hidden');
+  // 数据时点标注（三十期文件化）：快照路径带 as_of（ISO 本地时间），实时回退无此键 → 保持默认文案
+  const asofEl = document.getElementById('watchlist-asof');
+  if (asofEl) {
+    const asOf = payload && payload.as_of ? String(payload.as_of) : '';
+    asofEl.textContent = asOf.length >= 16 ? asOf.slice(5, 16).replace('T', ' ') : '收盘快照';
+  }
   const stocks = (payload && payload.stocks) || [];
   body.innerHTML = '';
   if (!stocks.length) {
-    body.innerHTML = '<tr><td colspan="5" class="empty">数据暂缺（实时取数失败）</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="empty">数据暂缺</td></tr>';
     return;
   }
   let maxAbs = 0.01;

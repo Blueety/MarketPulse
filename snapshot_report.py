@@ -17,8 +17,9 @@ import argparse
 import logging
 
 from src.alerter import run_alert_checks
-from src.analyzer import build_statuses, get_market_date, is_market_holiday, load_history, load_last_values, merge_history
-from src.fetcher import fetch_all, fetch_sector_heat
+from src.analyzer import build_statuses, get_market_date, is_market_holiday, load_history, load_last_values, merge_history, save_watchlist_snapshot
+from src.config import load_config
+from src.fetcher import fetch_all, fetch_sector_heat, fetch_watchlist
 from src.reporter import render_snapshot, save_snapshot, generate_context
 from src.git_ops import auto_commit_push
 
@@ -84,6 +85,15 @@ def main(market: str = "us", time: str = "noon") -> int:
         log.info("context 已更新: context/%s.json", date)
     except Exception as exc:
         log.warning("context 更新失败，不影响快照: %s", exc)
+    # 三十期：自选股快照随 cron 刷新（新鲜度对齐其他卡片的数据节奏）；失败仅记日志
+    try:
+        wl_stocks = (load_config().get("watchlist") or {}).get("stocks") or []
+        if wl_stocks:
+            wl_values, wl_series, _wl_errors = fetch_watchlist(wl_stocks)
+            if save_watchlist_snapshot(wl_stocks, wl_values, wl_series):
+                log.info("自选股快照已更新: data/watchlist.json")
+    except Exception as exc:
+        log.warning("自选股快照刷新失败，不影响快照: %s", exc)
     # 二十六期：cron 执行后自动 commit + push；失败仅记日志、退出码恒 0
     auto_commit_push(date, f"{market} {time} snapshot")
     return 0
