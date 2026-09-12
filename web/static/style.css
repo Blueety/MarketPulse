@@ -342,7 +342,7 @@ body {
 .mini-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 0; }
 .mini-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 /* V1 品牌色行图标：16px 圆角方块 + 1 字符（border-box 下尺寸恒定；底色由内联 var(--c-*) 提供） */
-.ico { width: 16px; height: 16px; border-radius: 5px; font-size: 9px; line-height: 1; color: #fff;
+.ico { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; line-height: 1; color: #fff;
        display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
        flex-shrink: 0; font-style: normal; }
 /* 旗标变体（需求方 2026-09-12）：美国市场 → 星条旗（简化条纹 + 蓝色角块）、中国市场 → 红底黄星。
@@ -425,7 +425,7 @@ body {
 
 /* ===== 行业板块（横幅条）===== */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
+.bar-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
 .bar-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { display: block; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
 .bar-track i { display: block; height: 100%; border-radius: 3px; }
@@ -534,7 +534,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .chart-wrap { height: 280px; }
   .seg { gap: 5px; }
   .seg button { padding: 3px 9px; font-size: 11px; }
-  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 52px; gap: 6px; }
+  .bar-row { grid-template-columns: 22px minmax(0, 1fr) 48px 52px; gap: 6px; }
 }
 
 /* G-8 降级（方案 B）：不支持 backdrop-filter 的环境（老浏览器 / 关闭该特性）→

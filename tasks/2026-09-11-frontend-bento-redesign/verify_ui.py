@@ -553,7 +553,7 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["secRows"] > 0 and f["secIcons"] == f["secRows"],
           "F-1d A股热点板块图标数 == 行数", (f["secIcons"], f["secRows"]))
     if f["icoSize"]:
-        check(f["icoSize"][0] == 16 and f["icoSize"][1] == 16, "F-1e 图标尺寸 16×16", f["icoSize"])
+        check(f["icoSize"][0] == 20 and f["icoSize"][1] == 20, "F-1e 图标尺寸 20×20", f["icoSize"])
     # F-2 / F-3 / F-4 / F-5
     check(f["yPos"] == "right", "F-2 趋势图 y 轴 position=right", f["yPos"])
     check(f["brandText"] == "MarketPulse", "F-3 品牌字为 MarketPulse", f["brandText"])
