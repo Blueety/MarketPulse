@@ -594,6 +594,80 @@ def assert_fidelity(page, m: dict) -> None:
     page.wait_for_timeout(900)   # 鼠标移出 + tooltip 收场，给 assert_crosshair 留干净基线
 
 
+NEWS_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const body = q('#news-body');
+  const items = [...document.querySelectorAll('#news-body .news-item')];
+  const links = [...document.querySelectorAll('#news-body .news-item a')];
+  const cs = body ? getComputedStyle(body) : null;
+  const a0 = links[0] ? getComputedStyle(links[0]) : null;
+  const lens = links.map((a) => a.textContent.length);
+  return {
+    count: items.length,
+    textLens: lens,
+    maxLen: lens.length ? Math.max(...lens) : 0,
+    invalidHref: links.filter((a) => !/^https?:/.test(a.getAttribute('href') || '')).length,
+    missingTitle: links.filter((a) => !a.getAttribute('title')).length,
+    metaCount: document.querySelectorAll('#news-body .news-meta').length,
+    summaryCount: document.querySelectorAll('#news-body .news-summary').length,
+    maxHeight: cs ? cs.maxHeight : null,
+    overflowY: cs ? cs.overflowY : null,
+    clientHeight: body ? body.clientHeight : null,
+    bodyScrollHeight: body ? body.scrollHeight : null,
+    cardH: q('#news') ? q('#news').offsetHeight : null,
+    alertsH: q('#alerts') ? q('#alerts').offsetHeight : null,
+    itemH: items.length ? items[0].offsetHeight : null,
+    weight: a0 ? a0.fontWeight : null,
+    whiteSpace: a0 ? a0.whiteSpace : null,
+    textOverflow: a0 ? a0.textOverflow : null,
+    scrollH: document.scrollingElement.scrollHeight,
+  };
+}
+"""
+
+
+def assert_news(page, base_url: str) -> None:
+    """N-7 最新资讯（宏观一句话新闻条）：DOM 渲染契约 + /api/news 落盘切句。
+
+    同时补齐 plan §7.2 要求、架构师未完成的 `#news` / `#news-body` DOM 实测值。
+    """
+    print("\n--- N-7 最新资讯（一句话新闻条）---")
+    dom = page.evaluate(NEWS_JS)
+    try:
+        with urllib.request.urlopen(base_url + "api/news", timeout=10) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        payload = {}
+        print(f"  /api/news 读取失败: {exc}")
+    items = payload.get("items") or []
+    sums = [len(it.get("summary") or "") for it in items]
+    print(f"  api items={len(items)} sumLens={sums} | dom items={dom['count']} maxLen={dom['maxLen']}")
+    print(f"  #news={dom['cardH']} #alerts={dom['alertsH']} itemH={dom['itemH']} "
+          f"body client={dom['clientHeight']} scroll={dom['bodyScrollHeight']} "
+          f"maxH={dom['maxHeight']} ovf={dom['overflowY']}")
+    print(f"  a weight={dom['weight']} whiteSpace={dom['whiteSpace']} textOverflow={dom['textOverflow']} "
+          f"scrollH={dom['scrollH']}")
+
+    check(dom["count"] > 0 and dom["count"] == len(items),
+          "N-1 DOM .news-item 数 == /api/news items 数", (dom["count"], len(items)))
+    check(dom["maxLen"] <= 43, "N-2 每行文本 ≤43 字（含 …）", dom["textLens"])
+    check(dom["metaCount"] == 0 and dom["summaryCount"] == 0,
+          "N-3 无 .news-meta / .news-summary（死元素清零）", (dom["metaCount"], dom["summaryCount"]))
+    check(dom["overflowY"] == "auto" and dom["maxHeight"] == "132px",
+          "N-4 #news-body max-height 132px + overflow-y auto", (dom["maxHeight"], dom["overflowY"]))
+    check(dom["invalidHref"] == 0 and dom["missingTitle"] == 0,
+          "N-5 href 均 http(s) 且 title 属性非空（tooltip 保信息）",
+          (dom["invalidHref"], dom["missingTitle"]))
+    check(all(s <= 60 for s in sums),
+          "N-7 /api/news 每条 summary ≤60 字（落盘切句生效）", sums)
+    check(dom["weight"] == "400", "N-8 .news-item a 字重 400（它是正文不是标题）", dom["weight"])
+    check(dom["whiteSpace"] == "nowrap" or dom["whiteSpace"] == "normal",
+          "N-9 white-space 合法（nowrap 桌面 / normal 小屏两行）", dom["whiteSpace"])
+    check(dom["cardH"] is not None and dom["alertsH"] is not None and abs(dom["cardH"] - dom["alertsH"]) <= 2,
+          "N-10 #news 与 #alerts 等高（行高不随条数漂移）", (dom["cardH"], dom["alertsH"]))
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
@@ -713,6 +787,7 @@ def main() -> int:
                 pass
             page.wait_for_timeout(800)
             assert_g9(page, page.evaluate(G9_JS))
+            assert_news(page, url)   # N-7 最新资讯（含 §7.2 要求的 #news DOM 实测）
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]

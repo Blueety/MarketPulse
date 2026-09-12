@@ -320,7 +320,21 @@ function renderMarketRelation(latest) {
   }).join('');
 }
 
-// 最新资讯（三十三期）：/api/news 渲染（Hermes 落盘 data/news.json，未接入时为空态）
+// 取一句话（单行展示用）：优先 summary，为空则回退 title；按句末标点切首句（首句 <12 字补第二句）；
+// 最终一律截到 42 字（含 …）。**回退路径也要截断**，否则长标题会突破 N-2 的 ≤43 上限。
+function oneLine(summary, fallback) {
+  var text = String(summary == null ? '' : summary).trim()
+    || String(fallback == null ? '' : fallback).trim();
+  if (!text) return '';
+  var parts = text.split(/[。！？；!?;]/);
+  var first = (parts[0] || '').trim();
+  if (first.length < 12 && parts[1]) first = (first + '。' + parts[1]).trim();
+  if (!first) first = text;
+  return first.length > 42 ? first.slice(0, 41) + '…' : first;
+}
+
+// 最新资讯（三十四期）：每行一句话的宏观/世界要闻列表。
+// 标题**不显示**，完整标题留在 <a title> 原生 tooltip 里（信息不丢失）；url 不来自可信源 → 必须转义。
 function renderNews(payload) {
   const body = document.getElementById('news-body');
   if (!body) return;
@@ -332,11 +346,10 @@ function renderNews(payload) {
     return;
   }
   body.innerHTML = items.map(function (n) {
-    const meta = [n.source, n.published].filter(Boolean).map(escapeHtml).join(' · ');
+    var text = oneLine(n.summary, n.title);
     return '<div class="news-item">' +
-      '<a href="' + n.url + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(n.title) + '</a>' +
-      (meta ? '<div class="news-meta">' + meta + '</div>' : '') +
-      (n.summary ? '<p class="news-summary">' + escapeHtml(n.summary) + '</p>' : '') +
+      '<a href="' + escapeHtml(n.url) + '" target="_blank" rel="noopener noreferrer"' +
+      ' title="' + escapeHtml(n.title) + '">' + escapeHtml(text) + '</a>' +
       '</div>';
   }).join('');
 }

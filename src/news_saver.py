@@ -26,6 +26,36 @@ def _is_junk(text: str) -> bool:
     return any(kw in text for kw in JUNK_KEYWORDS)
 
 
+# 尾部平台噪声（补 N-G4：_is_junk 只作用于 title，summary 侧的噪声会直接漏到前端）
+TAIL_NOISE = ["智通财经", "视野环球", "鉅亨網", "美股股市新聞", "富途牛牛"]
+TAIL_NOISE_POSITION = 0.5   # 仅当噪声出现位置 > 50% 时才截断
+MAX_SUMMARY_LEN = 60        # 一句话上限（比前端的 42 字宽，给前端留余量）
+MIN_FIRST_SENTENCE = 12     # 首句短于该长度 → 补第二句
+
+
+def _strip_tail_noise(text: str) -> str:
+    """剥离出现在**中后段**的平台噪声（如「…200日均！视野环球财经 315000 s…」）。
+
+    ⚠️ 为什么加 50% 门槛：`JUNK_KEYWORDS` 里的「东方财富」「同花顺」等可能出现在正文前段，
+    无条件截断会**把整句砍没** → 只处理中后段噪声。
+    """
+    cut = len(text)
+    for kw in TAIL_NOISE:
+        idx = text.rfind(kw)
+        if idx > len(text) * TAIL_NOISE_POSITION:
+            cut = min(cut, idx)
+    return text[:cut].strip()
+
+
+def _first_sentence(text: str) -> str:
+    """按句末标点切出「一句话」；首句过短则补第二句（补回句号）。"""
+    parts = re.split(r'[。！？；!?;\n]', text)
+    first = (parts[0] or "").strip()
+    if len(first) < MIN_FIRST_SENTENCE and len(parts) > 1 and parts[1].strip():
+        first = (first + "。" + parts[1].strip()).strip()
+    return first
+
+
 def _clean_title(title: str) -> str:
     """清理标题"""
     # 去除网站名后缀
@@ -45,7 +75,12 @@ def _clean_title(title: str) -> str:
 
 
 def _clean_summary(summary: str) -> str:
-    """清理摘要"""
+    """清理摘要 → **一句话**（供前端单行展示）。
+
+    顺序：去表格碎片/markdown/特殊字符/固定碎片 → 压空白 → **尾部噪声剥离** → **按句切分**
+    → 再剥一次噪声 → 截到 `MAX_SUMMARY_LEN`。切句必须在清洗之后（否则残留标记会破坏句边界
+    判断），截断必须放最后（否则会把「…」也算进长度）。
+    """
     # 去除表格碎片
     if "|" in summary:
         parts = summary.split("|")
@@ -63,9 +98,12 @@ def _clean_summary(summary: str) -> str:
     summary = re.sub(r'^\d+、', '', summary)
     # 去除换行
     summary = " ".join(summary.split())
+    # N-G3 修复：硬截断 → 一句话（先剥尾部噪声，再切句，必要时再剥一次）
+    summary = _first_sentence(_strip_tail_noise(summary))
+    summary = _strip_tail_noise(summary)
     # 截断
-    if len(summary) > 80:
-        summary = summary[:77] + "..."
+    if len(summary) > MAX_SUMMARY_LEN:
+        summary = summary[:MAX_SUMMARY_LEN - 1] + "…"
     return summary.strip()
 
 
@@ -104,15 +142,15 @@ def save_news(results: list[dict],当天日期: str | None = None) -> bool:
             "url": url,
             "source": item.get("source") or "",
             "published": item.get("date") or item.get("published_date") or "",
-            "summary": summary[:80] if summary else "",
+            "summary": summary[:MAX_SUMMARY_LEN] if summary else "",
         })
 
     if len(valid) < 1:
         log.info("[NewsSaver] 无有效条目，跳过写入")
         return False
 
-    # 取前 5 条
-    valid = valid[:5]
+    # 取前 8 条（与 news_fetcher 的 max_results:8 配套；两处是跨文件耦合，见 plan R3）
+    valid = valid[:8]
 
     # 构建文件内容
     data = {

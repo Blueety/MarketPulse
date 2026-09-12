@@ -49,8 +49,10 @@ def search_news(query: str, timeout: int = 10) -> list[dict]:
     payload = {
         "api_key": api_key,
         "query": query,
-        "max_results": 5,
+        "max_results": 8,        # 5 → 8：过滤后会淘汰，多行列表更饱满（与 news_saver 的 [:8] 配套）
         "search_depth": "basic",
+        "topic": "news",         # 新闻 topic：时效性更强（通用搜索会返回门户栏目/拼盘旧文）
+        "days": 2,               # 只回溯近 2 天
     }
     try:
         resp = requests.post(url, json=payload, timeout=timeout)

@@ -42,6 +42,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("marketpulse")
 
+# 最新资讯查询词（三十四期）：宏观 + 全球股市大事件（央行政策/经济数据/地缘/汇率与大宗）。
+# 提为模块级常量便于调整与测试；**勿**硬编码进函数体（plan N-3）。
+# 旧词 "A股 美股 今日 重大新闻 政策 利好 利空" 命中门户《操盘必读》栏目与个股公告拼盘（N-G1）。
+MACRO_NEWS_QUERY = "美联储 通胀 就业数据 地缘政治 全球股市 异动 要闻"
+
 
 def _build_watchlist_view(stocks_cfg, values, series, corr) -> dict:
     """合并配置 + 取数结果 + 相关性 → 渲染/context 统一视图（二十四期）。
@@ -160,7 +165,7 @@ def main() -> int:
         watchlist_view = None
     # 二十七期：资讯落盘（Tavily 搜索 → news.json）
     try:
-        news_results = search_news(f"A股 美股 今日 重大新闻 政策 利好 利空")
+        news_results = search_news(MACRO_NEWS_QUERY)
         save_news(news_results, date)
     except Exception as exc:
         log.warning("资讯落盘失败，跳过: %s", exc)

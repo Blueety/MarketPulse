@@ -370,16 +370,27 @@ body {
 .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
 /* 三十三期：市场关系活 pills——正 r=红/同向联动、负 r=绿/对冲（日报相关性表同色语义）；
    原 .pill 灰态是静态装饰的禁用 button，活 pill 为展示性 span（无 cursor:pointer 假交互） */
-/* 三十三期：最新资讯流（Hermes 落盘消费；标题允许两行 wrap，摘要两行截断） */
-.news-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+/* 三十四期：最新资讯 → 每行一句话的宏观/世界要闻列表。
+   `#news-body` 的 max-height 与 `.alert-list` 同为 132px：两侧等高 → `.row-news` 行高不再
+   随新闻条数漂移（**必需项**，不是可选项 —— 它同时是 scrollHeight ≤1240 护栏的保障）。 */
+#news-body { max-height: 132px; overflow-y: auto; }
+
+.news-item { padding: 7px 0; border-bottom: 1px solid var(--border); }
 .news-item:last-child { border-bottom: none; }
-.news-item a { font-size: 13px; font-weight: 600; color: var(--text-primary);
-               text-decoration: none; word-break: break-word; }
+.news-item a {
+  display: block; font-size: 13px; font-weight: 400;   /* 600 → 400：它不再是标题而是正文 */
+  color: var(--text-secondary); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .news-item a:hover { color: var(--blue); }
-.news-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.news-summary { font-size: 12px; color: var(--text-secondary); margin-top: 3px;
-                display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-                overflow: hidden; }
+
+/* 小屏放行 2 行：一行放不下时不要整句被省略号吞掉（nowrap 与 line-clamp 互斥，必须改回 normal） */
+@media (max-width: 768px) {
+  .news-item a {
+    white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+}
 .pill.pos { color: var(--red); }
 .pill.neg { color: var(--green); }
 .pill-row .ph-note { line-height: 1.6; }
