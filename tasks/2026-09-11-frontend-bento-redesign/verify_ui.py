@@ -689,10 +689,10 @@ def assert_news(page, base_url: str) -> None:
           "N-7 /api/news 每条 summary ≤120 字（落盘切句生效）", sums)
     print(f"  scrollbarW={dom['scrollbarW']} sbRuleWidth={dom['sbRuleWidth']}")
     check(dom["sbRuleWidth"] == "6px",
-          "N-10a 样式表含 ::-webkit-scrollbar{width:6px}（系统默认 15px）",
+          "N-11a 样式表含 ::-webkit-scrollbar{width:6px}（系统默认 15px）",
           dom["sbRuleWidth"])
     check(all((v is not None and v <= 8) for v in dom["scrollbarW"].values()),
-          "N-10b 各滚动容器实测宽 ≤8px（headed 实测 6px；headless overlay 为 0）",
+          "N-11b 各滚动容器实测宽 ≤8px（headed 实测 6px；headless overlay 为 0）",
           dom["scrollbarW"])
     check(dom["weight"] == "400", "N-8 .news-item a 字重 400（它是正文不是标题）", dom["weight"])
     check(dom["whiteSpace"] == "nowrap" or dom["whiteSpace"] == "normal",
@@ -701,6 +701,125 @@ def assert_news(page, base_url: str) -> None:
           "N-9b 桌面单行放不下时可横向滚动（overflow-x:auto，替代省略号吞字）", dom["overflowX"])
     check(dom["cardH"] is not None and dom["alertsH"] is not None and abs(dom["cardH"] - dom["alertsH"]) <= 2,
           "N-10 #news 与 #alerts 等高（行高不随条数漂移）", (dom["cardH"], dom["alertsH"]))
+
+
+POLISH_JS = r"""
+() => {
+  const root = getComputedStyle(document.documentElement);
+  // 探针：把 CSS 变量解析成 computed rgb，并生成一对 .chg-pill 供比色
+  // （探针绝对定位于屏外 → 不参与布局、不影响 scrollHeight）
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;left:-9999px;top:0';
+  probe.innerHTML = '<span class="chg-pill pos">+1.00%</span><span class="chg-pill neg">-1.00%</span>' +
+                    '<i id="__g"></i><i id="__r"></i>';
+  const gEl = probe.querySelector('#__g');
+  const rEl = probe.querySelector('#__r');
+  gEl.style.color = 'var(--green)';
+  rEl.style.color = 'var(--red)';
+  document.body.appendChild(probe);
+  const pillPos = probe.querySelector('.chg-pill.pos');
+  const pillNeg = probe.querySelector('.chg-pill.neg');
+  const refGreen = getComputedStyle(gEl).color;
+  const refRed = getComputedStyle(rEl).color;
+  const data = {
+    muted: root.getPropertyValue('--text-muted').trim(),
+    refGreen: refGreen, refRed: refRed,
+    pillPosColor: getComputedStyle(pillPos).color,
+    pillNegColor: getComputedStyle(pillNeg).color,
+    pillPosBg: getComputedStyle(pillPos).backgroundColor,
+    pillNegBg: getComputedStyle(pillNeg).backgroundColor,
+  };
+  probe.remove();
+
+  // P-4 真实页面已渲染的 .chg-pill：类名与颜色必须一致（防撞 .pill.pos 的「涨变红」反转）
+  const real = [...document.querySelectorAll('.chg-pill')];
+  data.realPillCount = real.length;
+  data.realPillBad = real.filter((el) => {
+    const c = getComputedStyle(el).color;
+    const p = el.classList.contains('pos'), n = el.classList.contains('neg');
+    if (!p && !n) return true;
+    if (p && c !== refGreen) return true;
+    if (n && c !== refRed) return true;
+    return false;
+  }).length;
+
+  // P-2 千分位：4 位以上整数缺逗号 = 未生效（非纯数字文本如「数据未接入」不计入）
+  const numRe = /^([\d,]+)\.(\d{1,2})$/;
+  const texts = (sel) => [...document.querySelectorAll(sel)].map((e) => e.textContent.trim());
+  const mini = texts('#overview-body .mini-val');
+  const kpi = texts('.kpi-val');
+  const badSep = (arr) => arr.filter((t) => {
+    const m = numRe.exec(t);
+    if (!m) return false;
+    return m[1].replace(/,/g, '').length >= 4 && m[1].indexOf(',') < 0;
+  }).length;
+  data.miniTexts = mini;
+  data.kpiTexts = kpi;
+  data.miniNumCount = mini.filter((t) => numRe.test(t)).length;
+  data.miniBadSep = badSep(mini);
+  data.kpiBadSep = badSep(kpi);
+  data.hasSep = mini.concat(kpi).some((t) => t.indexOf(',') >= 0);
+
+  // P-3 无溢出（千分位多 1 字符不得撑出省略号）
+  data.overflow = [...document.querySelectorAll('.kpi-val, #overview-body .mini-val')]
+    .filter((el) => el.scrollWidth > el.clientWidth + 1).length;
+
+  // P-5 涨跌幅未复用 .pill（.pill.pos 是相关性语义且配色相反）
+  data.pillInData = document.querySelectorAll('.data-table .pill, .bar-row .pill').length;
+
+  // P-4 骨架屏：数据到达后可见骨架必须清零（5 处加载态都被真实内容替换）
+  data.skVisible = [...document.querySelectorAll('.skeleton')].filter((el) => el.offsetParent !== null).length;
+
+  data.scrollH = document.scrollingElement.scrollHeight;
+  data.scrollW = document.scrollingElement.scrollWidth;
+  data.innerW = window.innerWidth;
+  return data;
+}
+"""
+
+
+def assert_polish(page, base_url: str) -> None:
+    """P-1~P-7 前端评审落地（frontend-polish 任务）：对比度 / 千分位 / 涨跌 Badge / 骨架屏 + 护栏回归。"""
+    print("\n--- P 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）---")
+    d = page.evaluate(POLISH_JS)
+    print(f"  muted={d['muted']} chg-pill real={d['realPillCount']} bad={d['realPillBad']} "
+          f"bg=({d['pillPosBg'], d['pillNegBg']})")
+    print(f"  mini={d['miniTexts']} | kpi={d['kpiTexts']}")
+    print(f"  overflow={d['overflow']} pillInData={d['pillInData']} skVisible={d['skVisible']} "
+          f"scrollH={d['scrollH']}")
+
+    check(d["muted"].upper() == "#8E9BAE",
+          "P-1 dark --text-muted = #8E9BAE（对比度 ≈6.9:1）", d["muted"])
+    check(d["miniNumCount"] > 0 and d["miniBadSep"] == 0 and d["kpiBadSep"] == 0 and d["hasSep"],
+          "P-2 价格带千分位（≥4 位整数必含逗号）",
+          (d["miniNumCount"], d["miniBadSep"], d["kpiBadSep"], d["hasSep"]))
+    check(d["overflow"] == 0,
+          "P-3 .kpi-val / .mini-val 无溢出（千分位多 1 字符不撑破）", d["overflow"])
+    check(d["realPillCount"] > 0 and d["realPillBad"] == 0
+          and d["pillPosColor"] == d["refGreen"] and d["pillNegColor"] == d["refRed"],
+          "P-4 .chg-pill 绿涨红跌（未撞 .pill.pos 的反转配色）",
+          (d["realPillCount"], d["realPillBad"], d["pillPosColor"], d["refGreen"]))
+    check(d["pillInData"] == 0, "P-5 涨跌幅未复用 .pill（独立命名空间）", d["pillInData"])
+
+    # P-6 骨架屏 colspan 走「静态模板源」断言：加载态转瞬即逝，运行时抓不稳定（未打补丁的
+    # 旧模板 colspan 也是 5，故此条是**防回退护栏**而非「先红」项）。
+    html = ""
+    try:
+        with urllib.request.urlopen(base_url, timeout=10) as r:
+            html = r.read().decode("utf-8")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  首页 HTML 读取失败: {exc}")
+    sk_colspans = re.findall(r'<tr class="sk-row"><td colspan="(\d+)"', html)
+    check(bool(sk_colspans) and all(c == "5" for c in sk_colspans),
+          "P-6 骨架行 colspan 全为 5（图标列已使表头变 5 列）", sk_colspans)
+    check('class="skeleton sk-card"' in html and 'class="skeleton sk-item"' in html,
+          "P-6b 首屏骨架屏已就位（概览卡 + 告警条）", html.count('class="skeleton'))
+
+    check(d["skVisible"] == 0, "P-4b 数据到达后可见骨架清零（加载态被真实内容替换）", d["skVisible"])
+
+    # P-7 回归护栏（与 F-6a/CS-5 同口径，此处独立复测一次）
+    check(d["scrollH"] <= 1240, "P-7a scrollHeight @1920 ≤1240", d["scrollH"])
+    check(d["scrollW"] == d["innerW"], "P-7b 无横向溢出", (d["scrollW"], d["innerW"]))
 
 
 def measure(page, url: str, w: int, h: int) -> dict:
@@ -823,6 +942,7 @@ def main() -> int:
             page.wait_for_timeout(800)
             assert_g9(page, page.evaluate(G9_JS))
             assert_news(page, url)   # N-7 最新资讯（含 §7.2 要求的 #news DOM 实测）
+            assert_polish(page, url)  # P-1~P-7 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]

@@ -270,6 +270,20 @@
 - **Tavily 片段会把同一条标题连续重复两次**：如「原油飙升逾六周新高 原油飙升逾六周新高」→ 用 `re.sub(r'(.{8,60}?)\s*\1', r'\1', text)` 折叠。⚠️ **该规则会误伤"由重复片段构造的测试串"**：单测里用 `"x" * 20` 造超长文本会被折叠成短串、永不触发截断（本次实测踩到，改用无重复的长句构造）。
 - **展示字数是"落盘上限 + CSS 行为"两级，改任一级都要同步断言**：需求方 2026-09-12 反馈「字数显示太少」→ 落盘 `MAX_SUMMARY_LEN` **60→120**、前端 `NEWS_MAX_LEN` **42→120**（两级对齐，不再二次截断）、CSS 由 `overflow:hidden + ellipsis` 改为 **`overflow-x:auto` 横向滚动**（省略号吞字 → 可滚动看全）。⚠️ 三个连带点：① `overflow-x:auto` 下必须显式 `overflow-y:hidden`（另一轴 `visible` 会计算成 `auto`，冒出竖滚动条）；② scroll 容器下 `text-overflow:ellipsis` 本就不渲染，留着是误导；③ 小屏（≤768px）改**完整换行**而非横滚（手机上逐行横滑体验差）。
 - **放宽字数上限会同步放大既有的内容噪声**：60→120 后，原本"可容忍"的时间戳/多标题拼接立刻变成最显眼的瑕疵。**改长度上限时要把内容清洗一起纳入验证**，否则"显示更多"会变成净负收益。
+- **`::-webkit-scrollbar` 与 `scrollbar-width`/`scrollbar-color` 在 Chromium 里互斥，不能"两套都写当兼容兜底"**：headed Chromium（Windows，1920×1080）逐变量隔离实测根滚动条宽度 ——
+
+  | 写法 | 根滚动条宽 |
+  |---|---|
+  | 基线（无任何自定义） | 15px |
+  | 仅 `::-webkit-scrollbar{width:6px}` | **6px** |
+  | 仅 `scrollbar-width:thin` | 10px |
+  | 仅 `scrollbar-color:…` | 15px |
+  | webkit 6px **+** `scrollbar-width:thin` | **10px**（webkit 整块被丢弃） |
+  | webkit 6px **+** `scrollbar-color` | **15px**（连 thin 都不生效，退化成系统色） |
+
+  即 Chromium 只要看到 `scrollbar-width`/`scrollbar-color` 非 `auto`，就**忽略全部 `::-webkit-scrollbar`**。想要 6px 细滚动条：Chromium 分支**只能**用 webkit 伪元素；Firefox 不认 `::-webkit-*`，用 `@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: … } }` 路由（Chromium 恒跳过该块）。"两套都写"会得到比不写更丑的结果（15px 系统色）。
+- **headless Playwright 测不出滚动条宽度（恒 0），别拿它当护栏**：headless Chromium 用 overlay 滚动条、不占布局宽 → `offsetWidth - clientWidth` 恒为 0，`≤8px` 这类断言在 headless 下**恒真（假通过）**。判滚动条外观必须 `launch(headless=False)`；headless 下改用**查 CSSOM**（遍历 `document.styleSheets` 找 `::-webkit-scrollbar` 的 `width`）作可验证代理。另：`#sidebar` 内容不溢出 → 永不出现滚动条，把它纳入宽度断言等于白测。
+- **根滚动条（窗口右缘）不在截图内**：`page.screenshot()` 只截视口内容，浏览器自身滚动条属 chrome UI，截不到 → 只能靠 `window.innerWidth - document.documentElement.clientWidth` 数值判定（headed 才有意义）。
 - **查询词直接决定内容质量，调词前先做 A/B 实测**：同一 Tavily 账号、同一天，三个宏观词的返回是 **3 条（2 条同一标的）/ 1 条 / 8 条**，且内容从「纽元/美元汇率」到「CPI+美联储决议+地缘+原油」差异巨大。旧词 `"A股 美股 今日 重大新闻 政策 利好 利空"` 命中门户《操盘必读》栏目与个股公告拼盘（N-G1）。**结论：先跑 2~3 个候选词比条数与内容集中度，再定稿**，而不是只靠"改过滤规则"。
 - **`topic:"news"` + `days:2` 会显著减少返回条数**：`max_results:8` 但实测只回 3 条（近 2 天匹配度高的新闻本就少，遇周末更少）。要「列表饱满」需靠查询词拓宽覆盖面，而不是调大 `max_results`。
 - **并排卡片必须两侧都有高度约束，否则行高由"无约束侧"决定**：`.alert-list` 有 `max-height:132px`，而 `#news-body` **原本没有任何规则** → 资讯条数一多就把 `.row-news` 行高从 195 拖到 232，**直接把 `scrollHeight` 从 1216 顶到 1257、破了 ≤1240 护栏**（⚠️ 该破损在本次任务 N-0 基线时就已存在）。修法：`#news-body { max-height:132px; overflow-y:auto }` 与 `.alert-list` 取同值 → 两侧等高（实测 `#news == #alerts == 195`），行高不再随条数漂移。**只在一侧加约束 = 没加约束。**
