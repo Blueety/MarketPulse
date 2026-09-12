@@ -55,6 +55,7 @@ MACRO_KEYWORDS = [
 MACRO_FILTER_ENABLED = True     # 实测过滤后条数 < 3 时改 False（或放宽 MACRO_KEYWORDS）
 
 PER_FEED_CAP = 12               # 单源合并前的取条上限（防第一源把 8 条名额占满，双源都要露面）
+MAX_SOURCE_SUFFIX = 2           # 标题尾部来源后缀最多剥几层（实测有 `原标题-站名 - 发布方` 双层）
 DEFAULT_LIMIT = 8               # 最终条数（与 news_saver 的 [:8] 配套）
 
 # 标题尾部来源后缀：` - 新浪新闻` / ` | 财联社`
@@ -85,16 +86,31 @@ def _split_source(title: str) -> tuple[str, str]:
     """
     t = (title or "").strip()
     src = ""
-    for _ in range(2):                      # 最多剥两层（`标题 - A - B`）
+    for _ in range(MAX_SOURCE_SUFFIX):      # 实测存在双层后缀：`原标题-市场参考 - 金十数据`
         m = _SOURCE_TAIL_RE.search(t)
         if not m:
             break
         head = t[:m.start()].strip()
         if len(head) < 6:                   # 剥完太短 → 认为这不是来源后缀
             break
-        src = m.group(1).strip()
+        if not src:                         # 只记最外层（Google 注册的发布方）
+            src = m.group(1).strip()
         t = head
     return t, src
+
+
+def _drop_trailing_source(text: str, src: str) -> str:
+    """剥掉正文尾部的媒体名（Google News 的 description 形如 `标题&nbsp;&nbsp;<font>来源</font>`）。
+
+    标题若恰好以 `！`/`？` 结尾，`_clean_summary` 按句切分时天然切掉来源；但标题没有句末标点
+    时来源会留在摘要里（`美国8月CPI超预期 东方财富`）→ 这里按已知来源名精确剥除。
+    """
+    if not src or not text:
+        return text
+    t = text.strip()
+    if t.endswith(src):
+        return t[: -len(src)].strip(" \u3000|—-·")
+    return text
 
 
 def _norm_key(s: str) -> str:
@@ -191,7 +207,9 @@ def fetch_macro_news(timeout: int = 10, limit: int = DEFAULT_LIMIT) -> list[dict
         title, src = _split_source(it["title"])
         if not title:
             continue
-        it = {**it, "title": title, "source": src or it.get("source") or ""}
+        it = {**it, "title": title,
+              "snippet": _drop_trailing_source(it["snippet"], src),
+              "source": src or it.get("source") or ""}
         key, url_key = _norm_key(title), _norm_url(it["link"])
         if key in seen_keys or url_key in seen_urls:
             continue                # 两源命中同一条 → 只保留先出现的那条
