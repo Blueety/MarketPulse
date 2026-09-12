@@ -12,11 +12,12 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 NEWS_FILE = DATA_DIR / "news.json"
 NEWS_TMP = DATA_DIR / "news.json.tmp"
 
-# 垃圾内容关键词（标题包含则丢弃）
+# 垃圾内容关键词
 JUNK_KEYWORDS = [
     "APP下载", "登录", "自选股", "手机新浪", "富途牛牛", 
     "东方财富", "同花顺", "雪球", "腾讯证券", "开户", "注册",
-    "提供者", "智通财经", "视野环球", "鉅亨網",
+    "提供者", "智通财经", "视野环球", "鉅亨網", "美股股市新聞",
+    "智通财经APP", "提供者",
 ]
 
 
@@ -54,6 +55,8 @@ def _clean_summary(summary: str) -> str:
         summary = summary.replace(prefix, "")
     # 去除特殊字符
     summary = re.sub(r'[‌\u200c\u200d\u200e\u200f]', '', summary)
+    # 去除数字编号开头（如"10、"）
+    summary = re.sub(r'^\d+、', '', summary)
     # 去除换行
     summary = " ".join(summary.split())
     # 截断
