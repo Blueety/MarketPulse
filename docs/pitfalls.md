@@ -285,5 +285,11 @@
 
 - **给既有"实时取数端点"加"文件优先"路径，测试隔离必须做在 autouse fixture 里**：`/api/watchlist` 改为快照文件优先后，本机真实 `data/watchlist.json`（随 cron 落盘）会劫持所有未打补丁的既有用例（conftest 只隔离 CONFIG_PATH，不隔离 DATA_DIR）。解法：`_reset_watch_cache` autouse fixture 请求 `monkeypatch` 并默认 `setattr(web.app, "load_watchlist_snapshot", lambda: None)`；快照路径用例在测试体内再覆盖同一名（后 setattr 者生效）。**逐个改既有用例是下策**。
 - **monkeypatch 不了"测试环境差异"时先想"谁会读真实文件"**：`load_watchlist_snapshot` 以模块级名字导入到 `web.app` 后，补丁必须打 `web.app`（定义方 analyzer 不生效，同 CHARTS_DIR 纪律）；快照命中用例要同时 mock `fetch_watchlist` 为「被调用即 raise AssertionError」，才能证明"请求路径零联网"，只断言返回值测不出偷偷联网。
+- **storage.DB_PATH 是「补丁打使用方」纪律的有意例外**：storage 函数内 `db_path or DB_PATH` 是调用时属性查找，`monkeypatch.setattr(storage, "DB_PATH", tmp)` 单点全局生效（analyzer/web 全部经 storage 走）；故 14 个测试文件的 patch 点统一迁到 conftest `tmp_db` fixture + `seed_db`（等价旧"写 tmp history.json"），无需逐模块打补丁。
+- **NULL 是语义（休市/未收盘），三处必须保真**：迁移脚本 None→NULL、upsert preserve 模式 NULL 不抹（对应 merge_existing 定稿保护）、rows_to_records 全键补 None。change 列保留但一律 NULL（D3）——change_pct 一律读侧相邻收盘价派生，存时点值会引入基准分歧。
+- **Railway 恢复链是主数据源不是兜底（D2）**：DB 入 gitignore + Railway 临时文件系统 → 每次部署 DB 必不存在 → web startup `restore_if_empty`（data/backup 按月合并 → 旧 history.json 兼容读 → 空库「数据暂缺」）。pytest 经 conftest `MP_SKIP_RESTORE=1` 跳过（防测试写真实 DB）。恢复只对空库触发（幂等）。
+- **backtest 输入冻结（D8 已知缺口）**：`scripts/backtest.py --history` 仍读 data/history.json，切换后该文件冻结不再更新，回测基于截至 2026-09-11 的数据；后续任务加 `--from-db`。
+- **北京周六午后跑 daily_report 会 append 非交易日行**：ET 已周六 → get_us_eastern_date=当天（周六）→ Yahoo 返回 None ≠ 最新行值 → 二十五期去重不触发 → 落一行全 None 的非交易日行，顶栏变「周六·休市」。生产 cron 无此窗口；本地验证踩到就删行（同 09-05/06 处置）。
+- **迁移类任务的测试迁移必须与 analyzer 切换同批完成**：analyzer 切 SQLite 后、旧 `HISTORY_FILE` patch 变死补丁，未迁移的用例会向**真实 DB** 写测试数据（本期全量 pytest 注入 43 个垃圾日期）；切换后立即全量 pytest 并核对 DB 日期分布（`SELECT DISTINCT date` 畸形/周末日期 = 污点信号）。
 - **休市日真跑验证会"静默不执行"**：周六跑 `snapshot_report.py --market a-share --time midday` 退出码 0、但 `_is_market_closed` 门在 main 开头就 return，任何 main 内新增逻辑都不会执行——日志只有一行"休市…跳过"。验证 S5 类"main 尾部新增块"要看日志确认到达了目标代码，退出码 0 ≠ 代码被执行；交易日在验证或走等价单测（S2 同款调用序列已双次真跑覆盖）。
 - **"追加决策行/坑位"类编辑禁用"旧文本→新文本"整体替换**：architecture.md 决策表、pitfalls 分节都是 append-only 内容，用「末行锚点 + 旧文保留 + 新文追加」的 new_string 必须把旧文**完整包含**进去，否则静默覆盖历史记录（本任务 architecture.md 决策行被覆盖一次，靠 grep 计数发现并回补）。

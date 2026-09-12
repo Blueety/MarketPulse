@@ -75,6 +75,16 @@ class TestUpsert:
         assert st.upsert_history_rows([]) == 0
         assert st.count_rows() == 0
 
+    def test_malformed_date_skipped(self, db):
+        """int date 等畸形值不入库（web 读侧 strptime 会炸的脏行，在写入口拦下）。"""
+        n = st.upsert_history_rows([("20260903", "sh", 1.0, None), ("2026-09-01", "gspc", 2.0, None)])
+        assert n == 1
+        assert [r[0] for r in st.query_history()] == ["2026-09-01"]
+
+    def test_symbol_lowercased_on_write(self, db):
+        st.upsert_history_rows([("2026-09-01", "GSPC", 5.0, None)])
+        assert [r[1] for r in st.query_history()] == ["gspc"]
+
 
 class TestQuery:
     def test_null_roundtrip(self, db):

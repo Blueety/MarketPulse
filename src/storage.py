@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -71,14 +72,28 @@ def wal_checkpoint(db_path=None) -> None:
         conn.close()
 
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def upsert_history_rows(rows, preserve_existing: bool = False, db_path=None) -> int:
     """批量 upsert 长行 [(date, symbol, value, change), ...]，返回写入行数。
 
-    preserve_existing=True  → 已有行的 value/change 不被 NULL 抹掉
-                              （对应 append_history(merge_existing=True) 定稿保护）
-    preserve_existing=False → 无条件覆盖为新值（允许写 NULL；对应同日定稿覆盖 / 迁移 / 回填）
+    日期格式强制 YYYY-MM-DD（畸形行跳过并告警——防 int date 等脏值入库炸读侧 strptime）；
+    symbol 强制小写（存储键纪律）。preserve_existing=True → 已有行的 value/change 不被
+    NULL 抹掉（对应 append_history(merge_existing=True) 定稿保护）；False → 无条件覆盖
+    （允许写 NULL；对应同日定稿覆盖 / 迁移 / 回填）。
     """
-    rows = [(str(d), str(s), v, c) for (d, s, v, c) in rows]
+    clean, skipped = [], 0
+    for (d, s, v, c) in rows:
+        d, s = str(d), str(s).lower()
+        if not _DATE_RE.match(d):
+            log.warning("history 行日期格式异常，跳过: %r (symbol=%s)", d, s)
+            skipped += 1
+            continue
+        clean.append((d, s, v, c))
+    rows = clean
+    if skipped:
+        log.warning("共跳过 %d 行畸形日期", skipped)
     if not rows:
         return 0
     if preserve_existing:

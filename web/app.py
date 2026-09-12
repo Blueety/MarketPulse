@@ -52,6 +52,26 @@ _TEMPLATES = Environment(
 
 app = FastAPI(title="MarketPulse Web 看板")
 
+# 三十一期（D2，P0）：Railway 临时文件系统 + DB 入 gitignore → 每次部署 DB 不存在，
+# 启动恢复链（data/backup/*.json 按月合并 → 旧 history.json 兼容读 → 空库「数据暂缺」）
+# 是 Railway 的主数据来源而非兜底。MP_SKIP_RESTORE=1 供 pytest 等场景跳过（防写真实 DB）。
+# 恢复只对空库触发（幂等），是 web 对自身 DB 副本的一次性引导写入，不违反只读边界。
+@app.on_event("startup")
+def _restore_history_db() -> None:
+    if os.environ.get("MP_SKIP_RESTORE") == "1":
+        log.info("MP_SKIP_RESTORE=1，跳过 history DB 启动恢复")
+        return
+    try:
+        outcome = st.restore_if_empty()
+        if outcome == "backup":
+            log.info("history DB 启动恢复完成（来源: data/backup/ 按月合并）")
+        elif outcome == "json":
+            log.info("history DB 启动恢复完成（来源: 旧 data/history.json 兼容导入）")
+        elif outcome == "empty":
+            log.warning("history DB 为空且无可用恢复源，页面将显示「数据暂缺」")
+    except Exception as exc:
+        log.warning("history DB 启动恢复失败，按空库运行: %s", exc)
+
 # 静态资源挂 /static（仅 style.css 等源码资源，不落盘生成物）。
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

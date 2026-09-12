@@ -79,10 +79,12 @@ class TestMergeHistory:
         an.merge_history("2026-09-03", {"SH": None, "SZ": None})
         assert an.load_history() == []
 
-    def test_date_stringified(self, tmp_path, monkeypatch):
+    def test_malformed_date_rejected(self, tmp_path, monkeypatch):
+        """三十一期：存储层强制 YYYY-MM-DD——int date 等畸形值不再字符串化入库
+        （真实库曾因 20260903 脏行炸掉 web 读侧 strptime，格式护栏优先于旧宽容行为）。"""
         self._set_file(tmp_path, monkeypatch)
-        an.merge_history(20260903, {"SH": 3100.0})  # 非字符串 date
-        assert an.load_history()[0]["date"] == "20260903"
+        an.merge_history(20260903, {"SH": 3100.0})
+        assert an.load_history() == []   # 畸形日期被写入口拦下，不入库
 
     def test_permanent_retention_no_trim(self, tmp_path, monkeypatch):
         """三十一期：永久保留，不再按 90 天裁剪（旧 test_rolling_90 行为废止）。"""

@@ -18,8 +18,11 @@
 - `src/alerter.py`: 告警层（告警文件渲染 + alerts.log 去重 + collect_breaches 纯计算 + run_alert_checks 编排）。
 | `src/reporter.py`: 报告渲染（日报/快照/趋势图/分市场趋势图 + 相关性分析章节）+ generate_context 上下文 JSON 生成（含 sector_heat / us_sector_heat / correlation 键）。 |
 - `web/`: 只读看板（bento 栅格仪表盘，2026-09-11 重构）：`app.py`（FastAPI，**5 个 JSON API**：`/api/history`（`days` 上限 **365**）/ `/api/latest`（`sector_heat` + **`us_sector_heat`**）/ `/api/alerts` / `/api/watchlist`（**三十期文件化**：优先读 `data/watchlist.json` 快照（daily/snapshot 报告链路落盘）+ symbol 配置比对，mismatch/无快照才回退实时取数；响应带 `as_of` 数据时点）/ **`/api/macro`**（美元指数 / 10Y美债 / 原油，env `MACRO_STOCKS` > `config.json` `macro.stocks` > 内置默认））；`templates/index.html`（`.dash` + `.row-kpi/.row-main/.row-3/.row-news` 四视觉行、9 类模块、3 个 `data-placeholder="1"` 静态占位）；`static/app.js`（趋势**四图合一 + 4 类别 tab**、KPI sparkline、自选迷你条）；`static/style.css`（卡片 token 双主题）。进程绝不写 `data/` `alerts/` `context/`。**UI 验收必须跑** `venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright 三视口，自动挑空闲端口；截图/JSON 落 `%TEMP%`），不要以 `curl 200` 或肉眼看代替。
+- `src/storage.py`: SQLite 存储层（三十一期）：history 长表读写/upsert 双模式/按月备份/空库恢复；`DB_PATH` 为测试单点 patch（有意例外）。
 - `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_web.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py / test_backtest.py）。
 - `alerts/`: 告警输出（`YYYY-MM-DD-{market}-{time}.md`（盘中快照复合名）/ `YYYY-MM-DD-close.md`（日报）；gitignore 排除）。
+- `data/marketpulse.db` + `-wal`/`-shm`: SQLite 历史库（三十一期；gitignore 排除；Railway 经 data/backup/ 恢复链）。
+- `data/backup/history_YYYY-MM.json`: 历史按月备份（**入库**，web 启动恢复链数据源；当月覆盖、历史月冻结）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。
 - `docs/`: 项目知识和规则。
 - `tasks/`: 任务目录和交接记录。

@@ -556,10 +556,11 @@ def test_api_history_days_caps(client):
 
 def test_api_history_days_invalid(client):
     assert client.get("/api/history?days=0").status_code == 422
-    # 上限放宽到 365（1Y 视图）：91 / 365 合法，366 越界
+    # 三十一期 D9：上限放宽到 3650（永久保留）；91 / 365 / 3650 合法，3651 越界
     assert client.get("/api/history?days=91").status_code == 200
     assert client.get("/api/history?days=365").status_code == 200
-    assert client.get("/api/history?days=366").status_code == 422
+    assert client.get("/api/history?days=3650").status_code == 200
+    assert client.get("/api/history?days=3651").status_code == 422
 
 
 def test_api_history_symbols_param(client):
