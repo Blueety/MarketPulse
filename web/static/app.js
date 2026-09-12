@@ -322,6 +322,10 @@ function renderMarketRelation(latest) {
 
 // 取一句话（单行展示用）：优先 summary，为空则回退 title；按句末标点切首句（首句 <12 字补第二句）；
 // 最终一律截到 42 字（含 …）。**回退路径也要截断**，否则长标题会突破 N-2 的 ≤43 上限。
+// 上限与落盘层 MAX_SUMMARY_LEN（src/news_saver.py）保持一致：**不再二次截断**，
+// 显示不完的行由 CSS `overflow-x: auto` 横向滚动（需求方 2026-09-12：字数显示太少 → 多显示 + 可横滚）。
+var NEWS_MAX_LEN = 120;
+
 function oneLine(summary, fallback) {
   var text = String(summary == null ? '' : summary).trim()
     || String(fallback == null ? '' : fallback).trim();
@@ -330,7 +334,7 @@ function oneLine(summary, fallback) {
   var first = (parts[0] || '').trim();
   if (first.length < 12 && parts[1]) first = (first + '。' + parts[1]).trim();
   if (!first) first = text;
-  return first.length > 42 ? first.slice(0, 41) + '…' : first;
+  return first.length > NEWS_MAX_LEN ? first.slice(0, NEWS_MAX_LEN - 1) + '…' : first;
 }
 
 // 最新资讯（三十四期）：每行一句话的宏观/世界要闻列表。

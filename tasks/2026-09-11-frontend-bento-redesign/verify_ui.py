@@ -620,6 +620,7 @@ NEWS_JS = r"""
     itemH: items.length ? items[0].offsetHeight : null,
     weight: a0 ? a0.fontWeight : null,
     whiteSpace: a0 ? a0.whiteSpace : null,
+    overflowX: a0 ? a0.overflowX : null,
     textOverflow: a0 ? a0.textOverflow : null,
     scrollH: document.scrollingElement.scrollHeight,
   };
@@ -646,12 +647,13 @@ def assert_news(page, base_url: str) -> None:
     print(f"  #news={dom['cardH']} #alerts={dom['alertsH']} itemH={dom['itemH']} "
           f"body client={dom['clientHeight']} scroll={dom['bodyScrollHeight']} "
           f"maxH={dom['maxHeight']} ovf={dom['overflowY']}")
-    print(f"  a weight={dom['weight']} whiteSpace={dom['whiteSpace']} textOverflow={dom['textOverflow']} "
+    print(f"  a weight={dom['weight']} whiteSpace={dom['whiteSpace']} overflowX={dom['overflowX']} "
           f"scrollH={dom['scrollH']}")
 
     check(dom["count"] > 0 and dom["count"] == len(items),
           "N-1 DOM .news-item 数 == /api/news items 数", (dom["count"], len(items)))
-    check(dom["maxLen"] <= 43, "N-2 每行文本 ≤43 字（含 …）", dom["textLens"])
+    check(dom["maxLen"] <= 121, "N-2 每行文本 ≤121 字（上限与落盘 MAX_SUMMARY_LEN 一致，不再二次截断）",
+          dom["textLens"])
     check(dom["metaCount"] == 0 and dom["summaryCount"] == 0,
           "N-3 无 .news-meta / .news-summary（死元素清零）", (dom["metaCount"], dom["summaryCount"]))
     check(dom["overflowY"] == "auto" and dom["maxHeight"] == "132px",
@@ -659,11 +661,13 @@ def assert_news(page, base_url: str) -> None:
     check(dom["invalidHref"] == 0 and dom["missingTitle"] == 0,
           "N-5 href 均 http(s) 且 title 属性非空（tooltip 保信息）",
           (dom["invalidHref"], dom["missingTitle"]))
-    check(all(s <= 60 for s in sums),
-          "N-7 /api/news 每条 summary ≤60 字（落盘切句生效）", sums)
+    check(all(s <= 120 for s in sums),
+          "N-7 /api/news 每条 summary ≤120 字（落盘切句生效）", sums)
     check(dom["weight"] == "400", "N-8 .news-item a 字重 400（它是正文不是标题）", dom["weight"])
     check(dom["whiteSpace"] == "nowrap" or dom["whiteSpace"] == "normal",
-          "N-9 white-space 合法（nowrap 桌面 / normal 小屏两行）", dom["whiteSpace"])
+          "N-9 white-space 合法（nowrap 桌面 / normal 小屏换行）", dom["whiteSpace"])
+    check(dom["overflowX"] == "auto",
+          "N-9b 桌面单行放不下时可横向滚动（overflow-x:auto，替代省略号吞字）", dom["overflowX"])
     check(dom["cardH"] is not None and dom["alertsH"] is not None and abs(dom["cardH"] - dom["alertsH"]) <= 2,
           "N-10 #news 与 #alerts 等高（行高不随条数漂移）", (dom["cardH"], dom["alertsH"]))
 

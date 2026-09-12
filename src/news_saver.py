@@ -29,7 +29,15 @@ def _is_junk(text: str) -> bool:
 # 尾部平台噪声（补 N-G4：_is_junk 只作用于 title，summary 侧的噪声会直接漏到前端）
 TAIL_NOISE = ["智通财经", "视野环球", "鉅亨網", "美股股市新聞", "富途牛牛"]
 TAIL_NOISE_POSITION = 0.5   # 仅当噪声出现位置 > 50% 时才截断
-MAX_SUMMARY_LEN = 60        # 一句话上限（比前端的 42 字宽，给前端留余量）
+MAX_SUMMARY_LEN = 120       # 一句话上限（前端单行显示不完时由 CSS 横向滚动，不再用省略号吞掉）
+
+# 搜索片段混入的发布时间 / 栏目日期标签（见 _strip_timestamps）
+_TS_PATTERNS = [
+    r'\d{1,2}\s*\d{1,2}月\s*\d{4}[,，]?\s*\d{1,2}:\d{2}',   # 10 9月 2026, 09:13
+    r'\d{1,2}月\s*\d{1,2}\s*日?[,，]?\s*\d{1,2}:\d{2}',      # 9月11日 08:22
+    r'\d{2}-\d{2}\s*\d{1,2}:\d{2}',                          # 09-09 08:22
+    r'\d{1,2}月\d{1,2}日[^：:，。\s]{0,6}[：:]',             # 9月9日财经早餐：
+]
 MIN_FIRST_SENTENCE = 12     # 首句短于该长度 → 补第二句
 
 
@@ -45,6 +53,19 @@ def _strip_tail_noise(text: str) -> str:
         if idx > len(text) * TAIL_NOISE_POSITION:
             cut = min(cut, idx)
     return text[:cut].strip()
+
+
+def _strip_timestamps(text: str) -> str:
+    """剥离搜索片段里混入的**发布时间 / 栏目日期标签**（补 N-G4）。
+
+    搜索引擎的高亮片段会把正文与时间戳拼在一起，例如
+    `10 9月 2026, 09:13 情报报告称… 10 9月 2026, 09:06 打击乌克兰…` 或
+    `…揭开背后线索 09-09 08:22 9月9日财经早餐：地缘风险与通胀…`。
+    这类碎片在长文本（120 字）下最显眼，且用「按句切分」清不掉（条目之间没有句末标点）。
+    """
+    for pat in _TS_PATTERNS:
+        text = re.sub(pat, " ", text)
+    return " ".join(text.split())
 
 
 def _first_sentence(text: str) -> str:
@@ -100,6 +121,8 @@ def _clean_summary(summary: str) -> str:
     summary = re.sub(r'^\d+、', '', summary)
     # 去除换行
     summary = " ".join(summary.split())
+    # 时间戳 / 栏目日期碎片（长文本下最显眼的噪声，须在切句之前清）
+    summary = _strip_timestamps(summary)
     # N-G3 修复：硬截断 → 一句话（先剥尾部噪声，再切句，必要时再剥一次）
     summary = _first_sentence(_strip_tail_noise(summary))
     summary = _strip_tail_noise(summary)

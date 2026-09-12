@@ -50,7 +50,7 @@ def test_clean_summary_caps_and_keeps_first_sentence():
 
 
 def test_clean_summary_truncation_appends_ellipsis():
-    out = ns._clean_summary("美联储宣布加息二十五个基点" + "非常长的补充说明" * 8)
+    out = ns._clean_summary("美联储宣布加息二十五个基点" + "非常长的补充说明" * 20)
     assert len(out) == ns.MAX_SUMMARY_LEN
     assert out.endswith("…")
 
