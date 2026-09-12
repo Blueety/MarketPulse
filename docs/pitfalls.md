@@ -284,6 +284,17 @@
   即 Chromium 只要看到 `scrollbar-width`/`scrollbar-color` 非 `auto`，就**忽略全部 `::-webkit-scrollbar`**。想要 6px 细滚动条：Chromium 分支**只能**用 webkit 伪元素；Firefox 不认 `::-webkit-*`，用 `@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: … } }` 路由（Chromium 恒跳过该块）。"两套都写"会得到比不写更丑的结果（15px 系统色）。
 - **headless Playwright 测不出滚动条宽度（恒 0），别拿它当护栏**：headless Chromium 用 overlay 滚动条、不占布局宽 → `offsetWidth - clientWidth` 恒为 0，`≤8px` 这类断言在 headless 下**恒真（假通过）**。判滚动条外观必须 `launch(headless=False)`；headless 下改用**查 CSSOM**（遍历 `document.styleSheets` 找 `::-webkit-scrollbar` 的 `width`）作可验证代理。另：`#sidebar` 内容不溢出 → 永不出现滚动条，把它纳入宽度断言等于白测。
 - **根滚动条（窗口右缘）不在截图内**：`page.screenshot()` 只截视口内容，浏览器自身滚动条属 chrome UI，截不到 → 只能靠 `window.innerWidth - document.documentElement.clientWidth` 数值判定（headed 才有意义）。
+- **`@supports selector(::-webkit-scrollbar)` 在 Firefox 里也返回 `true` → 用它取反做「Firefox 门控」必然失效**：Firefox 出于 web 兼容把 `::-webkit-scrollbar` 当作「合法但未实现」的选择器，`selector()` 同样返回 **true**（Firefox 153 实测）。于是 `@supports not selector(::-webkit-scrollbar) { … scrollbar-width: thin … }` 在 Firefox 里**永不成立** → Firefox 一条规则都没吃到、落到 **17px 原生滚动条**（用户 2026-09-13 报「就 firefox 这样，其他浏览器没这样」）。正确门控用 **Firefox 专属属性** `@supports (-moz-appearance: none)`。同一份 CSS、Playwright 双内核实测对照：
+
+  | 探测 / 结果 | Chromium | Firefox |
+  |---|---|---|
+  | `CSS.supports('selector(::-webkit-scrollbar)')` | true | **true（陷阱）** |
+  | `CSS.supports('-moz-appearance','none')` | false | true |
+  | 门控用 `not selector(...)`：实际 `scrollbar-width` / 宽度 | auto → **6px**（webkit 分支生效） | auto → **17px**（整块被跳过） |
+  | 门控改 `-moz-appearance`：同上 | auto → **6px**（无回归） | thin → **8px**（Firefox thin 的下限） |
+
+- **headless Firefox 完全不渲染滚动条**：实测 `getComputedStyle().scrollbarWidth === 'none'`、宽度恒 **0**（与 headless Chromium 的 overlay 同源，机制不同结论一致）→ **宽度类断言在 headless Firefox 下毫无意义**（恒真/恒假）。headless 可用的替代判据：① `scrollbar-color` 是否被主题色覆盖（能证明门控块**真的生效**）② CSSOM 里查 `CSSSupportsRule.conditionText` 是否含 `-moz-appearance` 且内部有 `scrollbar-width`。宽度必须 `headless=False` 测。
+- **引擎专项 CSS 必须双内核验收**：本次「Chromium 全绿、Firefox 17px」的偏差，只跑 Chromium 的验收脚本**永远发现不了**（我此前 3 轮验收全绿却漏了它）。`verify_ui.py` 已加 `assert_firefox_scrollbar`（N-12，未装 FF 内核则 SKIP 不误报红）；凡涉及 `-webkit-`/`-moz-` 分支、`@supports` 门控、滚动条/表单控件原生外观的改动，都要跑双内核。
 - **`StaticFiles` 默认不下发 `Cache-Control` → 启发式缓存导致「改了像没改」**：`web/app.py` 的 `/` 路由已带 `no-cache`，但 `/static/*` 走 `StaticFiles`，**只给 `ETag` + `Last-Modified`、不给 `Cache-Control`** → 浏览器按「(Date − Last-Modified) 的 10%」自行估算新鲜度（可达数小时/天）且**连协商请求都不发**，结果「页面是新的、CSS 是旧的」。2026-09-13 用户把 8021 旧标签页里的旧 CSS（15px 系统滚动条）当成「滚动条被改回去了」——而磁盘 / 线上 Railway / 无缓存浏览器三处实测都已是新的 6px。**排查纪律**：用户报「改动没生效」时，先并列核对 ①磁盘文件 ②服务实吐内容（直接匹配 `.../static/style.css` 里的关键字）③**无缓存浏览器实测**（Playwright 新实例，或 `launch(headless=False)` 看真实滚动条），三者一致则问题几乎必在缓存/另一份副本。**根治**：`_RevalidateStatic(StaticFiles)` 覆写 `file_response` 加 `Cache-Control: no-cache`（仍是 304 协商，不浪费带宽）+ 模板资源 URL 拼 `?v={{ asset_v }}`（`_asset_version()` 取 style.css/app.js 最大 mtime，改文件即换 URL）双保险。⚠️ 改 `web/app.py` 后**必须重启预览进程**，旧进程永远吐不出新逻辑（只有静态文件是随磁盘变的，这也正是"页面逻辑没更新、CSS 却更新了"的原因）。
 - **查询词直接决定内容质量，调词前先做 A/B 实测**：同一 Tavily 账号、同一天，三个宏观词的返回是 **3 条（2 条同一标的）/ 1 条 / 8 条**，且内容从「纽元/美元汇率」到「CPI+美联储决议+地缘+原油」差异巨大。旧词 `"A股 美股 今日 重大新闻 政策 利好 利空"` 命中门户《操盘必读》栏目与个股公告拼盘（N-G1）。**结论：先跑 2~3 个候选词比条数与内容集中度，再定稿**，而不是只靠"改过滤规则"。
 - **`topic:"news"` + `days:2` 会显著减少返回条数**：`max_results:8` 但实测只回 3 条（近 2 天匹配度高的新闻本就少，遇周末更少）。要「列表饱满」需靠查询词拓宽覆盖面，而不是调大 `max_results`。
