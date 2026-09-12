@@ -90,6 +90,8 @@ def _clean_summary(summary: str) -> str:
         summary = summary.replace(prefix, "")
     # 去除特殊字符
     summary = re.sub(r'[\u200c\u200d\u200e\u200f]', '', summary)
+    # 去除参考文献/脚注标记（[1] / [1.3.3]）——不处理则截断后残留半截中括号碎片（如 "…30% […"）
+    summary = re.sub(r'\[\d+(?:\.\d+)*\]', '', summary)
     # 去除"提供者...•"碎片
     summary = re.sub(r'提供者.*?•\s*', '', summary)
     # 去除"智通财经APP..."碎片

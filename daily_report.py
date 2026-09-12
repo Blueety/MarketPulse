@@ -45,7 +45,11 @@ log = logging.getLogger("marketpulse")
 # 最新资讯查询词（三十四期）：宏观 + 全球股市大事件（央行政策/经济数据/地缘/汇率与大宗）。
 # 提为模块级常量便于调整与测试；**勿**硬编码进函数体（plan N-3）。
 # 旧词 "A股 美股 今日 重大新闻 政策 利好 利空" 命中门户《操盘必读》栏目与个股公告拼盘（N-G1）。
-MACRO_NEWS_QUERY = "美联储 通胀 就业数据 地缘政治 全球股市 异动 要闻"
+# 定稿前做过 A/B（Tavily topic=news + days=2 实测）：
+#   "美联储 通胀 就业数据 地缘政治 全球股市 异动 要闻" → 3 条，其中 2 条同一标的（纽元/美元）
+#   "美联储 利率决议 通胀数据 非农 地缘冲突 美股 异动"   → 1 条（过窄）
+#   ↓ 本词 → 8 条（用满 max_results），全部为央行/通胀/地缘/原油/全球股市要闻（plan R11 授权调词）
+MACRO_NEWS_QUERY = "全球市场要闻 美联储 欧洲央行 通胀 地缘政治 原油 股市"
 
 
 def _build_watchlist_view(stocks_cfg, values, series, corr) -> dict:
