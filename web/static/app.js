@@ -104,9 +104,9 @@ function iconHtml(colorVar, char) {
   const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
   return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
 }
-// 旗标变体：CSS 画旗（.ico-flag-us / .ico-flag-cn），Windows 无旗 Emoji 不能用 🇺🇸🇨🇳
+// 旗标变体：CSS 画旗（.ico-flag 定位锚 + .ico-flag-us/cn 皮肤），Windows 无旗 Emoji 不能用 🇺🇸🇨🇳
 function iconFlagHtml(which) {
-  return '<i class="ico ico-flag-' + (which === 'cn' ? 'cn' : 'us') + '"></i>';
+  return '<i class="ico ico-flag ico-flag-' + (which === 'cn' ? 'cn' : 'us') + '"></i>';
 }
 
 // 单一状态源：驱动所有视图刷新
