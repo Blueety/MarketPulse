@@ -10,6 +10,7 @@ import json
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 from src import config as cfg
 from src import fetcher as ft
 from src import reporter as rep
@@ -159,7 +160,8 @@ class TestDailyReportWiring:
         cfg_path = tmp_path / "config.json"
         cfg_path.write_text(json.dumps(cfg_obj), encoding="utf-8")
         monkeypatch.setenv("CONFIG_PATH", str(cfg_path))
-        monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+        monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+        st.init_db()
         monkeypatch.setattr(an, "LAST_VALUES_FILE", tmp_path / "last_values.json")
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
         monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (

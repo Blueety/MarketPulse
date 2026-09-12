@@ -10,6 +10,7 @@ from datetime import date, timedelta
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 from src import reporter as rep
 import daily_report as dr
 
@@ -50,7 +51,8 @@ def clean_thresholds(monkeypatch):
 def tmp_context(monkeypatch, tmp_path, clean_thresholds):
     """context/history/alerts 全部重定向到 tmp。"""
     monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
-    monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
     return tmp_path
 
 

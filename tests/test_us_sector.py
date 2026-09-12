@@ -10,6 +10,7 @@ import json
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 from src import fetcher as ft
 from src import reporter as rep
 
@@ -132,7 +133,8 @@ class TestRenderReportUsSector:
 class TestGenerateContextUsSector:
     def test_field_present(self, monkeypatch, tmp_path):
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
-        monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+        monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+        st.init_db()
         from src import alerter as al
 
         monkeypatch.setattr(al, "ALERTS_DIR", tmp_path / "alerts")
