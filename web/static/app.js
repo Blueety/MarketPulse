@@ -104,9 +104,13 @@ function iconHtml(colorVar, char) {
   const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
   return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
 }
-// 旗标变体：CSS 画旗（.ico-flag 定位锚 + .ico-flag-us/cn 皮肤），Windows 无旗 Emoji 不能用 🇺🇸🇨🇳
+// 旗标变体：真旗 SVG 素材（web/static/flags/，取自 twemoji，自托管零运行时依赖）铺在上层；
+// 加载失败（离线）时 onerror 移除 <img>，露出底层 CSS 画旗（.ico-flag-us/cn）兜底。
+// Windows 无旗 Emoji（🇺🇸 渲染成 "US" 字母），不能用 Emoji 字符。
 function iconFlagHtml(which) {
-  return '<i class="ico ico-flag ico-flag-' + (which === 'cn' ? 'cn' : 'us') + '"></i>';
+  const k = which === 'cn' ? 'cn' : 'us';
+  return '<i class="ico ico-flag ico-flag-' + k + '">' +
+    '<img class="ico-flag-img" src="/static/flags/' + k + '.svg" alt="" onerror="this.remove()"></i>';
 }
 
 // 单一状态源：驱动所有视图刷新
