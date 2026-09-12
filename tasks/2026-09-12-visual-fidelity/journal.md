@@ -57,3 +57,21 @@ V5 侧栏导航 10 项（Q1：4 映射 + 3 保留 + 3 占位）。
 - 效果图里的 nav 标签先对照页面区块存在性，无区块的项用 is-disabled 占位，别照抄。
 - 切主题不重渲染的 DOM，颜色一律引用 CSS 变量（内联 `var(--token)`），不要 JS 取实值。
 - 跨任务回归点（如 crosshair × 轴位）要写成断言（F-7）+ 像素取证（%TEMP% 探针），不能只靠"代码看起来会跟随"。
+
+## 追记（2026-09-12）：市场概览图标升级为国旗（用户追加需求）
+
+- **需求**：美国市场相关（美股/美元指数/10Y 美债 + 美股上市的黄金 ETF/美油 WTI）→ 🇺🇸，
+  中国市场（A股）→ 🇨🇳。**只动市场概览**；自选/板块表保持品牌色循环（各列表语义不变）。
+- **实现**：`OVERVIEW_CARDS` 的 `char` 换成 `flag` 字段（'us'/'cn'）+ `iconFlagHtml()`（输出
+  `ico ico-flag ico-flag-us|cn`）+ CSS 画旗（`.ico-flag-us` 星条旗简化条纹 + 蓝角块、
+  `.ico-flag-cn` 红底 `★` 黄星；旗色官方色不随主题）。**不用旗 Emoji**：Windows 的 Chrome
+  渲染成 "US"/"CN" 字母（pitfalls 已记）。
+- **断言**：F-8（`ico-flag-us`×5 + `ico-flag-cn`×1）先红（0,0）后绿。
+- **实测抓到的 bug（最有价值的一课）**：首版实现 F-8 全绿但像素取证发现蓝角块/黄星**没画出来**
+  ——`::before{position:absolute}` 需要父级 `position:relative`，而共享规则挂在 `.ico.ico-flag`，
+  helper 少拼了公共类 `ico-flag` → 皮肤类（渐变）生效、定位类静默失效。**class 计数断言测不出
+  这种失效**（类在、规则没命中），靠逐图标像素普查（按 icon 裁剪数旗色：US 蓝角块 237px /
+  CN 黄星 77px @DPR2）定位并闭环。修复 = helper 补上公共类，复测 6 枚旗全部真实渲染。
+- **验证**：`verify_ui.py` **ALL PASSED / EXIT=0**（F-8 绿，全部既有断言不回退）；`pytest` 459 passed；
+  逐图标像素取证 6/6 通过（截图落 `%TEMP%/mp_glass_cmp/ico2-*.png`）。
+- **Playwright 小坑**：`screenshot(clip=…)` 的键是 `width/height`，不是 `w/h`（类型错误信息不明显）。
