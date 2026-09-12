@@ -770,6 +770,23 @@ POLISH_JS = r"""
   // P-4 骨架屏：数据到达后可见骨架必须清零（5 处加载态都被真实内容替换）
   data.skVisible = [...document.querySelectorAll('.skeleton')].filter((el) => el.offsetParent !== null).length;
 
+  // P-8 表头与数据格的水平对齐必须一致（用户反馈：成交额 th 漏 num → 表头左 / 数值右）
+  // 注：th 被 .data-table th 置 left、td 默认计算值为 start → 归一化后再比。
+  const norm = (v) => (v === 'start' ? 'left' : (v === 'end' ? 'right' : v));
+  data.alignMismatch = [];
+  ['#us-sectors .panel-cn table.data-table', '.watchlist-table'].forEach((sel) => {
+    const t = document.querySelector(sel);
+    if (!t) return;
+    const ths = [...t.querySelectorAll('thead th')].map((e) => norm(getComputedStyle(e).textAlign));
+    [...t.querySelectorAll('tbody tr')].forEach((tr) => {
+      [...tr.children].forEach((td, i) => {
+        if (i >= ths.length) return;
+        const a = norm(getComputedStyle(td).textAlign);
+        if (a !== ths[i]) data.alignMismatch.push(sel + ' 第' + (i + 1) + '列 th=' + ths[i] + ' td=' + a);
+      });
+    });
+  });
+
   data.scrollH = document.scrollingElement.scrollHeight;
   data.scrollW = document.scrollingElement.scrollWidth;
   data.innerW = window.innerWidth;
@@ -786,7 +803,7 @@ def assert_polish(page, base_url: str) -> None:
           f"bg=({d['pillPosBg'], d['pillNegBg']})")
     print(f"  mini={d['miniTexts']} | kpi={d['kpiTexts']}")
     print(f"  overflow={d['overflow']} pillInData={d['pillInData']} skVisible={d['skVisible']} "
-          f"scrollH={d['scrollH']}")
+          f"alignMismatch={d['alignMismatch']} scrollH={d['scrollH']}")
 
     check(d["muted"].upper() == "#8E9BAE",
           "P-1 dark --text-muted = #8E9BAE（对比度 ≈6.9:1）", d["muted"])
@@ -800,6 +817,8 @@ def assert_polish(page, base_url: str) -> None:
           "P-4 .chg-pill 绿涨红跌（未撞 .pill.pos 的反转配色）",
           (d["realPillCount"], d["realPillBad"], d["pillPosColor"], d["refGreen"]))
     check(d["pillInData"] == 0, "P-5 涨跌幅未复用 .pill（独立命名空间）", d["pillInData"])
+    check(not d["alignMismatch"],
+          "P-8 表头与数据格水平对齐一致（防「成交额」类表头漏 num）", d["alignMismatch"])
 
     # P-6 骨架屏 colspan 走「静态模板源」断言：加载态转瞬即逝，运行时抓不稳定（未打补丁的
     # 旧模板 colspan 也是 5，故此条是**防回退护栏**而非「先红」项）。
