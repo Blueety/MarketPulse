@@ -2,7 +2,8 @@
 import json
 import logging
 import os
-from datetime import date, datetime
+import re
+from datetime import date
 from pathlib import Path
 
 log = logging.getLogger("news_saver")
@@ -11,27 +12,31 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 NEWS_FILE = DATA_DIR / "news.json"
 NEWS_TMP = DATA_DIR / "news.json.tmp"
 
-# 垃圾内容关键词（标题或摘要包含则丢弃）
+# 垃圾内容关键词（标题包含则丢弃）
 JUNK_KEYWORDS = [
-    "操盘必读", "今日股市", "股票新闻", "美股新聞", "提供者", "APP",
-    "APP下载", "登录", "自选股", "行情走势", "实时行情", "手机新浪",
-    "富途牛牛", "东方财富", "同花顺", "雪球", "腾讯证券",
-    "|", "##", "###", "下载", "注册", "开户",
+    "APP下载", "登录", "自选股", "手机新浪", "富途牛牛", 
+    "东方财富", "同花顺", "雪球", "腾讯证券", "开户", "注册",
+    "提供者", "智通财经", "视野环球", "鉅亨網",
 ]
 
 
-def _is_junk(title: str, summary: str) -> bool:
-    """检查是否为垃圾内容"""
-    text = (title + " " + summary).lower()
-    return any(kw.lower() in text for kw in JUNK_KEYWORDS)
+def _is_junk(text: str) -> bool:
+    """检查是否为垃圾"""
+    return any(kw in text for kw in JUNK_KEYWORDS)
 
 
 def _clean_title(title: str) -> str:
-    """清理标题：截断、去除网站名"""
+    """清理标题"""
     # 去除网站名后缀
-    for suffix in [" - 新浪财经", " - 富途牛牛", " - 东方财富", " - 同花顺", " - 雪球"]:
+    for suffix in [" - 新浪财经", " - 富途牛牛", " - 东方财富", " - 同花顺", " - 雪球", " - 腾讯证券", " | 鉅亨網"]:
         if title.endswith(suffix):
             title = title[:-len(suffix)]
+    # 去除 _ 分隔的网站名
+    if "_" in title:
+        parts = title.split("_")
+        title = parts[0]
+    # 去除特殊字符
+    title = re.sub(r'[‌\u200c\u200d\u200e\u200f]', '', title)
     # 截断
     if len(title) > 50:
         title = title[:47] + "..."
@@ -39,14 +44,18 @@ def _clean_title(title: str) -> str:
 
 
 def _clean_summary(summary: str) -> str:
-    """清理摘要：截断、去除表格碎片"""
+    """清理摘要"""
     # 去除表格碎片
     if "|" in summary:
         parts = summary.split("|")
         summary = " ".join(p.strip() for p in parts if p.strip() and not p.strip()[0].isdigit())
     # 去除 markdown
-    for prefix in ["##", "###", "**", "*"]:
+    for prefix in ["##", "###", "**", "*", "+", "#"]:
         summary = summary.replace(prefix, "")
+    # 去除特殊字符
+    summary = re.sub(r'[‌\u200c\u200d\u200e\u200f]', '', summary)
+    # 去除换行
+    summary = " ".join(summary.split())
     # 截断
     if len(summary) > 80:
         summary = summary[:77] + "..."
@@ -54,13 +63,7 @@ def _clean_summary(summary: str) -> str:
 
 
 def save_news(results: list[dict],当天日期: str | None = None) -> bool:
-    """将搜索结果写入 news.json。
-
-    - 筛选 3~8 条有效新闻
-    - 过滤垃圾内容（标题/摘要包含关键词）
-    - 原子写入
-    - 返回 True 表示成功写入
-    """
+    """将搜索结果写入 news.json。"""
     if not results:
         log.info("[NewsSaver] 无搜索结果，跳过写入")
         return False
@@ -81,12 +84,12 @@ def save_news(results: list[dict],当天日期: str | None = None) -> bool:
         title = _clean_title(title)
         summary = _clean_summary(summary)
 
-        # 过滤垃圾
-        if _is_junk(title, summary):
+        # 过滤垃圾标题
+        if _is_junk(title):
             continue
 
-        # summary 必须非空
-        if not summary:
+        # 标题太短（可能是网站名）
+        if len(title) < 5:
             continue
 
         valid.append({
@@ -94,15 +97,15 @@ def save_news(results: list[dict],当天日期: str | None = None) -> bool:
             "url": url,
             "source": item.get("source") or "",
             "published": item.get("date") or item.get("published_date") or "",
-            "summary": summary[:80],
+            "summary": summary[:80] if summary else "",
         })
 
-    if len(valid) < 3:
-        log.info("[NewsSaver] 有效条目不足 3 条（%d 条），跳过写入", len(valid))
+    if len(valid) < 1:
+        log.info("[NewsSaver] 无有效条目，跳过写入")
         return False
 
-    # 取前 8 条
-    valid = valid[:8]
+    # 取前 5 条
+    valid = valid[:5]
 
     # 构建文件内容
     data = {
