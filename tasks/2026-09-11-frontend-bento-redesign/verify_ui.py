@@ -843,6 +843,69 @@ def assert_polish(page, base_url: str) -> None:
     check(d["scrollW"] == d["innerW"], "P-7b 无横向溢出", (d["scrollW"], d["innerW"]))
 
 
+FF_SCROLLBAR_JS = r"""
+() => {
+  const el = document.querySelector('#news-body');
+  const cs = el ? getComputedStyle(el) : null;
+  // CSSOM 里的 Firefox 门控块：conditionText 含 -moz-appearance，且内部含 scrollbar-width
+  let gate = null;
+  for (const sheet of document.styleSheets) {
+    let rules;
+    try { rules = sheet.cssRules; } catch (e) { continue; }
+    for (const r of rules) {
+      if (r.conditionText && r.conditionText.includes('-moz-appearance')) {
+        for (const inner of (r.cssRules || [])) {
+          if (inner.style && inner.style.scrollbarWidth) gate = inner.style.scrollbarWidth;
+        }
+      }
+    }
+  }
+  return {
+    scrollbarWidth: cs ? cs.scrollbarWidth : null,
+    scrollbarColor: cs ? cs.scrollbarColor : null,
+    gateScrollbarWidth: gate,
+    rootSbPx: window.innerWidth - document.documentElement.clientWidth,
+    newsSbPx: el ? el.offsetWidth - el.clientWidth : null,
+  };
+}
+"""
+
+
+def assert_firefox_scrollbar(p, url: str) -> None:
+    """N-12 Firefox 引擎专项：细滚动条的门控必须真的命中 Firefox。
+
+    背景（2026-09-13 用户实测「就 firefox 这样」）：`@supports not selector(::-webkit-scrollbar)`
+    在 **Firefox 里恒为假** —— Firefox 出于 web 兼容把 `::-webkit-scrollbar` 当作「合法但未实现」
+    的选择器，`selector()` 同样返回 true；取反后 Firefox 被误判成 Chromium、标准属性块被跳过 →
+    落到 **17px 原生滚动条**。门控必须改用 Firefox 专属属性（`-moz-appearance`，实测 FF=true / Chromium=false）。
+
+    ⚠️ 判据为何不用宽度：**headless Firefox 根本不渲染滚动条**（实测 `scrollbar-width` 解析为 `none`、
+    宽度 0，与 headless Chromium 的 overlay 同源）→ 宽度类断言在 headless 下恒真/恒假都没有意义。
+    故 headless 下用「门控命中」判据（`scrollbar-color` 是否被主题色覆盖 = 块真的生效了 + CSSOM 门控形状），
+    宽度证据来自 headed 实测：修复前 17px → 修复后 **8px**（Firefox thin 的下限）。
+    未安装 Firefox 内核 → SKIP（打印原因、不计失败）。
+    """
+    print("\n--- N-12 Firefox 引擎滚动条 ---")
+    try:
+        fb = p.firefox.launch()
+    except Exception as exc:  # noqa: BLE001
+        print(f"  SKIP Firefox 内核不可用（需 `playwright install firefox`）: {str(exc).splitlines()[0][:90]}")
+        return
+    try:
+        pg = fb.new_page(viewport={"width": 1920, "height": 1080})
+        pg.goto(url, wait_until="load")
+        pg.wait_for_timeout(3000)
+        d = pg.evaluate(FF_SCROLLBAR_JS)
+    finally:
+        fb.close()
+    print(f"  {d}")
+    check("auto" not in str(d["scrollbarColor"]) and "rgb" in str(d["scrollbarColor"]),
+          "N-12a Firefox 下 scrollbar-color 被主题色覆盖（证明 -moz-appearance 门控在 FF 命中）",
+          d["scrollbarColor"])
+    check(d["gateScrollbarWidth"] == "thin",
+          "N-12b CSSOM 内 Firefox 门控块含 scrollbar-width:thin", d["gateScrollbarWidth"])
+
+
 def measure(page, url: str, w: int, h: int) -> dict:
     page.set_viewport_size({"width": w, "height": h})
     page.goto(url, wait_until="load")
@@ -1077,6 +1140,9 @@ def main() -> int:
 
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
+
+            # Firefox 专项（复用同一个 playwright 实例；未装 FF 内核则 SKIP）
+            assert_firefox_scrollbar(p, url)
     finally:
         proc.terminate()
         try:

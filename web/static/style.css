@@ -147,14 +147,19 @@ body {
      基线（无自定义）                          → 15px
    即 Chromium 只要看到 `scrollbar-width`/`scrollbar-color` 非 auto，就**忽略全部 ::-webkit-scrollbar**，
    所以"标准属性 + webkit 伪元素一起写"会互相打架，得到比预期更丑的结果。
-   路由：Chromium/Safari 走 A（6px，最细）；Firefox 走 B（不认 ::-webkit-*，只能用标准属性）。 */
+   路由：Chromium/Safari 走 A（6px，最细）；Firefox 走 B（不认 ::-webkit-*，只能用标准属性）。
+
+   ⚠️ B 块**不能**用 `@supports not selector(::-webkit-scrollbar)` 做判定 —— Firefox 出于 web 兼容
+   会把 `::-webkit-scrollbar` 视为「合法但未实现」的选择器，`selector()` 在 Firefox 里同样返回 **true**，
+   取反后 Firefox 被误判成 Chromium、本块被跳过 → 落到 **17px 原生滚动条**（2026-09-13 实测：
+   Chromium/webkit 6px 正常，Firefox 17px 未生效）。改用 Firefox 专属属性判定。 */
 /* A. Chromium / Safari */
 ::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
 ::-webkit-scrollbar-corner { background: transparent; }
-/* B. Firefox（`selector(::-webkit-scrollbar)` 为假 → 只有它生效；Chromium 恒跳过本块） */
-@supports not selector(::-webkit-scrollbar) {
+/* B. Firefox 专用门控：`-moz-appearance` 实测 Firefox=true、Chromium=false（Firefox 之外恒跳过本块） */
+@supports (-moz-appearance: none) {
   * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 }
 
