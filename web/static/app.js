@@ -71,8 +71,7 @@ const GROUPS = [
 // 静态占位模块（无数据源，仅保视觉；grep data-placeholder 定位全部待接点）
 const PLACEHOLDERS = [
   { id: 'news', title: '最新资讯', note: '数据未接入' },
-  { id: 'fund-flow', title: '资金流向（近5日）', note: '数据未接入' },
-  { id: 'risk-appetite', title: '风险偏好', note: '数据未接入' }
+  { id: 'fund-flow', title: '资金流向（近5日）', note: '数据未接入' }
 ];
 
 // 市场概览 6 小卡：indices = /api/latest，macro = /api/macro。
@@ -231,6 +230,28 @@ function renderSector(latest) {
 }
 
 // === 美股行业板块：横幅条（条宽 = |change| / max|change|）===
+// 风险偏好仪表（三十二期）：/api/latest.risk_appetite 渲染；null/缺失 → 「数据暂缺」不隐藏（防布局跳变）
+function renderRiskAppetite(latest) {
+  const body = document.getElementById('risk-appetite-body');
+  if (!body) return;
+  const ra = latest && latest.risk_appetite;
+  const labels = { high: '风险偏好高', low: '风险偏好低', neutral: '风险偏好中性' };
+  const clsMap = { high: 'pos', low: 'neg', neutral: 'muted' };
+  if (!ra || ra.level == null || !labels[ra.level]) {
+    body.innerHTML = '<p class="ph-note">数据暂缺</p>';
+    return;
+  }
+  const items = (ra.factors || []).map(function (f) {
+    if (f.name === 'VIX 5日') {
+      const c = f.impact >= 0 ? 'pos' : 'neg';
+      return '<li>VIX 5日 <span class="' + c + '">' + fmtPct(f.change_pct) + '</span></li>';
+    }
+    return '<li>' + escapeHtml(f.name) + ' ' + fmtNum(f.value, 1) + ' · ' + escapeHtml(f.state) + '</li>';
+  });
+  body.innerHTML = '<div class="ra-label ' + clsMap[ra.level] + '">' + escapeHtml(labels[ra.level]) + '</div>' +
+    '<ul class="ra-factors">' + items.join('') + '</ul>';
+}
+
 function renderUsSectors(latest) {
   const box = document.getElementById('us-sectors-body');
   if (!box) return;
@@ -818,6 +839,7 @@ function refresh() {
       updateTopbarDate(data.date);
       renderOverview();
       renderSector(data);
+      renderRiskAppetite(data);
       renderUsSectors(data);
       renderLede();
     })

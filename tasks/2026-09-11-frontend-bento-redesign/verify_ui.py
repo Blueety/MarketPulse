@@ -378,9 +378,10 @@ def assert_g9(page, g9: dict) -> None:
 
     check(g9["rowNewsCols"] == 2, "行 4 为 2 列（1fr 2.4fr）", g9["rowNewsCols"])
     check(g9["sectorBlocks"] == 3, "#sectors 内 3 个子块（风险偏好/资金流向/市场关系）", g9["sectorBlocks"])
-    check(g9["phCount"] == 3, "全站 data-placeholder 计数 = 3", g9["phCount"])
-    check(len(g9["phNotes"]) == 3 and all(n == "数据未接入" for n in g9["phNotes"]),
-          "3 处占位文案仍为「数据未接入」", g9["phNotes"])
+    # 三十二期：risk-appetite 点亮后占位 3→2（fund-flow / news）
+    check(g9["phCount"] == 2, "全站 data-placeholder 计数 = 2", g9["phCount"])
+    check(len(g9["phNotes"]) == 2 and all(n == "数据未接入" for n in g9["phNotes"]),
+          "2 处占位文案仍为「数据未接入」", g9["phNotes"])
     for key in ("fundFlowBody", "riskBody", "newsBody", "sectorBody", "usSectorsBody"):
         check(g9[key], f"app.js 契约 id 保留：{key}")
     check(g9["panelsCount"] == 2, "双 tab 有 2 个 panel", g9["panelsCount"])
@@ -640,8 +641,8 @@ def assert_viewport(w: int, h: int, m: dict) -> None:
     check(m["sectorRows"] >= 1, f"{w} A 股板块有行", m["sectorRows"])
     check(m["usSectorRows"] >= 1, f"{w} 美股行业板块有行", m["usSectorRows"])
     check((not m["watchHidden"]) and m["watchRows"] >= 1, f"{w} 自选列表可见且有行", m["watchRows"])
-    check(len(m["phNotes"]) == 3 and all(n == "数据未接入" for n in m["phNotes"]),
-          f"{w} 3 个占位模块文案", m["phNotes"])
+    check(len(m["phNotes"]) == 2 and all(n == "数据未接入" for n in m["phNotes"]),
+          f"{w} 2 个占位模块文案", m["phNotes"])
     check(m["tabCount"] == 4, f"{w} 趋势类别 tab 4 个", m["tabCount"])
     check(m["isWeekendFri"] is False and m["isWeekendSat"] is True,
           f"{w} isWeekendDate(周五)=false / (周六)=true", (m["isWeekendFri"], m["isWeekendSat"]))
