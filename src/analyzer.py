@@ -58,7 +58,7 @@ STREAK_DAYS = int(_CFG["trend"]["streak_days"])
 # 大盘告警（恒 WARN）建议文案：大盘无恐慌区间定义，不臆造分级。
 STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理。"
 
-HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 历史数据滚动窗口（天）
+HISTORY_MAX = int(_CFG["history"]["retention_days"])   # 三十一期 deprecated：SQLite 永久保留，裁剪废止（常量保留防引用断裂）
 
 # 历史记录持久化的 10 个指数键（与 load_history 投影、SYMBOLS 大写键一一对应小写）
 _HISTORY_KEYS = frozenset(s.lower() for s in SYMBOLS)
@@ -635,6 +635,18 @@ def merge_history(date: str, values: dict) -> None:
     rows = [(str(date), k, v, None) for k, v in updates.items()]
     upsert_history_rows(rows, preserve_existing=True)
 
+
+# ---- 自选股快照层（三十期：报告链路落盘，web 只读文件零联网）----
+def save_watchlist_snapshot(stocks_cfg: list[dict], values: dict, series: dict) -> bool:
+    """自选股快照落盘；存原始数据（加工留在 web 层）。stocks_cfg 空 / values 空 / 全 None
+    → 不写返回 False（merge_history「取数全失败→空操作」同款纪律，防垃圾覆盖昨日好快照）。
+    series 的 (date, close) tuple 经 JSON 序列化自动变 list，读取端按 list 兼容。
+    临时文件 + os.replace 原子写（save_history 同款）。"""
+    if not stocks_cfg or not values or all(v is None for v in values.values()):
+        return False
+    payload = {
+        "saved_at": datetime.now().astimezone().isoformat(timespec="minutes"),
+        "stocks": [dict(s) for s in stocks_cfg],
         "values": dict(values),
         "series": {k: [[d, v] for d, v in pts] for k, pts in series.items()},
     }

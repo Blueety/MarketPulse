@@ -23,7 +23,7 @@ DEFAULTS = {
     },
     "alert": {"vix": 20.0, "vxn": 20.0, "move": 12.0, "gspc": 2.5, "ixic": 3.5, "sh": 2.5, "sz": 3.5, "cyb": 5.0, "dynamic": True, "lookback_days": 20, "k_factor": 2.0},
     "trend": {"chart_days": 30, "streak_days": 3},
-    "history": {"retention_days": 90},
+    "history": {"retention_days": 90},   # 三十一期 deprecated：SQLite 永久保留，retention 不再被消费（env/config 保留解析防旧配置报错）
     # 二十四期：自选股/持仓（值为 list[dict]，白名单合并无法处理，由 _valid_watchlist 单独校验）
     "watchlist": {"stocks": [], "corr_high_threshold": 0.7},
 }
