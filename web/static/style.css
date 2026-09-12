@@ -368,6 +368,11 @@ body {
 }
 #sectors .ph-body { min-height: 40px; }   /* 子块内占位压矮，保证 #sectors 高度不超原值（scrollHeight 护栏） */
 .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 三十三期：市场关系活 pills——正 r=红/同向联动、负 r=绿/对冲（日报相关性表同色语义）；
+   原 .pill 灰态是静态装饰的禁用 button，活 pill 为展示性 span（无 cursor:pointer 假交互） */
+.pill.pos { color: var(--red); }
+.pill.neg { color: var(--green); }
+.pill-row .ph-note { line-height: 1.6; }
 
 /* G-9 关键高度约束：右卡默认激活的 A股 tab 里是 4 列表格（thead + 5 行），比美股条形列表高
    → 它决定 .row-3 的行高（stretch 等高）。实测自然内容高 299 → 会顶破 scrollHeight ≤1240 护栏，

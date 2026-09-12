@@ -302,6 +302,25 @@ function renderAlerts(alerts) {
 }
 
 // === 静态占位模块 ===
+// 市场关系（三十三期）：context 显著相关对 pills（按 |r| 降序，cap 5）；
+// 正 r=红/同向联动、负 r=绿/对冲（与日报相关性表同色语义，勿按涨红跌绿直觉写反）。
+function renderMarketRelation(latest) {
+  const row = document.querySelector('#market-relation .pill-row');
+  if (!row) return;
+  const list = ((latest && latest.correlation) || [])
+    .slice().sort(function (x, y) { return Math.abs(y.r) - Math.abs(x.r); }).slice(0, 5);
+  if (!list.length) {
+    row.innerHTML = '<p class="ph-note">暂无显著相关对（近30日 |r|≤0.5）</p>';
+    return;
+  }
+  row.innerHTML = list.map(function (c) {
+    const cls = c.r >= 0 ? 'pos' : 'neg';
+    const r = (c.r >= 0 ? '+' : '') + Number(c.r).toFixed(2);
+    return '<span class="pill ' + cls + '" title="近' + c.n + '个交易日">' +
+      escapeHtml(c.pair) + ' ' + r + '</span>';
+  }).join('');
+}
+
 function renderPlaceholders() {
   PLACEHOLDERS.forEach(function (p) {
     var cardEl = document.getElementById(p.id);
@@ -840,6 +859,7 @@ function refresh() {
       renderOverview();
       renderSector(data);
       renderRiskAppetite(data);
+      renderMarketRelation(data);
       renderUsSectors(data);
       renderLede();
     })

@@ -406,6 +406,16 @@ def _watchlist_config() -> list[dict]:
 _RISK_VIX_5D_PCT = 5.0   # VIX 5 日变化打分阈值（%）；模块级常量，V1 不入 config（plan §5.5）
 
 
+def _correlation_payload(ctx) -> list:
+    """context correlation 显著对直通（list 原样返回，其余 → []；容错语义同 _sector_payload）。
+
+    不做逐条字段校验：生产端 generate_context 的契约已保证 {a,b,pair,r,n}，web 侧过度防御反而藏错。
+    """
+    if isinstance(ctx, dict) and isinstance(ctx.get("correlation"), list):
+        return ctx["correlation"]
+    return []
+
+
 def _compute_risk_appetite(indices: list[dict], records: list[dict]) -> dict:
     """风险偏好合成（纯函数）：VIX 状态 + MOVE 状态 + VIX 5 日变化三点打分。
 
@@ -551,7 +561,8 @@ def api_latest() -> dict:
     result = _compute_latest(records)
     if result is None:
         return {"date": None, "indices": [], **empty_sectors,
-                "risk_appetite": {"level": None, "score": 0, "factors": []}}
+                "risk_appetite": {"level": None, "score": 0, "factors": []},
+                "correlation": _correlation_payload(ctx)}
 
     date, indices = result
     status_map: dict[str, str | None] = {}
@@ -569,6 +580,7 @@ def api_latest() -> dict:
         "sector_heat": _sector_payload(ctx, "sector_heat"),
         "us_sector_heat": _sector_payload(ctx, "us_sector_heat"),
         "risk_appetite": _compute_risk_appetite(indices, records),
+        "correlation": _correlation_payload(ctx),
     }
 
 

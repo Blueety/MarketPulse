@@ -1039,3 +1039,46 @@ def test_api_latest_includes_risk_appetite(client):
     ra = r.json()["risk_appetite"]
     assert ra["level"] == "low" and ra["score"] == -1
     assert [f["name"] for f in ra["factors"]] == ["VIX", "MOVE", "VIX 5日"]
+
+
+# ---- 市场关系（三十三期：/api/latest 新增 correlation，context 显著对直通）----
+
+def test_correlation_payload_passthrough():
+    """ctx 带 correlation 列表 → 原样直通（不做逐条字段校验，契约由生产端保证）。"""
+    corr = [{"a": "VIX", "b": "GSPC", "pair": "恐慌指数(VIX) ↔ 标普500", "r": -0.62, "n": 28}]
+    assert web.app._correlation_payload({"correlation": corr}) == corr
+
+
+def test_correlation_payload_none_and_bad_type():
+    """ctx None / correlation 缺失 / 非列表 → []（容错语义同 _sector_payload）。"""
+    assert web.app._correlation_payload(None) == []
+    assert web.app._correlation_payload({}) == []
+    assert web.app._correlation_payload({"correlation": {"a": 1}}) == []
+    assert web.app._correlation_payload({"correlation": "x"}) == []
+
+
+def test_api_latest_correlation_key_empty_ctx(client):
+    """client 夹具 ctx 无 correlation 键 → 恒有键且为 []（前端空态兜底）。"""
+    r = client.get("/api/latest")
+    assert r.status_code == 200
+    assert r.json()["correlation"] == []
+
+
+def test_api_latest_correlation_from_context(tmp_path, monkeypatch):
+    """ctx 带显著对 → 原样透出（与 context/最新.json 逐条一致）。"""
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows([{"date": "2026-09-10", "gspc": 100.0}]))
+    monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
+    ctx_dir = tmp_path / "context"
+    ctx_dir.mkdir()
+    corr = [{"a": "VIX", "b": "GSPC", "pair": "恐慌指数(VIX) ↔ 标普500", "r": -0.62, "n": 28}]
+    (ctx_dir / "2026-09-11.json").write_text(json.dumps(
+        {"date": "2026-09-11", "indices": {}, "sector_heat": {"gainers": [], "losers": []},
+         "correlation": corr}), encoding="utf-8")
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", ctx_dir)
+
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/latest").json()
+    assert data["correlation"] == corr
