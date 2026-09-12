@@ -28,12 +28,15 @@ from src.fetcher import SYMBOLS
 
 
 @pytest.fixture(autouse=True)
-def _reset_watch_cache():
-    """TTL 缓存为模块级状态，跨测试会泄漏；每个测试前清空以保证断言隔离。"""
+def _reset_watch_cache(monkeypatch):
+    """TTL 缓存为模块级状态，跨测试会泄漏；每个测试前清空以保证断言隔离。
+    同时默认把自选股快照读取隔离为 None（本机可能存在真实 data/watchlist.json，
+    文件优先逻辑不得劫持未打补丁的既有用例）；快照路径用例自行覆盖该补丁。"""
     web.app._watch_cache["ts"] = 0.0
     web.app._watch_cache["payload"] = None
     web.app._macro_cache["ts"] = 0.0
     web.app._macro_cache["payload"] = None
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
     yield
 
 def make_alert(date: str) -> str:
@@ -709,6 +712,58 @@ def test_load_watchlist_fetch_raises(monkeypatch):
     assert out["hidden"] is False
     assert out["stocks"] == []
     assert out["trend"] == {"dates": [], "series": []}
+
+
+def test_load_watchlist_file_hit_no_network(monkeypatch):
+    """快照命中（标的与配置一致）→ 数据来自文件且零联网：fetch_watchlist 被调用即 fail。"""
+    snap = {"saved_at": "2026-09-12T10:30+08:00",
+            "stocks": [{"symbol": "X", "label": "测试"}],
+            "values": {"X": 4.01},
+            "series": {"X": [["d1", 3.9], ["d2", 4.01]]}}   # JSON 往返后 list-of-list
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: snap)
+    monkeypatch.setattr(web.app, "load_config",
+                        lambda: {"watchlist": {"stocks": [{"symbol": "X", "label": "测试"}]}})
+
+    def boom(stocks):
+        raise AssertionError("快照命中时不得联网取数")
+
+    monkeypatch.setattr(web.app, "fetch_watchlist", boom)
+    out = _load_watchlist()
+    assert out["hidden"] is False
+    assert out["stocks"][0]["symbol"] == "X"
+    assert out["stocks"][0]["value"] == 4.01
+    assert out["as_of"] == "2026-09-12T10:30+08:00"
+    assert out["trend"]["dates"][-1] == "d2"   # list 兼容解包与索引访问
+
+
+def test_load_watchlist_config_mismatch_falls_back(monkeypatch):
+    """快照标的 ≠ 配置标的 → 回退实时取数（防改配置后展示旧标的），无 as_of。"""
+    snap = {"saved_at": "2026-09-12T10:30+08:00",
+            "stocks": [{"symbol": "OLD"}], "values": {"OLD": 1.0},
+            "series": {"OLD": [["d1", 1.0]]}}
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: snap)
+    monkeypatch.setattr(web.app, "load_config",
+                        lambda: {"watchlist": {"stocks": [{"symbol": "NEW"}]}})
+    values, series, errors = {"NEW": 9.0}, {"NEW": [("d1", 8.0), ("d2", 9.0)]}, []
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda s: (values, series, errors))
+    out = _load_watchlist()
+    assert out["hidden"] is False
+    assert out["stocks"][0]["symbol"] == "NEW"
+    assert out["stocks"][0]["value"] == 9.0
+    assert "as_of" not in out
+
+
+def test_load_watchlist_no_snapshot_falls_back(monkeypatch):
+    """无快照文件 → 回退实时取数（既有实时路径回归锚；文件优先逻辑不得越界）。"""
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
+    monkeypatch.setattr(web.app, "load_config",
+                        lambda: {"watchlist": {"stocks": [{"symbol": "X"}]}})
+    values, series, errors = {"X": 4.0}, {"X": [("d1", None), ("d2", 4.0)]}, []
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda s: (values, series, errors))
+    out = _load_watchlist()
+    assert out["hidden"] is False
+    assert out["stocks"][0]["value"] == 4.0
+    assert "as_of" not in out
 
 
 def test_api_watchlist_endpoint(client, monkeypatch):

@@ -364,33 +364,45 @@ def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
     return {"stocks": stocks_out, "trend": {"dates": dates, "series": trend_series}}
 
 
-def _load_watchlist() -> dict:
-    """实时取数自选股。hidden=true 仅=无配置（前端隐藏）；有配置时取数失败
-    仍返回 hidden=false + 空 stocks（前端占位可见，不静默隐藏，NF3）。
-    优先读环境变量 WATCHLIST_STOCKS（JSON 格式），其次读 config.json。"""
-    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
-    # 优先从环境变量读取（Railway 部署用）
+def _watchlist_config() -> list[dict]:
+    """自选股配置：env WATCHLIST_STOCKS（JSON，Railway 用）> config.json watchlist.stocks；
+    无配置 / 解析失败 → []（语义与三十期前一致：空配置 = 前端隐藏）。"""
     env_stocks = os.environ.get("WATCHLIST_STOCKS")
     if env_stocks:
         try:
             stocks = json.loads(env_stocks)
-            if not stocks:
-                return {"hidden": True, **empty}
+            return stocks or []
         except (json.JSONDecodeError, TypeError) as exc:
             log.warning("WATCHLIST_STOCKS 环境变量解析失败: %s", exc)
-            return {"hidden": True, **empty}
-    else:
-        try:
-            cfg = load_config()
-        except Exception as exc:
-            log.warning("自选股配置读取失败，视为无配置: %s", exc)
-            return {"hidden": True, **empty}
-        stocks = (cfg.get("watchlist") or {}).get("stocks") or []
-        if not stocks:
-            return {"hidden": True, **empty}
+            return []
     try:
-        values, series, _errors = fetch_watchlist(stocks)
-        return {"hidden": False, **_build_watchlist_payload(stocks, values, series)}
+        cfg = load_config()
+    except Exception as exc:
+        log.warning("自选股配置读取失败，视为无配置: %s", exc)
+        return []
+    return (cfg.get("watchlist") or {}).get("stocks") or []
+
+
+def _load_watchlist() -> dict:
+    """自选股：快照文件优先（报告链路落盘，请求路径零联网），配置比对失败 / 无快照 /
+    快照构建异常时回退既有实时取数路径（慢但正确，防改配置后展示旧标的）。
+    hidden=true 仅=无配置（前端隐藏）；有配置时失败仍返回 hidden=false + 空 stocks
+    （前端占位可见，不静默隐藏，NF3）。"""
+    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
+    cfg = _watchlist_config()
+    if not cfg:
+        return {"hidden": True, **empty}
+    snap = load_watchlist_snapshot()
+    if snap and ([s.get("symbol") for s in snap["stocks"]] == [s.get("symbol") for s in cfg]):
+        try:
+            payload = _build_watchlist_payload(snap["stocks"], snap["values"], snap["series"])
+            payload["as_of"] = snap.get("saved_at")   # 数据时点标注（新字段，向后兼容）
+            return {"hidden": False, **payload}
+        except Exception as exc:
+            log.warning("自选股快照构建失败，回退实时取数: %s", exc)
+    try:
+        values, series, _errors = fetch_watchlist(cfg)
+        return {"hidden": False, **_build_watchlist_payload(cfg, values, series)}
     except Exception as exc:
         log.warning("自选股取数失败，降级空结构: %s", exc)
         return {"hidden": False, **empty}

@@ -3,53 +3,53 @@
   "indices": {
     "GSPC": {
       "value": 7656.98,
-      "change_pct": 0.859886454944212,
-      "status": "连涨1日"
+      "change_pct": 0.0,
+      "status": "下跌趋势"
     },
     "IXIC": {
       "value": 26333.035,
-      "change_pct": 0.9635482315682774,
-      "status": "连涨1日"
+      "change_pct": 0.0,
+      "status": "下跌趋势"
     },
     "SH": {
       "value": 3888.1106,
-      "change_pct": -1.176620517529013,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "SZ": {
       "value": 13471.257,
-      "change_pct": -1.0751692470150949,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "CYB": {
       "value": 3322.039,
-      "change_pct": -0.4907408350412204,
+      "change_pct": 0.0,
       "status": "下跌趋势"
     },
     "VIX": {
       "value": 15.84,
-      "change_pct": -11.210762331838566,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "VXN": {
       "value": 21.02,
-      "change_pct": -9.901414487783965,
+      "change_pct": 0.0,
       "status": "警惕"
     },
     "MOVE": {
       "value": 82.207,
-      "change_pct": 0.13691521732244732,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "GLD": {
       "value": 398.77,
-      "change_pct": 0.6080331012211041,
-      "status": "连涨1日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "BTC": {
-      "value": 77279.92,
-      "change_pct": 0.8673320419482121,
-      "status": "连涨1日"
+      "value": 77267.73,
+      "change_pct": -0.015773825852824806,
+      "status": "下跌趋势"
     }
   },
   "history_30d": {
@@ -403,29 +403,12 @@
       78475.77,
       78303.1,
       76615.41,
-      77279.92
+      77267.73
     ]
   },
   "breach": {
-    "triggered": true,
-    "indices": [
-      {
-        "name": "VIX",
-        "current": 15.84,
-        "previous": 17.84,
-        "change_pct": -11.21,
-        "threshold": 8.412478485869332,
-        "level": "WARN"
-      },
-      {
-        "name": "VXN",
-        "current": 21.02,
-        "previous": 23.33,
-        "change_pct": -9.9,
-        "threshold": 5.910822902400703,
-        "level": "WARN"
-      }
-    ]
+    "triggered": false,
+    "indices": []
   },
   "sector_heat": {
     "gainers": [
@@ -560,11 +543,11 @@
     ]
   },
   "search_keywords": [
-    "VIX drop 2026-09-11",
-    "VXN drop 2026-09-11",
     "通信/电子 drop 2026-09-11",
     "军工 drop 2026-09-11",
-    "消费 drop 2026-09-11"
+    "消费 drop 2026-09-11",
+    "其他 drop 2026-09-11",
+    "光伏/新能源 drop 2026-09-11"
   ],
   "correlation": [
     {
