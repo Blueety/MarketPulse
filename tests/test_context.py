@@ -10,6 +10,7 @@ import pytest
 
 from src import alerter as al
 from src import analyzer as an
+from src import storage as st
 from src import reporter as rep
 
 
@@ -22,7 +23,8 @@ def clean_thresholds(monkeypatch):
 def tmp_context(monkeypatch, tmp_path, clean_thresholds):
     """context/history/alerts 全部重定向到 tmp；alerts 断言幂等性。"""
     monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
-    monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
     monkeypatch.setattr(al, "ALERTS_DIR", tmp_path / "alerts")
     monkeypatch.setattr(al, "ALERTS_LOG", tmp_path / "alerts.log")
     return tmp_path

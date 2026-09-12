@@ -9,6 +9,7 @@
 import json
 
 from src import analyzer as an
+from src import storage as st
 from src import reporter as rep
 import daily_report as dr
 
@@ -51,7 +52,8 @@ class TestDailyReportDedupWiring:
         cfg_path = tmp_path / "config.json"
         cfg_path.write_text(json.dumps({}), encoding="utf-8")
         monkeypatch.setenv("CONFIG_PATH", str(cfg_path))
-        monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+        monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+        st.init_db()
         monkeypatch.setattr(an, "LAST_VALUES_FILE", tmp_path / "last_values.json")
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
         monkeypatch.setattr(dr, "get_us_eastern_date", lambda: "2026-09-01")

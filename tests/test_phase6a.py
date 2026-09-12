@@ -5,6 +5,7 @@ import json
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 from src import config as cfg
 from src import reporter as rep
 
@@ -130,7 +131,8 @@ class TestReportSections:
 class TestContextExtension:
     def test_indices_and_history_include_gspc_ixic(self, tmp_path, monkeypatch):
         monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path)
-        monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+        monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+        st.init_db()
         an.append_history({"date": "2026-08-28", "vix": 20.0, "vxn": 18.0, "move": 75.0, "gspc": 4400.0, "ixic": 17000.0, "sh": 3100.0, "sz": 10000.0, "cyb": 2200.0})
         an.append_history({"date": "2026-08-29", "vix": 21.0, "vxn": 19.0, "move": 78.0, "gspc": 4500.0, "ixic": 17500.0, "sh": 3120.0, "sz": 10100.0, "cyb": 2210.0})
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,

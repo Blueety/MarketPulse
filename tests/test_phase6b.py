@@ -11,6 +11,7 @@ import pytest
 
 from src import alerter as al
 from src import analyzer as an
+from src import storage as st
 from src import reporter as rep
 from src.config import DEFAULTS
 
@@ -26,7 +27,8 @@ def tmp_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(al, "ALERTS_DIR", tmp_path / "alerts")
     monkeypatch.setattr(al, "ALERTS_LOG", tmp_path / "alerts.log")
     monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
-    monkeypatch.setattr(an, "HISTORY_FILE", tmp_path / "history.json")
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
     return tmp_path
 
 
