@@ -4,6 +4,8 @@
   --bg-elevated: #FFFFFF;
   --bg-hover: #F0F2F5;
   --border: #E5E7EB;
+  --scroll-thumb: #D5DAE1;
+  --scroll-thumb-hover: #B4BCC7;
   --text-primary: #111827;
   --text-secondary: #6B7280;
   --text-muted: #9CA3AF;
@@ -43,9 +45,14 @@
   --bg-elevated: #111827;
   --bg-hover: #161D27;
   --border: #1E2733;
+  --scroll-thumb: #2C3745;
+  --scroll-thumb-hover: #3E4C5D;
   --text-primary: #E5E7EB;
   --text-secondary: #9BA3AF;
-  --text-muted: #6B7280;
+  /* 建议 3（对比度）：原 #6B7280 在 #0B0F14 上仅 ≈4.06:1，未达 WCAG AA(4.5)；
+     该 token 承载真实内容（.ph-note / .empty / td.empty / .ms-time / .link-btn）→ 提亮到 ≈6.9:1。
+     注意：同一 token 也用于 .kpi-card::before 色条与 .ms-dot 圆点（装饰会随之提亮，须目视）。 */
+  --text-muted: #8E9BAE;
   --green: #2FD6A8;
   --red: #FF6E5E;
   --blue: #3B82F6;
@@ -129,6 +136,27 @@ body {
 }
 .icon-btn:hover { color: var(--text-primary); border-color: var(--blue); }
 #menu-toggle { width: 28px; height: 28px; display: none; }
+
+/* ===== 统一细滚动条（替换各平台默认的粗滚动条）=====
+   容器：#sidebar / #news-body、.alert-list（row-news 两张卡）/ .table-scroll / body / .news-item a（4px）。
+
+   ⚠️ 两套写法必须**互斥**，不能"都写上兜底" —— 实测（headed Chromium 逐变量隔离）：
+     仅 ::-webkit-scrollbar{width:6px}        → 6px  ✅
+     webkit 6px + scrollbar-width:thin       → 10px ❌（webkit 整块被丢弃，落到 thin）
+     webkit 6px + scrollbar-color:...        → 15px ❌（连 thin 都不生效，退化成系统色）
+     基线（无自定义）                          → 15px
+   即 Chromium 只要看到 `scrollbar-width`/`scrollbar-color` 非 auto，就**忽略全部 ::-webkit-scrollbar**，
+   所以"标准属性 + webkit 伪元素一起写"会互相打架，得到比预期更丑的结果。
+   路由：Chromium/Safari 走 A（6px，最细）；Firefox 走 B（不认 ::-webkit-*，只能用标准属性）。 */
+/* A. Chromium / Safari */
+::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+::-webkit-scrollbar-corner { background: transparent; }
+/* B. Firefox（`selector(::-webkit-scrollbar)` 为假 → 只有它生效；Chromium 恒跳过本块） */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+}
 
 /* ===== 骨架：flex shell + 侧栏 + 主区 ===== */
 .shell { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
@@ -328,6 +356,17 @@ body {
 .row-flash td { background: color-mix(in srgb, var(--red) 7%, transparent); }
 .row-warn td { background: color-mix(in srgb, var(--orange) 10%, transparent); }
 
+/* ===== P-3 涨跌幅 Badge（建议 5）=====
+   ⚠️ 必须用独立命名空间：项目里既有的 `.pill` 承载的是「相关性」语义且**配色相反**
+   （`.pill.pos`=红=同向联动风险），若直接套用会让「+0.38%」变红 → 涨跌语义反转。
+   本项目约定仍是**绿涨红跌**（与 `.pos`/`.neg` 一致）。 */
+.chg-pill {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-family: var(--mono); font-weight: 600; font-size: 12px;
+}
+.chg-pill.pos { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.chg-pill.neg { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+
 /* 自选列表：纯 CSS 百分比迷你条（不用 Chart.js） */
 .watchlist-table td.name { font-weight: 500; }
 .watchlist-table .col-bar { width: 92px; }
@@ -385,10 +424,9 @@ body {
   display: block; font-size: 13px; font-weight: 400;   /* 600 → 400：它不再是标题而是正文 */
   color: var(--text-secondary); text-decoration: none;
   white-space: nowrap; overflow-x: auto; overflow-y: hidden;
-  scrollbar-width: thin;
 }
+/* 单行横滚条单独压到 4px：它夹在 34px 行高里，跟全局 6px 会显压行 */
 .news-item a::-webkit-scrollbar { height: 4px; }
-.news-item a::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .news-item a:hover { color: var(--blue); }
 
 /* 小屏改**完整换行**（不截断、不横滚）：手机上逐行横向滑动体验差，换行更易读；
@@ -407,6 +445,9 @@ body {
 #us-sectors .tab-labels { margin-bottom: 6px; }
 #us-sectors .data-table th { padding: 4px 8px; }
 #us-sectors .data-table td { padding: 4px 8px; font-size: 12px; }
+/* P-3 零增高对冲：badge 高 ≈19px > 该表 12px 文字行高(≈17.4px) → 该表行高会长 ~2px/行（5 行 +10px）。
+   把涨跌幅列的上下 padding 4→3 抵消（4+4+17.4 = 3+3+19.4），保住 scrollHeight ≤1240 余量。 */
+#us-sectors .data-table td.chg { padding: 3px 8px; }
 .pill {
   background: transparent;
   border: 1px solid var(--glass-border);
@@ -456,7 +497,9 @@ body {
 
 /* ===== 行业板块（横幅条）===== */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 58px; align-items: center; gap: 8px; font-size: 12px; }
+/* P-3：涨跌幅改为 .chg-pill 后末列需要容纳「胶囊 + 内边距」，58px 会裁切（-12.34% 约 62px）→ 放宽到 70px
+   （名称列是 minmax(0,1fr)，会自动吸收 → 不产生横向溢出、不影响行高） */
+.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 70px; align-items: center; gap: 8px; font-size: 12px; }
 /* 三十二期：风险偏好仪表（后端合成数据，色值只用既有 token） */
 .ra-label { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
 .ra-label.pos { color: var(--green); }
@@ -575,7 +618,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .chart-wrap { height: 280px; }
   .seg { gap: 5px; }
   .seg button { padding: 3px 9px; font-size: 11px; }
-  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 52px; gap: 6px; }
+  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 66px; gap: 6px; }
 }
 
 /* G-8 降级（方案 B）：不支持 backdrop-filter 的环境（老浏览器 / 关闭该特性）→
@@ -601,3 +644,18 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* ===== P-4 骨架屏（建议 8）=====
+   加载态占位：尺寸贴近真实内容 → 数据到达时行高不突变（CLS）。脉冲动画由上面既有的
+   `prefers-reduced-motion: reduce` 全局规则关闭（R10），此处无需重复声明。 */
+.skeleton { display: block; border-radius: 4px; background: var(--bg-hover); animation: sk-pulse 1.4s ease-in-out infinite; }
+@keyframes sk-pulse { 0%, 100% { opacity: .45; } 50% { opacity: .95; } }
+/* 表格骨架行：用 td 的固定 height（border-box）表达 30px 行高 —— 不依赖 padding
+   （本表所在面板 `#us-sectors .data-table td` 的 4px padding 特异性更高，改 padding 会失效） */
+.sk-row td { height: 30px; vertical-align: middle; }
+.sk-line { height: 12px; width: 72%; }
+/* 概览小卡骨架（尺寸对齐 .mini-card，2 行 × 3 列） */
+.sk-card { height: 92px; border-radius: 10px; }
+/* 行业板块横幅条骨架 / 告警列表条骨架 */
+.sk-bar { height: 18px; }
+.sk-item { height: 30px; border-radius: 6px; }

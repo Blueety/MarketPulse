@@ -136,6 +136,13 @@ function fmtNum(v, digits) {
   if (v == null) return "—";
   return Number(v).toFixed(digits);
 }
+// 建议 7（千分位）：只给「价格」用 —— 不动 fmtNum，避免波及告警阈值/风险因子/tooltip。
+function fmtNumSep(v, digits) {
+  if (v == null) return "—";
+  var n = Number(v);
+  if (!isFinite(n)) return "—";
+  return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
 function fmtPct(v) {
   if (v == null || isNaN(v)) return "—";
   return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
@@ -178,10 +185,12 @@ function sourceMap(kind) {
 }
 
 // === 市场概览 6 小卡 ===
+// P-4 骨架屏（建议 8）：加载态占位形状与 6 小卡一致 → 数据到达时行高不突变（CLS）
+var OVERVIEW_SKELETON = '<div class="skeleton sk-card"></div>'.repeat(6);
 function renderOverview() {
   var box = document.getElementById('overview-body');
   if (!box) return;
-  if (!state.latest) { box.innerHTML = '<p class="empty">加载中…</p>'; return; }
+  if (!state.latest) { box.innerHTML = OVERVIEW_SKELETON; return; }
   var idxMap = sourceMap('indices');
   var macMap = sourceMap('macro');
   box.innerHTML = OVERVIEW_CARDS.map(function (c) {
@@ -201,7 +210,7 @@ function renderOverview() {
     var sub = chg == null ? (d.status || '—') : fmtPct(chg);
     return '<div class="mini-card"><div class="mini-label">' + ico +
       escapeHtml(c.label) + '</div>' +
-      '<div class="mini-val">' + fmtNum(val, 2) + escapeHtml(c.suffix || '') + '</div>' +
+      '<div class="mini-val">' + fmtNumSep(val, 2) + escapeHtml(c.suffix || '') + '</div>' +
       '<div class="mini-sub ' + cls + '">' + escapeHtml(sub) + '</div></div>';
   }).join('');
 }
@@ -221,7 +230,8 @@ function renderSector(latest) {
     tr.innerHTML =
       '<td class="col-ico">' + iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (g.name || "—").charAt(0)) + "</td>" +
       "<td>" + escapeHtml(g.name || "—") + "</td>" +
-      '<td class="num chg pos">' + fmtPct(g.change) + "</td>" +
+      '<td class="num chg"><span class="chg-pill ' + ((g.change || 0) >= 0 ? "pos" : "neg") + '">' +
+        fmtPct(g.change) + "</span></td>" +
       '<td class="col-turnover num">' + escapeHtml(g.turnover || "—") + "</td>" +
       "<td>" + escapeHtml(g.top_stock || "—") + "</td>";
     tbody.appendChild(tr);
@@ -270,7 +280,7 @@ function renderUsSectors(latest) {
       iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (r.name || '—').charAt(0)) +
       '<span class="bar-name">' + escapeHtml(r.name || '—') + '</span>' +
       '<span class="bar-track"><i class="' + cls + '" style="width:' + width + '%"></i></span>' +
-      '<span class="bar-val ' + cls + '">' + fmtPct(r.change) + '</span></div>';
+      '<span class="bar-val"><span class="chg-pill ' + cls + '">' + fmtPct(r.change) + '</span></span></div>';
   }).join('');
 }
 
@@ -699,7 +709,7 @@ function renderLede() {
     let sub, subCls;
     if (chg == null) { sub = d.status || '—'; subCls = ''; }
     else { sub = fmtPct(chg); subCls = chg >= 0 ? 'pos' : 'neg'; }
-    return { label: label, kind: kind, sym: sym, val: fmtNum(d.value, 2), sub: sub, subCls: subCls };
+    return { label: label, kind: kind, sym: sym, val: fmtNumSep(d.value, 2), sub: sub, subCls: subCls };
   }
 
   const cells = [];
@@ -714,7 +724,7 @@ function renderLede() {
     const wc = s.change_pct;
     wcell = {
       label: s.label || s.symbol || '自选', kind: 'accent', sym: s.symbol,
-      val: fmtNum(s.value, 2),
+      val: fmtNumSep(s.value, 2),
       sub: wc == null ? (s.status || '—') : fmtPct(wc),
       subCls: wc == null ? '' : (wc >= 0 ? 'pos' : 'neg')
     };
@@ -831,8 +841,8 @@ function renderWatchlist(payload) {
     tr.innerHTML =
       '<td class="col-ico">' + ico + '</td>' +
       '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
-      '<td class="num">' + fmtNum(row.value, 2) + '</td>' +
-      '<td class="num chg ' + cls + '">' + fmtPct(chg) + '</td>' +
+      '<td class="num">' + fmtNumSep(row.value, 2) + '</td>' +
+      '<td class="num chg"><span class="chg-pill ' + cls + '">' + fmtPct(chg) + '</span></td>' +
       '<td class="col-bar"><span class="mini-bar"><i class="' + (chg >= 0 ? 'pos' : 'neg') +
       '" style="width:' + width + '%"></i></span></td>';
     body.appendChild(tr);

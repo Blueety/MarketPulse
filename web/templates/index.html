@@ -115,7 +115,8 @@
             <div class="table-scroll">
               <table class="data-table watchlist-table">
                 <thead><tr><th class="col-ico"></th><th>名称</th><th class="num">最新价</th><th class="num">涨跌幅</th><th class="col-bar"></th></tr></thead>
-                <tbody id="watchlist-body"><tr><td colspan="5">加载中…</td></tr></tbody>
+                <!-- P-4 骨架屏：colspan 必须为 5（visual-fidelity 已加图标列，4 会错位） -->
+                <tbody id="watchlist-body"><tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr><tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr></tbody>
               </table>
             </div>
           </section>
@@ -126,7 +127,12 @@
           <section class="card" id="overview">
             <h2>市场概览 <span class="h2-sub" id="overview-sub">· 最新交易日</span></h2>
             <div class="mini-grid" id="overview-body">
-              <p class="empty">加载中…</p>
+              <div class="skeleton sk-card"></div>
+              <div class="skeleton sk-card"></div>
+              <div class="skeleton sk-card"></div>
+              <div class="skeleton sk-card"></div>
+              <div class="skeleton sk-card"></div>
+              <div class="skeleton sk-card"></div>
             </div>
           </section>
 
@@ -167,14 +173,25 @@
                       <tr><th class="col-ico"></th><th>板块</th><th class="num">涨跌幅</th><th class="col-turnover">成交额</th><th>领涨股</th></tr>
                     </thead>
                     <tbody id="sector-body">
-                      <tr><td colspan="5">加载中…</td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
               <div class="panel panel-us">
                 <div class="bar-list" id="us-sectors-body">
-                  <p class="empty">加载中…</p>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
+                  <div class="skeleton sk-bar"></div>
                 </div>
               </div>
             </div>
@@ -186,7 +203,11 @@
           <section class="card" id="alerts">
             <h2>告警记录 <span class="h2-sub">· 最近 10 条</span></h2>
             <div id="alert-list" class="alert-list">
-              <p class="empty">加载中…</p>
+              <div class="skeleton sk-item"></div>
+              <div class="skeleton sk-item"></div>
+              <div class="skeleton sk-item"></div>
+              <div class="skeleton sk-item"></div>
+              <div class="skeleton sk-item"></div>
             </div>
           </section>
 

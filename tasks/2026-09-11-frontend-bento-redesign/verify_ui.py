@@ -622,6 +622,30 @@ NEWS_JS = r"""
     whiteSpace: a0 ? a0.whiteSpace : null,
     overflowX: a0 ? a0.overflowX : null,
     textOverflow: a0 ? a0.textOverflow : null,
+    // 滚动条实测宽度：offsetWidth - clientWidth - 左右边框（#sidebar 有 border-right，必须扣掉）
+    scrollbarW: (() => {
+      const sbw = (el) => {
+        if (!el) return null;
+        const s = getComputedStyle(el);
+        const b = parseFloat(s.borderLeftWidth || 0) + parseFloat(s.borderRightWidth || 0);
+        return el.offsetWidth - el.clientWidth - b;
+      };
+      const out = {};
+      ['#news-body', '.alert-list', '#sidebar'].forEach((sel) => { out[sel] = sbw(q(sel)); });
+      return out;
+    })(),
+    // headless Chromium 用 overlay 滚动条（不占布局宽 → 上面恒测到 0），故另查 CSSOM 里
+    // ::-webkit-scrollbar 的 width 声明，保证「细滚动条规则确实存在且被解析」。
+    sbRuleWidth: (() => {
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try { rules = sheet.cssRules; } catch (e) { continue; }
+        for (const r of rules) {
+          if (r.selectorText === '::-webkit-scrollbar' && r.style.width) return r.style.width;
+        }
+      }
+      return null;
+    })(),
     scrollH: document.scrollingElement.scrollHeight,
   };
 }
@@ -663,6 +687,13 @@ def assert_news(page, base_url: str) -> None:
           (dom["invalidHref"], dom["missingTitle"]))
     check(all(s <= 120 for s in sums),
           "N-7 /api/news 每条 summary ≤120 字（落盘切句生效）", sums)
+    print(f"  scrollbarW={dom['scrollbarW']} sbRuleWidth={dom['sbRuleWidth']}")
+    check(dom["sbRuleWidth"] == "6px",
+          "N-10a 样式表含 ::-webkit-scrollbar{width:6px}（系统默认 15px）",
+          dom["sbRuleWidth"])
+    check(all((v is not None and v <= 8) for v in dom["scrollbarW"].values()),
+          "N-10b 各滚动容器实测宽 ≤8px（headed 实测 6px；headless overlay 为 0）",
+          dom["scrollbarW"])
     check(dom["weight"] == "400", "N-8 .news-item a 字重 400（它是正文不是标题）", dom["weight"])
     check(dom["whiteSpace"] == "nowrap" or dom["whiteSpace"] == "normal",
           "N-9 white-space 合法（nowrap 桌面 / normal 小屏换行）", dom["whiteSpace"])
