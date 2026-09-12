@@ -17,7 +17,7 @@ JUNK_KEYWORDS = [
     "APP下载", "登录", "自选股", "手机新浪", "富途牛牛", 
     "东方财富", "同花顺", "雪球", "腾讯证券", "开户", "注册",
     "提供者", "智通财经", "视野环球", "鉅亨網", "美股股市新聞",
-    "智通财经APP", "提供者",
+    "智通财经APP",
 ]
 
 
@@ -37,7 +37,7 @@ def _clean_title(title: str) -> str:
         parts = title.split("_")
         title = parts[0]
     # 去除特殊字符
-    title = re.sub(r'[‌\u200c\u200d\u200e\u200f]', '', title)
+    title = re.sub(r'[\u200c\u200d\u200e\u200f]', '', title)
     # 截断
     if len(title) > 50:
         title = title[:47] + "..."
@@ -54,7 +54,11 @@ def _clean_summary(summary: str) -> str:
     for prefix in ["##", "###", "**", "*", "+", "#"]:
         summary = summary.replace(prefix, "")
     # 去除特殊字符
-    summary = re.sub(r'[‌\u200c\u200d\u200e\u200f]', '', summary)
+    summary = re.sub(r'[\u200c\u200d\u200e\u200f]', '', summary)
+    # 去除"提供者...•"碎片
+    summary = re.sub(r'提供者.*?•\s*', '', summary)
+    # 去除"智通财经APP..."碎片
+    summary = re.sub(r'智通财经APP.*?，', '', summary)
     # 去除数字编号开头（如"10、"）
     summary = re.sub(r'^\d+、', '', summary)
     # 去除换行
