@@ -29,6 +29,7 @@ from src.config import load_config
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat, fetch_watchlist
 from src.news_fetcher import search_news
 from src.news_saver import save_news
+from src.rss_fetcher import fetch_macro_news
 from src.reporter import (generate_context, render_market_trend_chart, render_report,
                           render_trend_chart, save_report, load_opening_refs)
 from src.image_renderer import render_report_image
@@ -167,9 +168,14 @@ def main() -> int:
     except Exception as exc:
         log.warning("自选股处理失败，跳过板块: %s", exc)
         watchlist_view = None
-    # 二十七期：资讯落盘（Tavily 搜索 → news.json）
+    # 二十七期：资讯落盘。三十四期改用 **RSS 主源**：搜索引擎 snippet 是「网页中含关键词的任意
+    # 窗口」（碎片、常与标题无关），而 RSS 的 description 是文章开头（自含）+ 编辑级标题。
+    # RSS 两源全失败 → 降级 Tavily 备源，保证 #news 卡不会整片空白（链路 A 个股归因仍用 Tavily）。
     try:
-        news_results = search_news(MACRO_NEWS_QUERY)
+        news_results = fetch_macro_news()
+        if not news_results:
+            log.info("RSS 无结果，降级 Tavily 备源")
+            news_results = search_news(MACRO_NEWS_QUERY)
         save_news(news_results, date)
     except Exception as exc:
         log.warning("资讯落盘失败，跳过: %s", exc)
