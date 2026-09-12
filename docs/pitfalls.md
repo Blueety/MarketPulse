@@ -285,6 +285,8 @@
 
 - **给既有"实时取数端点"加"文件优先"路径，测试隔离必须做在 autouse fixture 里**：`/api/watchlist` 改为快照文件优先后，本机真实 `data/watchlist.json`（随 cron 落盘）会劫持所有未打补丁的既有用例（conftest 只隔离 CONFIG_PATH，不隔离 DATA_DIR）。解法：`_reset_watch_cache` autouse fixture 请求 `monkeypatch` 并默认 `setattr(web.app, "load_watchlist_snapshot", lambda: None)`；快照路径用例在测试体内再覆盖同一名（后 setattr 者生效）。**逐个改既有用例是下策**。
 - **monkeypatch 不了"测试环境差异"时先想"谁会读真实文件"**：`load_watchlist_snapshot` 以模块级名字导入到 `web.app` 后，补丁必须打 `web.app`（定义方 analyzer 不生效，同 CHARTS_DIR 纪律）；快照命中用例要同时 mock `fetch_watchlist` 为「被调用即 raise AssertionError」，才能证明"请求路径零联网"，只断言返回值测不出偷偷联网。
+- **grep `data-placeholder` 盘点占位会漏掉「未打标的的死块」**：`#market-relation` 有 4 个写死 disabled 胶囊但从未打占位标记（外表存在、无功能、盘点清单里消失）。点亮这类块要先在页面上人工过一遍「只有外表没有功能」的区块，别只信标记 grep。
+- **周六跑 daily_report 会生成非交易日的 context/行工件**：ET 日期=当天（周六）→ `context/2026-09-12.json` 与 history 行落盘 → web `_load_latest_context` 选中它、顶栏/相关对都跟着变。验证后删工件（同 history 行处置），且「API 与 context 对照」必须取**最新日期**的 context 文件而非想当然的某个日期。
 - **点亮占位块是「双点同步」操作**：`index.html` 摘 `data-placeholder="1"` 与 `app.js` 的 `PLACEHOLDERS` 注册表删同名项必须同一批改——只摘 HTML 会出现注册表渲染的「数据未接入」覆盖真值（renderPlaceholders 按注册表写 `.ph-note`），只删注册表则占位属性还在。verify_ui 的 G9/视口断言硬编码占位计数（3→2 需同步两处断言点）。
 - **storage.DB_PATH 是「补丁打使用方」纪律的有意例外**：storage 函数内 `db_path or DB_PATH` 是调用时属性查找，`monkeypatch.setattr(storage, "DB_PATH", tmp)` 单点全局生效（analyzer/web 全部经 storage 走）；故 14 个测试文件的 patch 点统一迁到 conftest `tmp_db` fixture + `seed_db`（等价旧"写 tmp history.json"），无需逐模块打补丁。
 - **NULL 是语义（休市/未收盘），三处必须保真**：迁移脚本 None→NULL、upsert preserve 模式 NULL 不抹（对应 merge_existing 定稿保护）、rows_to_records 全键补 None。change 列保留但一律 NULL（D3）——change_pct 一律读侧相邻收盘价派生，存时点值会引入基准分歧。
