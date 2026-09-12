@@ -28,6 +28,7 @@ from src.analyzer import (
 from src.config import load_config
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat, fetch_watchlist
 from src.news_fetcher import search_news
+from src.news_saver import save_news
 from src.reporter import (generate_context, render_market_trend_chart, render_report,
                           render_trend_chart, save_report, load_opening_refs)
 from src.image_renderer import render_report_image
@@ -157,6 +158,12 @@ def main() -> int:
     except Exception as exc:
         log.warning("自选股处理失败，跳过板块: %s", exc)
         watchlist_view = None
+    # 二十七期：资讯落盘（Tavily 搜索 → news.json）
+    try:
+        news_results = search_news(f"A股 美股 今日 市场 行情 新闻")
+        save_news(news_results, date)
+    except Exception as exc:
+        log.warning("资讯落盘失败，跳过: %s", exc)
     correlations = compute_correlation(history)   # 十二期：相关性分析（报告/context 同一份数值）
     statuses = build_statuses(values, errors, last_values, history)
     summary = build_summary(values, statuses, errors)
