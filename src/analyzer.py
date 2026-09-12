@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import statistics
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from .config import env_float, load_config
 from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS
+from . import storage as st
 from .storage import HISTORY_KEYS, query_history, records_to_rows, rows_to_records, upsert_history_rows
 
 log = logging.getLogger("marketpulse")
@@ -599,6 +601,21 @@ def save_last_values(values: dict, date: str) -> None:
 
 
 # ---- 历史数据层（三十一期：JSON → SQLite，三函数签名不变、内部走 storage）----
+def _upsert_history_rows_selfheal(rows, preserve_existing: bool) -> None:
+    """upsert + DB 损坏自愈：DatabaseError → 删除损坏 DB（含 -wal/-shm）重建后重试一次
+    （语义同旧 JSON 层「坏文件容错重建」；查询侧损坏由 storage 返回 [] 处理）。"""
+    try:
+        upsert_history_rows(rows, preserve_existing=preserve_existing)
+        return
+    except sqlite3.DatabaseError as exc:
+        log.warning("history DB 损坏，删除重建后重试: %s", exc)
+    for suffix in ("-wal", "-shm", ""):
+        p = Path(str(st.DB_PATH) + suffix)
+        if p.exists():
+            p.unlink()
+    st.init_db()
+    upsert_history_rows(rows, preserve_existing=preserve_existing)
+
 def load_history() -> list[dict]:
     """读取历史记录 [{date, gspc, ixic, sh, sz, cyb, vix, vxn, move, gld, btc}]；
     DB 缺失 / 损坏 → 空历史（容错纪律不变）。三十一期起改读 SQLite：永久保留（无 90 天裁剪）、
@@ -618,7 +635,7 @@ def append_history(record: dict, merge_existing: bool = False) -> None:
     if not date:
         return
     rows = [(date, k, record.get(k), None) for k in HISTORY_KEYS]
-    upsert_history_rows(rows, preserve_existing=bool(merge_existing))
+    _upsert_history_rows_selfheal(rows, preserve_existing=bool(merge_existing))
 
 
 def merge_history(date: str, values: dict) -> None:
@@ -633,7 +650,7 @@ def merge_history(date: str, values: dict) -> None:
     if not updates:
         return
     rows = [(str(date), k, v, None) for k, v in updates.items()]
-    upsert_history_rows(rows, preserve_existing=True)
+    _upsert_history_rows_selfheal(rows, preserve_existing=True)
 
 
 # ---- 自选股快照层（三十期：报告链路落盘，web 只读文件零联网）----

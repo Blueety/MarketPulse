@@ -4,18 +4,19 @@
 非 None 过滤 / date 字符串化 / 90 天裁剪 / 临时文件零残留 / 坏文件容错重建。
 """
 
-import json
-
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 
 
 class TestMergeHistory:
     def _set_file(self, tmp_path, monkeypatch):
-        history_file = tmp_path / "history.json"
-        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
-        return history_file
+        """三十一期：JSON 文件隔离 → SQLite tmp DB 隔离（方法名保留以最小化 diff）。"""
+        db_path = tmp_path / "test-history.db"
+        monkeypatch.setattr(st, "DB_PATH", db_path)
+        st.init_db()
+        return db_path
 
     def test_new_date_creates_row_with_defaults(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)
@@ -83,31 +84,31 @@ class TestMergeHistory:
         an.merge_history(20260903, {"SH": 3100.0})  # 非字符串 date
         assert an.load_history()[0]["date"] == "20260903"
 
-    def test_rolling_90(self, tmp_path, monkeypatch):
+    def test_permanent_retention_no_trim(self, tmp_path, monkeypatch):
+        """三十一期：永久保留，不再按 90 天裁剪（旧 test_rolling_90 行为废止）。"""
         from datetime import date, timedelta
 
         self._set_file(tmp_path, monkeypatch)
         start = date(2026, 1, 1)
-        # 先以 append 铺 90 条历史
-        for i in range(90):
+        for i in range(95):
             an.append_history(
                 {"date": (start + timedelta(days=i)).isoformat(), "vix": 20.0}
             )
-        # 再 merge 一条新日期 → 仍裁剪到 90
         new = (start + timedelta(days=95)).isoformat()
         an.merge_history(new, {"SH": 3100.0})
         data = an.load_history()
-        assert len(data) == 90
+        assert len(data) == 96   # 全量保留，无裁剪
         assert data[-1]["date"] == new
 
     def test_no_tmp_residue(self, tmp_path, monkeypatch):
-        history_file = self._set_file(tmp_path, monkeypatch)
+        db_path = self._set_file(tmp_path, monkeypatch)
         an.merge_history("2026-09-03", {"SH": 3100.0})
-        assert not history_file.with_name("history.json.tmp").exists()
+        assert not db_path.with_name("test-history.db.tmp").exists()   # 事务原子性，无临时残留
 
-    def test_corrupt_file_rebuilds(self, tmp_path, monkeypatch):
-        history_file = self._set_file(tmp_path, monkeypatch)
-        history_file.write_text("{broken", encoding="utf-8")
+    def test_corrupt_db_rebuilds(self, tmp_path, monkeypatch):
+        """坏 DB 文件 → 自愈重建后 merge 落地（语义同旧「坏文件容错重建」）。"""
+        db_path = self._set_file(tmp_path, monkeypatch)
+        db_path.write_bytes(b"not a sqlite file")
         an.merge_history("2026-09-03", {"SH": 3100.0})
         data = an.load_history()
         assert len(data) == 1
@@ -118,9 +119,11 @@ class TestAppendHistoryPreserve:
     """append_history(merge_existing=...) 语义（A 定稿保护）。"""
 
     def _set_file(self, tmp_path, monkeypatch):
-        history_file = tmp_path / "history.json"
-        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
-        return history_file
+        """三十一期：JSON 文件隔离 → SQLite tmp DB 隔离（方法名保留以最小化 diff）。"""
+        db_path = tmp_path / "test-history.db"
+        monkeypatch.setattr(st, "DB_PATH", db_path)
+        st.init_db()
+        return db_path
 
     def test_merge_existing_preserves_intraday_value(self, tmp_path, monkeypatch):
         # 当日行已有快照写入的美股盘中值（gspc=7727.09）；日报盘中跑 fetch 到 None

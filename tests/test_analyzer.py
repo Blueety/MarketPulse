@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pytest
 
 from src import analyzer as an
+from src import storage as st
 
 
 class TestClassifyVix:
@@ -144,10 +145,13 @@ class TestFormatters:
 
 
 class TestHistory:
+    """三十一期：SQLite 化后的行为等价锁（旧 JSON 文件断言逐条映射到 tmp DB）。"""
+
     def _set_file(self, tmp_path, monkeypatch) -> "Path":
-        history_file = tmp_path / "history.json"
-        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
-        return history_file
+        db_path = tmp_path / "test-history.db"
+        monkeypatch.setattr(st, "DB_PATH", db_path)
+        st.init_db()
+        return db_path
 
     def test_append_and_load(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)
@@ -163,7 +167,8 @@ class TestHistory:
         assert len(data) == 1
         assert data[0]["vix"] == pytest.approx(23.0)
 
-    def test_rolling_90(self, tmp_path, monkeypatch):
+    def test_permanent_retention_no_trim(self, tmp_path, monkeypatch):
+        """三十一期：永久保留，不再按 90 天裁剪（旧 test_rolling_90 行为废止）。"""
         self._set_file(tmp_path, monkeypatch)
         start = date(2026, 1, 1)
         for i in range(95):
@@ -171,32 +176,27 @@ class TestHistory:
                 {"date": (start + timedelta(days=i)).isoformat(), "vix": 20.0, "vxn": 25.0, "move": 70.0}
             )
         data = an.load_history()
-        assert len(data) == 90
-        assert data[0]["date"] == (start + timedelta(days=5)).isoformat()  # 最早 5 条被滚动掉
+        assert len(data) == 95   # 全量保留，无滚动删除
+        assert data[0]["date"] == start.isoformat()
         assert data[-1]["date"] == (start + timedelta(days=94)).isoformat()
 
-    def test_missing_file_returns_empty(self, tmp_path, monkeypatch):
+    def test_missing_db_returns_empty(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)
         assert an.load_history() == []
 
-    def test_corrupt_file_returns_empty(self, tmp_path, monkeypatch):
-        history_file = self._set_file(tmp_path, monkeypatch)
-        history_file.write_text("{broken json", encoding="utf-8")
-        assert an.load_history() == []
-
-    def test_non_list_returns_empty(self, tmp_path, monkeypatch):
-        history_file = self._set_file(tmp_path, monkeypatch)
-        history_file.write_text(json.dumps({"date": "2026-08-01"}), encoding="utf-8")
-        assert an.load_history() == []
+    def test_corrupt_db_returns_empty(self, tmp_path, monkeypatch):
+        db_path = self._set_file(tmp_path, monkeypatch)
+        db_path.write_bytes(b"{broken json")
+        assert an.load_history() == []   # 损坏 → 空历史（storage 查询侧容错）
 
     def test_append_after_corrupt_recovers(self, tmp_path, monkeypatch):
-        history_file = self._set_file(tmp_path, monkeypatch)
-        history_file.write_text("{broken", encoding="utf-8")
+        db_path = self._set_file(tmp_path, monkeypatch)
+        db_path.write_bytes(b"{broken")
         an.append_history({"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5})
         data = an.load_history()
         assert len(data) == 1
         assert data[0]["date"] == "2026-08-01"
-        assert not history_file.with_name("history.json.tmp").exists()  # 临时文件已清理
+        assert not db_path.with_name("test-history.db.tmp").exists()  # 无临时残留
 
 
 class TestWatchlistSnapshot:
