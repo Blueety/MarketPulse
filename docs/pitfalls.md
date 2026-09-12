@@ -280,3 +280,10 @@
 - **nav 照抄效果图会造出死链接（R3）**：效果图里有、页面无对应区块的项（宏观数据/市场日历/设置）必须渲染为 `<span class="nav-item is-disabled" title="未开放">`——**不带 `href` / `data-target`**（`href="#"` 会跳页顶；`data-target` 指向不存在 id 会被 F-5 类断言抓出）。既有 nav 点击 handler 对无 target 项天然安全（`if (!el) return`）。断言要用「总数 == 10 + disabled == 3 + target 全命中」三件套，只查 target 命中在 7 项旧结构上会假绿。
 - **切主题不重渲染的列表，图标色必须走内联 `var(--c-*)`**：`iconHtml()` 输出 `style="background:var(--c-gspc)"` 让浏览器在绘制时解析 CSS 变量——主题切换即时生效；若在 JS 里 `cssVar()` 取实值写死，切主题后图标仍是旧主题色（渲染函数不在 theme handler 的重渲染名单里）。
 - **Windows 的 Chrome 没有旗 Emoji**：🇺🇸🇨🇳 在 Windows 上渲染成 "US"/"CN" 字母（Segoe UI Emoji 不含区域指示符对），国旗只能 CSS 画（条纹 `repeating-linear-gradient` + 蓝角块 / 红底 + `★` 字符黄星）。**CSS 画旗的定位坑**：`::before{position:absolute}` 需要父级 `position:relative`——共享规则挂的公共类（`.ico.ico-flag`）必须真的出现在元素 classList 里（本次 helper 少拼了 `ico-flag`，皮肤类的渐变生效而定位类静默失效，图标看着「少了一块」）。**class 计数断言测不出这种失效**（类在、规则没命中）→ 旗标类改动必须补像素取证（按 icon 裁剪数旗色像素：蓝角块/黄星/条纹各有独立颜色可数）。
+
+## 模块 web + 持久化/（自选股文件化 2026-09-12）
+
+- **给既有"实时取数端点"加"文件优先"路径，测试隔离必须做在 autouse fixture 里**：`/api/watchlist` 改为快照文件优先后，本机真实 `data/watchlist.json`（随 cron 落盘）会劫持所有未打补丁的既有用例（conftest 只隔离 CONFIG_PATH，不隔离 DATA_DIR）。解法：`_reset_watch_cache` autouse fixture 请求 `monkeypatch` 并默认 `setattr(web.app, "load_watchlist_snapshot", lambda: None)`；快照路径用例在测试体内再覆盖同一名（后 setattr 者生效）。**逐个改既有用例是下策**。
+- **monkeypatch 不了"测试环境差异"时先想"谁会读真实文件"**：`load_watchlist_snapshot` 以模块级名字导入到 `web.app` 后，补丁必须打 `web.app`（定义方 analyzer 不生效，同 CHARTS_DIR 纪律）；快照命中用例要同时 mock `fetch_watchlist` 为「被调用即 raise AssertionError」，才能证明"请求路径零联网"，只断言返回值测不出偷偷联网。
+- **休市日真跑验证会"静默不执行"**：周六跑 `snapshot_report.py --market a-share --time midday` 退出码 0、但 `_is_market_closed` 门在 main 开头就 return，任何 main 内新增逻辑都不会执行——日志只有一行"休市…跳过"。验证 S5 类"main 尾部新增块"要看日志确认到达了目标代码，退出码 0 ≠ 代码被执行；交易日在验证或走等价单测（S2 同款调用序列已双次真跑覆盖）。
+- **"追加决策行/坑位"类编辑禁用"旧文本→新文本"整体替换**：architecture.md 决策表、pitfalls 分节都是 append-only 内容，用「末行锚点 + 旧文保留 + 新文追加」的 new_string 必须把旧文**完整包含**进去，否则静默覆盖历史记录（本任务 architecture.md 决策行被覆盖一次，靠 grep 计数发现并回补）。
