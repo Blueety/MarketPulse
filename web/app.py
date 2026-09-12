@@ -79,7 +79,36 @@ def _restore_history_db() -> None:
 
 # 静态资源挂 /static（仅 style.css 等源码资源，不落盘生成物）。
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+class _RevalidateStatic(StaticFiles):
+    """静态资源一律加 `Cache-Control: no-cache`（= 每次协商，未变则 304，不浪费带宽）。
+
+    StaticFiles 默认**不下发任何 Cache-Control** → 浏览器按「(Date − Last-Modified) 的 10%」
+    启发式估算新鲜度，可长达数小时/天且**连协商请求都不发** → 出现「代码改了、页面没变」。
+    HTML 路由已带 no-cache，反而更迷惑：页面是新的、CSS 是旧的（2026-09-13 用户把旧标签页
+    里的旧 CSS 误判为「滚动条被改回去了」，实为启发式缓存命中）。
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static")
+
+
+def _asset_version() -> str:
+    """静态资源版本号 = style.css / app.js 的最大 mtime（秒），供模板拼 `?v=`。
+
+    与 `Cache-Control: no-cache` 双保险：万一某层缓存（IDE 预览 webview / CDN / 代理）忽略
+    缓存头，资源 URL 变化也会强制换新副本。取 mtime 而非手写版本号 = 不会忘记递增。
+    """
+    try:
+        return str(int(max((STATIC_DIR / n).stat().st_mtime for n in ("style.css", "app.js"))))
+    except OSError:
+        return "0"
 
 
 # ---- 历史解析（三十一期：SQLite storage；损坏 DB → []，纪律同旧 JSON 容错）----
@@ -683,6 +712,6 @@ def api_macro() -> dict:
 def index() -> HTMLResponse:
     """渲染单页看板。"""
     template = _TEMPLATES.get_template("index.html")
-    resp = HTMLResponse(template.render())
+    resp = HTMLResponse(template.render(asset_v=_asset_version()))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp

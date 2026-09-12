@@ -781,6 +781,8 @@ POLISH_JS = r"""
     [...t.querySelectorAll('tbody tr')].forEach((tr) => {
       [...tr.children].forEach((td, i) => {
         if (i >= ths.length) return;
+        // 占位符 `.empty`（「数据暂缺」）是刻意居中的，不参与「表头 vs 数据」对齐比对
+        if (td.classList.contains('empty')) return;
         const a = norm(getComputedStyle(td).textAlign);
         if (a !== ths[i]) data.alignMismatch.push(sel + ' 第' + (i + 1) + '列 th=' + ths[i] + ' td=' + a);
       });

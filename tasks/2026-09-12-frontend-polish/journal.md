@@ -94,6 +94,40 @@ scrollH/scrollW = 1220 / ==innerWidth（P-7 pass）
 | **D4** | 未采纳的 4 条 | 建议 1/2/4/6 均按 plan 结论不采纳（`--mono` 已含 `tabular-nums`、玻璃 token 已生效且双主题、`td.num` 已右对齐、渐变已按 `chartArea` 动态取）。plan 提到的「可选微调：`DIN Alternate` 加入 `--mono` 栈最前」**未做**（可选、非必需，避免动字体栈）。 |
 | **D5** | 验证命令落点 | 未用 8019 端口目视（plan §5），改由 `verify_ui.py` 的自动挑端口 + 量化断言覆盖（三视口 + 主题 + tab），符合 `docs/commands.md` 对前端改动的要求。 |
 
+## 追加修复 · 用户反馈「成交额那边没对齐」（2026-09-13）
+
+**现象**：A 股板块表（`#us-sectors` → A股 tab）「成交额」列的表头与数值不在同一条对齐线上。
+
+**运行时取证**（不靠代码推理）：临时探针脚本启动 uvicorn + Playwright，实测 1920 档该表 `thead th` 与 `tbody td` 的 `text-align` 与几何：
+
+| 列 | `<th>` class / align | `<td>` class / align | 结论 |
+|---|---|---|---|
+| （图标） | `col-ico` / left | `col-ico` / start→left | 一致 |
+| 板块 | — / left | — / start→left | 一致 |
+| 涨跌幅 | `num` / **right** | `num chg` / **right** | 一致 |
+| **成交额** | `col-turnover` / **left** | `col-turnover num` / **right** | ❌ **不一致（根因）** |
+| 领涨股 | — / left | — / start→left | 一致 |
+
+数值文本盒实测右边缘逐行相同（1767 / 1767…）→ 数据格**确实**是右对齐，问题只在**表头漏了 `num`**：`<th class="col-turnover">成交额</th>`。该列宽 117px、数值仅约 52px，表头因此贴在列左缘、数值贴右缘，视觉上错开约 49px。
+
+**修复**（1 行）：`<th class="col-turnover">成交额</th>` → `<th class="col-turnover num">成交额</th>`。
+
+**回归验证**：
+
+| 项 | 结果 |
+|---|---|
+| 探针复测 | 表头 `cls="col-turnover num"` / `align="right"` ✓ 与数据格一致 |
+| `verify_ui.py` | **ALL PASSED**（含新增 P-8） |
+| `scrollHeight` | 1220 / 1935 / 2539（与基线逐项一致，表头对齐不涉布局） |
+| `pytest tests/ -q` | **531 passed** |
+
+**新增护栏 P-8**：逐列比对 `thead th` 与 `tbody td` 的水平对齐（`start/end` 归一化为 `left/right` 后比较），对 `#us-sectors`（A股表）与 `.watchlist-table` 生效 → 任何「表头/数据格对齐脱节」会被断言抓住，不再依赖肉眼。
+排查中发现的两点已在断言里说明：
+1. `th` 被 `.data-table th` 置 `left`、`td` 默认计算值是 `start` → **必须归一化**，否则全是假不匹配；
+2. 占位符 `.empty`（「数据暂缺」行）由 CSS 刻意 `text-align:center`，**不参与**比对（它是占位符不是数据）——首次运行 P-8 正是被自选表的 `.empty` 行判红，据此加排除。
+
+> 探针脚本（`probe_sector.py`）为本次一次性取证工具，已按「临时辅助文件用完即清」删除；本节的类名/对齐值/几何数字即其全部结论，需要复现时按上表重写即可。
+
 ## 下次注意
 
 - **加「增高型」组件前先实测行高由谁决定**：`td` 行高 = 同行最高单元格，先加再量，不要纸面推算；判据只有 `scrollHeight`。
