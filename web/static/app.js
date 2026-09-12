@@ -75,14 +75,16 @@ const PLACEHOLDERS = [
   { id: 'risk-appetite', title: '风险偏好', note: '数据未接入' }
 ];
 
-// 市场概览 6 小卡：indices = /api/latest，macro = /api/macro
+// 市场概览 6 小卡：indices = /api/latest，macro = /api/macro。
+// flag：市场归属旗标（需求方 2026-09-12）——美国市场相关（美股/美元/10Y/美股上市的黄金 ETF/美油）→
+// 'us'，中国市场（A股）→ 'cn'；CSS 画旗（Windows 无旗 Emoji），见 style.css 的 .ico-flag-*。
 const OVERVIEW_CARDS = [
-  { id: 'GSPC', label: '美股 · 标普500', source: 'indices', char: '美' },
-  { id: 'SH', label: 'A股 · 上证指数', source: 'indices', char: 'A' },
-  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, char: '金' },
-  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', char: '元' },
-  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', char: '债' },
-  { id: 'CL=F', label: '原油', source: 'macro', char: '油' }
+  { id: 'GSPC', label: '美股 · 标普500', source: 'indices', flag: 'us' },
+  { id: 'SH', label: 'A股 · 上证指数', source: 'indices', flag: 'cn' },
+  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, flag: 'us' },
+  { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', flag: 'us' },
+  { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', flag: 'us' },
+  { id: 'CL=F', label: '原油', source: 'macro', flag: 'us' }
 ];
 
 // === V1 品牌色行图标（16px 圆角方块 + 1 字符）===
@@ -101,6 +103,10 @@ const ICON_FALLBACK_VAR = "--text-muted";
 function iconHtml(colorVar, char) {
   const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
   return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
+}
+// 旗标变体：CSS 画旗（.ico-flag-us / .ico-flag-cn），Windows 无旗 Emoji 不能用 🇺🇸🇨🇳
+function iconFlagHtml(which) {
+  return '<i class="ico ico-flag-' + (which === 'cn' ? 'cn' : 'us') + '"></i>';
 }
 
 // 单一状态源：驱动所有视图刷新
@@ -171,18 +177,19 @@ function renderOverview() {
   var idxMap = sourceMap('indices');
   var macMap = sourceMap('macro');
   box.innerHTML = OVERVIEW_CARDS.map(function (c) {
+    const ico = c.flag ? iconFlagHtml(c.flag) : iconHtml(ICON_COLORS[c.id], c.char);
     var d = (c.source === 'indices' ? idxMap : macMap)[c.id];
     if (!d || d.value == null) {
       // macro 未接数据 → 「数据未接入」；indices 缺失 → 「数据暂缺」
       var note = c.source === 'macro' ? '数据未接入' : '数据暂缺';
-      return '<div class="mini-card is-empty"><div class="mini-label">' + iconHtml(ICON_COLORS[c.id], c.char) +
+      return '<div class="mini-card is-empty"><div class="mini-label">' + ico +
         escapeHtml(c.label) + '</div><div class="mini-val">' + note + '</div><div class="mini-sub">—</div></div>';
     }
     var val = c.scale ? d.value * c.scale : d.value;
     var chg = d.change_pct;
     var cls = chg == null ? '' : (chg >= 0 ? 'pos' : 'neg');
     var sub = chg == null ? (d.status || '—') : fmtPct(chg);
-    return '<div class="mini-card"><div class="mini-label">' + iconHtml(ICON_COLORS[c.id], c.char) +
+    return '<div class="mini-card"><div class="mini-label">' + ico +
       escapeHtml(c.label) + '</div>' +
       '<div class="mini-val">' + fmtNum(val, 2) + escapeHtml(c.suffix || '') + '</div>' +
       '<div class="mini-sub ' + cls + '">' + escapeHtml(sub) + '</div></div>';

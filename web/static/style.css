@@ -345,6 +345,13 @@ body {
 .ico { width: 16px; height: 16px; border-radius: 5px; font-size: 9px; line-height: 1; color: #fff;
        display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
        flex-shrink: 0; font-style: normal; }
+/* 旗标变体（需求方 2026-09-12）：美国市场 → 星条旗（简化条纹 + 蓝色角块）、中国市场 → 红底黄星。
+   Windows 的 Chrome 无旗 Emoji（🇺🇸 渲染成 "US" 字母），只能 CSS 画；旗色为官方色、不随主题切换。 */
+.ico.ico-flag { position: relative; overflow: hidden; }
+.ico-flag-us { background: repeating-linear-gradient(180deg, #B22234 0 2.286px, #ffffff 2.286px 4.571px); }
+.ico-flag-us::before { content: ""; position: absolute; left: 0; top: 0; width: 8px; height: 8.6px; background: #3C3B6E; }
+.ico-flag-cn { background: #DE2910; }
+.ico-flag-cn::before { content: "★"; position: absolute; left: 2px; top: 0; color: #FFDE00; font-size: 10px; line-height: 15px; }
 .mini-val { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--text-primary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-sub { font-family: var(--mono); font-size: 12px; margin-top: 2px; color: var(--text-secondary); }
 .mini-card.is-empty .mini-val { color: var(--text-muted); font-size: 13px; font-weight: 400; }
