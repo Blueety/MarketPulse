@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from .config import env_float, load_config
 from .fetcher import SYMBOLS, STOCK_SYMBOLS, A_SHARE_SYMBOLS, ALT_SYMBOLS
+from .storage import HISTORY_KEYS, query_history, records_to_rows, rows_to_records, upsert_history_rows
 
 log = logging.getLogger("marketpulse")
 
@@ -597,71 +598,33 @@ def save_last_values(values: dict, date: str) -> None:
     )
 
 
-# ---- 历史数据层 ----
+# ---- 历史数据层（三十一期：JSON → SQLite，三函数签名不变、内部走 storage）----
 def load_history() -> list[dict]:
-    """读取历史记录 [{date, vix, vxn, move}]；文件缺失、损坏或格式异常时按空历史处理。"""
-    if not HISTORY_FILE.exists():
-        return []
-    try:
-        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        log.warning("历史数据读取失败，按空历史处理: %s", exc)
-        return []
-    if not isinstance(data, list):
-        log.warning("历史数据格式异常（非列表），按空历史处理")
-        return []
-    return [
-        {
-            "date": str(rec.get("date", "")),
-            "vix": rec.get("vix"),
-            "vxn": rec.get("vxn"),
-            "move": rec.get("move"),
-            "gspc": rec.get("gspc"),
-            "ixic": rec.get("ixic"),
-            "sh": rec.get("sh"),
-            "sz": rec.get("sz"),
-            "cyb": rec.get("cyb"),
-            "gld": rec.get("gld"),
-            "btc": rec.get("btc"),
-            }
-        for rec in data
-        if isinstance(rec, dict) and rec.get("date")
-    ]
+    """读取历史记录 [{date, gspc, ixic, sh, sz, cyb, vix, vxn, move, gld, btc}]；
+    DB 缺失 / 损坏 → 空历史（容错纪律不变）。三十一期起改读 SQLite：永久保留（无 90 天裁剪）、
+    date 升序由 storage.query_history 保证、None 语义（休市/未收盘）保留。"""
+    return rows_to_records(query_history())
 
 
 def append_history(record: dict, merge_existing: bool = False) -> None:
-    """追加当日记录（同日重复按 date 键覆盖），裁剪至最近 90 条；临时文件 + os.replace 原子写。
+    """写入/覆盖当日记录（全 10 键展开长行 upsert）。
 
-    merge_existing=True（日报定稿用）：当日行已存在且本次 record 某键为 None 时，
-    用当日行既有非 None 值补全（防盘中定稿把快照已写入的盘中值整行抹成 None；决策 X）。
-    补全仅限 _HISTORY_KEYS 键、date 键除外；默认 False 保持既有覆盖语义（其余调用零影响）。
+    merge_existing=False（默认）：无条件覆盖（缺键/None 键写 NULL，与旧整行覆盖语义一致）；
+    merge_existing=True（日报定稿）：NULL 不抹已有值（preserve upsert，防盘中定稿把快照
+    已写入的盘中值抹成 None；决策 X）。
+    三十一期：永久保留，不再按 HISTORY_MAX 裁剪（常量保留防引用断裂，已废止）。
     """
-    records = load_history()
-    if merge_existing:
-        prev = next((r for r in records if r.get("date") == record.get("date")), None)
-        if prev is not None:
-            for k, v in record.items():
-                if (k != "date" and k in _HISTORY_KEYS and v is None
-                        and prev.get(k) is not None):
-                    record[k] = prev[k]
-    records = [r for r in records if r.get("date") != record.get("date")]
-    records.append(record)
-    records = records[-HISTORY_MAX:]
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = HISTORY_FILE.with_name(HISTORY_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, HISTORY_FILE)
+    date = str(record.get("date", ""))
+    if not date:
+        return
+    rows = [(date, k, record.get(k), None) for k in HISTORY_KEYS]
+    upsert_history_rows(rows, preserve_existing=bool(merge_existing))
 
 
 def merge_history(date: str, values: dict) -> None:
-    """按 date 合并写当日记录：仅把 values 中非 None 且属历史键的字段更新进该日期行；
-    无该日期行则新建（其余键置 None）；同日重复合并幂等（不新增重复行）；裁 90 天；
-    原子写 + 坏文件容错。取数全失败（values 空/全 None）→ 空操作、不报错、退出码恒 0。
-
-    snapshot/opening 各自只取市场子集，写入即合并进同一当日行，避免整行覆盖抹除他市场数据。
-    daily 定稿行（append_history 全 10 键覆盖）与 merge 全量更新等价，故 daily_report 无需调用。
-    """
-    records = load_history()
+    """按 date 合并写当日记录：仅把 values 中非 None 且属历史键的字段并入该行（preserve
+    upsert，不整行覆盖）；空 updates → 空操作。市场子集（sh/sz/cyb 或 gspc/ixic 或 gld/btc）
+    并入互不抹除；同日重复合并幂等（长表主键天然去重）；三十一期起永久保留不裁剪。"""
     updates = {
         k.lower(): v
         for k, v in values.items()
@@ -669,35 +632,9 @@ def merge_history(date: str, values: dict) -> None:
     }
     if not updates:
         return
-    row = next((r for r in records if r.get("date") == str(date)), None)
-    if row is None:
-        row = {"date": str(date)}
-        row.update({k: None for k in _HISTORY_KEYS})
-        records.append(row)
-    row.update(updates)
-    # 同 date 去重（保留末次，幂等），再裁剪至最近 90 条
-    dedup: dict[str, dict] = {}
-    for r in records:
-        dedup[r.get("date")] = r
-    records = list(dedup.values())
-    records = records[-HISTORY_MAX:]
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = HISTORY_FILE.with_name(HISTORY_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, HISTORY_FILE)
+    rows = [(str(date), k, v, None) for k, v in updates.items()]
+    upsert_history_rows(rows, preserve_existing=True)
 
-
-# ---- 自选股快照层（三十期：报告链路落盘，web 只读文件零联网）----
-def save_watchlist_snapshot(stocks_cfg: list[dict], values: dict, series: dict) -> bool:
-    """自选股快照落盘；存原始数据（加工留在 web 层）。stocks_cfg 空 / values 空 / 全 None
-    → 不写返回 False（merge_history「取数全失败→空操作」同款纪律，防垃圾覆盖昨日好快照）。
-    series 的 (date, close) tuple 经 JSON 序列化自动变 list，读取端按 list 兼容。
-    临时文件 + os.replace 原子写（save_history 同款）。"""
-    if not stocks_cfg or not values or all(v is None for v in values.values()):
-        return False
-    payload = {
-        "saved_at": datetime.now().astimezone().isoformat(timespec="minutes"),
-        "stocks": [dict(s) for s in stocks_cfg],
         "values": dict(values),
         "series": {k: [[d, v] for d, v in pts] for k, pts in series.items()},
     }
