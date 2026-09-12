@@ -37,6 +37,8 @@ _TS_PATTERNS = [
     r'\d{1,2}月\s*\d{1,2}\s*日?[,，]?\s*\d{1,2}:\d{2}',      # 9月11日 08:22
     r'\d{2}-\d{2}\s*\d{1,2}:\d{2}',                          # 09-09 08:22
     r'\d{1,2}月\d{1,2}日[^：:，。\s]{0,6}[：:]',             # 9月9日财经早餐：
+    # 尾部悬空的时间戳：fetcher 会把 snippet 截到 200 字，时间戳可能被截成 "10 9月 2026, 08"（缺 :MM）
+    r'\s*\d{1,2}\s*\d{1,2}月\s*(?:\d{4}\s*[,，]?\s*)?(?:\d{1,2}(?::\d{2})?)?\s*$',
 ]
 MIN_FIRST_SENTENCE = 12     # 首句短于该长度 → 补第二句
 
@@ -102,6 +104,13 @@ def _clean_summary(summary: str) -> str:
     → 再剥一次噪声 → 截到 `MAX_SUMMARY_LEN`。切句必须在清洗之后（否则残留标记会破坏句边界
     判断），截断必须放最后（否则会把「…」也算进长度）。
     """
+    # Markdown 列表型片段（`时间戳\n\n### 标题\n\n时间戳\n\n### 标题…`，≥2 个标题标记）→ 只取第一条标题；
+    # 否则多条标题会被拼成一条长句（条目之间没有句末标点，按句切分切不开）。
+    # 仅当 ≥2 个 `###` 时才动手：单个标题的散文片段保持原样，避免丢正文。
+    if len(re.findall(r'#{2,6}\s', summary)) >= 2:
+        first_head = re.search(r'#{2,6}\s*([^\n]+)', summary)
+        if first_head and first_head.group(1).strip():
+            summary = first_head.group(1).strip()
     # 去除表格碎片
     if "|" in summary:
         parts = summary.split("|")
@@ -123,6 +132,8 @@ def _clean_summary(summary: str) -> str:
     summary = " ".join(summary.split())
     # 时间戳 / 栏目日期碎片（长文本下最显眼的噪声，须在切句之前清）
     summary = _strip_timestamps(summary)
+    # 片段连续重复（Tavily 片段常把同一条标题重复拼两次，如「…原油飙升逾六周新高 原油飙升逾六周新高」）
+    summary = re.sub(r'(.{8,60}?)\s*\1', r'\1', summary)
     # N-G3 修复：硬截断 → 一句话（先剥尾部噪声，再切句，必要时再剥一次）
     summary = _first_sentence(_strip_tail_noise(summary))
     summary = _strip_tail_noise(summary)

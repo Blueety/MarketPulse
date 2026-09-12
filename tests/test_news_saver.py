@@ -50,9 +50,32 @@ def test_clean_summary_caps_and_keeps_first_sentence():
 
 
 def test_clean_summary_truncation_appends_ellipsis():
-    out = ns._clean_summary("美联储宣布加息二十五个基点" + "非常长的补充说明" * 20)
+    """超长首句 → 截到 MAX_SUMMARY_LEN 且以 … 结尾。
+
+    注意：测试串**不能是同一片段的重复**（如 "x"*20）—— `_clean_summary` 有连续重复片段折叠，
+    会把重复内容压掉导致永不触发截断（这正是本用例第一版踩到的坑）。
+    """
+    long_sentence = (
+        "美联储主席在杰克逊霍尔年会上表示通胀虽有回落但仍高于目标水平因此货币政策需要保持限制性立场"
+        "同时继续关注劳动力市场降温与金融条件变化并在每次会议上依据最新数据逐次评估调整的必要性"
+        "此外需留意地缘冲突对能源价格的冲击以及财政赤字扩张对长期利率的潜在推升作用"
+    )
+    assert len(long_sentence) > ns.MAX_SUMMARY_LEN
+    out = ns._clean_summary(long_sentence)
     assert len(out) == ns.MAX_SUMMARY_LEN
     assert out.endswith("…")
+
+
+def test_clean_summary_dedupes_repeated_fragment():
+    """连续重复的长片段只保留一份（Tavily 片段常见「…新高 …新高」）。"""
+    out = ns._clean_summary("原油飙升逾六周新高 原油飙升逾六周新高")
+    assert out.count("原油飙升逾六周新高") == 1
+
+
+def test_clean_summary_strips_timestamps():
+    """发布时间 / 栏目日期标签须清除（长文本下最显眼）。"""
+    out = ns._clean_summary("10 9月 2026, 09:13 情报报告称西方退役特种兵可能参与训练 9月9日财经早餐：地缘风险升温")
+    assert "09:13" not in out and "财经早餐" not in out
 
 
 def test_clean_summary_strips_footnote_markers():
