@@ -285,6 +285,7 @@
 
 - **给既有"实时取数端点"加"文件优先"路径，测试隔离必须做在 autouse fixture 里**：`/api/watchlist` 改为快照文件优先后，本机真实 `data/watchlist.json`（随 cron 落盘）会劫持所有未打补丁的既有用例（conftest 只隔离 CONFIG_PATH，不隔离 DATA_DIR）。解法：`_reset_watch_cache` autouse fixture 请求 `monkeypatch` 并默认 `setattr(web.app, "load_watchlist_snapshot", lambda: None)`；快照路径用例在测试体内再覆盖同一名（后 setattr 者生效）。**逐个改既有用例是下策**。
 - **monkeypatch 不了"测试环境差异"时先想"谁会读真实文件"**：`load_watchlist_snapshot` 以模块级名字导入到 `web.app` 后，补丁必须打 `web.app`（定义方 analyzer 不生效，同 CHARTS_DIR 纪律）；快照命中用例要同时 mock `fetch_watchlist` 为「被调用即 raise AssertionError」，才能证明"请求路径零联网"，只断言返回值测不出偷偷联网。
+- **资讯文件双写者边界（三十三期）**：`context/*.json` 只归 Python（generate_context 覆盖写）、`data/news.json` 只归 Hermes（Python 无搜索能力，决策 G）——Hermes 绝不写 context（会被快照运行覆盖），Python 绝不写 news。`/api/news` 读端逐层容错（坏 JSON/缺 title/url 非 http(s) 逐条过滤、cap 8）永不 500；`target=_blank` 必配 `rel="noopener noreferrer"`。**验证期样例 `data/news.json` 必须删除**（git 追踪范围内，不删会被 cron 提交成假资讯）。
 - **grep `data-placeholder` 盘点占位会漏掉「未打标的的死块」**：`#market-relation` 有 4 个写死 disabled 胶囊但从未打占位标记（外表存在、无功能、盘点清单里消失）。点亮这类块要先在页面上人工过一遍「只有外表没有功能」的区块，别只信标记 grep。
 - **周六跑 daily_report 会生成非交易日的 context/行工件**：ET 日期=当天（周六）→ `context/2026-09-12.json` 与 history 行落盘 → web `_load_latest_context` 选中它、顶栏/相关对都跟着变。验证后删工件（同 history 行处置），且「API 与 context 对照」必须取**最新日期**的 context 文件而非想当然的某个日期。
 - **点亮占位块是「双点同步」操作**：`index.html` 摘 `data-placeholder="1"` 与 `app.js` 的 `PLACEHOLDERS` 注册表删同名项必须同一批改——只摘 HTML 会出现注册表渲染的「数据未接入」覆盖真值（renderPlaceholders 按注册表写 `.ph-note`），只删注册表则占位属性还在。verify_ui 的 G9/视口断言硬编码占位计数（3→2 需同步两处断言点）。
