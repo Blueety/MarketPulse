@@ -199,6 +199,73 @@ class TestHistory:
         assert not history_file.with_name("history.json.tmp").exists()  # 临时文件已清理
 
 
+class TestWatchlistSnapshot:
+    """自选股快照读写（三十期：报告链路落盘，web 只读文件零联网）。"""
+
+    STK = [{"symbol": "515300.SS", "label": "红利低波ETF"}]
+
+    def _set_file(self, tmp_path, monkeypatch):
+        wf = tmp_path / "watchlist.json"
+        monkeypatch.setattr(an, "WATCHLIST_FILE", wf)
+        return wf
+
+    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        series = {"515300.SS": [("2026-09-01", 3.98), ("2026-09-02", 4.01)]}
+        assert an.save_watchlist_snapshot(self.STK, {"515300.SS": 4.01}, series) is True
+        assert wf.exists()
+        assert not wf.with_name("watchlist.json.tmp").exists()  # 原子写无残留
+        snap = an.load_watchlist_snapshot()
+        assert snap["stocks"] == self.STK
+        assert snap["values"] == {"515300.SS": 4.01}
+        # tuple → JSON list：web 层 _build_watchlist_payload 的解包/索引访问按 list 兼容
+        assert snap["series"]["515300.SS"] == [["2026-09-01", 3.98], ["2026-09-02", 4.01]]
+        assert isinstance(snap["saved_at"], str) and "T" in snap["saved_at"]
+
+    def test_save_overwrites(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        an.save_watchlist_snapshot(self.STK, {"515300.SS": 4.0}, {"515300.SS": [("d1", 4.0)]})
+        an.save_watchlist_snapshot(self.STK, {"515300.SS": 4.1}, {"515300.SS": [("d2", 4.1)]})
+        snap = an.load_watchlist_snapshot()
+        assert snap["values"] == {"515300.SS": 4.1}
+        assert snap["series"]["515300.SS"] == [["d2", 4.1]]
+
+    def test_save_empty_cfg_returns_false(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        assert an.save_watchlist_snapshot([], {"X": 1.0}, {}) is False
+        assert an.save_watchlist_snapshot(self.STK, {}, {}) is False
+        assert not wf.exists()  # 不写、不制造空文件
+
+    def test_save_all_none_values_returns_false(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        assert an.save_watchlist_snapshot(self.STK, {"515300.SS": None}, {}) is False
+        assert not wf.exists()  # 全标的失败 → 空操作，防垃圾覆盖昨日好快照
+
+    def test_load_missing_returns_none(self, tmp_path, monkeypatch):
+        self._set_file(tmp_path, monkeypatch)
+        assert an.load_watchlist_snapshot() is None
+
+    def test_load_corrupt_returns_none(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        wf.write_text("{broken", encoding="utf-8")
+        assert an.load_watchlist_snapshot() is None
+
+    def test_load_non_dict_returns_none(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        wf.write_text("[1, 2]", encoding="utf-8")
+        assert an.load_watchlist_snapshot() is None
+
+    def test_load_missing_key_returns_none(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        wf.write_text(json.dumps({"stocks": self.STK, "values": {}}), encoding="utf-8")  # 缺 series
+        assert an.load_watchlist_snapshot() is None
+
+    def test_load_stocks_not_list_returns_none(self, tmp_path, monkeypatch):
+        wf = self._set_file(tmp_path, monkeypatch)
+        wf.write_text(json.dumps({"stocks": "x", "values": {}, "series": {}}), encoding="utf-8")
+        assert an.load_watchlist_snapshot() is None
+
+
 def _wl_hist(dates, gspc):
     return [{"date": d, "vix": 20.0, "vxn": 18.0, "move": 75.0,
              "gspc": g, "ixic": g * 4, "sh": 3000.0, "sz": 10000.0, "cyb": 2200.0,

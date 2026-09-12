@@ -23,6 +23,7 @@ from src.analyzer import (
     load_history,
     load_last_values,
     save_last_values,
+    save_watchlist_snapshot,
 )
 from src.config import load_config
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat, fetch_watchlist
@@ -132,6 +133,12 @@ def main() -> int:
         stocks_cfg = wl_cfg.get("stocks") or []
         if stocks_cfg:
             wl_values, wl_series, wl_errors = fetch_watchlist(stocks_cfg)
+            # 三十期：自选股快照落盘（web 只读文件零联网）；失败仅记日志不影响日报（决策 H）
+            try:
+                if save_watchlist_snapshot(stocks_cfg, wl_values, wl_series):
+                    log.info("自选股快照已更新: data/watchlist.json")
+            except Exception as exc:
+                log.warning("自选股快照写入失败，不影响日报: %s", exc)
             wl_data = [
                 {"symbol": it["symbol"], "label": it.get("label", it["symbol"]),
                  "series": wl_series.get(it["symbol"])}

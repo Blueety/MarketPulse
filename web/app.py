@@ -26,6 +26,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from src.analyzer import ALERTS_DIR as _ALERTS_DIR
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import HISTORY_FILE as _HISTORY_FILE
+from src.analyzer import load_watchlist_snapshot
 from src.config import load_config
 from src.fetcher import SYMBOLS, fetch_watchlist
 
