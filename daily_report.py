@@ -160,7 +160,7 @@ def main() -> int:
         watchlist_view = None
     # 二十七期：资讯落盘（Tavily 搜索 → news.json）
     try:
-        news_results = search_news(f"A股 美股 今日 市场 行情 新闻")
+        news_results = search_news(f"A股 美股 今日 重大新闻 政策 利好 利空")
         save_news(news_results, date)
     except Exception as exc:
         log.warning("资讯落盘失败，跳过: %s", exc)
