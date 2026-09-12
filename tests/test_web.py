@@ -24,6 +24,7 @@ from web.app import (
     _resolve_symbols,
     _sector_payload,
 )
+from src import storage as st
 from src.fetcher import SYMBOLS
 
 
@@ -82,18 +83,17 @@ level: WARN
 
 def test_last_records_truncates(tmp_path, monkeypatch):
     hist = [{"date": f"2026-08-{i:02d}"} for i in range(1, 12)]  # 11 条
-    p = tmp_path / "history.json"
-    p.write_text(json.dumps(hist), encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", p)
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows(hist))
     last = _last_records(7)
     assert len(last) == 7
     assert last[-1]["date"] == "2026-08-11"
 
 
 def test_last_records_empty_file(tmp_path, monkeypatch):
-    p = tmp_path / "history.json"
-    p.write_text("[]", encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", p)
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
     assert _last_records(7) == []
 
 
@@ -375,9 +375,9 @@ def client(tmp_path, monkeypatch):
         {"date": "2026-08-11", "gspc": 106.0, "ixic": 214.0, "sh": 3060.0, "sz": 12300.0, "cyb": 3620.0, "vix": 22.0, "vxn": 26.0, "move": 76.0, "gld": 427.0, "btc": 76700.0},
         {"date": "2026-08-12", "gspc": 107.0, "ixic": 216.0, "sh": 3070.0, "sz": 12350.0, "cyb": 3640.0, "vix": 23.0, "vxn": 26.5, "move": 77.0, "gld": 428.0, "btc": 76800.0},
     ]
-    hist_p = tmp_path / "history.json"
-    hist_p.write_text(json.dumps(hist), encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", hist_p)
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows(hist))
 
     alerts_dir = tmp_path / "alerts"
     alerts_dir.mkdir()
@@ -443,7 +443,8 @@ def test_api_alerts(client):
 
 
 def test_endpoints_empty_data(tmp_path, monkeypatch):
-    monkeypatch.setattr(web.app, "HISTORY_FILE", tmp_path / "history.json")
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
     monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
     monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path / "context")
     from fastapi.testclient import TestClient
@@ -461,10 +462,10 @@ def test_endpoints_empty_data(tmp_path, monkeypatch):
 
 
 def _seed_history(tmp_path, monkeypatch, hist):
-    """写入测试历史并 monkeypatch HISTORY_FILE（落在使用方模块 web.app）。"""
-    p = tmp_path / "history.json"
-    p.write_text(json.dumps(hist), encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", p)
+    """seed 测试历史进 tmp DB（三十一期：DB_PATH 调用时查找，单点 patch 生效）。"""
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows(hist))
 
 
 def test_build_history_payload_normalized_base100(tmp_path, monkeypatch):
@@ -838,9 +839,9 @@ def test_sector_payload_variants():
 def test_api_latest_includes_us_sector_heat(tmp_path, monkeypatch):
     """同一 context 同源暴露 A 股与美股两个板块键（Step 1：context 已有键但端点未暴露）。"""
     hist = [{"date": "2026-09-10", "gspc": 100.0}, {"date": "2026-09-11", "gspc": 101.0}]
-    hist_p = tmp_path / "history.json"
-    hist_p.write_text(json.dumps(hist), encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", hist_p)
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows(hist))
     monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
 
     ctx_dir = tmp_path / "context"
@@ -869,9 +870,9 @@ def test_api_latest_includes_us_sector_heat(tmp_path, monkeypatch):
 
 def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
     """context 无 us_sector_heat 键（旧格式）→ 该键降级双空，不影响 sector_heat。"""
-    hist_p = tmp_path / "history.json"
-    hist_p.write_text(json.dumps([{"date": "2026-09-10", "gspc": 100.0}]), encoding="utf-8")
-    monkeypatch.setattr(web.app, "HISTORY_FILE", hist_p)
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows([{"date": "2026-09-10", "gspc": 100.0}]))
     monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
     ctx_dir = tmp_path / "context"
     ctx_dir.mkdir()

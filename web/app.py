@@ -23,9 +23,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from src import storage as st
 from src.analyzer import ALERTS_DIR as _ALERTS_DIR
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
-from src.analyzer import HISTORY_FILE as _HISTORY_FILE
 from src.analyzer import load_watchlist_snapshot
 from src.config import load_config
 from src.fetcher import SYMBOLS, fetch_watchlist
@@ -33,7 +33,6 @@ from src.fetcher import SYMBOLS, fetch_watchlist
 log = logging.getLogger("marketpulse")
 
 # 模块级路径常量：解析函数一律引用本模块的这些名字（测试 monkeypatch 落点）。
-HISTORY_FILE = _HISTORY_FILE
 ALERTS_DIR = _ALERTS_DIR
 CONTEXT_DIR = _CONTEXT_DIR
 
@@ -58,21 +57,11 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-# ---- 历史解析（直接使用本模块 HISTORY_FILE 常量）----
+# ---- 历史解析（三十一期：SQLite storage；损坏 DB → []，纪律同旧 JSON 容错）----
 
 def _load_history_raw() -> list[dict]:
-    """读取 HISTORY_FILE；缺失 / 损坏 / 非列表 → []。记录须含 date 键。"""
-    if not HISTORY_FILE.exists():
-        return []
-    try:
-        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        log.warning("历史数据读取失败，按空历史处理: %s", exc)
-        return []
-    if not isinstance(data, list):
-        log.warning("历史数据格式异常（非列表），按空历史处理")
-        return []
-    return [r for r in data if isinstance(r, dict) and r.get("date")]
+    """读取历史宽记录（date 升序、None 语义保留、全键补 None）。"""
+    return st.rows_to_records(st.query_history())
 
 
 def _last_records(n: int = 7) -> list[dict]:
@@ -112,12 +101,14 @@ def _resolve_symbols(symbols: str | None) -> list[str]:
     return [sym for sym in SYMBOLS if sym in wanted]
 
 
-def _build_history_payload(days: int = 30, symbols: str | None = None) -> dict:
+def _build_history_payload(days: int = 30, symbols: str | None = None,
+                           start_date: str | None = None, end_date: str | None = None) -> dict:
     """展开为 Chart.js 友好结构：dates + N 组 series（key=小写 symbol）。
 
     每个序列归一化为相对基准百分比（窗口首个非空值 = 100），另附 change_7d
     （窗口涨跌幅，键名保留向后兼容）与 raw（等长原始值，GLD 已 ×10，与图线一致）。
-    按交易日条数过滤：读全量历史 → 过滤周末 → 取最近 days 条（记录数不足时全取）。
+    过滤：显式 start_date/end_date 优先（日期字符串比较）；否则按交易日条数取最近 days 条
+    （记录数不足时全取）。
     """
     from datetime import datetime
     records = _load_history_raw()
@@ -127,7 +118,13 @@ def _build_history_payload(days: int = 30, symbols: str | None = None) -> dict:
         dt = datetime.strptime(r["date"], "%Y-%m-%d")
         if dt.weekday() < 5:
             weekdays.append(r)
-    records = weekdays[-days:] if days > 0 else []
+    if start_date or end_date:
+        weekdays = [r for r in weekdays
+                    if (not start_date or r["date"] >= start_date)
+                        and (not end_date or r["date"] <= end_date)]
+    else:
+        weekdays = weekdays[-days:] if days > 0 else []
+    records = weekdays
 
     dates = [r["date"] for r in records]
     series = []
@@ -468,9 +465,15 @@ def _load_macro() -> dict:
 # ---- 端点 ----
 
 @app.get("/api/history")
-def api_history(days: int = Query(30, ge=1, le=365), symbols: str | None = Query(None)) -> dict:
-    """最近 N 交易日趋势数据（Chart.js 友好）；days 默认 30，symbols 默认全量。"""
-    return _build_history_payload(days=days, symbols=symbols)
+def api_history(
+    days: int = Query(30, ge=1, le=3650),   # D9：永久保留后放宽上限（原 365）
+    symbols: str | None = Query(None),
+    start_date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end_date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+) -> dict:
+    """趋势数据；days 默认 30，symbols 默认全量；显式 start_date/end_date 优先（忽略 days）。"""
+    return _build_history_payload(days=days, symbols=symbols,
+                                  start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/latest")
