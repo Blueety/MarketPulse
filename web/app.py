@@ -29,6 +29,10 @@ from src.analyzer import classify_move, classify_vix
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import load_watchlist_snapshot
 from src.config import load_config
+
+# 三十三期：资讯快照（Hermes 侧 tavily 搜索后落盘，契约见 docs/architecture.md 决策行；
+# 定义在使用方 web.app——monkeypatch 打这里，测试隔离不依赖真实 data/ 文件）
+NEWS_FILE = Path(__file__).resolve().parent.parent / "data" / "news.json"
 from src.fetcher import SYMBOLS, fetch_watchlist
 
 log = logging.getLogger("marketpulse")
@@ -588,6 +592,48 @@ def api_latest() -> dict:
 def api_alerts() -> list[dict]:
     """最近 10 条告警记录（按日期倒序）。"""
     return _load_alerts(10)
+
+
+# ---- 最新资讯（三十三期：Hermes 契约先行，web 只读消费）----
+
+def _load_news() -> dict:
+    """读取资讯快照 data/news.json（所有权归 Hermes，web 只读）。
+
+    容错：文件缺失 / 坏 JSON / 非 dict / items 非列表 → 空结构（HTTP 200 恒定，不 500）。
+    条目过滤：dict 且 title 非空 且 url 以 http(s):// 开头（防 javascript: 注入）；
+    source/published/summary 缺省 ""；截前 8 条（cap 8，防超量撑破卡片）。
+    """
+    empty = {"date": None, "items": [], "count": 0}
+    try:
+        data = json.loads(NEWS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        if NEWS_FILE.exists():
+            log.warning("资讯文件读取失败，按空结构处理: %s", exc)
+        return empty
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        log.warning("资讯文件结构异常，按空结构处理")
+        return empty
+    items = []
+    for it in data["items"]:
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title") or "").strip()
+        url = str(it.get("url") or "").strip()
+        if not title or not url.lower().startswith(("http://", "https://")):
+            continue
+        items.append({"title": title, "url": url,
+                      "source": str(it.get("source") or ""),
+                      "published": str(it.get("published") or ""),
+                      "summary": str(it.get("summary") or "")})
+    items = items[:8]
+    date = data.get("date")
+    return {"date": str(date) if date else None, "items": items, "count": len(items)}
+
+
+@app.get("/api/news")
+def api_news() -> dict:
+    """最新资讯（data/news.json，Hermes 落盘；未接入/坏文件 → 空结构，200 恒定）。"""
+    return _load_news()
 
 
 def _watch_failed(payload: dict) -> bool:

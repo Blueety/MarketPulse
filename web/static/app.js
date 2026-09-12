@@ -70,7 +70,6 @@ const GROUPS = [
 
 // 静态占位模块（无数据源，仅保视觉；grep data-placeholder 定位全部待接点）
 const PLACEHOLDERS = [
-  { id: 'news', title: '最新资讯', note: '数据未接入' },
   { id: 'fund-flow', title: '资金流向（近5日）', note: '数据未接入' }
 ];
 
@@ -318,6 +317,27 @@ function renderMarketRelation(latest) {
     const r = (c.r >= 0 ? '+' : '') + Number(c.r).toFixed(2);
     return '<span class="pill ' + cls + '" title="近' + c.n + '个交易日">' +
       escapeHtml(c.pair) + ' ' + r + '</span>';
+  }).join('');
+}
+
+// 最新资讯（三十三期）：/api/news 渲染（Hermes 落盘 data/news.json，未接入时为空态）
+function renderNews(payload) {
+  const body = document.getElementById('news-body');
+  if (!body) return;
+  const dateEl = document.getElementById('news-date');
+  if (dateEl) dateEl.textContent = payload && payload.date ? '· ' + payload.date : '';
+  const items = payload && Array.isArray(payload.items) ? payload.items : [];
+  if (!items.length) {
+    body.innerHTML = '<p class="ph-note">暂无资讯</p>';
+    return;
+  }
+  body.innerHTML = items.map(function (n) {
+    const meta = [n.source, n.published].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<div class="news-item">' +
+      '<a href="' + n.url + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(n.title) + '</a>' +
+      (meta ? '<div class="news-meta">' + meta + '</div>' : '') +
+      (n.summary ? '<p class="news-summary">' + escapeHtml(n.summary) + '</p>' : '') +
+      '</div>';
   }).join('');
 }
 
@@ -937,6 +957,19 @@ document.addEventListener('DOMContentLoaded', function () {
       console.error('[alerts] fetch failed:', err);
       const el = document.getElementById('alert-list');
       if (el) el.innerHTML = '<p class="empty">加载失败</p>';
+    });
+
+  // 资讯（仅初始加载一次；Hermes 落盘 data/news.json，未接入时为空态「暂无资讯」）
+  fetch('/api/news')
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (data) { renderNews(data); })
+    .catch(function (err) {
+      console.error('[news] fetch failed:', err);
+      const el = document.getElementById('news-body');
+      if (el) el.innerHTML = '<p class="ph-note">暂无资讯</p>';
     });
 
   // 自选股实时取数（hidden=true 仅=无配置；异常态失败占位可见，不静默隐藏）

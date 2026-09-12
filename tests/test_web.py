@@ -1082,3 +1082,62 @@ def test_api_latest_correlation_from_context(tmp_path, monkeypatch):
 
     data = TestClient(web.app.app).get("/api/latest").json()
     assert data["correlation"] == corr
+
+
+# ---- 最新资讯（三十三期：Hermes 落盘 data/news.json，web 只读 /api/news）----
+
+def _write_news(tmp_path, monkeypatch, payload, name="news.json"):
+    """写资讯样例并 patch web.app.NEWS_FILE（定义在使用方 web.app，monkeypatch 纪律）。"""
+    f = tmp_path / name
+    f.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(web.app, "NEWS_FILE", f)
+    return f
+
+
+def test_api_news_missing_file(client, tmp_path, monkeypatch):
+    """文件缺失 → 200 空结构（Hermes 未接入前为常驻空态，HTTP 200 恒定）。"""
+    monkeypatch.setattr(web.app, "NEWS_FILE", tmp_path / "nonexistent" / "news.json")
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    assert r.json() == {"date": None, "items": [], "count": 0}
+
+
+def test_api_news_valid_filtered_capped(client, tmp_path, monkeypatch):
+    """合法文件 → 过滤（title 空 / url 非 http(s) 剔除）+ cap 8 + 缺省字段补 ""。"""
+    items = [{"title": f"新闻{i}", "url": f"https://e.com/{i}", "source": "Reuters",
+              "published": "2026-09-12", "summary": f"摘要{i}"} for i in range(10)]
+    items.insert(2, {"title": "", "url": "https://e.com/x"})               # 空 title → 滤
+    items.insert(5, {"title": "JS 注入", "url": "javascript:alert(1)"})    # 非 http(s) → 滤
+    items.append({"url": "https://e.com/9"})                               # 缺 title → 滤
+    _write_news(tmp_path, monkeypatch, {"date": "2026-09-12", "items": items})
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["date"] == "2026-09-12" and data["count"] == 8
+    assert all(it["title"] and it["url"].startswith("https://") for it in data["items"])
+    assert all(set(it.keys()) == {"title", "url", "source", "published", "summary"}
+               for it in data["items"])
+
+
+def test_api_news_bad_json(client, tmp_path, monkeypatch):
+    """坏 JSON → 空结构（不 500）。"""
+    _write_news(tmp_path, monkeypatch, "{broken", name="news-bad.json")
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    assert r.json() == {"date": None, "items": [], "count": 0}
+
+
+def test_api_news_non_dict_payload(client, tmp_path, monkeypatch):
+    """payload 非 dict（如列表）→ 空结构。"""
+    _write_news(tmp_path, monkeypatch, "[]", name="news-list.json")
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    assert r.json()["items"] == []
+
+
+def test_api_news_missing_items_key(client, tmp_path, monkeypatch):
+    """缺 items 键 → 空结构（date 也不透出）。"""
+    _write_news(tmp_path, monkeypatch, {"date": "2026-09-12"})
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    assert r.json() == {"date": None, "items": [], "count": 0}
