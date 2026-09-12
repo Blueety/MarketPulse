@@ -326,3 +326,12 @@
 - **迁移类任务的测试迁移必须与 analyzer 切换同批完成**：analyzer 切 SQLite 后、旧 `HISTORY_FILE` patch 变死补丁，未迁移的用例会向**真实 DB** 写测试数据（本期全量 pytest 注入 43 个垃圾日期）；切换后立即全量 pytest 并核对 DB 日期分布（`SELECT DISTINCT date` 畸形/周末日期 = 污点信号）。
 - **休市日真跑验证会"静默不执行"**：周六跑 `snapshot_report.py --market a-share --time midday` 退出码 0、但 `_is_market_closed` 门在 main 开头就 return，任何 main 内新增逻辑都不会执行——日志只有一行"休市…跳过"。验证 S5 类"main 尾部新增块"要看日志确认到达了目标代码，退出码 0 ≠ 代码被执行；交易日在验证或走等价单测（S2 同款调用序列已双次真跑覆盖）。
 - **"追加决策行/坑位"类编辑禁用"旧文本→新文本"整体替换**：architecture.md 决策表、pitfalls 分节都是 append-only 内容，用「末行锚点 + 旧文保留 + 新文追加」的 new_string 必须把旧文**完整包含**进去，否则静默覆盖历史记录（本任务 architecture.md 决策行被覆盖一次，靠 grep 计数发现并回补）。
+
+## 模块 web/（前端评审落地 2026-09-12）
+
+- **同名 class 承载相反语义时，新组件必须开独立命名空间（`.chg-pill` 而非 `.pill`）**：项目里 `.pill.pos`/`.pill.neg` 是**相关性**语义（正 r=红=同向联动=风险），而涨跌语义是 `.pos`=绿。若给涨跌幅直接套 `.pill pos`，「+0.38%」会变**红色**——涨跌语义反转，且**只查 class 是否存在的断言仍会全绿**（坏在其他地方）。⚠️ 更要命的第二层：全局 `.pos { color: var(--green) !important }` / `.neg{...red !important}` 会**压过** `.chg-pill.pos{color:var(--green)}`，所以「比 color 值」才是有效断言（本次 P-4 用 CSS 变量探针解析出参考色再逐元素比色）。
+- **渐变不能写死像素范围**：`createLinearGradient(0,0,0,400)` 在容器高度随断点变化（1920→527 / 1280→395 / 375→439）时与真实绘图区错位 → 渐变截断或填充不满，与 C2「canvas 位图≠显示尺寸」同源。必须按 `chartArea.top/bottom` 动态取。外部评审给的示例代码常写死数值，**照抄即回归**。
+- **20px 余量下的增高型改动：行高由「同行最高单元格」决定，别盲目削 padding**：`scrollHeight@1920` 只有 20px 余量（1220/1240），给表格行加 badge 前先算账。实测结论修正了 plan 的预设：在 `padding:7px` 的表（自选列表）里，兄弟单元格已贡献 7+7+行高，badge（≈19px）**没有超出**，行高不变 → 无需削 padding；真正会被撑高的是**全表已紧凑到 4px padding** 的 `#us-sectors` 表格（4+4+17.4 → 4+4+19.4，5 行 +10px）→ 只对该表 `td.chg` 做 4→3px 对冲即守恒。判据永远是**改完实测 `scrollHeight`**，不要按「行数×增量」纸面推算。
+- **骨架屏尺寸要用「真实内容盒模型」对齐，而不是拍一个高度**：加载态 vs 数据态的 CLS 判据是「`.row-*` 高度差 ≤8px」。两个实操要点：① 表格骨架行用 `td { height:30px }`（border-box）表达，**不要靠 padding**——`#us-sectors .data-table td` 这类带 id 的紧凑规则特异性更高，会静默压掉 `.sk-row td{padding}`；② 概览 6 小卡骨架用固定 `height` 的独立 grid item（`.sk-card`），比在 `.mini-card` 里塞嵌套骨架更好对齐；③ `prefers-reduced-motion` 已有全局规则会关掉脉冲动画，骨架屏无需重复声明。
+- **「加载态转瞬即逝」的断言要么走静态模板源，要么走运行时留存判据**：`colspan=5` 这类加载态属性在 Playwright 里抓不稳（数据到达即被替换），验证时改为读**首页 HTML 源码**正则断言；而「骨架是否被真实内容替换」用可见骨架计数 `offsetParent !== null` 的 `.skeleton` 必须为 0 来表达（两个方向一起测，才既有护栏又有行为）。
+- **auto-commit cron 会在你写代码的过程中把改动提交掉**：本任务执行期间外部 Hermes「每日数据更新」cron 连做 3 次 `git add -A`（`0509c66`/`8f399c7`/`590d9df`），把**尚未审阅**的前端三文件与断言直接入库 → `git status` 变 clean、`git diff` 变空，极易误判「改动丢了」。应对：改动是否安全以 `git log --oneline -- <path>` / `git show --stat` 反查，不要只看 `git status`。**推论**：任何「先回退再验证（先红后绿）」的破坏性步骤，在 cron 活跃期都可能与提交竞态，优先改用**非破坏性**手段（运行时探针 / 独立 worktree）。
