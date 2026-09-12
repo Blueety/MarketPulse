@@ -342,7 +342,7 @@ body {
 .mini-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 0; }
 .mini-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 /* V1 品牌色行图标：16px 圆角方块 + 1 字符（border-box 下尺寸恒定；底色由内联 var(--c-*) 提供） */
-.ico { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; line-height: 1; color: #fff;
+.ico { width: 16px; height: 16px; border-radius: 5px; font-size: 9px; line-height: 1; color: #fff;
        display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
        flex-shrink: 0; font-style: normal; }
 /* 旗标变体（需求方 2026-09-12）：美国市场 → 星条旗（简化条纹 + 蓝色角块）、中国市场 → 红底黄星。

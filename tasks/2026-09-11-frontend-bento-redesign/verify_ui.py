@@ -529,6 +529,7 @@ FIDELITY_JS = r"""
     navBad: navBad,
     flagUs: document.querySelectorAll('#overview .ico.ico-flag-us').length,
     flagCn: document.querySelectorAll('#overview .ico.ico-flag-cn').length,
+    flagImgs: document.querySelectorAll('#overview .ico-flag-img').length,
     icoSize: (() => { const i = q('.ico'); return i ? [i.offsetWidth, i.offsetHeight] : null; })()
   };
 }
@@ -553,16 +554,17 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["secRows"] > 0 and f["secIcons"] == f["secRows"],
           "F-1d A股热点板块图标数 == 行数", (f["secIcons"], f["secRows"]))
     if f["icoSize"]:
-        check(f["icoSize"][0] == 20 and f["icoSize"][1] == 20, "F-1e 图标尺寸 20×20", f["icoSize"])
+        check(f["icoSize"][0] == 16 and f["icoSize"][1] == 16, "F-1e 图标尺寸 16×16", f["icoSize"])
     # F-2 / F-3 / F-4 / F-5
     check(f["yPos"] == "right", "F-2 趋势图 y 轴 position=right", f["yPos"])
     check(f["brandText"] == "MarketPulse", "F-3 品牌字为 MarketPulse", f["brandText"])
     check(f["avatarRadius"] is not None and f["avatarRadius"] != "50%",
           "F-4 头像为圆角方块（radius≠50%）", f["avatarRadius"])
-    # F-8 市场概览旗标（需求方 2026-09-12）：美国市场相关 → 旗 US（美股/美元/10Y/黄金/原油），
-    # 中国市场 → 旗 CN（A股）。Windows 无旗 Emoji，用 CSS 画旗（ico-flag-us / ico-flag-cn）。
-    check(f["flagUs"] == 5 and f["flagCn"] == 1,
-          "F-8 市场概览旗标：US×5 + CN×1", (f["flagUs"], f["flagCn"]))
+    # F-8 市场概览图标（需求方 2026-09-12 参照效果图定稿）：美股→旗 US、A股→旗 CN，
+    # 其余 4 卡（美元/10Y/黄金/原油）→ 圆形图形素材（/static/icons/*.svg，上铺 img、底层色块兜底）。
+    check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
+          "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
+          (f["flagUs"], f["flagCn"], f["flagImgs"]))
     check(f["navCount"] == 10 and f["navDisabled"] == 3 and not f["navBad"],
           "F-5 nav=10 项（7 真实+3 占位）且 data-target 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
