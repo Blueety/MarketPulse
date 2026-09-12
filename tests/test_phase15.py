@@ -13,6 +13,7 @@ import opening_analyzer as oa
 import json
 
 import src.analyzer as an
+import src.storage as st
 from src.reporter import render_report
 
 
@@ -245,10 +246,10 @@ class TestOpeningEntry:
         # 反转：开盘分析现合并写 history（决策 R1/R3）；仍不写 context
         data_dir = tmp_path / "data"
         ctx_dir = tmp_path / "context"
-        history_file = tmp_path / "history.json"  # 父目录已存在，merge_history 写入不会 FileNotFoundError
         monkeypatch.setattr(rep, "OPENING_DIR", tmp_path / "opening")
-        # 重定向 analyzer 持久化目标到 tmp，防止触碰真实 data/history.json
-        monkeypatch.setattr(an, "HISTORY_FILE", history_file)
+        # 重定向 analyzer 持久化目标到 tmp DB，防止触碰真实数据（三十一期：SQLite）
+        monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+        st.init_db()
         monkeypatch.setattr(oa, "fetch_realtime_quotes",
                             lambda m: ({"SH": {"open": 1.0, "prev_close": 1.0, "current": 1.0}}, {}))
         monkeypatch.setattr(oa, "fetch_sector_heat", lambda: ([], []))
@@ -259,7 +260,7 @@ class TestOpeningEntry:
         rc = oa.main("a-share")
         assert rc == 0
         # history 被合并写入当日行（仅 SH，本市场子集；VIX 不写）
-        hist = json.loads(history_file.read_text(encoding="utf-8"))
+        hist = an.load_history()   # 三十一期：改读 tmp DB
         today = [r for r in hist if r["date"] == oa.get_market_date("a-share")]
         assert len(today) == 1
         assert today[0]["sh"] == 1.0

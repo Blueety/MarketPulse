@@ -73,8 +73,8 @@ class TestDailyReportDedupWiring:
         monkeypatch.setattr(dr, "load_opening_refs", lambda d: [])
 
     def _seed_history(self, tmp_path, record):
-        p = tmp_path / "history.json"
-        p.write_text(json.dumps([record]), encoding="utf-8")
+        """三十一期：seed 进 tmp DB（原写 history.json 已随文件化废止；DB_PATH 由 _monkeypatch_net 打好）。"""
+        st.upsert_history_rows(st.records_to_rows([record]))
 
     def test_dup_day_skips_append(self, tmp_path, monkeypatch):
         self._monkeypatch_net(monkeypatch, tmp_path)

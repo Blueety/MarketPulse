@@ -256,8 +256,7 @@ class TestWiring:
         monkeypatch.setattr(dr, "run_alert_checks",
                             lambda *a, **k: captured.setdefault("args", a) or None)
         seed = {"date": "2026-09-02", "vix": 20.0}
-        (tmp_path / "history.json").write_text(
-            __import__("json").dumps([seed]), encoding="utf-8")
+        st.upsert_history_rows(st.records_to_rows([seed]))   # 三十一期：seed 进 tmp DB
         dr.main()
         args = captured["args"]
         assert len(args) >= 6
@@ -300,8 +299,7 @@ class TestWiring:
                             lambda *a, **k: captured.setdefault("args", a) or None)
         monkeypatch.setattr(sr, "is_market_holiday", lambda *a, **k: False)  # 工作日全流程：关闭周末 gate
         seed = {"date": "2026-09-02", "vix": 20.0}
-        (tmp_path / "history.json").write_text(
-            __import__("json").dumps([seed]), encoding="utf-8")
+        st.upsert_history_rows(st.records_to_rows([seed]))   # 三十一期：seed 进 tmp DB
         sr.main("a-share", "midday")
         args = captured["args"]
         assert len(args) >= 6
