@@ -779,18 +779,24 @@ function renderMainChart() {
     Chart.register(window.ChartZoom);
     renderMainChart._zoomRegistered = true;
   }
-  // 三十四期：alt 组日期轴取 history ∪ macro 并集（gc=f 序列投影其上；A 股独有休市日为空点，
-  // 既有 buildLinePts/投影的 filled 逻辑与 Chart.js 连线即 spanGaps）
+  // 三十四期补全：macro 深度序列（tail 400）按当前窗口起点裁剪（防 7D 轴被 400 点撑爆），
+  // 轴取 history ∪ macro(可见段) 并集；gc=f 重归一化为「可见窗口首个非空值 = 100」
+  // （与 history 系列同基准，双线可比；raw 保留真价供 tooltip），change 按可见窗口覆盖。
   let axis;
   let gcSeries = null;
   if (g.macroGold) {
     const mc = state.macro && state.macro.trend ? state.macro.trend : null;
     gcSeries = (mc && mc.series ? mc.series : []).find(function (s) { return s.key === g.macroGold; }) || null;
   }
+  const windowStart = dates.length ? dates[0] : null;
+  const mcVisible = [];
   if (gcSeries) {
-    const mcDates = state.macro.trend.dates || [];
+    (state.macro.trend.dates || []).forEach(function (d, i) {
+      if (windowStart && d < windowStart) return;
+      mcVisible.push({ d: d, i: i });
+    });
     const all = new Set(dates);
-    mcDates.forEach(function (d) { all.add(d); });
+    mcVisible.forEach(function (p) { all.add(p.d); });
     const tradingDates = Array.from(all).filter(function (d) { return !isWeekendDate(d); }).sort();
     const dateIndexMap = {};
     tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
@@ -803,24 +809,31 @@ function renderMainChart() {
     return buildLineDataset(s, palette[s.key], buildLinePts(s, dates, axis.dateIndexMap), { area: true });
   });
   let gcMeta = null;
-  if (gcSeries) {
-    // gc=f 序列投影到合并轴：逐日映射，null 前向填充（spanGaps），缺口日跳过
+  if (gcSeries && mcVisible.length) {
+    let base = null;   // 可见窗口首个非空原始值
+    mcVisible.forEach(function (p) {
+      const v = gcSeries.values ? gcSeries.values[p.i] : null;
+      if (base === null && v != null) base = v;
+    });
+    const scale = base ? 100 / base : 1;
     const gcPts = [];
     let lastVal = null, lastRaw = null;
-    (state.macro.trend.dates || []).forEach(function (d, i) {
-      if (axis.dateIndexMap[d] === undefined) return;
-      const v = gcSeries.values ? gcSeries.values[i] : null;
+    mcVisible.forEach(function (p) {
+      if (axis.dateIndexMap[p.d] === undefined) return;
+      const v = gcSeries.values ? gcSeries.values[p.i] : null;
+      const raw = gcSeries.raw ? gcSeries.raw[p.i] : null;
       if (v != null) {
-        lastVal = v;
-        lastRaw = gcSeries.raw ? gcSeries.raw[i] : null;
-        gcPts.push({ x: d, y: v, rawVal: lastRaw });
+        lastVal = v * scale;
+        lastRaw = raw;
+        gcPts.push({ x: p.d, y: lastVal, rawVal: raw });
       } else if (lastVal != null) {
-        gcPts.push({ x: d, y: lastVal, rawVal: lastRaw, filled: true });
+        gcPts.push({ x: p.d, y: lastVal, rawVal: lastRaw, filled: true });
       }
     });
     if (gcPts.length) {
       datasets.push(buildLineDataset(gcSeries, palette[gcSeries.key] || palette.gld, gcPts, { area: true }));
-      gcMeta = gcSeries;
+      // meta 的涨跌幅按可见窗口覆盖（tail 400 下后端算的是 400 日变化，与所选档位不符）
+      gcMeta = Object.assign({}, gcSeries, { change_7d: lastVal != null ? lastVal - 100 : null });
     }
   }
   charts.main = new Chart(canvas, {
