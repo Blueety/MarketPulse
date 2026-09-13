@@ -49,3 +49,17 @@ BTC 不动；GLD 保留在 history/SQLite 作 EOD 历史；零 src/ 改动。
 - 趋势图叠加外部序列：日期轴并集 + 逐日投影 + filled 前向填充三步，直接复用 buildLineDataset
   （label/key/color 由 SERIES_VAR token 提供）。
 - 多执行者并行环境：开工先 `git log --oneline -5` 摸清并行任务，改共享文件前 grep 现状。
+
+
+## 追记（用户反馈"黄金只有近 30 天数据"）→ 深度补全
+
+- **根因**：`/api/macro` 趋势被 `_series_tail(30)` 截断 + fetcher Yahoo 窗口仅 3mo——双端双重截断。
+- **处置（三处配合）**：① `src/fetcher.py` `_fetch_yahoo_watch` range 3mo→2y（docstring 同步；
+  下游各自 tail，/api/watchlist 语义不变）；② `_build_watchlist_payload` 加 `tail: int = 30` 参数，
+  `_load_macro` 传 400（覆盖 1Y 视图 259 交易日）；③ 前端 alt 分支按当前窗口起点裁剪 macro 序列 +
+  **重归一化**（可见窗口首个非空 = 100，与 history 系列同基准；raw 保留真价）+ meta change 按可见
+  窗口覆盖（后端 tail 400 下 change 是整窗值，与所选档位不符）。
+- **验证**：`/api/macro` gc=f 402 点；Playwright 三档位实测——7D 轴 7/gc 6、30D 轴 30/gc 29、
+  1Y 轴 259/gc 252（金线铺满全窗），各档双线 first=100（同基准）；全量 pytest **549 passed**。
+- **探针竞态教训**：range 点击后 fetch+重渲 <1s 内未完成，700ms 等待读到旧轴（误报"轴被撑爆"）；
+  等待 ≥1.5s 或读 state.days 对照后再断言（已记 pitfalls）。
