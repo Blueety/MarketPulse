@@ -843,6 +843,167 @@ def assert_polish(page, base_url: str) -> None:
     check(d["scrollW"] == d["innerW"], "P-7b 无横向溢出", (d["scrollW"], d["innerW"]))
 
 
+AUTOSCROLL_JS = r"""
+() => {
+  const el = document.getElementById('news-body');
+  if (!el) return { error: 'no #news-body' };
+  const cs = getComputedStyle(el);
+  const items = el.querySelectorAll('.news-item');
+  const clone = el.querySelector('.news-clone');
+  const alerts = document.getElementById('alerts');
+  const news = document.getElementById('news');
+  return {
+    itemCount: items.length,
+    cloneItemCount: clone ? clone.querySelectorAll('.news-item').length : 0,
+    cloneAriaHidden: clone ? clone.getAttribute('aria-hidden') : null,
+    offsetHeight: el.offsetHeight,
+    clientHeight: el.clientHeight,
+    scrollHeight: el.scrollHeight,
+    scrollTop: el.scrollTop,
+    maxHeight: cs.maxHeight,
+    overflowY: cs.overflowY,
+    alertH: alerts ? alerts.offsetHeight : null,
+    newsH: news ? news.offsetHeight : null,
+    scrollH: document.scrollingElement.scrollHeight,
+    scrollW: document.scrollingElement.scrollWidth,
+    innerW: window.innerWidth,
+  };
+}
+"""
+
+# 按**时间**采样 ~600ms 的 scrollTop：帧率高时按帧数采样会采到几乎没动 → 假红
+SAMPLE_JS = r"""
+() => new Promise((resolve) => {
+  const el = document.getElementById('news-body');
+  const s = [];
+  const t0 = performance.now();
+  const tick = () => {
+    s.push(Math.round(el.scrollTop * 100) / 100);
+    if (performance.now() - t0 < 600) requestAnimationFrame(tick); else resolve(s);
+  };
+  requestAnimationFrame(tick);
+})
+"""
+
+# 顶到「循环点前 2px」后采样**直到观察到回绕**（或 150 帧兜底），用于验证回绕方式
+WRAP_JS = r"""
+() => new Promise((resolve) => {
+  const el = document.getElementById('news-body');
+  if (!el) return resolve({ error: 'no el' });
+  const items = [...el.querySelectorAll('.news-item')];
+  const n = Math.max(1, Math.floor(items.length / 2));
+  const half = items.slice(0, n).reduce((s, x) => s + x.offsetHeight, 0);
+  el.scrollTop = Math.max(0, half - 2);
+  const out = [];
+  const tick = () => {
+    out.push(Math.round(el.scrollTop * 100) / 100);
+    const wrapped = out.some((v, i) => i > 0 && v < out[i - 1]);
+    if (wrapped || out.length >= 150) resolve({ samples: out, half: half });
+    else requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})
+"""
+
+
+def assert_news_autoscroll(page, base_url: str) -> None:
+    """A-1~A-7 最新资讯自动滚动（`scrollTop` + rAF）：双份内容 / 高度不变量 / 滚动 / 暂停 / 无缝回绕 / 回归。"""
+    print("\n--- A 最新资讯自动滚动 ---")
+    d = page.evaluate(AUTOSCROLL_JS)
+    if d.get("error"):
+        check(False, "A-0 找到 #news-body", d["error"])
+        return
+    try:
+        with urllib.request.urlopen(base_url + "api/news", timeout=10) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001
+        payload = {}
+    api_n = len(payload.get("items") or [])
+    print(f"  api={api_n} dom={d['itemCount']} clone={d['cloneItemCount']} hidden={d['cloneAriaHidden']} "
+          f"bodyH={d['offsetHeight']} client={d['clientHeight']} scroll={d['scrollHeight']}")
+
+    check(api_n > 0 and d["itemCount"] == api_n * 2 and d["cloneItemCount"] == api_n,
+          "A-4 .news-item 数 == 接口条数 × 2（双份内容）", (d["itemCount"], api_n, d["cloneItemCount"]))
+    check(d["cloneAriaHidden"] == "true",
+          "A-4b 克隆半 aria-hidden=true（屏幕阅读器不重复朗读）", d["cloneAriaHidden"])
+    check(d["offsetHeight"] <= 132 and d["maxHeight"] == "132px",
+          "A-3 #news-body 高度 ≤132 且 max-height=132px（护栏不变）", (d["offsetHeight"], d["maxHeight"]))
+    # 双份内容不得把容器撑高：超限时必须恰好被钳在 132px
+    if d["scrollHeight"] > 132:
+        check(d["offsetHeight"] == 132,
+              "A-3b 内容超限时 #news-body 恰好钳在 132px（双份内容不撑高容器）", d["offsetHeight"])
+    else:
+        check(d["offsetHeight"] <= 132,
+              "A-3b 内容不足时高度随内容（≤132）", d["offsetHeight"])
+    check(d["newsH"] is not None and d["alertH"] is not None and abs(d["newsH"] - d["alertH"]) <= 2,
+          "A-3c #news 与 #alerts 两卡仍等高（并排等高原则未破）", (d["newsH"], d["alertH"]))
+
+    page.mouse.move(10, 10)          # 保证不在 hover 暂停态
+    page.wait_for_timeout(200)
+    samples = page.evaluate(SAMPLE_JS)
+    moved = len(samples) >= 2 and samples[-1] > samples[0] + 0.5
+    print(f"  自动滚动采样: {samples} moved={moved}")
+    if d["scrollHeight"] > d["clientHeight"]:
+        check(moved, "A-1 内容超一屏 → scrollTop 递增（自动滚动生效）", samples)
+    else:
+        check(all(x == 0 for x in samples), "A-2 内容不足一屏 → scrollTop 恒 0（不滚）", samples)
+
+    # A-5：必须「hover 前在动 + hover 时不动」两条同时成立（否则「不动」是恒真断言）
+    page.hover("#news-body")
+    page.wait_for_timeout(200)
+    t0 = page.evaluate("() => document.getElementById('news-body').scrollTop")
+    page.wait_for_timeout(600)
+    t1 = page.evaluate("() => document.getElementById('news-body').scrollTop")
+    check(moved and abs(t1 - t0) <= 1,
+          "A-5 悬停暂停（滚动中 → 0.6s 内 scrollTop 不变）", (moved, t0, t1))
+    page.mouse.move(10, 10)
+    page.wait_for_timeout(150)
+    r0 = page.evaluate("() => document.getElementById('news-body').scrollTop")
+    page.wait_for_timeout(500)
+    r1 = page.evaluate("() => document.getElementById('news-body').scrollTop")
+    check(abs(r1 - r0) < 200,
+          "A-5b 移开恢复时不产生大跳（mouseleave 重置时间戳）", (r0, r1))
+
+    # A-7：顶到循环点前采样 → 应恰好回绕一次、幅度≈半程、全程无负值
+    page.mouse.move(10, 10)
+    page.wait_for_timeout(150)
+    w = page.evaluate(WRAP_JS)
+    ss = w.get("samples") or []
+    half = w.get("half") or 0
+    drops = [round(ss[i - 1] - ss[i], 2) for i in range(1, len(ss)) if ss[i] < ss[i - 1]]
+    print(f"  循环采样 half={half} first={ss[0] if ss else None} last={ss[-1] if ss else None} drops={drops}")
+    check(all(x >= 0 for x in ss), "A-7a scrollTop 全程无负值", (min(ss) if ss else None))
+    check(any(ss[i] > ss[i - 1] + 0.5 for i in range(1, len(ss))),
+          "A-7b 采样期间持续前进（循环未停住）", (ss[0] if ss else None, ss[-1] if ss else None))
+    check(len(drops) <= 1 and (not drops or max(drops) <= half + 1),
+          "A-7c 越过半程只回绕一次且幅度 ≤ 半程", drops)
+    check(not drops or max(drops) > half * 0.5,
+          "A-7d 回绕幅度 > 半程的一半（证明是 -half 而非随机跳变）", drops)
+
+    check(d["scrollH"] <= 1240, "A-6a scrollHeight @1920 ≤1240", d["scrollH"])
+    check(d["scrollW"] == d["innerW"], "A-6b 无横向溢出", (d["scrollW"], d["innerW"]))
+
+
+def assert_news_reduced_motion(browser, url: str) -> None:
+    """A-2：`prefers-reduced-motion: reduce` 下不启动自动滚动，但内容仍可手动滚动到（无障碍）。"""
+    print("\n--- A-2 reduce-motion 退化 ---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080},
+                              device_scale_factor=1, reduced_motion="reduce")
+    try:
+        page = ctx.new_page()
+        page.goto(url, wait_until="load")
+        page.wait_for_timeout(2500)          # 若误启动，16px/s × 2.5s ≈ 40px，足以区分
+        d = page.evaluate(AUTOSCROLL_JS)
+        s = page.evaluate(SAMPLE_JS)
+        print(f"  overflowY={d['overflowY']} maxH={d['maxHeight']} scrollTop 采样={s}")
+        check(d["overflowY"] == "auto",
+              "A-2a reduce-motion 下 #news-body 仍 overflow-y:auto（内容可达）", d["overflowY"])
+        check(all(x == 0 for x in s),
+              "A-2b reduce-motion 下不启动自动滚动（scrollTop 恒 0）", s)
+    finally:
+        ctx.close()
+
+
 FF_SCROLLBAR_JS = r"""
 () => {
   const el = document.querySelector('#news-body');
@@ -1027,6 +1188,8 @@ def main() -> int:
             assert_g9(page, page.evaluate(G9_JS))
             assert_news(page, url)   # N-7 最新资讯（含 §7.2 要求的 #news DOM 实测）
             assert_polish(page, url)  # P-1~P-7 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）
+            assert_news_autoscroll(page, url)      # A-1~A-7 最新资讯自动循环滚动
+            assert_news_reduced_motion(browser, url)  # A-2 reduce-motion 退化（独立 context）
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]

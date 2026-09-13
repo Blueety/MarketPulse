@@ -420,7 +420,9 @@ body {
 #news-body { max-height: 132px; overflow-y: auto; }
 
 .news-item { padding: 7px 0; border-bottom: 1px solid var(--border); }
-.news-item:last-child { border-bottom: none; }
+/* 注：原 `.news-item:last-child { border-bottom: none }` 已删除（自动滚动任务）——
+   内容渲染两遍后 `:last-child` 指向克隆半末条，语义失效；且循环点 H→A 之间**需要**一条
+   分隔线才连贯。半程高度用「第一半实测高度」计算，故不再依赖这条规则（plan §3.2/§6.3）。 */
 /* 需求方 2026-09-12：字数显示太少 → 提高上限并**不再用省略号吞字**，一行放不下时该行可横向滚动。
    注 1：有意去掉 `text-overflow: ellipsis` —— scroll 容器下 ellipsis 本就不渲染，留着是误导。
    注 2：`overflow-y` 必须显式 hidden —— 只设 overflow-x 时另一轴的 visible 会计算成 auto，
@@ -648,6 +650,10 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  /* 自动滚动在 reduce-motion 下不启动（app.js startNewsAutoScroll 直接 return），
+     这里**显式**保障手动滚动仍可用 —— 若将来有人把 #news-body 改成 overflow:hidden
+     （误抄 transform 方案），没有这条兜底，reduce-motion 用户后面的条目将永远看不到。 */
+  #news-body { overflow-y: auto !important; }
 }
 
 /* ===== P-4 骨架屏（建议 8）=====

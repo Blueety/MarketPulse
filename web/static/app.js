@@ -349,7 +349,70 @@ function oneLine(summary, fallback) {
 
 // 最新资讯（三十四期）：每行一句话的宏观/世界要闻列表。
 // 标题**不显示**，完整标题留在 <a title> 原生 tooltip 里（信息不丢失）；url 不来自可信源 → 必须转义。
+// === 最新资讯自动循环滚动（scrollTop + requestAnimationFrame）===
+// 为什么不用 CSS transform 动画：手动滚动（overflow-y:auto）与 transform 动画是两套机制，
+// 叠加会跳变；且 reduce-motion 关掉动画后，**后面的条目将永远不可达**。用 scrollTop 驱动
+// 可让「向上匀速 / 保留手动滚动 / reduce-motion 退化为纯手动」三者共存。
+var NEWS_SCROLL_PX_PER_SEC = 16;   // 待目视定稿（约 2.1s 过一行；太快读不了、太慢没感觉）
+var _newsRaf = 0, _newsLast = 0, _newsHalf = 0, _newsPaused = false, _newsBound = false;
+
+function _newsEl() { return document.getElementById('news-body'); }
+
+function stopNewsAutoScroll() {
+  if (_newsRaf) { cancelAnimationFrame(_newsRaf); _newsRaf = 0; }
+  _newsPaused = false;
+  _newsHalf = 0;
+}
+
+function _newsStep(now) {
+  _newsRaf = requestAnimationFrame(_newsStep);
+  var el = _newsEl();
+  if (!el) { stopNewsAutoScroll(); return; }
+  var dt = (now - _newsLast) / 1000;
+  _newsLast = now;
+  if (_newsPaused || dt <= 0) return;
+  if (dt > 0.5) dt = 0.5;                        // 后台切回/长间隔 → 钳制，防一次跳很远
+  el.scrollTop += NEWS_SCROLL_PX_PER_SEC * dt;
+  // 无缝循环：越过「第一半高度」时**减去半程**（不是归零，避免累积误差）
+  if (_newsHalf > 0 && el.scrollTop >= _newsHalf) el.scrollTop -= _newsHalf;
+}
+
+function startNewsAutoScroll() {
+  var el = _newsEl();
+  if (!el) return;
+  // 无障碍：reduce-motion 下不启动（style.css 另有 overflow-y:auto 兜底，保证内容仍可手动翻到）
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var items = el.querySelectorAll('.news-item');
+  var n = Math.floor(items.length / 2);          // 双份内容 → 前一半 = 一个完整循环
+  if (n <= 0) return;
+  // 半程用「第一半元素的实测高度」而非 scrollHeight/2（末条 1px 边框会让双份不对称）
+  var half = 0;
+  for (var i = 0; i < n; i++) half += items[i].offsetHeight;
+  if (half <= el.clientHeight) return;           // 内容不足一屏 → 不滚（否则原地抖动）
+  _newsHalf = half;
+  _newsLast = performance.now();
+  if (_newsRaf) cancelAnimationFrame(_newsRaf);  // ★ 防 rAF 叠加（否则速度越来越快）
+  _newsRaf = requestAnimationFrame(_newsStep);
+}
+
+function _bindNewsHover(el) {
+  if (_newsBound) return;                        // 只绑一次（重渲染时 el 不变）
+  _newsBound = true;
+  el.addEventListener('mouseenter', function () { _newsPaused = true; });
+  el.addEventListener('mouseleave', function () {
+    _newsPaused = false;
+    _newsLast = performance.now();               // ★ 必须重置：否则暂停期间的 dt 会瞬间大跳
+  });
+  el.addEventListener('focusin', function () { _newsPaused = true; });    // 键盘 Tab 到链接也暂停
+  el.addEventListener('focusout', function () { _newsPaused = false; _newsLast = performance.now(); });
+  document.addEventListener('visibilitychange', function () {             // 后台标签页不空转
+    _newsPaused = document.hidden;
+    if (!document.hidden) _newsLast = performance.now();
+  });
+}
+
 function renderNews(payload) {
+  stopNewsAutoScroll();                          // ★ 先停旧循环，再重建 DOM
   const body = document.getElementById('news-body');
   if (!body) return;
   const dateEl = document.getElementById('news-date');
@@ -359,13 +422,18 @@ function renderNews(payload) {
     body.innerHTML = '<p class="ph-note">暂无资讯</p>';
     return;
   }
-  body.innerHTML = items.map(function (n) {
+  const html = items.map(function (n) {
     var text = oneLine(n.summary, n.title);
     return '<div class="news-item">' +
       '<a href="' + escapeHtml(n.url) + '" target="_blank" rel="noopener noreferrer"' +
       ' title="' + escapeHtml(n.title) + '">' + escapeHtml(text) + '</a>' +
       '</div>';
   }).join('');
+  // 内容渲染两遍（克隆半与第一半**像素级相同** → 减半程即无缝）。克隆半 aria-hidden 防重复朗读。
+  body.innerHTML = html + '<div class="news-clone" aria-hidden="true">' + html + '</div>';
+  body.scrollTop = 0;
+  _bindNewsHover(body);
+  startNewsAutoScroll();                         // 内容不足一屏时内部自行不启动
 }
 
 function renderPlaceholders() {
