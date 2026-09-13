@@ -349,87 +349,100 @@ function oneLine(summary, fallback) {
 
 // 最新资讯（三十四期）：每行一句话的宏观/世界要闻列表。
 // 标题**不显示**，完整标题留在 <a title> 原生 tooltip 里（信息不丢失）；url 不来自可信源 → 必须转义。
-// === 最新资讯自动循环滚动（scrollTop + requestAnimationFrame）===
+// === 资讯 / 告警 自动循环滚动（scrollTop + requestAnimationFrame，两卡共用一套机制）===
 // 为什么不用 CSS transform 动画：手动滚动（overflow-y:auto）与 transform 动画是两套机制，
 // 叠加会跳变；且 reduce-motion 关掉动画后，**后面的条目将永远不可达**。用 scrollTop 驱动
 // 可让「向上匀速 / 保留手动滚动 / reduce-motion 退化为纯手动」三者共存。
-var NEWS_SCROLL_PX_PER_SEC = 16;   // 待目视定稿（约 2.1s 过一行；太快读不了、太慢没感觉）
-var _newsRaf = 0, _newsLast = 0, _newsHalf = 0, _newsPaused = false, _newsBound = false;
-// ★ 浮点累加位置。**绝不能写 `el.scrollTop += 增量`**：该容器 scrollTop 读回来是整数，
-// 当每帧增量 <1px（如 16px/s ÷ 60fps = 0.27px）时小数部分每帧都被取整抹掉 → 位置永远停在 0
-// （60fps 下看起来「完全不动」）；低帧率下则变成 1~2px 一格一跳（观感卡顿）。
-// 实测证据见 tasks/2026-09-13-news-autoscroll/journal.md。
-var _newsPos = 0;
+var NEWS_SCROLL_PX_PER_SEC = 16;   // 两卡共用同一速度（待目视定稿：约 2.1s 过一行）
 
-function _newsEl() { return document.getElementById('news-body'); }
+// 每个滚动容器一份**独立状态**（两个 rAF 循环并存，绝不能共用全局变量，否则互相踩）
+function makeAutoScroller(bodyId, itemSel) {
+  var st = {
+    raf: 0, last: 0, period: 0, paused: false, bound: false,
+    // ★ 浮点累加位置。**绝不能写 `el.scrollTop += 增量`**：该容器 scrollTop 读回来是整数，
+    // 当每帧增量 <1px（如 16px/s ÷ 60fps = 0.27px）时小数部分每帧都被取整抹掉 → 位置永远停在 0
+    // （60fps 下看起来「完全不动」）；低帧率下则变成 1~2px 一格一跳（观感卡顿）。
+    // 实测证据见 tasks/2026-09-13-news-autoscroll/journal.md。
+    pos: 0,
+  };
 
-function stopNewsAutoScroll() {
-  if (_newsRaf) { cancelAnimationFrame(_newsRaf); _newsRaf = 0; }
-  _newsPaused = false;
-  _newsHalf = 0;
-  _newsPos = 0;
+  function el() { return document.getElementById(bodyId); }
+
+  function stop() {
+    if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+    st.paused = false;
+    st.period = 0;
+    st.pos = 0;
+  }
+
+  function syncFromEl() {
+    // 用户手动滚动 / 暂停恢复后把累加器对齐到真实位置，避免「跳回去」
+    var e = el();
+    if (e) st.pos = e.scrollTop;
+  }
+
+  function step(now) {
+    st.raf = requestAnimationFrame(step);
+    var e = el();
+    if (!e) { stop(); return; }
+    var dt = (now - st.last) / 1000;
+    st.last = now;
+    if (st.paused || dt <= 0) return;
+    if (dt > 0.5) dt = 0.5;                        // 后台切回/长间隔 → 钳制，防一次跳很远
+    st.pos += NEWS_SCROLL_PX_PER_SEC * dt;         // 浮点累加（不受 getter 取整影响）
+    // 无缝循环：越过「一个循环周期」时**减去周期**（不是归零，避免累积误差）
+    if (st.period > 0 && st.pos >= st.period) st.pos -= st.period;
+    e.scrollTop = st.pos;                          // 只在赋值这一刻交给浏览器取整
+  }
+
+  function start() {
+    var e = el();
+    if (!e) return;
+    // 无障碍：reduce-motion 下不启动（style.css 另有 overflow-y:auto 兜底，保证内容仍可手动翻到）
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var items = e.querySelectorAll(itemSel);
+    var n = Math.floor(items.length / 2);          // 双份内容 → 前一半 = 一个完整循环
+    if (n <= 0) return;
+    // 周期 = 克隆半首条相对第一半首条的偏移（offsetTop 差）。
+    // 比「前一半 offsetHeight 之和」通用：flex gap 布局（.alert-list）下求和法会差 n×gap。
+    var period = items[n].offsetTop - items[0].offsetTop;
+    if (!(period > 0) || period <= e.clientHeight) return;   // 内容不足一屏 → 不滚（否则原地抖动）
+    st.period = period;
+    st.pos = e.scrollTop;
+    st.last = performance.now();
+    if (st.raf) cancelAnimationFrame(st.raf);      // ★ 防 rAF 叠加（否则速度越来越快）
+    st.raf = requestAnimationFrame(step);
+  }
+
+  function bind(e) {
+    if (st.bound) return;                          // 只绑一次（重渲染时 el 不变）
+    st.bound = true;
+    e.addEventListener('mouseenter', function () { st.paused = true; });
+    e.addEventListener('mouseleave', function () {
+      st.paused = false;
+      st.last = performance.now();                 // ★ 必须重置：否则暂停期间的 dt 会瞬间大跳
+      syncFromEl();                                // ★ 用户可能手动滚过 → 对齐再续滚
+    });
+    e.addEventListener('focusin', function () { st.paused = true; });      // 键盘 Tab 到链接也暂停
+    e.addEventListener('focusout', function () {
+      st.paused = false; st.last = performance.now(); syncFromEl();
+    });
+    document.addEventListener('visibilitychange', function () {            // 后台标签页不空转
+      st.paused = document.hidden;
+      if (!document.hidden) { st.last = performance.now(); syncFromEl(); }
+    });
+  }
+
+  return { state: st, elId: bodyId, itemSel: itemSel,
+           start: start, stop: stop, sync: syncFromEl, bind: bind };
 }
 
-function _newsStep(now) {
-  _newsRaf = requestAnimationFrame(_newsStep);
-  var el = _newsEl();
-  if (!el) { stopNewsAutoScroll(); return; }
-  var dt = (now - _newsLast) / 1000;
-  _newsLast = now;
-  if (_newsPaused || dt <= 0) return;
-  if (dt > 0.5) dt = 0.5;                        // 后台切回/长间隔 → 钳制，防一次跳很远
-  _newsPos += NEWS_SCROLL_PX_PER_SEC * dt;       // 浮点累加（不受 getter 取整影响）
-  // 无缝循环：越过「第一半高度」时**减去半程**（不是归零，避免累积误差）
-  if (_newsHalf > 0 && _newsPos >= _newsHalf) _newsPos -= _newsHalf;
-  el.scrollTop = _newsPos;                       // 只在赋值这一刻交给浏览器取整
-}
-
-function _newsSyncFromEl() {
-  // 用户手动滚动/暂停恢复后，把累加器对齐到真实位置，避免「跳回去」
-  var el = _newsEl();
-  if (el) _newsPos = el.scrollTop;
-}
-
-function startNewsAutoScroll() {
-  var el = _newsEl();
-  if (!el) return;
-  // 无障碍：reduce-motion 下不启动（style.css 另有 overflow-y:auto 兜底，保证内容仍可手动翻到）
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var items = el.querySelectorAll('.news-item');
-  var n = Math.floor(items.length / 2);          // 双份内容 → 前一半 = 一个完整循环
-  if (n <= 0) return;
-  // 半程用「第一半元素的实测高度」而非 scrollHeight/2（末条 1px 边框会让双份不对称）
-  var half = 0;
-  for (var i = 0; i < n; i++) half += items[i].offsetHeight;
-  if (half <= el.clientHeight) return;           // 内容不足一屏 → 不滚（否则原地抖动）
-  _newsHalf = half;
-  _newsPos = el.scrollTop;
-  _newsLast = performance.now();
-  if (_newsRaf) cancelAnimationFrame(_newsRaf);  // ★ 防 rAF 叠加（否则速度越来越快）
-  _newsRaf = requestAnimationFrame(_newsStep);
-}
-
-function _bindNewsHover(el) {
-  if (_newsBound) return;                        // 只绑一次（重渲染时 el 不变）
-  _newsBound = true;
-  el.addEventListener('mouseenter', function () { _newsPaused = true; });
-  el.addEventListener('mouseleave', function () {
-    _newsPaused = false;
-    _newsLast = performance.now();               // ★ 必须重置：否则暂停期间的 dt 会瞬间大跳
-    _newsSyncFromEl();                           // ★ 用户可能手动滚过 → 对齐再续滚
-  });
-  el.addEventListener('focusin', function () { _newsPaused = true; });    // 键盘 Tab 到链接也暂停
-  el.addEventListener('focusout', function () {
-    _newsPaused = false; _newsLast = performance.now(); _newsSyncFromEl();
-  });
-  document.addEventListener('visibilitychange', function () {             // 后台标签页不空转
-    _newsPaused = document.hidden;
-    if (!document.hidden) { _newsLast = performance.now(); _newsSyncFromEl(); }
-  });
-}
+var newsScroller = makeAutoScroller('news-body', '.news-item');
+var alertScroller = makeAutoScroller('alert-list', '.alert-card');
+window.__scroll = { news: newsScroller, alerts: alertScroller };   // 供验收脚本读取内部状态
 
 function renderNews(payload) {
-  stopNewsAutoScroll();                          // ★ 先停旧循环，再重建 DOM
+  newsScroller.stop();                           // ★ 先停旧循环，再重建 DOM
   const body = document.getElementById('news-body');
   if (!body) return;
   const dateEl = document.getElementById('news-date');
@@ -446,11 +459,11 @@ function renderNews(payload) {
       ' title="' + escapeHtml(n.title) + '">' + escapeHtml(text) + '</a>' +
       '</div>';
   }).join('');
-  // 内容渲染两遍（克隆半与第一半**像素级相同** → 减半程即无缝）。克隆半 aria-hidden 防重复朗读。
+  // 内容渲染两遍（克隆半与第一半**像素级相同** → 减周期即无缝）。克隆半 aria-hidden 防重复朗读。
   body.innerHTML = html + '<div class="news-clone" aria-hidden="true">' + html + '</div>';
   body.scrollTop = 0;
-  _bindNewsHover(body);
-  startNewsAutoScroll();                         // 内容不足一屏时内部自行不启动
+  newsScroller.bind(body);
+  newsScroller.start();                          // 内容不足一屏时内部自行不启动
 }
 
 function renderPlaceholders() {
