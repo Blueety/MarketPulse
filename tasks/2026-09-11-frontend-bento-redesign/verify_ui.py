@@ -598,8 +598,13 @@ NEWS_JS = r"""
 () => {
   const q = (s) => document.querySelector(s);
   const body = q('#news-body');
-  const items = [...document.querySelectorAll('#news-body .news-item')];
-  const links = [...document.querySelectorAll('#news-body .news-item a')];
+  // 自动滚动任务后内容渲染两遍（克隆半）→ N-1~N-9 一律只取**第一半**，保持原有语义
+  // （「接口返回的条目都被渲染」）；克隆半的数量与 aria-hidden 由 A-4 断言覆盖。
+  const clone = q('#news-body .news-clone');
+  const firstHalf = (sel) => [...document.querySelectorAll(sel)]
+    .filter((el) => !(clone && clone.contains(el)));
+  const items = firstHalf('#news-body .news-item');
+  const links = firstHalf('#news-body .news-item a');
   const cs = body ? getComputedStyle(body) : null;
   const a0 = links[0] ? getComputedStyle(links[0]) : null;
   const lens = links.map((a) => a.textContent.length);
@@ -906,6 +911,38 @@ WRAP_JS = r"""
 """
 
 
+# 两半逐条比对（文本 + 高度）→ 证明 -half 回绕在视觉上无缝
+HALVES_JS = r"""
+() => {
+  const el = document.getElementById('news-body');
+  const items = [...el.querySelectorAll('.news-item')];
+  const n = Math.floor(items.length / 2);
+  const mismatches = [];
+  for (let i = 0; i < n; i++) {
+    const a = items[i], b = items[i + n];
+    if (!b) { mismatches.push({ i: i, missing: true }); continue; }
+    if (a.textContent !== b.textContent || a.offsetHeight !== b.offsetHeight) {
+      mismatches.push({ i: i, h: [a.offsetHeight, b.offsetHeight] });
+    }
+  }
+  return { n: n, mismatches: mismatches };
+}
+"""
+
+# 实测滚动速率（先归零 → 1.5s 内不会跨越半程，结果稳定）
+RATE_JS = r"""
+() => new Promise((resolve) => {
+  const el = document.getElementById('news-body');
+  el.scrollTop = 0;
+  const t0 = performance.now();
+  setTimeout(() => {
+    const dt = (performance.now() - t0) / 1000;
+    resolve({ px_per_sec: (el.scrollTop) / dt, constant: window.NEWS_SCROLL_PX_PER_SEC });
+  }, 1500);
+})
+"""
+
+
 def assert_news_autoscroll(page, base_url: str) -> None:
     """A-1~A-7 最新资讯自动滚动（`scrollTop` + rAF）：双份内容 / 高度不变量 / 滚动 / 暂停 / 无缝回绕 / 回归。"""
     print("\n--- A 最新资讯自动滚动 ---")
@@ -979,6 +1016,16 @@ def assert_news_autoscroll(page, base_url: str) -> None:
           "A-7c 越过半程只回绕一次且幅度 ≤ 半程", drops)
     check(not drops or max(drops) > half * 0.5,
           "A-7d 回绕幅度 > 半程的一半（证明是 -half 而非随机跳变）", drops)
+
+    # A-7e：两半逐条一致（文本+高度）→ 回绕点视觉无缝（客观代理，替代「目视顺不顺」）
+    halves = page.evaluate(HALVES_JS)
+    check(halves.get("n", 0) > 0 and not halves.get("mismatches"),
+          "A-7e 克隆半与第一半逐条一致（文本+高度）→ 回绕无缝", halves)
+
+    # A-5c：实测速率（16px/s 是待目视定稿值，此处只证明「确实按常量匀速在动」）
+    rate = page.evaluate(RATE_JS)
+    print(f"  实测速率 {rate['px_per_sec']:.2f} px/s（常量 {rate['constant']}）")
+    check(rate["px_per_sec"] >= 8, "A-5c 实测速率 ≥8px/s（按常量匀速滚动）", rate)
 
     check(d["scrollH"] <= 1240, "A-6a scrollHeight @1920 ≤1240", d["scrollH"])
     check(d["scrollW"] == d["innerW"], "A-6b 无横向溢出", (d["scrollW"], d["innerW"]))
