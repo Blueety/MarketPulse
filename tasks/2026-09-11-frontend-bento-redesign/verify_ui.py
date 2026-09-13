@@ -899,7 +899,10 @@ WRAP_JS = r"""
   const items = [...el.querySelectorAll('.news-item')];
   const n = Math.max(1, Math.floor(items.length / 2));
   const half = items.slice(0, n).reduce((s, x) => s + x.offsetHeight, 0);
-  el.scrollTop = Math.max(0, half - 2);
+  // 注意：必须同时重置**浮点累加器** `_newsPos`，否则下一帧会把 scrollTop 写回旧位置
+  const start = Math.max(0, half - 2);
+  window._newsPos = start;
+  el.scrollTop = start;
   const out = [];
   let wrapIdx = -1;
   const tick = () => {
@@ -938,6 +941,8 @@ HALVES_JS = r"""
 RATE_JS = r"""
 () => new Promise((resolve) => {
   const el = document.getElementById('news-body');
+  // 同时重置浮点累加器，否则下一次 _newsStep 会把 scrollTop 写回旧位置 → 速率虚高
+  window._newsPos = 0;
   el.scrollTop = 0;
   const t0 = performance.now();
   setTimeout(() => {
