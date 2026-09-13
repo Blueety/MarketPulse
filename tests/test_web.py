@@ -1094,6 +1094,19 @@ def _write_news(tmp_path, monkeypatch, payload, name="news.json"):
     return f
 
 
+def test_build_watchlist_payload_tail_param(tmp_path, monkeypatch):
+    """三十四期：tail 参数控制趋势深度（/api/macro 用 400 补全黄金 1Y 视图）；默认 30 语义不变。"""
+    monkeypatch.delenv("STATUS_THRESHOLD_VIX_CALM", raising=False)
+    closes = [("2026-06-%02d" % i, 100.0 + i) for i in range(1, 29)]   # 28 点
+    stocks = [{"symbol": "GC=F", "label": "黄金COMEX"}]
+    series = {"GC=F": closes}
+    out30 = web.app._build_watchlist_payload(stocks, {"GC=F": 127.0}, series)
+    assert len(out30["trend"]["dates"]) == 28 - 30 + 28 if False else len(out30["trend"]["dates"]) == 28
+    out5 = web.app._build_watchlist_payload(stocks, {"GC=F": 127.0}, series, tail=5)
+    assert len(out5["trend"]["dates"]) == 5
+    assert out5["trend"]["series"][0]["raw"][-1] == 127.0
+
+
 def test_api_news_missing_file(client, tmp_path, monkeypatch):
     """文件缺失 → 200 空结构（Hermes 未接入前为常驻空态，HTTP 200 恒定）。"""
     monkeypatch.setattr(web.app, "NEWS_FILE", tmp_path / "nonexistent" / "news.json")
