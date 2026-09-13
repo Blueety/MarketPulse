@@ -1035,6 +1035,24 @@ def assert_news_autoscroll(page, base_url: str) -> None:
     print(f"  实测速率 {rate['px_per_sec']:.2f} px/s（常量 {rate['constant']}）")
     check(rate["px_per_sec"] >= 8, "A-5c 实测速率 ≥8px/s（按常量匀速滚动）", rate)
 
+    # A-5d：★ 根因回归 —— 亚像素速率下仍必须前进。
+    # 旧实现 `el.scrollTop += 增量`：该容器 scrollTop 读回是整数，增量 <1px/帧 时小数每帧被抹掉
+    # → 位置永远停在原处（60fps 下 16px/s = 0.27px/帧 → 看起来「完全不动」）。
+    # 这里把速率降到 4px/s（约 0.4px/帧）复现该条件。
+    page.mouse.move(10, 10)
+    page.wait_for_timeout(200)
+    page.evaluate(
+        """() => { window.NEWS_SCROLL_PX_PER_SEC = 4;
+                   const el = document.getElementById('news-body');
+                   el.scrollTop = 0; window._newsPos = 0; }"""
+    )
+    page.wait_for_timeout(2200)
+    sub = page.evaluate("() => document.getElementById('news-body').scrollTop")
+    page.evaluate("() => { window.NEWS_SCROLL_PX_PER_SEC = 16; }")
+    print(f"  亚像素速率(4px/s) 2.2s 后 scrollTop={sub}")
+    check(sub >= 3,
+          "A-5d 速率 4px/s（<1px/帧）仍持续前进（浮点累加器生效，防「看起来不动」）", sub)
+
     check(d["scrollH"] <= 1240, "A-6a scrollHeight @1920 ≤1240", d["scrollH"])
     check(d["scrollW"] == d["innerW"], "A-6b 无横向溢出", (d["scrollW"], d["innerW"]))
 

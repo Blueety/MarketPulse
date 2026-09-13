@@ -355,6 +355,11 @@ function oneLine(summary, fallback) {
 // 可让「向上匀速 / 保留手动滚动 / reduce-motion 退化为纯手动」三者共存。
 var NEWS_SCROLL_PX_PER_SEC = 16;   // 待目视定稿（约 2.1s 过一行；太快读不了、太慢没感觉）
 var _newsRaf = 0, _newsLast = 0, _newsHalf = 0, _newsPaused = false, _newsBound = false;
+// ★ 浮点累加位置。**绝不能写 `el.scrollTop += 增量`**：该容器 scrollTop 读回来是整数，
+// 当每帧增量 <1px（如 16px/s ÷ 60fps = 0.27px）时小数部分每帧都被取整抹掉 → 位置永远停在 0
+// （60fps 下看起来「完全不动」）；低帧率下则变成 1~2px 一格一跳（观感卡顿）。
+// 实测证据见 tasks/2026-09-13-news-autoscroll/journal.md。
+var _newsPos = 0;
 
 function _newsEl() { return document.getElementById('news-body'); }
 
@@ -362,6 +367,7 @@ function stopNewsAutoScroll() {
   if (_newsRaf) { cancelAnimationFrame(_newsRaf); _newsRaf = 0; }
   _newsPaused = false;
   _newsHalf = 0;
+  _newsPos = 0;
 }
 
 function _newsStep(now) {
@@ -372,9 +378,16 @@ function _newsStep(now) {
   _newsLast = now;
   if (_newsPaused || dt <= 0) return;
   if (dt > 0.5) dt = 0.5;                        // 后台切回/长间隔 → 钳制，防一次跳很远
-  el.scrollTop += NEWS_SCROLL_PX_PER_SEC * dt;
+  _newsPos += NEWS_SCROLL_PX_PER_SEC * dt;       // 浮点累加（不受 getter 取整影响）
   // 无缝循环：越过「第一半高度」时**减去半程**（不是归零，避免累积误差）
-  if (_newsHalf > 0 && el.scrollTop >= _newsHalf) el.scrollTop -= _newsHalf;
+  if (_newsHalf > 0 && _newsPos >= _newsHalf) _newsPos -= _newsHalf;
+  el.scrollTop = _newsPos;                       // 只在赋值这一刻交给浏览器取整
+}
+
+function _newsSyncFromEl() {
+  // 用户手动滚动/暂停恢复后，把累加器对齐到真实位置，避免「跳回去」
+  var el = _newsEl();
+  if (el) _newsPos = el.scrollTop;
 }
 
 function startNewsAutoScroll() {
@@ -390,6 +403,7 @@ function startNewsAutoScroll() {
   for (var i = 0; i < n; i++) half += items[i].offsetHeight;
   if (half <= el.clientHeight) return;           // 内容不足一屏 → 不滚（否则原地抖动）
   _newsHalf = half;
+  _newsPos = el.scrollTop;
   _newsLast = performance.now();
   if (_newsRaf) cancelAnimationFrame(_newsRaf);  // ★ 防 rAF 叠加（否则速度越来越快）
   _newsRaf = requestAnimationFrame(_newsStep);
@@ -402,12 +416,15 @@ function _bindNewsHover(el) {
   el.addEventListener('mouseleave', function () {
     _newsPaused = false;
     _newsLast = performance.now();               // ★ 必须重置：否则暂停期间的 dt 会瞬间大跳
+    _newsSyncFromEl();                           // ★ 用户可能手动滚过 → 对齐再续滚
   });
   el.addEventListener('focusin', function () { _newsPaused = true; });    // 键盘 Tab 到链接也暂停
-  el.addEventListener('focusout', function () { _newsPaused = false; _newsLast = performance.now(); });
+  el.addEventListener('focusout', function () {
+    _newsPaused = false; _newsLast = performance.now(); _newsSyncFromEl();
+  });
   document.addEventListener('visibilitychange', function () {             // 后台标签页不空转
     _newsPaused = document.hidden;
-    if (!document.hidden) _newsLast = performance.now();
+    if (!document.hidden) { _newsLast = performance.now(); _newsSyncFromEl(); }
   });
 }
 
