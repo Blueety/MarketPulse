@@ -358,3 +358,12 @@
 - **多源合并默认必须交错，否则「多源」等于只有一个源**：`RSS_FEEDS` 顺序拼接 + 按日期稳定排序时，第一源（华尔街见闻 55 条）会把 8 条名额**全部占满**（实测 Google News 一条都进不来，与「双源都接」的决策相反）。修法：单源先各取 `PER_FEED_CAP`，再交错合并（`A0,B0,A1,B1…`）后才去重/取前 N；同一天内稳定排序会保留这个交替顺序。
 - **Google 侧 `description` 尾部带媒体名，会漏进摘要**：形态 `标题&nbsp;&nbsp;<font>来源</font>`。`_clean_summary` 按句切分时，标题带 `！`/`？` 会天然切掉来源，但**标题没有句末标点时来源就留在摘要里**（`美国8月CPI超预期 东方财富`）。修法：fetcher 侧按**已知来源名**精确剥尾部（`_drop_trailing_source`），不要依赖标点运气。
 - **plan/文档里的前端数值可能已漂移，动手前先读代码与既有断言**：本期 plan §R-5 写「`oneLine` 42 字上限、必要时提到 50」，实际 `app.js` 早已是 `NEWS_MAX_LEN = 120` + 单行横向滚动（`overflow-x:auto`，不再用省略号吞字），`verify_ui` 的 N-2 断言口径是 ≤121。照 plan 字面去「调 42→50」会改错地方；同理，plan 里「`valid[:5]→[:8]`」「基线 459 passed」也都是旧版数字。
+
+## 模块 web/（资讯自动滚动 2026-09-13）
+
+- **「保留手动滚动」与 CSS `transform` 动画天然冲突 → 自动滚动必须与手动共用同一机制（`scrollTop`）**：用 `translateY` 卡通内层 track 时，手动滚改的是容器的 `scrollTop`、动画改的是 `transform`，两者叠加会跳变；且容器一旦 `overflow:hidden`，手动滚动就彻底没了；最严重的是 `reduce-motion` 关掉动画后**后面的条目永远不可达**（无障碍缺陷）。`scrollTop += rate*dt` + `requestAnimationFrame` 则让「向上匀速 / 保留手动滚动 / reduce-motion 退化为纯手动」三者共存。
+- **`requestAnimationFrame` 必须成对清理，否则速度逐次变快**：重渲染（如 `/api/news` 重新拉取）时不 `cancelAnimationFrame` 会**叠加多个循环**，表现为「刷新几次后越滚越快」。纪律：渲染函数**开头**先 `stopNewsAutoScroll()`（cancel + 重置 `_newsHalf/_newsPaused`）再重建 DOM；`startNewsAutoScroll` 里也再 cancel 一次兜底。
+- **`scrollHeight/2` 推导半程不可靠，要用「前一半元素的实测高度之和」**：删掉 `.news-item:last-child{border-bottom:none}` 后每条都带 1px 边框，双份不再严格 2 倍；且 `.news-item a` 的横向滚动条也只在各半出现一次。用 `Σ items[0..n-1].offsetHeight` 与规则是否删除无关，更稳。
+- **内容渲染两遍后，既有的「DOM 计数 == 接口条数」断言会集体失效**：本项目 `verify_ui.py` 的 N-1 立刻变成 `(16, 8)`。克隆半必须 `aria-hidden="true"`（否则屏幕阅读器读两遍），**且断言取样要显式排除克隆半**（`clone.contains(el)` 过滤）才能保持原意；克隆半的存在性由单独断言（A-4）覆盖。
+- **「某东西不动」类断言必须与「它本来在动」配对，否则是恒真断言（假绿）**：`A-5 悬停暂停（scrollTop 不变）` 在自动滚动**尚未实现**时也恒成立。正确写法是复合断言：先采到「有增长」（`moved=True`），再验证「hover 后 Δ≈0」——两条同时成立才算暂停有效。
+- **并行跑重型验证脚本会互相制造假失败（本机实测）**：`pytest` 与 `verify_ui.py`（Playwright）同跑时 —— 图表测试因 `MARKET_CHART_TIMEOUT=5s` 在 CPU 争用下超时失败；rAF 帧间隔被拉长到 ~0.125s 导致滚动采样断言假红。**验证一律串行**；采样类断言要**按时间**（`performance.now()` 窗口）而非按帧数取样。
