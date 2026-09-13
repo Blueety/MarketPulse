@@ -890,7 +890,8 @@ SAMPLE_JS = r"""
 })
 """
 
-# 顶到「循环点前 2px」后采样**直到观察到回绕**（或 150 帧兜底），用于验证回绕方式
+# 顶到「循环点前 2px」后采样：**回绕后再多采 10 帧**（只采到回绕那一点的话，
+# 无法观测「回绕后是否继续前进」，A-7b 会假红）
 WRAP_JS = r"""
 () => new Promise((resolve) => {
   const el = document.getElementById('news-body');
@@ -900,11 +901,15 @@ WRAP_JS = r"""
   const half = items.slice(0, n).reduce((s, x) => s + x.offsetHeight, 0);
   el.scrollTop = Math.max(0, half - 2);
   const out = [];
+  let wrapIdx = -1;
   const tick = () => {
     out.push(Math.round(el.scrollTop * 100) / 100);
-    const wrapped = out.some((v, i) => i > 0 && v < out[i - 1]);
-    if (wrapped || out.length >= 150) resolve({ samples: out, half: half });
-    else requestAnimationFrame(tick);
+    if (wrapIdx < 0 && out.length > 1 && out[out.length - 1] < out[out.length - 2]) {
+      wrapIdx = out.length - 1;
+    }
+    if ((wrapIdx >= 0 && out.length - wrapIdx >= 10) || out.length >= 200) {
+      resolve({ samples: out, half: half, wrapIdx: wrapIdx });
+    } else requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 })
@@ -1009,9 +1014,12 @@ def assert_news_autoscroll(page, base_url: str) -> None:
     half = w.get("half") or 0
     drops = [round(ss[i - 1] - ss[i], 2) for i in range(1, len(ss)) if ss[i] < ss[i - 1]]
     print(f"  循环采样 half={half} first={ss[0] if ss else None} last={ss[-1] if ss else None} drops={drops}")
+    wrap_idx = w.get("wrapIdx", -1)
+    post = ss[wrap_idx:] if wrap_idx >= 0 else ss
     check(all(x >= 0 for x in ss), "A-7a scrollTop 全程无负值", (min(ss) if ss else None))
-    check(any(ss[i] > ss[i - 1] + 0.5 for i in range(1, len(ss))),
-          "A-7b 采样期间持续前进（循环未停住）", (ss[0] if ss else None, ss[-1] if ss else None))
+    check(wrap_idx >= 0 and len(post) >= 3 and post[-1] > post[0] + 0.5,
+          "A-7b 回绕过循环点后继续前进（循环未停住）",
+          (wrap_idx, post[0] if post else None, post[-1] if post else None))
     check(len(drops) <= 1 and (not drops or max(drops) <= half + 1),
           "A-7c 越过半程只回绕一次且幅度 ≤ 半程", drops)
     check(not drops or max(drops) > half * 0.5,
@@ -1112,6 +1120,36 @@ def assert_firefox_scrollbar(p, url: str) -> None:
           d["scrollbarColor"])
     check(d["gateScrollbarWidth"] == "thin",
           "N-12b CSSOM 内 Firefox 门控块含 scrollbar-width:thin", d["gateScrollbarWidth"])
+
+
+SHORT_NEWS = json.dumps({"date": "2026-09-13", "items": [{
+    "title": "短内容占位条目", "url": "https://example.com/x", "source": "测试",
+    "published": "2026-09-13", "summary": "内容不足一屏时应保持静止不滚动",
+}]}, ensure_ascii=False)
+
+
+def assert_news_short_content(browser, url: str) -> None:
+    """A-2'：内容不足一屏（半程 ≤ clientHeight）时不启动自动滚动（否则原地抖动，plan R6）。
+
+    用 `page.route` 伪造 1 条资讯的响应，独立 context 避免污染主页面状态。
+    """
+    print("\n--- A-2' 内容不足一屏 ---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        page.route("**/api/news", lambda route: route.fulfill(
+            status=200, content_type="application/json", body=SHORT_NEWS))
+        page.goto(url, wait_until="load")
+        page.wait_for_timeout(1500)
+        d = page.evaluate(AUTOSCROLL_JS)
+        s = page.evaluate(SAMPLE_JS)
+        print(f"  items={d['itemCount']} client={d['clientHeight']} scroll={d['scrollHeight']} 采样={s}")
+        check(d["itemCount"] == 2 and d["scrollHeight"] <= d["clientHeight"],
+              "A-2'a 1 条内容 → scrollHeight ≤ clientHeight（不足一屏）",
+              (d["itemCount"], d["scrollHeight"], d["clientHeight"]))
+        check(all(x == 0 for x in s), "A-2'b 内容不足一屏 → scrollTop 恒 0（不滚动/不抖动）", s)
+    finally:
+        ctx.close()
 
 
 def measure(page, url: str, w: int, h: int) -> dict:
@@ -1237,6 +1275,7 @@ def main() -> int:
             assert_polish(page, url)  # P-1~P-7 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）
             assert_news_autoscroll(page, url)      # A-1~A-7 最新资讯自动循环滚动
             assert_news_reduced_motion(browser, url)  # A-2 reduce-motion 退化（独立 context）
+            assert_news_short_content(browser, url)   # A-2' 内容不足一屏不滚（独立 context）
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
             bg_before = m["card"]["background"]
