@@ -371,3 +371,8 @@
 - **滚动重绘会带动全页 `backdrop-filter` 重合成（本项目「滚动卡顿」的根因 B）**：只要页面发生一次滚动重绘，**所有**玻璃卡的 backdrop-filter 都要重跑；无头软件光栅下实测 **8.8fps（滚动中）vs 60.5fps（关全部 blur）vs 59.4fps（不滚动）**。A/B 结论：**只关滚动卡片自己的 blur 无效**（8.6fps），`will-change: scroll-position` / `contain: paint` / `translateZ(0)` **均无效**。→ 排查这类「滚动卡」必须**整页**关 blur 做对照，别只关当前卡。
 - **性能取证的三个方法纪律（本任务踩过）**：① 先做 **`about:blank` 对照**区分「环境节流」与「页面慢」——本机 `about:blank` 61fps 而真实页面 9.2fps，一步排除环境；② 采样指标要取**净增量**（`end - start`），别把「最后一帧增量」当净增量（我因此误读了一轮，得出「注入 CSS 后不滚」的错误结论）；③ 断言「不动」必须与「本来在动」配对，且**用 CDP `Performance.getMetrics` 的 `TaskDuration`/`LayoutCount` 判断是主线程忙还是绘制管线忙**（本次主线程仅 32ms/3s、Layout 0 → 直接指向合成/光栅而非 JS）。
 - **无头软件光栅下的 fps 不能外推到用户真实浏览器**：GPU 合成下 blur 便宜得多。结论里必须区分「与环境无关的代码 bug」与「仅在本环境测得的绘制成本」，后者要明确写成**取证缺口**并请需求方在真实浏览器复测。
+- **多个自动滚动容器必须各自独立状态**：把单容器的模块级全局（`_newsRaf/_newsHalf/_newsPaused/_newsPos`）复用到第二个容器上会互相踩（A 卡的速度/暂停写进 B 卡）。改为 `makeAutoScroller(bodyId, itemSel)` 工厂返回闭包状态，实例化 `newsScroller` / `alertScroller`，并暴露 `window.__scroll` 供验收脚本读内部量。
+- **「一个循环周期」不能用条目高度求和**：flex `gap:4px` 的列表（`.alert-list`）求和方法会**少算 n×gap**（3 条差 12px）→ 回绕点可见跳动。用 `items[n].offsetTop - items[0].offsetTop`（克隆半首条相对第一半首条的偏移）对 border 分隔与 flex gap 两种布局都精确。
+- **克隆半包一层时用 `display: contents`**：既能挂 `aria-hidden="true"`（防屏幕阅读器读两遍），又不产生盒子 → 父级 `gap` 与条目分隔线保持均匀；用普通块盒会让「第一半 → 克隆半」之间多/少一段间距，回绕点不齐。
+- **「内容不足一屏」的判据是「周期」而不是 `scrollHeight`**：双份内容下 `scrollHeight ≈ 2×周期`，恒大于容器高（实测告警 1 条：`scrollHeight 242 > 132` 但 `period 121 ≤ 132` → 正确地不滚）。启动守卫与断言必须用同一口径，否则出现「功能对但断言红」。
+- **动画容器的帧率成本不是线性叠加**：实测 1 个滚动容器 8.0fps、2 个 8.1fps、0 个 57.5fps —— 成本在**每帧重绘**（本案是 backdrop-filter 重合成），多一个滚动容器几乎免费（同一帧内一起重绘）。想提帧只治「重绘面」，别去治「几个容器」。
