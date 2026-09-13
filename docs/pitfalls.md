@@ -326,6 +326,7 @@
 
 - **给既有"实时取数端点"加"文件优先"路径，测试隔离必须做在 autouse fixture 里**：`/api/watchlist` 改为快照文件优先后，本机真实 `data/watchlist.json`（随 cron 落盘）会劫持所有未打补丁的既有用例（conftest 只隔离 CONFIG_PATH，不隔离 DATA_DIR）。解法：`_reset_watch_cache` autouse fixture 请求 `monkeypatch` 并默认 `setattr(web.app, "load_watchlist_snapshot", lambda: None)`；快照路径用例在测试体内再覆盖同一名（后 setattr 者生效）。**逐个改既有用例是下策**。
 - **monkeypatch 不了"测试环境差异"时先想"谁会读真实文件"**：`load_watchlist_snapshot` 以模块级名字导入到 `web.app` 后，补丁必须打 `web.app`（定义方 analyzer 不生效，同 CHARTS_DIR 纪律）；快照命中用例要同时 mock `fetch_watchlist` 为「被调用即 raise AssertionError」，才能证明"请求路径零联网"，只断言返回值测不出偷偷联网。
+- **「画图缩放」不是「展示换算」，展示位禁继承图表缩放（三十四期）**：概览卡的 GLD×10 是为与 BTC 万级数值共图归一化的**画图缩放系数**（style/数据管线概念），却被当成"金价"展示（3,987 vs 现货 ~4,348，语义错位）。报价位一律用品种本身的实时报价链路（/api/macro），需要新展示位时先问"这个数是什么语义"，别拿现成缩放值凑。另：并行会话/多执行者环境下改共享文件（app.js 的 OVERVIEW_CARDS/GROUPS），动手前 grep 确认没有其他会话的未提交改动叠加。
 - **资讯文件双写者边界（三十三期）**：`context/*.json` 只归 Python（generate_context 覆盖写）、`data/news.json` 只归 Hermes（Python 无搜索能力，决策 G）——Hermes 绝不写 context（会被快照运行覆盖），Python 绝不写 news。`/api/news` 读端逐层容错（坏 JSON/缺 title/url 非 http(s) 逐条过滤、cap 8）永不 500；`target=_blank` 必配 `rel="noopener noreferrer"`。**验证期样例 `data/news.json` 必须删除**（git 追踪范围内，不删会被 cron 提交成假资讯）。
 - **grep `data-placeholder` 盘点占位会漏掉「未打标的的死块」**：`#market-relation` 有 4 个写死 disabled 胶囊但从未打占位标记（外表存在、无功能、盘点清单里消失）。点亮这类块要先在页面上人工过一遍「只有外表没有功能」的区块，别只信标记 grep。
 - **周六跑 daily_report 会生成非交易日的 context/行工件**：ET 日期=当天（周六）→ `context/2026-09-12.json` 与 history 行落盘 → web `_load_latest_context` 选中它、顶栏/相关对都跟着变。验证后删工件（同 history 行处置），且「API 与 context 对照」必须取**最新日期**的 context 文件而非想当然的某个日期。
