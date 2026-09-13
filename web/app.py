@@ -365,8 +365,10 @@ def _series_tail(points, n: int = 30) -> list:
     return list(points[-n:])
 
 
-def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
+def _build_watchlist_payload(stocks_cfg, values, series, tail: int = 30) -> dict:
     """构建自选股表格 + 趋势图双结构（同源一次返回）。
+
+    tail：趋势序列截取深度（默认 30；三十四期 /api/macro 传 400 补全黄金 1Y 视图）。
 
     stocks 行按配置序：symbol / label / value（当日收盘价，缺失为 None）/ change_pct
     （序列相邻日自算，与日报 _build_watchlist_view 同公式）。trend 与 /api/history
@@ -378,7 +380,7 @@ def _build_watchlist_payload(stocks_cfg, values, series) -> dict:
     for it in stocks_cfg:
         sym = it["symbol"]
         label = it.get("label", sym)
-        pts = _series_tail(series.get(sym) or [])
+        pts = _series_tail(series.get(sym) or [], tail)
         # 涨跌幅：序列相邻日自算（与日报 _build_watchlist_view 同公式）
         change_pct = None
         if len(pts) >= 2 and pts[-2][1] not in (None, 0):
@@ -565,7 +567,7 @@ def _load_macro() -> dict:
         return empty
     try:
         values, series, _errors = fetch_watchlist(stocks)
-        return _build_watchlist_payload(stocks, values, series)
+        return _build_watchlist_payload(stocks, values, series, tail=400)   # 三十四期：补全黄金 1Y 视图
     except Exception as exc:
         log.warning("宏观标的取数失败，降级空结构: %s", exc)
         return empty
