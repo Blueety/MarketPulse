@@ -520,6 +520,7 @@ _MACRO_DEFAULT: list[dict] = [
     {"symbol": "DX-Y.NYB", "label": "美元指数"},
     {"symbol": "^TNX", "label": "10Y美债"},
     {"symbol": "CL=F", "label": "原油"},
+    {"symbol": "GC=F", "label": "黄金COMEX"},   # 三十四期：黄金报价位 GLD×10 → COMEX 期货
 ]
 
 _MACRO_TTL = 90  # 秒，与自选股 TTL 同量级

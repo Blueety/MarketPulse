@@ -894,10 +894,10 @@ def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
 # ---- /api/macro：配置三级回退 + 容错 ----
 
 def test_load_macro_stocks_builtin_default(monkeypatch):
-    """env 未设 / config 无 macro.stocks → 内置 3 标的（端点开箱可用）。"""
+    """env 未设 / config 无 macro.stocks → 内置 4 标的（三十四期 +黄金 COMEX）。"""
     monkeypatch.delenv("MACRO_STOCKS", raising=False)
     monkeypatch.setattr(web.app, "load_config", lambda: {})
-    assert [s["symbol"] for s in _load_macro_stocks()] == ["DX-Y.NYB", "^TNX", "CL=F"]
+    assert [s["symbol"] for s in _load_macro_stocks()] == ["DX-Y.NYB", "^TNX", "CL=F", "GC=F"]
 
 
 def test_load_macro_stocks_env_precedence(monkeypatch):
@@ -911,11 +911,11 @@ def test_load_macro_stocks_env_invalid_falls_back(monkeypatch):
     """env 非法 JSON / 非列表 / 全无效项 → 内置默认（不抛、不空）。"""
     monkeypatch.setattr(web.app, "load_config", lambda: {})
     monkeypatch.setenv("MACRO_STOCKS", "{bad json")
-    assert len(_load_macro_stocks()) == 3
+    assert len(_load_macro_stocks()) == 4
     monkeypatch.setenv("MACRO_STOCKS", json.dumps("not-a-list"))
-    assert len(_load_macro_stocks()) == 3
+    assert len(_load_macro_stocks()) == 4
     monkeypatch.setenv("MACRO_STOCKS", json.dumps([{"label": "无symbol"}]))
-    assert len(_load_macro_stocks()) == 3
+    assert len(_load_macro_stocks()) == 4
 
 
 def test_load_macro_stocks_config_raises(monkeypatch):
@@ -925,7 +925,7 @@ def test_load_macro_stocks_config_raises(monkeypatch):
     def boom():
         raise RuntimeError("config unreadable")
     monkeypatch.setattr(web.app, "load_config", boom)
-    assert len(_load_macro_stocks()) == 3
+    assert len(_load_macro_stocks()) == 4
 
 
 def test_load_macro_fetch_raises(monkeypatch):

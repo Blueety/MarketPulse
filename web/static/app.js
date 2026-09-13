@@ -33,7 +33,8 @@ function themeColors() {
 }
 const SERIES_VAR = {
   gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
-  vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc"
+  vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc",
+  "gc=f": "--c-gld"   // 三十四期：黄金 COMEX 沿用 GLD 金色 token
 };
 // CSS token 缺失时的保底色（= Dark 硬编码值）
 const SERIES_FALLBACK = {
@@ -65,7 +66,7 @@ const GROUPS = [
   { id: "us", name: "美股大盘", keys: ["gspc", "ixic"] },
   { id: "cn", name: "A 股大盘", keys: ["sh", "sz", "cyb"] },
   { id: "vol", name: "波动率", keys: ["vix", "vxn", "move"] },
-  { id: "alt", name: "另类资产", keys: ["gld", "btc"] }
+  { id: "alt", name: "另类资产", keys: ["btc"], macroGold: "gc=f" }   // 三十四期：黄金线改用 /api/macro 的 GC=F 实时序列
 ];
 
 // 静态占位模块（无数据源，仅保视觉；grep data-placeholder 定位全部待接点）
@@ -79,7 +80,7 @@ const PLACEHOLDERS = [
 const OVERVIEW_CARDS = [
   { id: 'GSPC', label: '美股 · 标普500', source: 'indices', flag: 'us' },
   { id: 'SH', label: 'A股 · 上证指数', source: 'indices', flag: 'cn' },
-  { id: 'GLD', label: '黄金 ETF', source: 'indices', scale: 10, icon: 'gold', char: '金' },
+  { id: 'GC=F', label: '黄金 · COMEX', source: 'macro', icon: 'gold', char: '金' },
   { id: 'DX-Y.NYB', label: '美元指数', source: 'macro', icon: 'dollar', char: '元' },
   { id: '^TNX', label: '10Y 美债', source: 'macro', suffix: '%', icon: 'bond', char: '债' },
   { id: 'CL=F', label: '原油', source: 'macro', icon: 'oil', char: '油' }
@@ -92,7 +93,7 @@ const OVERVIEW_CARDS = [
 // 板块名首字符；查不到色 → 中性灰（--text-muted，双主题可见）。
 const ICON_COLORS = {
   "GSPC": "--c-gspc", "SH": "--c-sh", "GLD": "--c-gld",
-  "DX-Y.NYB": "--c-ixic", "^TNX": "--c-move", "CL=F": "--c-vxn",
+  "DX-Y.NYB": "--c-ixic", "^TNX": "--c-move", "CL=F": "--c-vxn", "GC=F": "--c-gld",
   "515300.SS": "--c-gspc"
 };
 const ICON_CHARS = { "515300.SS": "红" };
@@ -778,18 +779,57 @@ function renderMainChart() {
     Chart.register(window.ChartZoom);
     renderMainChart._zoomRegistered = true;
   }
-  const axis = buildTradingAxis(dates, series);
+  // 三十四期：alt 组日期轴取 history ∪ macro 并集（gc=f 序列投影其上；A 股独有休市日为空点，
+  // 既有 buildLinePts/投影的 filled 逻辑与 Chart.js 连线即 spanGaps）
+  let axis;
+  let gcSeries = null;
+  if (g.macroGold) {
+    const mc = state.macro && state.macro.trend ? state.macro.trend : null;
+    gcSeries = (mc && mc.series ? mc.series : []).find(function (s) { return s.key === g.macroGold; }) || null;
+  }
+  if (gcSeries) {
+    const mcDates = state.macro.trend.dates || [];
+    const all = new Set(dates);
+    mcDates.forEach(function (d) { all.add(d); });
+    const tradingDates = Array.from(all).filter(function (d) { return !isWeekendDate(d); }).sort();
+    const dateIndexMap = {};
+    tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
+    axis = { tradingDates: tradingDates, dateIndexMap: dateIndexMap };
+  } else {
+    axis = buildTradingAxis(dates, series);
+  }
   const palette = colors();
   const datasets = series.map(function (s) {
     return buildLineDataset(s, palette[s.key], buildLinePts(s, dates, axis.dateIndexMap), { area: true });
   });
+  let gcMeta = null;
+  if (gcSeries) {
+    // gc=f 序列投影到合并轴：逐日映射，null 前向填充（spanGaps），缺口日跳过
+    const gcPts = [];
+    let lastVal = null, lastRaw = null;
+    (state.macro.trend.dates || []).forEach(function (d, i) {
+      if (axis.dateIndexMap[d] === undefined) return;
+      const v = gcSeries.values ? gcSeries.values[i] : null;
+      if (v != null) {
+        lastVal = v;
+        lastRaw = gcSeries.raw ? gcSeries.raw[i] : null;
+        gcPts.push({ x: d, y: v, rawVal: lastRaw });
+      } else if (lastVal != null) {
+        gcPts.push({ x: d, y: lastVal, rawVal: lastRaw, filled: true });
+      }
+    });
+    if (gcPts.length) {
+      datasets.push(buildLineDataset(gcSeries, palette[gcSeries.key] || palette.gld, gcPts, { area: true }));
+      gcMeta = gcSeries;
+    }
+  }
   charts.main = new Chart(canvas, {
     type: 'line',
     data: { datasets: datasets },
     options: buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.days) }),
     plugins: [hoverCrosshair]   // 内联插件仅挂本实例（不 Chart.register，避免影响全局）
   });
-  renderTrendMeta(g, series);
+  renderTrendMeta(g, gcMeta ? series.concat([gcMeta]) : series);
 }
 
 // === KPI 卡（4 张：美股 / A股 / VIX / 自选）===
@@ -1141,6 +1181,7 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(mcTimer);
       state.macro = data || { stocks: [] };
       renderOverview();
+      renderMainChart();   // 三十四期：macro 晚到时补画 alt 组的黄金 COMEX 线
     })
     .catch(function (err) {
       console.error('[macro] fetch failed:', err);
