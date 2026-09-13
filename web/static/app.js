@@ -286,28 +286,31 @@ function renderUsSectors(latest) {
 
 // === 告警记录 ===
 function renderAlerts(alerts) {
+  alertScroller.stop();                          // ★ 先停旧循环，再重建 DOM
   const box = document.getElementById("alert-list");
   if (!box) return;
   if (!alerts || !alerts.length) {
     box.innerHTML = '<p class="empty">暂无告警记录</p>';
-    return;
+    return;                                      // 空态不加克隆半、不起滚动
   }
-  box.innerHTML = '';
-  alerts.forEach(function (a) {
+  const cards = alerts.map(function (a) {
     const level = a.level || "";
     const cls = level === "ALERT" ? "alert" : (level === "WARN" ? "warn" : "");
-    const card = document.createElement("div");
-    card.className = "alert-card " + cls;
-    card.innerHTML =
+    return '<div class="alert-card ' + cls + '">' +
       '<div class="alert-head"><span class="badge ' + cls + '">' + escapeHtml(level) + "</span>" +
       "<span>" + escapeHtml(a.symbol || "") + " · " + escapeHtml(a.date || "") + "</span></div>" +
       '<div class="alert-meta">类型：' + escapeHtml(a.type || "—") + " ｜ 市场状态：" + escapeHtml(a.state || "—") + "</div>" +
       '<div class="alert-row">当前值：' + fmtNum(a.current, 2) + " ｜ 昨日收盘：" + fmtNum(a.last, 2) +
       " ｜ 变化率：" + fmtPct(a.change_pct) + "（阈值 ±" + fmtNum(a.threshold, 1) + "%）</div>" +
       '<div class="alert-sugg">建议：' + escapeHtml(a.suggestion || "—") + "</div>" +
-      '<div class="alert-report">相关报告：' + escapeHtml(a.report || "—") + "</div>";
-    box.appendChild(card);
-  });
+      '<div class="alert-report">相关报告：' + escapeHtml(a.report || "—") + "</div>" +
+      "</div>";
+  }).join('');
+  // 与资讯卡同一机制：渲染两遍（克隆半像素级相同 → 减周期即无缝），克隆半 aria-hidden 防重复朗读。
+  box.innerHTML = cards + '<div class="alert-clone" aria-hidden="true">' + cards + '</div>';
+  box.scrollTop = 0;
+  alertScroller.bind(box);
+  alertScroller.start();                         // 内容不足一屏时内部自行不启动
 }
 
 // === 静态占位模块 ===
