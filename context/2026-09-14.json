@@ -4,52 +4,52 @@
     "GSPC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "IXIC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "SH": {
-      "value": 3894.2843,
-      "change_pct": 0.158784063395723,
-      "status": "连涨1日"
+      "value": 3884.6136,
+      "change_pct": -0.0899408571350785,
+      "status": "下跌趋势"
     },
     "SZ": {
-      "value": 13436.919,
-      "change_pct": -0.2548982622779726,
+      "value": 13384.317,
+      "change_pct": -0.6453740731098851,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 3306.358,
-      "change_pct": -0.47202937713855975,
+      "value": 3287.076,
+      "change_pct": -1.0524560367894593,
       "status": "下跌趋势"
     },
     "VIX": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "VXN": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "MOVE": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "GLD": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     },
     "BTC": {
       "value": null,
       "change_pct": null,
-      "status": "休市"
+      "status": "未开盘"
     }
   },
   "history_30d": {
@@ -275,7 +275,7 @@
       3951.5068,
       3934.4036,
       3888.1106,
-      3894.2843
+      3884.6136
     ],
     "sz": [
       14316.961,
@@ -307,7 +307,7 @@
       13723.322,
       13617.67,
       13471.257,
-      13436.919
+      13384.317
     ],
     "cyb": [
       3537.214,
@@ -339,7 +339,7 @@
       3354.969,
       3338.422,
       3322.039,
-      3306.358
+      3287.076
     ],
     "gld": [
       402.5400085449219,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 2.73,
-        "turnover": "817.1亿",
-        "top_stock": "药石科技"
+        "change": 3.23,
+        "turnover": "1163.1亿",
+        "top_stock": "美迪西"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.72,
-        "turnover": "3054.8亿",
-        "top_stock": "ST中路"
-      },
-      {
-        "name": "资源/有色",
-        "change": 0.39,
-        "turnover": "316.2亿",
-        "top_stock": "闽东电力"
+        "change": 0.37,
+        "turnover": "4291.3亿",
+        "top_stock": "高澜股份"
       },
       {
         "name": "金融",
-        "change": 0.27,
-        "turnover": "1172.9亿",
+        "change": 0.09,
+        "turnover": "1682.3亿",
         "top_stock": "科伦药业"
       },
       {
+        "name": "资源/有色",
+        "change": 0.08,
+        "turnover": "446.3亿",
+        "top_stock": "闽东电力"
+      },
+      {
         "name": "消费",
-        "change": 0.18,
-        "turnover": "108.6亿",
+        "change": -0.11,
+        "turnover": "151.5亿",
         "top_stock": "*ST瑞茂"
       }
     ],
     "losers": [
       {
-        "name": "农业",
-        "change": -2.02,
-        "turnover": "330.7亿",
-        "top_stock": "隆鑫通用"
-      },
-      {
         "name": "地产/基建",
-        "change": -1.84,
-        "turnover": "97.7亿",
+        "change": -2.22,
+        "turnover": "129.9亿",
         "top_stock": "万通发展"
       },
       {
+        "name": "农业",
+        "change": -1.92,
+        "turnover": "431.1亿",
+        "top_stock": "国投丰乐"
+      },
+      {
         "name": "通信/电子",
-        "change": -0.19,
-        "turnover": "1920.8亿",
+        "change": -0.56,
+        "turnover": "2748.3亿",
         "top_stock": "中京电子"
       },
       {
         "name": "军工",
-        "change": -0.16,
-        "turnover": "1410.8亿",
+        "change": -0.41,
+        "turnover": "1986.5亿",
         "top_stock": "天通股份"
       },
       {
         "name": "其他",
-        "change": 0.14,
-        "turnover": "11925.0亿",
+        "change": -0.12,
+        "turnover": "16834.2亿",
         "top_stock": "凯盛新能"
       }
     ]
@@ -483,9 +483,9 @@
   "search_keywords": [
     "医药 surge 2026-09-14",
     "光伏/新能源 surge 2026-09-14",
-    "资源/有色 surge 2026-09-14",
     "金融 surge 2026-09-14",
-    "消费 surge 2026-09-14"
+    "资源/有色 surge 2026-09-14",
+    "消费 drop 2026-09-14"
   ],
   "correlation": [],
   "watchlist": {

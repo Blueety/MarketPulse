@@ -647,7 +647,6 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
 | 指数 | 当前值 | 趋势 |
 | :--- | :--- | :--- |
 {table}"""
-"""
     if market == "a-share" and sector_heat is not None:
         gainers, losers = sector_heat
         sector_rows = []
