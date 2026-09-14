@@ -1015,8 +1015,13 @@ def api_econ() -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    """渲染单页看板。"""
+    """渲染单页看板。
+
+    2026-09-14：顶栏/侧栏抽成 `_topbar.html` / `_sidebar.html`（宏观页共用），
+    由 `base_prefix`（首页 "" → 页内锚点 `#x`）与 `active_page`（高亮哪一项）参数化。
+    """
     template = _TEMPLATES.get_template("index.html")
-    resp = HTMLResponse(template.render(asset_v=_asset_version()))
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="", active_page="dashboard"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
