@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import analyzer as an  # noqa: E402
+from src import reporter as rep  # noqa: E402
 from src import storage  # noqa: E402
 
 
@@ -51,6 +52,30 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", p)
     storage.init_db()
     return _TmpDb(p)
+
+
+@pytest.fixture(autouse=True)
+def isolate_real_output_paths(tmp_path, monkeypatch):
+    """真实输出路径隔离（autouse 护栏，2026-09-14）。
+
+    背景：10 个测试文件真实调用 `daily_report.main()` / `snapshot_report.main()`，这些入口会写
+    **真实** 的 `context/` 与 `data/backup/`：
+
+    - `reporter.CONTEXT_DIR` 是 reporter **import 时绑定**的 Path 对象（把补丁打在定义方
+      `analyzer` 上不生效）→ `generate_context` 写真实 `context/YYYY-MM-DD.json`。实测：
+      `test_snapshot_passes_history`（`sr.main("a-share", "midday")`，未隔离）把
+      `context/2026-09-03.json` 覆盖成 1 条 history + 空板块（VIX 21.0/change null），并被
+      auto-commit cron 提交（`da152fe`，333 行删除）。
+    - `storage.DEFAULT_BACKUP_DIR` 默认真实 `data/backup/` → `dr.main()` 末尾的
+      `export_monthly_backups()` 用 tmp DB 的行覆盖真实当月备份文件
+      （`data/backup/history_2026-09.json`）。
+
+    与 `isolate_watchlist_file` 同款纪律：默认重定向到 tmp；测试体内显式 patch 同一名字时
+    在其后生效（仍是 tmp），既有断言零改动。重定向后 `an.load_watchlist_snapshot()` 行为不变。
+    """
+    monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
+    monkeypatch.setattr(storage, "DEFAULT_BACKUP_DIR", tmp_path / "backup")
+    return tmp_path
 
 
 @pytest.fixture(autouse=True)

@@ -216,19 +216,24 @@ class TestWiring:
         assert captured["h"] is hist
 
     def test_generate_context_excludes_today(self, clean_thresholds, monkeypatch, tmp_path):
-        monkeypatch.setattr(an, "CONTEXT_DIR", tmp_path / "context")
+        # 隔离纪律：补丁必须打在「使用方」模块（reporter 在 import 时绑定 CONTEXT_DIR /
+        # load_history），打在 analyzer 上不生效 → 会写真实 context/（见 pitfalls 2026-09-14）。
+        monkeypatch.setattr(rep, "CONTEXT_DIR", tmp_path / "context")
         captured = {}
         monkeypatch.setattr(rep, "collect_breaches",
                             lambda v, lv, history=None: (captured.__setitem__("h", history) or []))
+        # 全键宽记录：generate_context 的 history_30d 按键取值，窄记录会 KeyError
         today_rows = [
-            {"date": "2026-09-03", "vix": 999.0},
-            {"date": "2026-09-02", "vix": 20.0},
+            {"date": "2026-09-03", **{k: None for k in st.HISTORY_KEYS}, "vix": 999.0},
+            {"date": "2026-09-02", **{k: None for k in st.HISTORY_KEYS}, "vix": 20.0},
         ]
-        monkeypatch.setattr(an, "load_history", lambda: today_rows)
-        rep.generate_context("2026-09-03", {"VIX": 20.0}, {"VIX": 0.0},
-                             {sym: ("平静", "ok") for sym in an.SYMBOLS}, {"VIX": 20.0})
+        monkeypatch.setattr(rep, "load_history", lambda: today_rows)
+        path = rep.generate_context("2026-09-03", {"VIX": 20.0}, {"VIX": 0.0},
+                                    {sym: ("平静", "ok") for sym in an.SYMBOLS}, {"VIX": 20.0})
+        assert path == tmp_path / "context" / "2026-09-03.json"   # 落点锁：patch 跑偏即写真实 context/
         assert captured["h"] is not None
-        assert all(r["date"] != "2026-09-03" for r in captured["h"])
+        # 注入的 fixture 必须真被用上，否则断言退化为"真空通过"
+        assert [r["date"] for r in captured["h"]] == ["2026-09-02"]
 
     def test_daily_passes_history_to_alert_checks(self, clean_thresholds, monkeypatch, tmp_path):
         cfg_path = tmp_path / "config.json"
