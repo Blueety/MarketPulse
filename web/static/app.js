@@ -124,6 +124,7 @@ const state = {
   trendGroup: 'us',   // 趋势主图当前类别 tab
   history: null,      // /api/history 全量 payload
   latest: null,       // /api/latest payload
+  latestDate: null,   // /api/latest 的 date：判定板块数据是否新鲜（as_of !== date → 显示快照标注）
   watch: null,        // /api/watchlist payload
   macro: null         // /api/macro payload
 };
@@ -222,6 +223,7 @@ function renderSector(latest) {
   if (!tbody) return;
   tbody.innerHTML = "";
   const gainers = (latest && latest.sector_heat && latest.sector_heat.gainers) || [];
+  _sectorAsOf.cn = (latest && latest.sector_heat && latest.sector_heat.as_of) || null;
   if (!gainers.length) {
     tbody.innerHTML = '<tr><td colspan="5">数据暂缺</td></tr>';
     return;
@@ -271,6 +273,7 @@ function renderUsSectors(latest) {
   if (!tbody) return;
   tbody.innerHTML = '';
   const gainers = (latest && latest.us_sector_heat && latest.us_sector_heat.gainers) || [];
+  _sectorAsOf.us = (latest && latest.us_sector_heat && latest.us_sector_heat.as_of) || null;
   if (!gainers.length) {
     tbody.innerHTML = '<tr><td colspan="5">数据暂缺</td></tr>';   // 与 A股 同款空态
     return;
@@ -286,6 +289,24 @@ function renderUsSectors(latest) {
       '<td>' + escapeHtml(g.top_stock || '—') + '</td>';
     tbody.appendChild(tr);
   });
+}
+
+// === 板块数据新鲜度标注（读取端陈旧回填的配套显示）===
+// 两个板块在同一天**独立取数**（A股 1 个请求 / 美股 11 个请求）→ 可各自回看到**不同**日期，
+// 所以各自的 as_of 分开缓存、按当前 tab 决定显示哪个。
+// ⚠️ 纯 CSS tab（:checked + 兄弟选择器）**没有切换事件** → 不挂 radio change 监听，
+//    切 tab 时标注不会更新（现象是"A股 tab 显示着美股的快照日期"）。
+var _sectorAsOf = { cn: null, us: null };
+
+function renderSectorAsOf() {
+  var el = document.getElementById('us-sectors-asof');
+  if (!el) return;
+  var usRadio = document.getElementById('sector-tab-us');
+  var which = (usRadio && usRadio.checked) ? 'us' : 'cn';
+  var asOf = _sectorAsOf[which];
+  var cur = state.latestDate;
+  // as_of === date（数据就是当天的）或 as_of 为 null（无数据，表格自己显示「数据暂缺」）→ 不标注
+  el.textContent = (asOf && cur && asOf !== cur) ? '· 数据截至 ' + asOf : '';
 }
 
 // === 告警记录 ===
@@ -1059,12 +1080,14 @@ function refresh() {
   fetch('/api/latest').then(function (r) { return r.json(); })
     .then(function (data) {
       state.latest = data;
+      state.latestDate = data.date;
       updateTopbarDate(data.date);
       renderOverview();
       renderSector(data);
       renderRiskAppetite(data);
       renderMarketRelation(data);
       renderUsSectors(data);
+      renderSectorAsOf();       // 两个板块的 as_of 都写完后才判定
       renderLede();
     })
     .catch(function (e) { loadFailed(e.message, 'overview-body'); });
@@ -1072,6 +1095,11 @@ function refresh() {
 
 // === 初始化 ===
 document.addEventListener('DOMContentLoaded', function () {
+  // 板块 tab 切换 → 重算「数据截至」标注（纯 CSS tab 没有切换事件，只能自己挂）
+  ['sector-tab-cn', 'sector-tab-us'].forEach(function (id) {
+    const r = document.getElementById(id);
+    if (r) r.addEventListener('change', renderSectorAsOf);
+  });
   // 主题切换（切后重渲染图表以同步线色/图例色）
   const themeBtn = document.getElementById('sidebar-theme');
   if (themeBtn) {

@@ -254,6 +254,15 @@ def test_load_alerts_desc_limit(tmp_path, monkeypatch):
     ]
 
 
+def _assert_sector_empty(sh: dict) -> None:
+    """板块 payload 的**空值**断言（子集口径）。
+
+    2026-09-14 起 `_sector_payload` 的返回值多了读取端生成的 `as_of` 键（陈旧数据回填用），
+    不能再整体相等比对。**用子集断言，而不是删掉断言** —— 后者会把真红改成假绿。
+    """
+    assert sh["gainers"] == [] and sh["losers"] == [] and sh["as_of"] is None
+
+
 def test_load_sector_heat_present(tmp_path, monkeypatch):
     monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
     ctx = {
@@ -275,12 +284,12 @@ def test_load_sector_heat_missing_key(tmp_path, monkeypatch):
     (tmp_path / "2026-08-30.json").write_text(
         json.dumps({"date": "x", "indices": {}}), encoding="utf-8"
     )
-    assert _load_sector_heat() == {"gainers": [], "losers": []}
+    _assert_sector_empty(_load_sector_heat())
 
 
 def test_load_sector_heat_no_context_dir(monkeypatch):
     monkeypatch.setattr(web.app, "CONTEXT_DIR", Path("/nonexistent/context/dir"))
-    assert _load_sector_heat() == {"gainers": [], "losers": []}
+    _assert_sector_empty(_load_sector_heat())
 
 
 def test_load_latest_context_falls_back_from_empty_shell(tmp_path, monkeypatch):
@@ -335,7 +344,7 @@ def test_load_latest_context_no_sector_anywhere(tmp_path, monkeypatch):
     (tmp_path / "2026-09-03.json").write_text(json.dumps(new), encoding="utf-8")
     # 语义下限：返回最新的可解析 context（状态列不落空）
     assert _load_latest_context()["date"] == "2026-09-03"
-    assert _load_sector_heat() == {"gainers": [], "losers": []}
+    _assert_sector_empty(_load_sector_heat())
 
 
 def test_load_latest_context_skips_corrupt_newest(tmp_path, monkeypatch):
@@ -357,7 +366,7 @@ def test_load_latest_context_all_corrupt(tmp_path, monkeypatch):
     (tmp_path / "2026-09-02.json").write_text("{bad", encoding="utf-8")
     (tmp_path / "2026-09-03.json").write_text("not json", encoding="utf-8")
     assert _load_latest_context() is None
-    assert _load_sector_heat() == {"gainers": [], "losers": []}
+    _assert_sector_empty(_load_sector_heat())
 
 
 

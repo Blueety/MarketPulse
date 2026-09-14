@@ -155,7 +155,10 @@
 
           <section class="card" id="us-sectors">
             <div class="card-head">
-              <h2>行业板块表现</h2>
+              <!-- 陈旧回填标注：as_of ≠ /api/latest 的 date 时由 renderSectorAsOf() 填文案。
+                   ⚠️ 必须是 h2 内的行内 span（与「市场概览 · 最新交易日」同款）→ 靠 line-height
+                   承载、零增高；放到 h2 之外会新增一行撑破 scrollHeight 护栏。 -->
+              <h2>行业板块表现 <span class="h2-sub" id="us-sectors-asof"></span></h2>
               <button type="button" class="link-btn" disabled title="数据未接入">查看全部 →</button>
             </div>
             <!-- 纯 CSS 双 tab ⚠️ 两个 radio 必须是 .tab-panels 的「前置同级兄弟」，`~` 才生效；

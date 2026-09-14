@@ -274,23 +274,53 @@ def _load_latest_context() -> dict | None:
             return ctx                         # 最近一次板块取数成功的交易日
     return fallback
 
-def _sector_payload(ctx: dict | None, key: str) -> dict:
-    """从 context 抽取单个板块热度键（sector_heat / us_sector_heat）→ {gainers, losers}。
+SECTOR_LOOKBACK_MAX = 5          # 板块回看上限（个 context 文件 ≈ 5 个交易日）
 
-    ctx 非 dict / 键缺失 / 非 dict → 双空列表降级（前端安全遍历）。
+
+def _find_context_with_key(key: str, max_lookback: int = SECTOR_LOOKBACK_MAX):
+    """按文件名倒序找第一个 `key.gainers` 非空的 context → `(ctx, 日期 stem)`；找不到 → `(None, None)`。
+
+    **逐键独立回看**：`sector_heat`（A股，1 个新浪请求）与 `us_sector_heat`（美股，11 个 Yahoo
+    请求）是同一天**独立取数、独立失败**的，所以不能拿"A股 有数据"当作整份 context 有效的判据
+    —— 否则 A股 成功、美股失败的日子会把美股的空值一起带回来（2026-09-14 实测）。
+    超过 `max_lookback` 个文件仍无数据 → 返回空：宁可空白，也不展示过旧快照（盘面误导）。
+    坏 JSON 复用 `_read_context_file` 的容错（跳过该文件继续回看）。
     """
+    if not CONTEXT_DIR.exists():
+        return None, None
+    for i, path in enumerate(sorted(CONTEXT_DIR.glob("*.json"), reverse=True)):
+        if i >= max_lookback:
+            break
+        ctx = _read_context_file(path)
+        if ctx is None:
+            continue                      # 坏文件 / 非 dict：跳过，继续回看
+        val = ctx.get(key)
+        if not isinstance(val, dict) or not val.get("gainers"):
+            continue
+        return ctx, path.stem             # 文件名 stem 即日期（YYYY-MM-DD）
+    return None, None
+
+
+def _sector_payload(key: str) -> dict:
+    """单键独立回看 → `{gainers, losers, as_of}`；`as_of=None` 表示无可用数据（前端显示空态）。
+
+    `as_of` 只在本函数的返回值里生成，**不落盘** —— `context.json` 必须保持"当天真实快照"
+    语义（写入端回填会污染它，且对已写下的历史文件无效）。
+    """
+    ctx, as_of = _find_context_with_key(key)
     sh = ctx.get(key) if isinstance(ctx, dict) else None
     if not isinstance(sh, dict):
-        return {"gainers": [], "losers": []}
+        return {"gainers": [], "losers": [], "as_of": None}
     return {
         "gainers": sh.get("gainers") or [],
         "losers": sh.get("losers") or [],
+        "as_of": as_of,
     }
 
 
 def _load_sector_heat() -> dict:
-    """从最近有效 context 取 A 股 sector_heat（gainers/losers）；缺失 / 坏 → 空结构降级。"""
-    return _sector_payload(_load_latest_context(), "sector_heat")
+    """A 股 sector_heat：单键独立回看（含 as_of）；缺失 / 坏 / 超回溯上限 → 空结构降级。"""
+    return _sector_payload("sector_heat")
 
 
 # ---- 告警解析（直接使用本模块 ALERTS_DIR 常量）----
@@ -591,8 +621,8 @@ def api_history(
 def api_latest() -> dict:
     """最新日 10 指数概览 + A 股/美股板块热度；status 与板块同源复用最新有效 context。"""
     ctx = _load_latest_context()
-    empty_sectors = {"sector_heat": {"gainers": [], "losers": []},
-                     "us_sector_heat": {"gainers": [], "losers": []}}
+    empty_sectors = {"sector_heat": {"gainers": [], "losers": [], "as_of": None},
+                     "us_sector_heat": {"gainers": [], "losers": [], "as_of": None}}
     records = _last_records(10)   # 三十二期：7→10，供风险偏好 5 日变化取数
     result = _compute_latest(records)
     if result is None:
@@ -613,8 +643,8 @@ def api_latest() -> dict:
     return {
         "date": date,
         "indices": indices,
-        "sector_heat": _sector_payload(ctx, "sector_heat"),
-        "us_sector_heat": _sector_payload(ctx, "us_sector_heat"),
+        "sector_heat": _sector_payload("sector_heat"),
+        "us_sector_heat": _sector_payload("us_sector_heat"),
         "risk_appetite": _compute_risk_appetite(indices, records),
         "correlation": _correlation_payload(ctx),
     }
