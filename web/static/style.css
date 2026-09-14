@@ -726,16 +726,19 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .mac .down { color: var(--red); }
 .mac .flat { color: var(--text-muted); }
 
-/* 模块 1：当前宏观环境 */
-.mac-regime { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr); gap: 24px; align-items: center; }
+/* 模块 1：当前宏观环境（三段式：左 hero / 中 Macro Score / 右 四维指标）
+   ⚠️ 2026-09-14 实测更正：改前 `1fr auto minmax(0,1.15fr)` 下左列被拉伸到 **587px**，
+      而 hero 文案实际只有 ~230px → **左列尾部空出 ~380px**，这才是 PRD 说的"左中右之间大片空白"
+      （不是中列对齐问题：中列是 auto，宽 85px，改成左对齐只挪动 ~15px —— 我先按"对齐"改过一次，
+       看截图发现无效，才去量列宽，故此处按**内容排布**重做）。
+   改为 `max-content auto 1fr`：左列只占文案宽、中间 24px 间距、富余宽度全给右侧四维指标列。 */
+.mac-regime { display: grid; grid-template-columns: max-content auto minmax(0, 1fr); gap: 20px 24px; align-items: center; }
 .regime-level { font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
 .regime-level.risk_on { color: var(--green); }
 .regime-level.risk_off { color: var(--red); }
 .regime-level.neutral, .regime-level.none { color: var(--text-secondary); }
 .regime-quadrant { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
-/* ⚠️ 左对齐而非右对齐（2026-09-14）：改前右对齐 → 数字被推到中列末尾，
-   与左列文字之间出现"双空档"（列内空档 + 24px 列间距）≈ 380px（PRD 要点 2「中间空档太大」）。
-   左对齐后数字紧贴左列文字（实测 1396px 栅格 [587｜85｜675]，空档 380 → ~35px）。 */
+/* 左对齐（中列是 auto = 紧贴内容，左对齐让数字紧接左列而不是再往右推） */
 .regime-score { text-align: left; padding-right: 6px; }
 .score-num { font-family: var(--mono); font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .score-cap { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
@@ -746,6 +749,11 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .f-val { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .f-imp { font-family: var(--mono); font-weight: 600; }
 .f-note { color: var(--text-muted); font-size: 11px; }
+/* 宽屏（≥1440）：右侧四维指标列会拿到 ~1000px → 列内再分 2 栏，
+   否则"左列空档"会被搬到右列（注文列被拉到 600px+ 同样空）。<1440 时该列 <700px，2 栏会挤压注文。 */
+@media (min-width: 1440px) {
+  .regime-factors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 26px; }
+}
 
 /* 模块 2：宏观市场（主图 = 视觉中心） */
 .mac-tools { display: flex; gap: 8px; flex-wrap: wrap; }
