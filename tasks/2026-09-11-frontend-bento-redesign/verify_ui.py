@@ -920,7 +920,9 @@ def assert_us_table(page, browser, url: str) -> None:
           "U-4 美股表格表头数字列右对齐", d["thAlignUs"])
     if d["rows"] == 1:
         check(d["emptyText"] == "数据暂缺", "U-3c 空态 = 表格内一行「数据暂缺」", d["emptyText"])
-        print("  ⚠️ 真实数据为空（今日美股板块取数超时）→「有数据时」的 5 行形态改用 mock 验证")
+        # 注意：不要在本文件 print 里用 emoji —— Windows 控制台是 GBK，非 GBK 字符会
+        # UnicodeEncodeError 让验收脚本中途崩掉（本次踩过）。
+        print("  真实数据为空（今日美股板块取数超时）->「有数据时」的 5 行形态改用 mock 验证")
 
     page.evaluate("() => { document.getElementById('sector-tab-cn').checked = true; }")
     page.wait_for_timeout(150)
@@ -950,6 +952,14 @@ def assert_us_table(page, browser, url: str) -> None:
         scroll_h = p2.evaluate("() => document.scrollingElement.scrollHeight")
         scroll_w = p2.evaluate("() => document.scrollingElement.scrollWidth")
         inner_w = p2.evaluate("() => window.innerWidth")
+        # 目视证据：美股 tab（mock 有数据）+ A股 tab 各截一张卡片图，便于人工比对是否逐列同构
+        try:
+            p2.locator("#us-sectors").screenshot(path=str(OUT_DIR / "shot-us-tab-us.png"))
+            p2.evaluate("() => { document.getElementById('sector-tab-cn').checked = true; }")
+            p2.wait_for_timeout(200)
+            p2.locator("#us-sectors").screenshot(path=str(OUT_DIR / "shot-us-tab-cn.png"))
+        except Exception as exc:  # noqa: BLE001
+            print(f"  截图失败（不影响断言）: {exc}")
         print(f"  mock 5 条：rows={m['rows']} cnRows={m['cnRows']} icons={m['icons']} "
               f"pills={m['pills']} chgCells={m['chgCells'][:2]} scrollH={scroll_h}/{inner_w}")
 
