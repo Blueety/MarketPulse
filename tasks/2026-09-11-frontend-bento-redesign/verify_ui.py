@@ -983,6 +983,98 @@ def assert_us_table(page, browser, url: str) -> None:
         ctx.close()
 
 
+# —— V 板块陈旧回填标注（2026-09-14 sector-stale-fallback 任务）——
+# 开关 tab 必须**手动 dispatch change**：程序化改 .checked 不会触发 change 事件，而标注正是
+# 靠 radio 的 change 监听更新的（纯 CSS tab 没有切换事件）→ 这样顺带验证了监听确实挂上了。
+ASOF_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const h2 = q('#us-sectors .card-head h2');
+  const el = document.getElementById('us-sectors-asof');
+  const card = q('#us-sectors');
+  const cn = document.getElementById('sector-tab-cn');
+  const us = document.getElementById('sector-tab-us');
+  const setTab = (r) => { r.checked = true; r.dispatchEvent(new Event('change')); };
+  const out = {};
+
+  setTab(cn);
+  out.cnText = el ? el.textContent : null;
+  out.cnH2 = h2 ? h2.offsetHeight : null;
+  out.cnCard = card ? card.offsetHeight : null;
+
+  setTab(us);
+  out.usText = el ? el.textContent : null;
+  out.usH2 = h2 ? h2.offsetHeight : null;
+  out.usCard = card ? card.offsetHeight : null;
+
+  // 零增高判据：把标注文本清空后高度是否变化（在美股 tab 下测，标注此时非空）
+  const keep = el.textContent;
+  el.textContent = '';
+  out.usH2NoLabel = h2.offsetHeight;
+  out.usCardNoLabel = card.offsetHeight;
+  el.textContent = keep;
+
+  // 375 换行判据：h2 实际高 vs 单行 line-height
+  const cs = getComputedStyle(h2);
+  // line-height 可能是 'normal'（parseFloat → NaN）→ 用 fontSize × 1.6 兜底，保证判据恒有数值
+  out.lineHeight = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.6);
+  out.h2ClientH = h2.clientHeight;
+  out.labelInH2 = !!(el && el.closest('h2') === h2);
+
+  setTab(cn);                       // 复位到默认 tab，别影响后续断言
+  out.resetToCn = el.textContent;
+  return out;
+}
+"""
+
+
+def assert_sector_asof(page, url: str) -> None:
+    """V-1~V-6 板块陈旧回填标注：tab-aware 文案 + 零增高 + 标注在 h2 内。"""
+    print("\n--- V 板块「数据截至」标注（陈旧回填）---")
+    try:
+        with urllib.request.urlopen(url + "api/latest", timeout=10) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        check(False, "V-1 读取 /api/latest（标注断言的期望值来源）", exc)
+        return
+    cn_as_of = payload["sector_heat"].get("as_of")
+    us_as_of = payload["us_sector_heat"].get("as_of")
+    cur = payload.get("date")
+    d = page.evaluate(ASOF_JS)
+    print(f"  api: date={cur} cn.as_of={cn_as_of} us.as_of={us_as_of}")
+    print(f"  cnText={d['cnText']!r} usText={d['usText']!r} "
+          f"h2={d['cnH2']}/{d['usH2']} card={d['cnCard']}/{d['usCard']} "
+          f"noLabelH2={d['usH2NoLabel']} h2ClientH={d['h2ClientH']} lineHeight={d['lineHeight']}")
+
+    check(d["labelInH2"], "V-1 标注 span 在 h2 内（零增高的前提）", d["labelInH2"])
+    # A股 tab：今天数据新鲜（as_of == date）→ 必须为空
+    check(d["cnText"] == "", "V-2 A股 tab 数据新鲜 → 标注为空", d["cnText"])
+    # 美股 tab：回看到 2026-09-13 → 必须显示（期望值直接取自 API，避免写死日期）
+    expected = ("· 数据截至 " + us_as_of) if (us_as_of and cur and us_as_of != cur) else ""
+    check(d["usText"] == expected and (us_as_of is None or d["usText"] != ""),
+          "V-3 美股 tab 显示「· 数据截至 <as_of>」（as_of 来自 API）",
+          (d["usText"], expected))
+    check(d["resetToCn"] == "",
+          "V-4 切回 A股 tab 后标注清空（radio change 监听生效）", d["resetToCn"])
+    check(d["usH2"] == d["cnH2"] and d["usCard"] == d["cnCard"]
+          and d["usH2"] == d["usH2NoLabel"] and d["usCard"] == d["usCardNoLabel"],
+          "V-5 标注零增高（h2 与 #us-sectors 高度都不变）",
+          (d["cnH2"], d["usH2"], d["usH2NoLabel"]))
+
+
+def assert_asof_narrow(page) -> None:
+    """375 档专项：长文案是否让 h2 换行（换行会 +~20px → 威胁护栏）。"""
+    print("\n--- V-7 375 档 h2 换行实测 ---")
+    d = page.evaluate(ASOF_JS)
+    print(f"  usText={d['usText']!r} h2ClientH={d['h2ClientH']} lineHeight={d['lineHeight']} "
+          f"h2={d['cnH2']}/{d['usH2']}")
+    check(d["h2ClientH"] is not None and d["lineHeight"] is not None
+          and d["h2ClientH"] <= d["lineHeight"] * 1.6,
+          "V-7 375 档 h2 未换行（单行：clientHeight ≈ line-height）",
+          (d["h2ClientH"], d["lineHeight"]))
+    check(d["cnH2"] == d["usH2"], "V-7b 375 档标注零增高", (d["cnH2"], d["usH2"]))
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -1486,6 +1578,18 @@ def main() -> int:
             assert_news(page, url)   # N-7 最新资讯（含 §7.2 要求的 #news DOM 实测）
             assert_polish(page, url)  # P-1~P-7 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）
             assert_us_table(page, browser, url)  # U-1~U-7 美股板块表格化（与 A股 同构）
+            assert_sector_asof(page, url)        # V-1~V-6 板块「数据截至」标注（陈旧回填）
+            try:                                 # 目视证据：美股 tab 的标注 + 真实回填数据
+                page.evaluate("() => { const r = document.getElementById('sector-tab-us');"
+                              " r.checked = true; r.dispatchEvent(new Event('change')); }")
+                page.wait_for_timeout(250)
+                page.locator("#us-sectors").screenshot(path=str(OUT_DIR / "shot-asof-us.png"))
+                page.evaluate("() => { const r = document.getElementById('sector-tab-cn');"
+                              " r.checked = true; r.dispatchEvent(new Event('change')); }")
+                page.wait_for_timeout(250)
+                page.locator("#us-sectors").screenshot(path=str(OUT_DIR / "shot-asof-cn.png"))
+            except Exception as exc:  # noqa: BLE001
+                print(f"  截图失败（不影响断言）: {exc}")
             assert_autoscroll(page, url, CFG_NEWS)      # A-* 最新资讯自动循环滚动
             assert_autoscroll(page, url, CFG_ALERTS)    # B-* 告警记录自动循环滚动
             for _cfg in (CFG_NEWS, CFG_ALERTS):
@@ -1571,6 +1675,7 @@ def main() -> int:
             page.set_viewport_size({"width": 375, "height": 812})
             page.goto(url, wait_until="load")
             page.wait_for_timeout(3500)
+            assert_asof_narrow(page)   # V-7 长文案在 375 档是否让 h2 换行（R1 护栏）
             # 抽屉：点击后必须等过渡（.25s）结束再读 transform，否则读到的是动画起始值
             mob_before = page.evaluate(
                 """() => {

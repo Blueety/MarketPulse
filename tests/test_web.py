@@ -465,8 +465,8 @@ def test_endpoints_empty_data(tmp_path, monkeypatch):
     lat = c.get("/api/latest").json()
     assert lat["date"] is None
     assert lat["indices"] == []
-    assert lat["sector_heat"] == {"gainers": [], "losers": []}
-    assert lat["us_sector_heat"] == {"gainers": [], "losers": []}
+    _assert_sector_empty(lat["sector_heat"])
+    _assert_sector_empty(lat["us_sector_heat"])
     assert c.get("/api/alerts").json() == []
 
 
@@ -832,18 +832,75 @@ def test_api_watchlist_fetch_raises_endpoint(client, monkeypatch):
 
 # ---- 板块热度双键（sector_heat / us_sector_heat）：纯函数 + 端点 ----
 
-def test_sector_payload_variants():
-    """_sector_payload：正常 / 单侧缺失 / 键缺失 / 非 dict / ctx None → 双空降级。"""
-    assert _sector_payload(
-        {"sector_heat": {"gainers": [{"name": "军工"}], "losers": []}}, "sector_heat"
-    ) == {"gainers": [{"name": "军工"}], "losers": []}
-    # gainers 为 None → 回落空列表；losers 保留
-    assert _sector_payload(
-        {"us_sector_heat": {"gainers": None, "losers": [{"name": "能源"}]}}, "us_sector_heat"
-    ) == {"gainers": [], "losers": [{"name": "能源"}]}
-    assert _sector_payload({}, "us_sector_heat") == {"gainers": [], "losers": []}
-    assert _sector_payload(None, "sector_heat") == {"gainers": [], "losers": []}
-    assert _sector_payload({"sector_heat": "bad"}, "sector_heat") == {"gainers": [], "losers": []}
+# ---- 逐键独立回看（2026-09-14 陈旧回填）：_sector_payload(key) 取代 (ctx, key) ----
+
+def _write_ctx(dirpath, date: str, **sectors) -> None:
+    """写一份 context 夹具：`_write_ctx(tmp, "2026-09-14", sector_heat={...})`。"""
+    (dirpath / f"{date}.json").write_text(
+        json.dumps({"date": date, "indices": {}, **sectors}), encoding="utf-8")
+
+
+def test_sector_payload_independent_lookback(tmp_path, monkeypatch):
+    """核心效果：两个键**各自**回看 —— 今天美股空、昨天有 → 美股回看到昨天，A股 用今天。"""
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    _write_ctx(tmp_path, "2026-09-13",
+               sector_heat={"gainers": [{"name": "军工"}], "losers": []},
+               us_sector_heat={"gainers": [{"name": "能源 (XLE)"}], "losers": []})
+    _write_ctx(tmp_path, "2026-09-14",
+               sector_heat={"gainers": [{"name": "消费"}], "losers": []},
+               us_sector_heat={"gainers": [], "losers": []})      # 今天美股取数失败
+
+    cn, us = _sector_payload("sector_heat"), _sector_payload("us_sector_heat")
+    assert cn["gainers"][0]["name"] == "消费" and cn["as_of"] == "2026-09-14"
+    assert us["gainers"][0]["name"] == "能源 (XLE)" and us["as_of"] == "2026-09-13"
+    assert cn["as_of"] != us["as_of"]                              # ← 本任务要达成的效果
+
+
+def test_sector_payload_lookback_limit(tmp_path, monkeypatch):
+    """超过 SECTOR_LOOKBACK_MAX 仍无数据 → 空 + as_of None（宁可空白，不展示过旧快照）。"""
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    for i in range(1, web.app.SECTOR_LOOKBACK_MAX + 1):            # 最新的 5 份都没有板块数据
+        _write_ctx(tmp_path, f"2026-09-{10 + i:02d}")
+    _write_ctx(tmp_path, "2026-09-10",                             # 第 6 份有数据 → 超上限，不该取到
+               sector_heat={"gainers": [{"name": "太旧"}], "losers": []})
+    assert _sector_payload("sector_heat") == {"gainers": [], "losers": [], "as_of": None}
+
+
+def test_sector_payload_skips_corrupt_newest(tmp_path, monkeypatch):
+    """最新文件坏 JSON → 跳过它继续回看（复用 _read_context_file 容错，不另写解析）。"""
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    (tmp_path / "2026-09-14.json").write_text("{bad json", encoding="utf-8")
+    _write_ctx(tmp_path, "2026-09-13",
+               us_sector_heat={"gainers": [{"name": "能源 (XLE)"}], "losers": []})
+    p = _sector_payload("us_sector_heat")
+    assert p["gainers"][0]["name"] == "能源 (XLE)" and p["as_of"] == "2026-09-13"
+
+
+def test_sector_payload_degrade_variants(tmp_path, monkeypatch):
+    """容错：目录不存在 / 键缺失 / 键非 dict → 空 + as_of None（不抛）。"""
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", Path("/nonexistent/context/dir"))
+    assert _sector_payload("sector_heat") == {"gainers": [], "losers": [], "as_of": None}
+
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    _write_ctx(tmp_path, "2026-09-14")                             # 无板块键
+    assert _sector_payload("sector_heat") == {"gainers": [], "losers": [], "as_of": None}
+    (tmp_path / "2026-09-14.json").write_text(
+        json.dumps({"date": "2026-09-14", "indices": {}, "sector_heat": "bad"}),
+        encoding="utf-8")                                          # 键存在但不是 dict
+    assert _sector_payload("sector_heat") == {"gainers": [], "losers": [], "as_of": None}
+
+
+def test_sector_payload_gainers_empty_means_no_data(tmp_path, monkeypatch):
+    """键在但 gainers 为空/None → 视为「该键当天无数据」→ 整键降级（不再单独保留 losers）。
+
+    ⚠️ 语义变化点（2026-09-14）：回看的有效性判据是 `key.gainers`（与 `_load_latest_context`
+    同口径），所以 gainers 为空时 losers 不再被单独保留。实测 `fetch_*_heat` 成功时两者必然
+    同时非空（都出自同一批结果），该组合只会出现在手写/异常数据里。
+    """
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", tmp_path)
+    _write_ctx(tmp_path, "2026-09-14",
+               us_sector_heat={"gainers": None, "losers": [{"name": "能源"}]})
+    assert _sector_payload("us_sector_heat") == {"gainers": [], "losers": [], "as_of": None}
 
 
 def test_api_latest_includes_us_sector_heat(tmp_path, monkeypatch):
@@ -878,6 +935,31 @@ def test_api_latest_includes_us_sector_heat(tmp_path, monkeypatch):
     assert [g["name"] for g in data["us_sector_heat"]["gainers"]] == ["能源 (XLE)", "公用事业 (XLU)"]
 
 
+def test_api_latest_sector_as_of_independent(tmp_path, monkeypatch):
+    """端点层：两个板块各自回看到**不同**日期 → 各自带 as_of（前端据此显示「数据截至」）。"""
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
+    st.init_db()
+    st.upsert_history_rows(st.records_to_rows([{"date": "2026-09-14", "gspc": 100.0}]))
+    monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path / "alerts")
+    ctx_dir = tmp_path / "context"
+    ctx_dir.mkdir()
+    _write_ctx(ctx_dir, "2026-09-13",                     # 美股只在这天成功
+               us_sector_heat={"gainers": [{"name": "能源 (XLE)"}], "losers": []})
+    _write_ctx(ctx_dir, "2026-09-14",                     # A股 今天成功、美股今天失败
+               sector_heat={"gainers": [{"name": "军工"}], "losers": []})
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", ctx_dir)
+
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/latest").json()
+    assert data["sector_heat"]["as_of"] == "2026-09-14"
+    assert data["us_sector_heat"]["as_of"] == "2026-09-13"
+    assert data["us_sector_heat"]["gainers"] == [{"name": "能源 (XLE)"}]
+    # as_of 只在响应里生成 → context 文件本身不被改写（不落盘）
+    written = json.loads((ctx_dir / "2026-09-14.json").read_text(encoding="utf-8"))
+    assert "as_of" not in written["sector_heat"]
+
+
 def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
     """context 无 us_sector_heat 键（旧格式）→ 该键降级双空，不影响 sector_heat。"""
     monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
@@ -897,7 +979,7 @@ def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
 
     data = TestClient(web.app.app).get("/api/latest").json()
     assert data["sector_heat"]["gainers"] == [{"name": "军工"}]
-    assert data["us_sector_heat"] == {"gainers": [], "losers": []}
+    _assert_sector_empty(data["us_sector_heat"])
 
 
 # ---- /api/macro：配置三级回退 + 容错 ----
