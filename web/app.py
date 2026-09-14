@@ -34,6 +34,8 @@ from src.config import load_config
 # 定义在使用方 web.app——monkeypatch 打这里，测试隔离不依赖真实 data/ 文件）
 NEWS_FILE = Path(__file__).resolve().parent.parent / "data" / "news.json"
 from src.fetcher import SYMBOLS, fetch_watchlist
+# 经济数据（BLS）：模块级导入，测试 monkeypatch 打使用方 web.app（与既有纪律一致）
+from src.econ_fetcher import build_econ_payload, fetch_econ_series
 
 log = logging.getLogger("marketpulse")
 
@@ -559,6 +561,14 @@ _MACRO_TTL = 90  # 秒，与自选股 TTL 同量级
 _macro_cache: dict = {"ts": 0.0, "payload": None}
 _macro_lock = threading.Lock()
 
+# 经济数据（BLS）TTL 缓存。
+# ⚠️ **必须**是小时级，不能"对齐 /api/macro 的 90s"：BLS 无 Key 限额 **25 次查询 / 日 / IP**，
+#   90s TTL → 一天最多 960 次 → 必然超限（返回 REQUEST_NOT_PROCESSED）。6h → 一天 ≤4 次。
+#   经济数据是**月度**的，6 小时完全不影响新鲜度。改小之前先读 docs/pitfalls.md。
+_ECON_TTL = 6 * 3600  # 秒
+_econ_cache: dict = {"ts": 0.0, "payload": None}
+_econ_lock = threading.Lock()
+
 
 def _load_macro_stocks() -> list[dict]:
     """宏观标的配置：env MACRO_STOCKS（JSON）> config.json 的 macro.stocks > 内置默认。
@@ -738,6 +748,26 @@ def api_macro() -> dict:
         with _macro_lock:
             _macro_cache["ts"] = time.time()
             _macro_cache["payload"] = fresh
+    return fresh
+
+
+@app.get("/api/econ")
+def api_econ() -> dict:
+    """经济数据（BLS：CPI-U / PPI / 失业率 / 非农）+ 四象限（长 TTL 缓存）。
+
+    **只缓存成功结果**：`as_of` 为空的降级结构不写缓存 —— 否则一次网络抖动会锁死 6 小时。
+    失败降级返回空结构，HTTP 200 恒定（不 500），前端显示「数据暂缺」。
+    """
+    now = time.time()
+    with _econ_lock:
+        cached = _econ_cache["payload"]
+        if cached is not None and (now - _econ_cache["ts"]) < _ECON_TTL:
+            return cached
+    fresh = build_econ_payload(fetch_econ_series())
+    if fresh.get("as_of"):
+        with _econ_lock:
+            _econ_cache["ts"] = time.time()
+            _econ_cache["payload"] = fresh
     return fresh
 
 
