@@ -506,9 +506,13 @@ FIDELITY_JS = r"""
 () => {
   const q = (s) => document.querySelector(s);
   const navBad = [];
+  let macroHref = null;
   document.querySelectorAll('#sidebar .nav-item').forEach(function (el) {
     const t = el.getAttribute('data-target');
+    const href = el.getAttribute('href') || '';
     if (t) { if (!document.getElementById(t)) navBad.push(el.textContent.trim() + '→' + t); }
+    // 跨页链接（2026-09-14 宏观页）：href 以 / 开头 = 路由跳转，不是页内锚点 → 合规
+    else if (href.charAt(0) === '/') { if (href === '/macro') macroHref = href; }
     else if (!el.classList.contains('is-disabled')) navBad.push(el.textContent.trim());
   });
   const c = window.Chart && window.Chart.getChart(document.getElementById('chart-main'));
@@ -528,6 +532,7 @@ FIDELITY_JS = r"""
     navCount: document.querySelectorAll('#sidebar .nav-item').length,
     navDisabled: document.querySelectorAll('#sidebar .nav-item.is-disabled').length,
     navBad: navBad,
+    macroHref: macroHref,
     flagUs: document.querySelectorAll('#overview .ico.ico-flag-us').length,
     flagCn: document.querySelectorAll('#overview .ico.ico-flag-cn').length,
     flagImgs: document.querySelectorAll('#overview .ico-flag-img').length,
@@ -566,8 +571,11 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
           "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
           (f["flagUs"], f["flagCn"], f["flagImgs"]))
-    check(f["navCount"] == 10 and f["navDisabled"] == 3 and not f["navBad"],
-          "F-5 nav=10 项（7 真实+3 占位）且 data-target 全命中", f)
+    # F-5 nav=10 项：7 个页内锚点 + 1 个**跨页链接**（宏观数据 → /macro，2026-09-14 新增）
+    #     + 2 个占位（市场日历 / 设置）。判据同步自「7+3 占位」→「7+1 跨页+2 占位」。
+    check(f["navCount"] == 10 and f["navDisabled"] == 2 and not f["navBad"]
+          and f["macroHref"] == "/macro",
+          "F-5 nav=10（7 锚点 + 1 跨页 /macro + 2 占位）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
