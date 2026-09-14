@@ -933,15 +933,94 @@ def _breach_item(alert: dict) -> dict:
         "threshold": alert["threshold"],
         "level": alert["level"],
     }
+
+
+def _load_prev_context(date: str) -> dict | None:
+    """读当日 context（合并语义用）。不存在 / 坏 JSON / 非对象 → None（容错，不抛异常）。"""
+    path = CONTEXT_DIR / f"{date}.json"
+    try:
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log.warning("读取旧 context 失败（%s），退化为全量写: %s", path, exc)
+        return None
+    if not isinstance(data, dict):
+        log.warning("旧 context 非对象（%s），退化为全量写", path)
+        return None
+    return data
+
+
+def _prev_sector(prev: dict, key: str):
+    """旧 context 的 {gainers, losers} → 入参元组 (gainers, losers)；缺失/非 dict → None。"""
+    entry = prev.get(key)
+    if not isinstance(entry, dict):
+        return None
+    return (entry.get("gainers") or [], entry.get("losers") or [])
+
+
+def _merge_market_inputs(values: dict, changes: dict, statuses: dict, prev: dict):
+    """把旧 context 的 indices 合并回本次输入（仅回填「本次 values 里没有的 sym」）。
+
+    键存在 = 本次覆盖范围（取数失败写 None 也覆盖）；键不存在 = 本次不管 → 保留旧值。
+    磁盘只存 status 标签（不存 desc），故 statuses 只能回填 label（desc 置空）。
+    """
+    idx = prev.get("indices")
+    if not isinstance(idx, dict):
+        return values, changes, statuses
+    values, changes, statuses = dict(values), dict(changes), dict(statuses)
+    for sym in SYMBOLS:
+        if sym in values:
+            continue
+        item = idx.get(sym)
+        if not isinstance(item, dict):
+            continue
+        values[sym] = item.get("value")
+        changes[sym] = item.get("change_pct")
+        if item.get("status") is not None:
+            statuses[sym] = (item["status"], "")
+    return values, changes, statuses
+
+
 def generate_context(date: str, values: dict, changes: dict, statuses: dict,
-                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None, watchlist=None) -> "Path":
+                     last_values: dict, sector_heat=None, us_sector_heat=None, correlations=None, watchlist=None,
+                     merge: bool = False) -> "Path":
     """生成 Hermes 上下文 context/YYYY-MM-DD.json（临时文件 + os.replace 原子写）。
 
     须在 append_history 之后调用（history_30d 才含当日）；不吞异常，由调用方 try/except
-    兜底（决策 E）。返回写入路径。"""
+    兜底（决策 E）。返回写入路径。
+
+    merge=True（盘中快照专用）：先把旧 context 的 indices 合并回 values/changes/statuses
+    （本次未取的 sym 保留旧值），再重算 breach / search_keywords —— 否则按市场子集取数的
+    快照会把当天其它市场的数据抹掉。merge 默认 False（daily_report 全量写，行为不变）。
+    """
+    prev = _load_prev_context(date) if merge else None
+    if prev:
+        # 合并必须在 collect_breaches / build_search_keywords 之前：派生字段须基于合并后的 values
+        values, changes, statuses = _merge_market_inputs(values, changes, statuses, prev)
+        if sector_heat is None:
+            sector_heat = _prev_sector(prev, "sector_heat")
+        if us_sector_heat is None:
+            us_sector_heat = _prev_sector(prev, "us_sector_heat")
     rows = load_history()                      # 单次读（原两次）；动态窗口须排除候选当日
     breaches = collect_breaches(values, last_values, [r for r in rows if r.get("date") != date])
     history = rows[-TREND_DAYS:]               # 含当日，既有语义不动
+    # 合并语义下：本次未提供（None）→ 保留旧 payload 值（correlation 已过滤 / watchlist 已映射，
+    # 不做二次加工）；非 None（含空 list）→ 按本次重建。
+    correlation_payload = (
+        [
+            {"a": c["a"], "b": c["b"], "pair": c["pair"], "r": c["r"], "n": c["n"]}
+            for c in correlations
+            if c.get("r") is not None and abs(c["r"]) > CORRELATION_SIGNIFICANT
+        ]
+        if correlations is not None
+        else (prev.get("correlation", []) if prev else [])
+    )
+    watchlist_payload = (
+        _watchlist_context(watchlist)
+        if watchlist is not None
+        else ((prev.get("watchlist") or _watchlist_context(None)) if prev else _watchlist_context(None))
+    )
     payload = {
         "date": date,
         "indices": {
@@ -978,12 +1057,8 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "losers": (us_sector_heat or ([], []))[1],
         },
         "search_keywords": build_search_keywords(date, breaches, sector_heat),
-        "correlation": [
-            {"a": c["a"], "b": c["b"], "pair": c["pair"], "r": c["r"], "n": c["n"]}
-            for c in (correlations or [])
-            if c.get("r") is not None and abs(c["r"]) > CORRELATION_SIGNIFICANT
-        ],
-        "watchlist": _watchlist_context(watchlist),
+        "correlation": correlation_payload,
+        "watchlist": watchlist_payload,
     }
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"{date}.json"

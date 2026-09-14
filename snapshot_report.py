@@ -80,8 +80,9 @@ def main(market: str = "us", time: str = "noon") -> int:
             if val is not None and prev is not None and prev != 0:
                 changes[sym] = (val - prev) / prev * 100
         statuses = build_statuses(values, errors, last_values, history)
+        # merge=True：本市场子集写回时保留同日其它市场数据（勿把 None 转成 []，[] 会被判为"要覆盖"）
         generate_context(date, values, changes, statuses, last_values,
-                         sector_heat=sector_heat if sector_heat else [])
+                         sector_heat=sector_heat, merge=True)
         log.info("context 已更新: context/%s.json", date)
     except Exception as exc:
         log.warning("context 更新失败，不影响快照: %s", exc)

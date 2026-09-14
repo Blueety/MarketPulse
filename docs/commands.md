@@ -17,6 +17,8 @@
 | `venv/Scripts/python scripts/migrate_to_sqlite.py [--db PATH]` | 一次性迁移 history.json → SQLite（幂等重跑；`--db` 可演练） | 存储层切换 / 数据校验 |
 | `venv/Scripts/python scripts/backup_db.py [--db] [--backup-dir]` | 按月导出 history 备份（当月覆盖/历史月冻结） | daily 后自动执行；手动补备份 |
 | `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` | 独立重渲染日报图片（Hermes 追加 AI 解读后重渲染含解读图）；依赖 imgkit + 本地 wkhtmltoimage（先 `pip install -r requirements.txt` 装 imgkit，再 winget 装 wkhtmltopdf）；失败仅退出码非 0，不影响日报 md | 改了 `src/image_renderer.py` / 模板 / 重渲染入口后 |
+| `venv/Scripts/python -m pytest tests/test_phase26.py -v` | 自动提交（`src/git_ops.py`）行为单测（**16 条**）：env 门控 / 无改动跳过 / commit message 格式 / 代理注入不污染 env / 失败不抛异常 / **路径白名单实参 + status 同范围 + 源码 WIP 不触发提交 + `reports` 不入列 + 忽略文件不触发** | 改了 `src/git_ops.py` 后 |
+| `git status --porcelain -- data context alerts` | 与 `git_ops._has_changes` **同口径**：查看"哪些改动会被自动提交"（源码/测试/文档改动**不该**出现在输出里） | 排查"改动没进 commit" / 核对自动提交范围 |
 
 ## 完整检查
 

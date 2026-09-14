@@ -215,6 +215,7 @@ Web 看板（独立进程，只读）：
 | **资讯所有权** | `context/*.json` 只归 Python；`data/news.json` 只归 Hermes —— 双写者互不越界 |
 | **Web 零写盘** | 看板进程绝不写任何数据文件 |
 | **cron 自动提交** | 默认开启（`AUTO_PUSH=0` 关）；无改动跳过；失败仅记日志、退出码恒 0 |
+| **自动提交范围** | **路径白名单** `data/` `context/` `alerts/`（`src/git_ops._DATA_PATHS`）；**禁 `-A` / `--all` / `.`**；`_has_changes` 与 `_commit` 必须同范围；`reports/` 因 `.gitignore:40` 排除而不得入列（否则 `git add` 直接 fatal） |
 
 ---
 
@@ -270,6 +271,7 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | **G4** | `src/image_renderer.py` 的 **15s 超时 / ≤800KB 尺寸守卫 / zoom 重试已在 `a536888` 删除，当前未实现** | 图片化推送缺乏超时与体积保护 | 按需恢复（见 `docs/architecture.md` §模块划分注） |
 | **G5** | 板块热度偶发取数失败（`us_sector_heat` 更脆弱） | 前端「数据暂缺」，静默降级不中断日报 | 已在任务队列中（见 §10） |
 | **G6** | 仓库根目录有开发残留：`_dbg_hist.json`、`_phase5_run.log`、`web_uvicorn.log`、`task brief.md`、`依赖初始化.md`、`初始prd.md` | 噪声；且外部 cron 的 `git add -A` 会把临时文件提交进仓库 | 清理并确认 `.gitignore` 覆盖 |
+| **G7** | **仓库外提交链仍是全量 `git add -A`**：Hermes cron「MarketPulse 自动推送GitHub」（`*/5`，`source=builtin`，id `6f6e40a6f8b4`）不受仓库代码约束（三十四期只收窄了 Python 侧三入口） | 仍会把工作区里的源码/测试/文档半成品扫进仓库；`git status` 失真、"改动像丢了" | 在该 cron 配置里限定路径（或停用 / 降频到每天 1 次）；首选改为「任务收尾由 Agent 显式提交」（见 `tasks/2026-09-14-autopush-scope/plan.md` §4.6） |
 
 ---
 

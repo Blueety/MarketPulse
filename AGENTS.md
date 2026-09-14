@@ -52,6 +52,7 @@
 - 保持 diff 最小，不重构无关代码。
 - 不引入新依赖，除非先说明理由并等待确认。
 - 不修改 `.env`、生产配置、生成文件。
+- **自动提交范围白名单**：`src/git_ops.py` 的自动提交只允许 `data/` `context/` `alerts/`（`_DATA_PATHS`），**禁止** `git add -A` / `--all` / `.`；`_has_changes` 与 `_commit` 必须**同范围**（否则源码 WIP 时误报 `Failed`）。`reports/` 被 `.gitignore` 排除 → 不得入列（否则 `git add` 直接 fatal，三入口数据提交全挂）。⚠️ 仓库外 Hermes 5 分钟 cron 仍是全量 `git add -A`（见 `docs/system-overview.md` §9 G7）→ **不要把写了一半的源码/文档留在工作区**；收尾请显式 `git add <具体文件>` 再提交。
 - 需求不清楚时先问，不要猜。
 - 每完成一个逻辑步骤后运行验证命令，不接受"应该可以"——必须实际运行验证命令。
 - 如有失败，先解释原因再修复，不要绕过问题。
