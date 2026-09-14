@@ -27,7 +27,10 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "venv" / "Scripts" / "python.exe"
 OUT_DIR = Path(os.environ.get("TEMP") or tempfile.gettempdir()) / "marketpulse-verify"
 
-VIEWPORTS = [(1920, 1080), (1280, 720), (375, 812)]
+# 2026-09-14（kpi-responsive-fix）：三视口 → 五视口。
+# ⚠️ 原 1920/1280/375 恰好**避开**两个坏带（1500–1919 五列无断点、769–1024 三列挤爆），
+#    所以脚本报全绿却漏掉了真实的响应式缺陷 —— 补 1600（空档 A）与 900（空档 B）。
+VIEWPORTS = [(1920, 1080), (1600, 900), (1280, 720), (900, 800), (375, 812)]
 
 FAILURES: list[str] = []
 
@@ -1248,6 +1251,96 @@ def assert_macro_page(browser, url: str) -> None:
         ctx2.close()
 
 
+# —— KY KPI 无静默截断（2026-09-14 kpi-responsive-fix 任务）——
+# ⚠️ 断的是**不变量**（"KPI 数值不得被省略号截断"），不是具体字号/断点数值 ——
+#    否则每调一次参数就要改一次断言，最后会变成"改断言让它变绿"（plan R2）。
+KPI_WIDTHS = [1920, 1760, 1600, 1500, 1440, 1366, 1280, 1100, 1024, 900, 800, 769]
+
+SCAN_JS = r"""
+() => {
+  const SEL = '.kpi-val, .kpi-sub, .kpi-label';
+  const bad = [];
+  document.querySelectorAll(SEL).forEach((e) => {
+    if (e.scrollWidth > e.clientWidth + 1) {
+      bad.push({ cls: (e.className || ''), text: e.textContent.trim(),
+                 need: e.scrollWidth, have: e.clientWidth });
+    }
+  });
+  // 其它 ellipsis 元素：**只报告不判失败**（便于逐步收敛）
+  // 显式排除 .news-item 内的元素 —— 它们是设计上就横向滚动（overflow-x:auto），不是缺陷
+  const others = [];
+  document.querySelectorAll('body *').forEach((e) => {
+    const cs = getComputedStyle(e);
+    if (cs.textOverflow !== 'ellipsis') return;
+    if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return;
+    if (e.matches(SEL) || e.closest('.news-item') || e.closest('.kpi-card')) return;
+    if (e.scrollWidth > e.clientWidth + 1) {
+      others.push({ cls: (e.className || e.tagName), text: e.textContent.trim().slice(0, 24) });
+    }
+  });
+  const kpi = document.querySelector('.row-kpi');
+  const card = document.querySelector('.kpi-card');
+  const val = document.querySelector('.kpi-val');
+  const spark = document.querySelector('.kpi-spark');
+  return {
+    bad: bad, others: others,
+    cols: kpi ? getComputedStyle(kpi).gridTemplateColumns.trim().split(/\s+/).length : null,
+    cardW: card ? Math.round(card.getBoundingClientRect().width) : null,
+    font: val ? getComputedStyle(val).fontSize : null,
+    sparkW: spark ? Math.round(spark.getBoundingClientRect().width) : null,
+    cardPad: card ? getComputedStyle(card).paddingLeft : null,
+  };
+}
+"""
+
+
+def assert_kpi_no_truncation(browser, url: str) -> None:
+    """KY-1~KY-3：跨 12 个宽度扫 KPI 是否被 `text-overflow: ellipsis` 静默截断。
+
+    单次页面加载 + 逐宽度 `set_viewport_size()`（媒体查询即时重算，不重新加载）。
+    输出各宽度的列数 / 卡宽 / 字号 / spark 宽，便于定稿 `clamp()` 系数与断点（plan §3.3 的模型校准）。
+    """
+    print("\n--- KY KPI 无静默截断（跨宽度扫描）---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    rows = []
+    other_hits: dict[str, list] = {}
+    try:
+        page = ctx.new_page()
+        page.goto(url, wait_until="load")
+        try:
+            page.wait_for_selector("#watchlist-section:not(.hidden)", timeout=25000)
+        except Exception:  # noqa: BLE001
+            pass
+        page.wait_for_timeout(1200)
+        for w in KPI_WIDTHS:
+            page.set_viewport_size({"width": w, "height": 900})
+            page.wait_for_timeout(200)
+            d = page.evaluate(SCAN_JS)
+            rows.append((w, d))
+            print(f"  W={w:<5} 列={d['cols']} 卡宽={d['cardW']} 字号={d['font']} "
+                  f"spark={d['sparkW']} 截断={len(d['bad'])}"
+                  + (f" 最严重={max(b['need'] - b['have'] for b in d['bad'])}px" if d["bad"] else ""))
+            if d["bad"]:
+                print(f"        例：{d['bad'][0]['cls']} {d['bad'][0]['text']!r} "
+                      f"need={d['bad'][0]['need']} have={d['bad'][0]['have']}")
+            if d["others"]:
+                other_hits[str(w)] = d["others"]
+        for w, d in rows:
+            check(not d["bad"],
+                  f"KY-1 W={w} KPI（数值/副标题/标签）无省略号截断",
+                  (len(d["bad"]), d["bad"][0] if d["bad"] else None))
+        # KY-2 其它 ellipsis 元素：只报告（不 fail），便于逐步收敛
+        if other_hits:
+            w0 = sorted(other_hits)[0]
+            print(f"  [报告] 其它 ellipsis 元素也出现截断（不判失败）：{other_hits[w0][:3]}")
+        check(True, "KY-2 其它 ellipsis 元素仅报告（设计上横滚的 .news-item 已排除）",
+              list(other_hits.keys())[:4])
+        # KY-3 扫描覆盖度：确认真的扫到了 12 个宽度（防"空扫描假绿"）
+        check(len(rows) == len(KPI_WIDTHS), "KY-3 扫描覆盖全部 12 个宽度", len(rows))
+    finally:
+        ctx.close()
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -1881,6 +1974,7 @@ def main() -> int:
             assert_viewport(375, 812, mob_card)
 
             assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
+            assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 
