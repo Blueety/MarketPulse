@@ -35,6 +35,10 @@ def fake_git(monkeypatch):
             "timeout": kw.get("timeout"),
         })
         if args[:2] == ["git", "status"]:
+            # 三十四期：`_has_changes` 改为路径限定（调用形如 git status --porcelain -- <paths>）。
+            # 仅当用例显式设置 status_stdout_paths 时才分流 → 既有 11 条用例行为完全不变。
+            if "--" in args and "status_stdout_paths" in state:
+                return _Completed(stdout=state["status_stdout_paths"])
             return _Completed(stdout=state["status_stdout"])
         if args[:2] == ["git", "push"]:
             if state["push_fail"] == "called":
@@ -177,3 +181,68 @@ def test_root_passed_as_cwd(monkeypatch, fake_git, tmp_path):
     git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
     for c in calls:
         assert c["cwd"] == str(tmp_path)
+
+
+# ---- 三十四期（2026-09-14）：自动提交范围收窄为路径白名单 ----
+# G1 内核：任何 cron 都不得把源码/测试/文档的半成品提交入库（原 `git add -A` 会扫走）。
+# 真实 git 行为证明见 tasks/2026-09-14-autopush-scope/plan.md §5.3 临时仓库冒烟。
+
+def test_add_uses_path_whitelist(monkeypatch, fake_git, tmp_path):
+    """add 必须按白名单逐路径，且**全程不得出现 `-A` / `--all` / `.`**（本方案核心护栏）。"""
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    state["status_stdout"] = " M data/history.json\n"
+    git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
+    add = next(c for c in calls if c["args"][1:2] == ["add"])
+    assert add["args"] == ["git", "add", *git_ops._DATA_PATHS]
+    for c in calls:
+        for bad in ("-A", "--all", "."):
+            assert bad not in c["args"][2:], f"出现全量提交实参 {bad!r}: {c['args']}"
+
+
+def test_status_limited_to_paths(monkeypatch, fake_git, tmp_path):
+    """status 必须与 add **同范围**（`--` 之后 == 白名单）—— 否则 R1 语义错标。"""
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    state["status_stdout"] = " M data/history.json\n"
+    git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
+    status = next(c for c in calls if c["args"][1:2] == ["status"])
+    assert "--" in status["args"]
+    assert status["args"][status["args"].index("--") + 1:] == list(git_ops._DATA_PATHS)
+
+
+def test_source_wip_does_not_trigger_commit(monkeypatch, fake_git, tmp_path):
+    """G1 核心：只有源码 WIP（白名单路径内无变更）→ 返回 False、零 commit / 零 push。
+
+    `status_stdout` 模拟**旧实现的全量口径**（有源码改动），`status_stdout_paths` 模拟
+    收窄后口径（空）→ 若有人把 `_has_changes` 改回全量，本用例立刻红。
+    """
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    state["status_stdout"] = " M web/static/app.js\n"
+    state["status_stdout_paths"] = ""
+    assert git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path) is False
+    assert not _has_call(calls, "commit")
+    assert not _has_call(calls, "push")
+
+
+def test_reports_not_in_whitelist():
+    """`reports/` 被 .gitignore:40 排除 → 不得进白名单（`git add reports` 会直接抛
+    CalledProcessError → 三个入口的数据提交全部失败，且只打一行日志极易漏看，R2）。"""
+    assert "reports" not in git_ops._DATA_PATHS
+    # 白名单变更必须是有意为之：改这一行即需复核 plan §4.6 / R2
+    assert set(git_ops._DATA_PATHS) == {"data", "context", "alerts"}
+
+
+def test_ignored_only_change_skips(monkeypatch, fake_git, tmp_path):
+    """仅被忽略文件变化（如 data/marketpulse.db / -wal）→ porcelain 不可见 → 跳过提交（幂等）。
+
+    真实 git 下"忽略文件不进 porcelain"由 §5.3 冒烟另证（本文件纪律：零真实 git）。
+    """
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    state["status_stdout"] = ""            # 全量口径下也为空（忽略文件本就不可见）
+    state["status_stdout_paths"] = ""
+    assert git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path) is False
+    assert not _has_call(calls, "add")
+    assert not _has_call(calls, "commit")

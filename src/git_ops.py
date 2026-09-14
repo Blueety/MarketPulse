@@ -6,8 +6,12 @@ add + commit + push 到 origin/master，确保 Railway 部署与最新数据同�
 
 设计要点（见 tasks/2026-09-02-marketpulse-cron-autopush/plan.md §3）：
 - 纯 stdlib（logging/os/subprocess/pathlib），零新依赖（NF1）。
+- **提交范围 = 路径白名单 `_DATA_PATHS`（data / context / alerts），禁止 `-A` / `--all` / `.`**：
+  `git add -A` 会扫走工作区里正在写的源码/测试/文档半成品（2026-09-14 实测被外部 cron 多次
+  扫走，见 tasks/2026-09-14-autopush-scope/plan.md §3.2）。`_commit` 与 `_has_changes` 必须
+  **同范围** —— 只收窄 add 不收窄 status，会让"仅源码 WIP"时日志误报 `Failed`、返回值语义错标。
 - 开关：env AUTO_PUSH == "0" 时完全跳过，返回 False 且零子进程（默认开启）。
-- 无改动（git status --porcelain 为空）跳过，幂等（NF3）。
+- 无改动（`git status --porcelain -- <白名单>` 为空）跳过，幂等（NF3）。
 - push 经 Clash 代理（http_proxy/https_proxy=http://127.0.0.1:7890），仅注入 push
   子进程 env 副本，不污染 os.environ（F3）。
 - 每步 subprocess 带 timeout；失败仅 print 日志、返回 False、不抛异常——cron 重试
@@ -30,16 +34,27 @@ _STATUS_TIMEOUT = 15
 _COMMIT_TIMEOUT = 30
 _PUSH_TIMEOUT = 120
 
+# 自动提交范围白名单（三十四期，2026-09-14）：只有本次运行会产出的数据目录可被自动入库。
+# - `reports/` **有意排除**：它被 .gitignore:40 排除，而 gitingore 命中的路径**不能**作 `git add`
+#   的显式 pathspec（会直接抛 `The following paths are ignored…` → 三个入口的数据提交全挂）。
+# - 顺序即 `git add` 的实参顺序，测试 test_add_uses_path_whitelist 钉死。
+_DATA_PATHS: tuple[str, ...] = ("data", "context", "alerts")
+
 
 def _enabled() -> bool:
     """AUTO_PUSH 未设置或 ≠ "0" 时启用（默认开启）。"""
     return os.environ.get("AUTO_PUSH", "") != "0"
 
 
-def _has_changes(root: Path) -> bool:
-    """工作区存在未提交变更（git status --porcelain 非空）。"""
+def _has_changes(root: Path, paths: tuple[str, ...] = _DATA_PATHS) -> bool:
+    """**目标路径内**存在未提交变更（`git status --porcelain -- <paths>` 非空）。
+
+    必须与 `_commit` 的 add 同范围（R1）：若此处全量、add 收窄，则"只有源码 WIP"时会判定
+    "有改动" → add 无可暂存内容 → commit 报 nothing to commit → 日志出现误导性
+    `[auto-push] Failed`，且返回值语义从"数据没变"错标成"提交失败"。
+    """
     result = subprocess.run(
-        ["git", "status", "--porcelain"],
+        ["git", "status", "--porcelain", "--", *paths],
         cwd=str(root),
         capture_output=True,
         text=True,
@@ -48,10 +63,14 @@ def _has_changes(root: Path) -> bool:
     return bool(result.stdout.strip())
 
 
-def _commit(root: Path, date_str: str, report_type: str) -> None:
-    """git add -A + git commit -m "auto: {date} {type}"。"""
+def _commit(root: Path, date_str: str, report_type: str, paths: tuple[str, ...] = _DATA_PATHS) -> None:
+    """`git add <白名单路径>` + `git commit -m "auto: {date} {type}"`。
+
+    **禁止** `-A` / `--all` / `.`（全量会把源码/测试/文档半成品一并入库）；
+    范围由 tests/test_phase26.py::test_add_uses_path_whitelist 钉死。
+    """
     msg = f"auto: {date_str} {report_type}"
-    subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
+    subprocess.run(["git", "add", *paths], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
     subprocess.run(["git", "commit", "-m", msg], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
 
 
