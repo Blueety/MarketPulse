@@ -1551,6 +1551,10 @@ def assert_macro_crosshair(browser, url: str) -> None:
         # ⚠️ 胶囊的 `data-pick` 用的是 PICKS 里的键：黄金 `gc=f`（**无 `^`**）、10Y `^tnx`（有 `^`）
         g = probe(0.5, "gc=f")
         print(f"  gold:   label={g.get('label')!r} axis={g.get('axisValue')}")
+        try:   # 目视证据：横线 + 轴端读数气泡（不参与断言）
+            page.locator("#macro-chart-wrap").screenshot(path=str(OUT_DIR / "shot-macro-crosshair.png"))
+        except Exception as exc:  # noqa: BLE001
+            print(f"  截图失败（不影响断言）: {exc}")
         check(g.get("label") and "%" not in g["label"] and g["label"].startswith("$")
               and abs((num(g["label"]) or 0) - (g.get("axisValue") or 0)) < 0.005,
               "XC-2 单变量·黄金读数 = 真实价 + $（不是 +4286.6%）", (g.get("label"), g.get("axisValue")))
