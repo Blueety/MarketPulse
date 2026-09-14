@@ -56,11 +56,23 @@
 - **0.2（是否有意兜底 Agent 产出）**：**事实上**在兜底（§3.2 证据：`docs/pitfalls.md`、`tasks/*/journal.md`、`tests/conftest.py`）。是否"有意"**需用户确认**；未确认前按 plan 默认"是"处理（保留一条全量兜底链）。
 - **仍未确认（需用户执行）**：cron 的命令/路径配置不可读 → **步骤 5 必须由用户处置**。
 
-## 6. 未运行的检查（如实标注）
+## 6. 外部 cron 验收（用户改完后由本会话实测，2026-09-14 23:33–23:35）
 
-- ❌ **未做真实 push 验证**：会触发 Railway 重部署 + 抢提交 → 由下一次外部 cron 自然发生时观察 `git log` 确认。
-- ❌ **未验证 Hermes cron 配置变更后的行为**：仓库外配置，本进程读不到 → 依赖用户执行并观测。
-- ⚠️ **仓库外链仍是全量 `git add -A`**（`docs/system-overview.md` §9 G7）：在用户处置前，**G1 只对 Python 侧三入口成立**。
+Hermes 改完 `6f6e40a6f8b4` 的 prompt 后，按 plan §5.4 在本仓库实跑验收（**不采信"应该可以"**）：
+
+| 方向 | 做法 | 实测结果 |
+|---|---|---|
+| **负向（G1）** | 在 `web/static/app.js` 末尾追加探针注释 → `hermes cron run --accept-hooks 6f6e40a6f8b4` | 该 WIP **未被提交**：`git status --porcelain -- web/static/app.js` 恒为 ` M`；当时白名单范围为空 → 无新提交（旧行为会把它卷进去） |
+| **正向（G2）** | 在白名单内造惰性文件 `alerts/_autopush_probe.md` → 再次触发 | 产生提交 **`4084f0c`**，文件清单**只含** `alerts/_autopush_probe.md` + `context/2026-09-03.json`，**不含** app.js → 数据同步照常、源码仍被排除 |
+| 频率 | `hermes cron list` | 仍为 `*/5` ✓（数据新鲜度未劣化） |
+| 清理 | 删除探针 + `git checkout -- web/static/app.js` | 已恢复（探针删除落在白名单内，由下一次调度自动提交） |
+
+**结论：G1 在整条链上成立**（仓库内 Python 侧 + 仓库外 cron），`docs/system-overview.md` §9 G7 已标注解决。
+
+## 7. 未运行的检查（如实标注）
+
+- ❌ **未在本仓库主动跑一次"三入口 push"验证**：会触发 Railway 重部署 + 与 cron 抢提交。外部 cron 侧已通过 §6 的真实提交（`4084f0c`）间接验证到 push 链路可用。
+- ✅ **外部 cron 行为已验证**：见 §6（原本计划依赖"用户执行并观测"，实际由本会话实测完成）。
 
 ## 7. 下次注意
 
