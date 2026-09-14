@@ -1154,6 +1154,14 @@ def assert_macro_page(browser, url: str) -> None:
               resp.status if resp else None)
         page.wait_for_timeout(3500)          # /api/macro 冷启动 ~2.2s + /api/econ
         d = page.evaluate(MACRO_JS)
+        # /api/econ 依赖**外部 BLS**：瞬时失败时页面会显示「数据暂缺」（端点按设计不缓存失败结果）。
+        # ⚠️ 这里**只重试一次**（重载会再次触发取数）—— 判据不放松（仍要求显示「YYYY年M月」），
+        #    只是不把外部 API 的一次网络抖动判成页面缺陷（实测 2026-09-14 遇到过 1 次）。
+        if not (d["econAsOf"] and "年" in d["econAsOf"]):
+            print("  [retry] /api/econ 首次返回空（外部 BLS 瞬时失败）→ 重载一次再测")
+            page.reload(wait_until="load")
+            page.wait_for_timeout(3500)
+            d = page.evaluate(MACRO_JS)
         print(f"  level={d['level']!r} quadrant={d['quadrant']!r} score={d['score']!r} "
               f"factors={d['factorCount']}")
         print(f"  canvas={d['canvasBitmapW']}x{d['canvasBitmapH']} css={d['canvasCssW']}x{d['canvasCssH']} "
