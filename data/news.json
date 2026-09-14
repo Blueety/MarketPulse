@@ -1,12 +1,26 @@
 {
-  "date": "2026-09-03",
+  "date": "2026-09-14",
   "items": [
     {
-      "title": "10年期美债收益率冲破5%！“预言家”警告：抛售还没结束",
-      "url": "https://wallstreetcn.com/articles/3781729",
+      "title": "对冲基金刚刚重建科技多头，纳斯达克关键支撑却已开始松动",
+      "url": "https://wallstreetcn.com/articles/3781730",
       "source": "华尔街见闻",
-      "published": "2026-09-14",
-      "summary": "美国国债遭遇新一轮猛烈抛售，10年期收益率周一突破5%关口，创2023年以来新高，通胀忧虑与供给压力形成共振，令全球债市承压"
+      "published": "2026-09-15",
+      "summary": "纳斯达克100指数（NDX）正逼近持续数月的震荡区间下沿"
+    },
+    {
+      "title": "欧盟天然气价格创2022年底以来新高，低库存背景下冬季寒潮将引发价格冲击",
+      "url": "https://wallstreetcn.com/articles/3781727",
+      "source": "华尔街见闻",
+      "published": "2026-09-15",
+      "summary": "欧洲天然气市场正面临自2022年俄乌冲突爆发初期以来最为严峻的供应压力"
+    },
+    {
+      "title": "特朗普抨击Anthropic CEO：AI发展不能踩刹车，美国有“高智商总统”就足够",
+      "url": "https://wallstreetcn.com/articles/3781728",
+      "source": "华尔街见闻",
+      "published": "2026-09-15",
+      "summary": "特朗普公开抨击Anthropic首席执行官Dario Amodei呼吁放缓AI发展的立场，将业界日益高涨的安全警告定性为\"阴谋\"，并重申美国领先优势不容动摇"
     },
     {
       "title": "美国通胀及就业数据支持本周加息– Market Outlook",
@@ -16,13 +30,6 @@
       "summary": "美国通胀及就业数据支持本周加息– Market Outlook"
     },
     {
-      "title": "集体踩刹车，微软加入OpenAI、Anthropic，表态放缓AI前沿开发",
-      "url": "https://wallstreetcn.com/articles/3781726",
-      "source": "华尔街见闻",
-      "published": "2026-09-14",
-      "summary": "微软发布了一份针对旗下人工智能模型的临时行为准则，明确设定多项限制，成为继三巨头之后，最新一家公开表态放缓AI前沿开发步伐的科技巨头"
-    },
-    {
       "title": "一张表看懂！华尔街“彻底信了”：美联储本周加息",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBwcWs3b3ppTWlqZWdHRDRMbkJUeEtkeTN1bXFuLVhLMjY1MUxwdE9RWkJiWGE3bk5QWHVRZkE0UVNoUFlUZERhRw?oc=5",
       "source": "财联社",
@@ -30,18 +37,18 @@
       "summary": "一张表看懂。华尔街“彻底信了”：美联储本周加息"
     },
     {
-      "title": "AI开发放缓担忧升温，美股低开，费城半导体指数跌6%，10年期美债收益率三年来首破5%，布油涨...",
-      "url": "https://wallstreetcn.com/articles/3781670",
-      "source": "华尔街见闻",
-      "published": "2026-09-14",
-      "summary": "AI巨头联手呼吁放慢前沿模型开发节奏，叠加油价飙升重燃通胀忧虑，全球股市承压"
-    },
-    {
       "title": "二十年一遇！美欧日三大央行将同步加息 这意味着什么？",
       "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9xSjh3UGFZSVI5bXczYWphenU5VWFKNDBrUmFyWS1OdG5jd2Vla3BQWE51ekVMNnZIQWxURkNBZFg1eFlLVzRZaW5xckM2TGs3WnlSclltSkVtc0RLMGs1YQ?oc=5",
       "source": "东方财富",
       "published": "2026-09-14",
       "summary": "二十年一遇。美欧日三大央行将同步加息 这意味着什么"
+    },
+    {
+      "title": "红海局势再度升温，胡塞武装大规模袭击沙特空军基地",
+      "url": "https://wallstreetcn.com/articles/3781724",
+      "source": "华尔街见闻",
+      "published": "2026-09-14",
+      "summary": "也门胡塞武装对沙特阿拉伯核心军事设施发动大规模导弹与无人机袭击，叠加沙特东西输油管道遭受重创，全球能源供应面临多重冲击，油价应声急涨"
     },
     {
       "title": "一片“连续加息”声中，特朗普要求美联储降息：美国应拥有全球最低利率",
