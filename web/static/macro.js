@@ -113,32 +113,10 @@
     return "";
   }
 
-  function cssVar(name, fallback) {
-    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
-    v = (v || "").trim();
-    return v || fallback;
-  }
-
-  // 颜色降 alpha（图表"次要序列"用）：token 可能是 #rrggbb / #rgb / rgb() / rgba()
-  function withAlpha(color, a) {
-    var c = (color || "").trim();
-    var m = c.match(/^#([0-9a-f]{6})$/i);
-    if (m) {
-      var n = parseInt(m[1], 16);
-      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
-    }
-    m = c.match(/^#([0-9a-f]{3})$/i);
-    if (m) {
-      var h = m[1], r3 = parseInt(h[0] + h[0], 16), g3 = parseInt(h[1] + h[1], 16), b3 = parseInt(h[2] + h[2], 16);
-      return "rgba(" + r3 + "," + g3 + "," + b3 + "," + a + ")";
-    }
-    m = c.match(/^rgba?\(([^)]+)\)$/i);
-    if (m) {
-      var p = m[1].split(",");
-      if (p.length >= 3) return "rgba(" + p[0].trim() + "," + p[1].trim() + "," + p[2].trim() + "," + a + ")";
-    }
-    return c;   // 兜底：宁可不变淡，也不要把线变成透明/黑色
-  }
+  // ⚠️ 2026-09-14（macro-chart-crosshair）：本文件原先自带 `cssVar` / `withAlpha` 两份实现，
+  //    现已随 crosshair 插件一起收敛到 `/static/chart-crosshair.js`（首页 + 宏观页共用）。
+  //    此处继续裸调用同名函数 —— 它们是 window 上的全局函数，调用点零改动。
+  //    （口径按 app.js 原实现统一：只处理 hex，其它形式原样返回；本页 `--c-*` token 全是 hex，行为不变。）
 
   // ---- 主题 / 抽屉 / 市场状态（与 app.js 同口径；见文件头注释）----
   function getTheme() {
@@ -276,6 +254,22 @@
     return arr.map(function (v) { return (v == null || !isFinite(v)) ? null : (v / base) * 100; });
   }
 
+  // ---- 悬停横向参考线的读数口径（2026-09-14 macro-chart-crosshair）----
+  // ⚠️ 陷阱 1：**不能复用首页的 fmtAxisPct** —— 它输出"相对 100 的偏离百分比"（(v-100)+'%'），
+  //    而本页单变量模式的 y 轴是**真实价格**：黄金 4386.60 会被读成 `+4286.6%`（页面不报错，数字荒谬）。
+  // ⚠️ 陷阱 2：传入的 v **已经是显示值**（建数据集时走过 `normalize()` / `displayValue()`）→
+  //    **绝对不能再调一次 `displayValue(k, v)`**，否则 ^tnx 会被 `toYieldDisplay` 除两次（4.987 → 0.4987）。
+  //    正确做法：直接格式化 v，只补单位。
+  function macroCrosshairFormatter(v) {
+    if (v == null || !isFinite(v)) return "—";
+    if (state.pick === "__all__") return fmt(v, 2);        // 全部对比：起点 = 100 的指数，纯数字
+    var k = state.pick;                                     // 单变量：真实价 + 品种单位
+    var u = unitOf(k);
+    var digits = k === "^tnx" ? 3 : 2;                      // 收益率 3 位小数（与 tooltip 一致）
+    var s = fmt(v, digits);
+    return u === "$" ? u + s : s + u;                       // $ 在数值前，% 在后
+  }
+
   function showChartFail(msg) {
     var canvas = el("macro-chart");
     var fail = el("macro-chart-fail");
@@ -347,6 +341,11 @@
     state.chart = new window.Chart(canvas, {
       type: "line",
       data: { labels: win.dates, datasets: datasets },
+      // 悬停水平参考线：插件实现与首页共用（chart-crosshair.js），用工厂产出**实例级**插件对象
+      // 以注入本页读数口径（不 Chart.register，避免影响别的图表）。
+      // ⚠️ 不能写成 `options.plugins.hoverCrosshair = { formatter }` —— Chart.js 会把插件选项里的
+      //    函数值当 scriptable option **立即调用**（实测抛 Cannot convert object to primitive value）。
+      plugins: [window.makeHoverCrosshair({ formatter: macroCrosshairFormatter })],
       options: {
         responsive: true,
         maintainAspectRatio: false,          // ★ C2：容器高度由 CSS 给，不能让 canvas 自撑

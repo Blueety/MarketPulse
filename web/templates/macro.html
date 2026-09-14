@@ -117,6 +117,9 @@
       </div>
     </main>
   </div>
+  <!-- ⚠️ 必须在 macro.js **之前**：crosshair 插件（与首页共用）挂载时读 window.hoverCrosshair，
+       顺序错会变成 plugins:[undefined] → 被 Chart.js 静默忽略（横线不出现且 console 不报错） -->
+  <script src="/static/chart-crosshair.js?v={{ asset_v }}"></script>
   <script src="/static/macro.js?v={{ asset_v }}"></script>
 </body>
 </html>

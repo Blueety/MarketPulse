@@ -1470,6 +1470,123 @@ def assert_macro_refine(browser, url: str) -> None:
         ctx.close()
 
 
+# —— XC 宏观页悬停参考线（2026-09-14 macro-chart-crosshair 任务）——
+# ⚠️ 标签用 `XC-*` 而不是 plan 里写的 `MX-*` —— `MX-*` 已被宏观页断言（assert_macro_page）占用，
+#    重名会让失败报告无法定位是哪一处红（偏离记入 journal）。
+XC_JS = r"""
+() => {
+  const c = window.Chart && window.Chart.getChart(document.getElementById('macro-chart'));
+  if (!c) return null;
+  const a = c.chartArea;
+  const r = document.getElementById('macro-chart').getBoundingClientRect();
+  const hov = c.options.plugins ? c.options.plugins.hoverCrosshair : null;
+  return {
+    plugins: (c.config.plugins || []).map((p) => p && p.id),
+    hasFormatter: !!(hov && typeof hov.formatter === 'function'),
+    area: { top: a.top, bottom: a.bottom, left: a.left, right: a.right },
+    rect: { top: r.top, left: r.left },
+    label: c.$crosshairLabel === undefined ? null : c.$crosshairLabel,
+    crossY: c.$crossY === undefined ? null : c.$crossY,
+    axisValue: (c.$crossY == null) ? null : c.scales.y.getValueForPixel(c.$crossY),
+    axisPos: c.scales.y.position,
+  };
+}
+"""
+
+
+def assert_macro_crosshair(browser, url: str) -> None:
+    """XC-1~XC-9 宏观页悬停参考线（plan X-4；标签改 `XC-*`，见上方注释）。
+
+    核心价值：锁住"读数按**轴语义**分派"这条不变量 —— 单变量黄金不得出现 `%`、
+    10Y 不得被二次换算（4.987 → 0.4987）。plan 的 MX-8（首页 CS-*/F-7a 回归）由本脚本
+    既有的 `assert_crosshair` / `assert_fidelity` 覆盖，故此处不重复断言。
+    """
+    print("\n--- XC 宏观页悬停参考线（crosshair）---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(3500)
+
+        def probe(frac: float, click: str | None = None) -> dict:
+            """点（可选）品种胶囊 → 把鼠标移到绘图区纵向 frac 处 → 读回插件状态。"""
+            if click:
+                page.evaluate(
+                    "() => document.querySelector('#macro-pills .mac-pill[data-pick=\"%s\"]').click()" % click
+                )
+                page.wait_for_timeout(1000)
+            base = page.evaluate(XC_JS)
+            if not base:
+                return {}
+            y = base["rect"]["top"] + base["area"]["top"] + \
+                (base["area"]["bottom"] - base["area"]["top"]) * frac
+            x = base["rect"]["left"] + (base["area"]["left"] + base["area"]["right"]) / 2
+            page.mouse.move(x, y)
+            page.wait_for_timeout(400)
+            out = page.evaluate(XC_JS)
+            out["snap"] = page.evaluate("() => document.getElementById('macro-chart').toDataURL()")
+            return out
+
+        def num(s):
+            mo = re.search(r"[-+]?\d+(?:\.\d+)?", s or "")
+            return float(mo.group(0)) if mo else None
+
+        d0 = page.evaluate(XC_JS)
+        check(bool(d0), "XC-0 #macro-chart 实例可达")
+        if not d0:
+            return
+        print(f"  plugins={d0['plugins']} hasFormatter={d0['hasFormatter']} axisPos={d0['axisPos']}")
+        check("hoverCrosshair" in (d0["plugins"] or []),
+              "XC-1 宏观页主图已挂 hoverCrosshair（防 script 顺序错 → plugins:[undefined] 静默失效）",
+              d0["plugins"])
+        check(d0["hasFormatter"], "XC-1b 实例级 formatter 已注入（读数口径可注入，不改共享插件）")
+
+        # XC-2 单变量·黄金：真实价格 + $，**绝不能是 '+4286.6%'**（plan 的头号后果）
+        g = probe(0.5, "^gc=f")
+        print(f"  gold:   label={g.get('label')!r} axis={g.get('axisValue')}")
+        check(g.get("label") and "%" not in g["label"] and g["label"].startswith("$")
+              and abs((num(g["label"]) or 0) - (g.get("axisValue") or 0)) < 0.005,
+              "XC-2 单变量·黄金读数 = 真实价 + $（不是 +4286.6%）", (g.get("label"), g.get("axisValue")))
+        # XC-3 单变量·10Y：3 位小数 + %，且**未被二次换算**（4.987 不能变成 0.4987）
+        t = probe(0.5, "^tnx")
+        print(f"  10Y:    label={t.get('label')!r} axis={t.get('axisValue')}")
+        tv = num(t.get("label"))
+        check(t.get("label") and t["label"].endswith("%") and tv is not None
+              and abs(tv - (t.get("axisValue") or 0)) < 0.0006,
+              "XC-3 单变量·10Y 读数 = 轴值 + %（未被 displayValue 二次换算）",
+              (t.get("label"), t.get("axisValue")))
+        # XC-4 全部对比：指数值，纯数字（无 % / 无 $）
+        a = probe(0.5, "__all__")
+        print(f"  all:    label={a.get('label')!r} axis={a.get('axisValue')}")
+        check(a.get("label") and "%" not in a["label"] and "$" not in a["label"]
+              and re.fullmatch(r"\d+\.\d{2}", a["label"]) is not None
+              and abs((num(a["label"]) or 0) - (a.get("axisValue") or 0)) < 0.005,
+              "XC-4 全部对比读数 = 纯指数数字（无单位）", (a.get("label"), a.get("axisValue")))
+        # XC-5 横线跟手：不同 Y 的画布指纹不同（不依赖气泡文字，避免"数字碰巧一样"）
+        a2 = probe(0.72)
+        check(bool(a.get("snap")) and a2.get("snap") != a.get("snap"),
+              "XC-5 不同 Y 位置画布指纹不同（横线实时跟随）")
+        # XC-6 移出绘图区 → 隐藏
+        page.mouse.move(5, 5)
+        page.wait_for_timeout(500)
+        d_out = page.evaluate(XC_JS)
+        check(d_out.get("crossY") is None, "XC-6 鼠标移出绘图区后 $crossY 清空（横线隐藏）", d_out.get("crossY"))
+        # XC-7 切品种/切范围重建实例后插件不丢（与首页 CS-7b 同源风险）
+        page.evaluate("() => document.querySelector('#macro-range .mac-pill[data-range=\"5y\"]').click()")
+        page.wait_for_timeout(1200)
+        d7 = page.evaluate(XC_JS)
+        check(bool(d7) and "hoverCrosshair" in (d7["plugins"] or []) and d7["hasFormatter"],
+              "XC-7 切范围重建后新实例仍带 hoverCrosshair + formatter",
+              (d7 or {}).get("plugins"))
+        # XC-9 本块内 console 干净（插件缺 helper / 顺序错都会在这里冒出来）
+        check(not errors, "XC-9 /macro 悬停交互期间 console error = 0", errors[:3])
+    finally:
+        ctx.close()
+
+
 # —— KY KPI 无静默截断（2026-09-14 kpi-responsive-fix 任务）——
 # ⚠️ 断的是**不变量**（"KPI 数值不得被省略号截断"），不是具体字号/断点数值 ——
 #    否则每调一次参数就要改一次断言，最后会变成"改断言让它变绿"（plan R2）。
@@ -2204,6 +2321,7 @@ def main() -> int:
 
             assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
             assert_macro_refine(browser, url)  # M-* 宏观页 refinement（主题/关系口径/主图主次/留白/分层）
+            assert_macro_crosshair(browser, url)  # XC-* 宏观页悬停参考线（读数按轴语义分派）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()

@@ -17,20 +17,10 @@ applyTheme(getTheme());
 
 // CSS 变量读取：图表色单一来源在 style.css 的 --c-* token（Light/Dark 两套）。
 // Chart.js 不随 CSS 变量自动变色，切主题后重渲染（renderMainChart / repaintSparklines）生效。
-function cssVar(name, fallback) {
-  var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback || "";
-}
-function themeColors() {
-  return {
-    tooltipBg: cssVar('--c-tip-bg', 'rgba(255, 255, 255, 0.95)'),
-    tooltipTitle: cssVar('--c-tip-title', '#1d1d1f'),
-    tooltipBody: cssVar('--c-tip-body', '#1d1d1f'),
-    tooltipBorder: cssVar('--c-tip-border', '#d2d2d7'),
-    axisTick: cssVar('--c-axis-tick', '#86868b'),
-    gridLine: cssVar('--c-grid-line', 'rgba(0, 0, 0, 0.06)')
-  };
-}
+// ⚠️ 2026-09-14（macro-chart-crosshair）：`cssVar` / `themeColors` / `withAlpha` 三件套已收敛到
+//    `/static/chart-crosshair.js`（与 crosshair 插件同文件，供首页 + 宏观页共用，消除两份实现）。
+//    本文件继续**裸调用同名函数**（它们是 window 上的全局函数）→ 调用点零改动。
+//    ⚠️ 该脚本必须在 `<script src="app.js">` **之前**引入（index.html 已保证）。
 const SERIES_VAR = {
   gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
   vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc",
@@ -48,15 +38,7 @@ function colors() {
   return out;
 }
 
-// 色值加透明度：#RGB / #RRGGBB → rgba()；其余形式（rgb()/变量值）原样返回。
-function withAlpha(color, a) {
-  var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color || '').trim());
-  if (!m) return color;
-  var h = m[1];
-  if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
-  var n = parseInt(h, 16);
-  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
-}
+// 色值加透明度：实现见 `/static/chart-crosshair.js`（`window.withAlpha`，与本文件旧实现逐字节一致）。
 
 const charts = {};  // 'main' -> Chart 实例（重渲染前 destroy）
 if (window.Chart && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
@@ -703,70 +685,12 @@ function renderTrendMeta(g, series) {
   });
 }
 
-// === 悬停水平参考线（crosshair）——内联插件，仅挂 #chart-main 实例，不 Chart.register ===
-// Q2 定调：横线 Y 取鼠标在绘图区内的纵向位置（非数据点）→ 一条中性色线 + 一个涨跌幅读数
-// （Q3/Q4），与系列无关。afterDatasetsDraw 绘制 → 线在数据之上、tooltip 之下（R5）。
-const hoverCrosshair = {
-  id: 'hoverCrosshair',
-  afterEvent: function (chart, args) {
-    const e = args.event;
-    const area = chart.chartArea;
-    // 离开画布 / 触屏抬手 → 清线重绘（触屏下 tooltip 被禁，横线+气泡是唯一读数）
-    if (e.type === 'mouseout' || e.type === 'touchend') {
-      if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }
-      return;
-    }
-    if ((e.type !== 'mousemove' && e.type !== 'touchmove') || !area) return;
-    if (e.y < area.top || e.y > area.bottom) {
-      if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }   // 移出绘图区即隐藏
-      return;
-    }
-    // R1 核心：Chart.js 只在激活元素集合变化时自动重绘，同 x 索引内纵向移动集合不变，
-    // 必须手动 chart.draw() 才能实时跟随（勿用 update()，会重算布局/动画）；1px 节流。
-    if (chart.$crossY != null && Math.abs(e.y - chart.$crossY) < 1) return;
-    chart.$crossY = e.y;
-    chart.draw();
-  },
-  afterDatasetsDraw: function (chart) {
-    const y = chart.$crossY;
-    if (y == null) return;
-    const area = chart.chartArea;
-    const axis = chart.scales.y;
-    const tc = themeColors();
-    const ctx = chart.ctx;
-    ctx.save();
-    // 全宽虚线，中性色与系列无关；坐标一律 CSS 像素，勿乘 devicePixelRatio（R2）
-    ctx.beginPath();
-    ctx.setLineDash([4, 4]);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = withAlpha(tc.axisTick, 0.65);
-    ctx.moveTo(area.left, y);
-    ctx.lineTo(area.right, y);
-    ctx.stroke();
-    // Y 轴端百分比气泡：动态贴当前轴侧（R7，勿写死 left），垂直钳制在画布内（R4）
-    const text = fmtAxisPct(axis.getValueForPixel(y));
-    chart.$crosshairLabel = text;   // 可测性挂钩：verify_ui.py 对气泡的唯一客观断言点
-    const f = (window.Chart.defaults && window.Chart.defaults.font) || {};
-    ctx.font = '11px ' + (f.family || 'sans-serif');
-    const bw = ctx.measureText(text).width + 10;
-    const bh = 16;
-    const pad = bh / 2 + 2;
-    const cy = Math.min(Math.max(y, pad), chart.height - pad);
-    const bx = axis.position === 'right' ? area.right + 2 : area.left - 2 - bw;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx, cy - bh / 2, bw, bh, 4); else ctx.rect(bx, cy - bh / 2, bw, bh);
-    ctx.fillStyle = tc.tooltipBg;
-    ctx.fill();
-    ctx.strokeStyle = tc.tooltipBorder;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = tc.tooltipBody;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, bx + 5, cy);
-    ctx.restore();
-  }
-};
+// === 悬停水平参考线（crosshair）===
+// 2026-09-14（macro-chart-crosshair）：插件本体已抽到 `/static/chart-crosshair.js`（`window.hoverCrosshair`），
+// 与宏观页共用同一个对象；**id / $crosshairLabel / 节流 / 轴侧动态 / afterDatasetsDraw 全部未变**。
+// 首页的读数口径（fmtAxisPct，相对 100 的偏离）是该插件的**默认兜底**，故此处行为逐字节不变。
+// ⚠️ 该脚本必须在 `<script src="app.js">` **之前**引入，否则 `plugins: [window.hoverCrosshair]`
+//    会变成 `[undefined]` 并被 Chart.js **静默忽略**（横线不出现且不报错）。
 
 function renderMainChart() {
   const canvas = document.getElementById('chart-main');

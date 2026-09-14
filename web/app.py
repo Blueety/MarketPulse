@@ -102,7 +102,9 @@ class _RevalidateStatic(StaticFiles):
 app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static")
 
 # 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
-_ASSET_FILES = ("style.css", "app.js", "macro.js")
+# ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
+#    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
+_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js")
 
 
 def _asset_version() -> str:
