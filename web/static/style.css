@@ -270,7 +270,13 @@ body {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px;
+  /* 2026-09-14（kpi-responsive-fix）：spark 列宽由**固定 96px** 改为**跟随视口**的 clamp。
+     ⚠️ 必须同时改「轨道」与「.kpi-spark 的 max-width」——只改 max-width 不会释放文本宽度，
+     因为固定轨道依然占着 96px（原计划只写了 max-width，实测那样改**无效**）。
+     1500–1919px 是五列档且原本没有任何中间断点 → 卡宽从 314 缩到 230、字号恒 26px，
+     实测 1600 截断 4px、1500 截断 24px。clamp 让字号与 spark 跟着视口走（保持 5 列 bento 形态）。 */
+  --kpi-spark-w: clamp(48px, 5vw, 96px);
+  grid-template-columns: minmax(0, 1fr) var(--kpi-spark-w);
   align-items: center;
   column-gap: 10px;
   min-width: 0;
@@ -283,11 +289,13 @@ body {
 .kpi-card.kpi-neg::before { background: var(--red); }
 .kpi-info { min-width: 0; }
 .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi-val { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1.1; color: var(--text-primary); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 2026-09-14：字号改为跟随视口（>1499 的五列档生效；≤1499 由 1499 断点的 22px 覆盖，
+   ≤480 由 480 断点的 18px 覆盖）—— 原固定 26px 在 1500–1919 会挤爆数值。 */
+.kpi-val { font-family: var(--mono); font-size: clamp(20px, 1.4vw, 26px); font-weight: 500; line-height: 1.1; color: var(--text-primary); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-sub { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-sub.pos { color: var(--green); }
 .kpi-sub.neg { color: var(--red); }
-.kpi-spark { width: 100%; max-width: 96px; height: 56px; display: block; margin: 0; justify-self: end; }
+.kpi-spark { width: 100%; max-width: var(--kpi-spark-w, 96px); height: 56px; display: block; margin: 0; justify-self: end; }
 
 /* promo 卡（全球市场动态：CSS 渐变 + 内联 SVG，不引二进制资源） */
 .card.promo {
@@ -559,7 +567,8 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-card { min-height: 88px; }
   .kpi-val { font-size: 22px; }
-  .kpi-spark { max-width: 84px; }
+  /* .kpi-spark 的 max-width 已由 --kpi-spark-w 派生（≤1499 时 5vw ≤ 75px < 84px），
+     原来的 84px 兜底已成死规则 → 2026-09-14 删除，避免与变量两处不同步。 */
 }
 
 /* G-9：<1400px 行 4 改单列堆叠（1280 下 `1fr 2.4fr` 的左卡仅 ≈292px，装不下告警正文） */
@@ -571,6 +580,16 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 @media (max-width: 1299px) {
   .row-main { grid-template-columns: minmax(0, 1fr); }
   .main { padding: 20px 24px 32px; }
+}
+
+/* 2026-09-14（kpi-responsive-fix）：769–1024px 提前把 KPI 降到 **2 列**。
+   原因：该区间**侧栏仍是内联 232px**（抽屉只在 ≤768px 生效），主区仅剩 537–792px，
+   3 列时卡宽只有 152–237px，而 22px 字号 + spark 只需文本可用 ≥105.6px → 物理上装不下
+   （实测 1024/900/800/769 分别截断 0/7/12/12 个元素，最严重 85px）。
+   ⚠️ **只改 .row-kpi**：下面的 768 块同时管「侧栏改抽屉」（.shell 方向 / #sidebar fixed / body.nav-open），
+      两者是**两件事**，绝不能合并或互相覆盖。 */
+@media (max-width: 1024px) {
+  .row-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ===== 平板 / 移动端：侧栏改抽屉（选择器与基础规则同源特异性 #sidebar）===== */
