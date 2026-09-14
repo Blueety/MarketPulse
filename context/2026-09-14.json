@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3885.3328,
+      "change_pct": -0.0714434409350352,
+      "status": "下跌趋势"
     },
     "SZ": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 13384.568,
+      "change_pct": -0.6435108468348596,
+      "status": "下跌趋势"
     },
     "CYB": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 3285.583,
+      "change_pct": -1.0973983147097348,
+      "status": "下跌趋势"
     },
     "VIX": {
       "value": null,
@@ -411,15 +411,81 @@
     "indices": []
   },
   "sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "医药",
+        "change": 3.23,
+        "turnover": "1226.5亿",
+        "top_stock": "美迪西"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 0.38,
+        "turnover": "4513.6亿",
+        "top_stock": "高澜股份"
+      },
+      {
+        "name": "资源/有色",
+        "change": 0.09,
+        "turnover": "465.5亿",
+        "top_stock": "闽东电力"
+      },
+      {
+        "name": "金融",
+        "change": 0.08,
+        "turnover": "1767.2亿",
+        "top_stock": "科伦药业"
+      },
+      {
+        "name": "其他",
+        "change": -0.12,
+        "turnover": "17684.2亿",
+        "top_stock": "凯盛新能"
+      }
+    ],
+    "losers": [
+      {
+        "name": "地产/基建",
+        "change": -2.3,
+        "turnover": "135.7亿",
+        "top_stock": "万通发展"
+      },
+      {
+        "name": "农业",
+        "change": -1.87,
+        "turnover": "450.6亿",
+        "top_stock": "国投丰乐"
+      },
+      {
+        "name": "通信/电子",
+        "change": -0.59,
+        "turnover": "2888.2亿",
+        "top_stock": "中京电子"
+      },
+      {
+        "name": "军工",
+        "change": -0.46,
+        "turnover": "2084.6亿",
+        "top_stock": "天通股份"
+      },
+      {
+        "name": "消费",
+        "change": -0.14,
+        "turnover": "162.6亿",
+        "top_stock": "*ST瑞茂"
+      }
+    ]
   },
   "us_sector_heat": {
     "gainers": [],
     "losers": []
   },
   "search_keywords": [
-    "market summary 2026-09-14"
+    "医药 surge 2026-09-14",
+    "光伏/新能源 surge 2026-09-14",
+    "资源/有色 surge 2026-09-14",
+    "金融 surge 2026-09-14",
+    "其他 drop 2026-09-14"
   ],
   "correlation": [],
   "watchlist": {

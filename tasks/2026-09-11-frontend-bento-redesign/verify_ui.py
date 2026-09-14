@@ -1479,10 +1479,13 @@ XC_JS = r"""
   if (!c) return null;
   const a = c.chartArea;
   const r = document.getElementById('macro-chart').getBoundingClientRect();
-  const hov = c.options.plugins ? c.options.plugins.hoverCrosshair : null;
+  // ⚠️ formatter 只从 config.plugins 的插件对象上读：**读 options.plugins.hoverCrosshair 会触发
+  //    Chart.js 的 scriptable-option 解析**（把函数值立即以 context 调用）→ 探针自己会把页面搞崩。
+  let entry = null;
+  ((c.config && c.config.plugins) || []).forEach((p) => { if (p && p.id === 'hoverCrosshair') entry = p; });
   return {
     plugins: (c.config.plugins || []).map((p) => p && p.id),
-    hasFormatter: !!(hov && typeof hov.formatter === 'function'),
+    hasFormatter: !!(entry && typeof entry.formatter === 'function'),
     area: { top: a.top, bottom: a.bottom, left: a.left, right: a.right },
     rect: { top: r.top, left: r.left },
     label: c.$crosshairLabel === undefined ? null : c.$crosshairLabel,
@@ -1545,7 +1548,8 @@ def assert_macro_crosshair(browser, url: str) -> None:
         check(d0["hasFormatter"], "XC-1b 实例级 formatter 已注入（读数口径可注入，不改共享插件）")
 
         # XC-2 单变量·黄金：真实价格 + $，**绝不能是 '+4286.6%'**（plan 的头号后果）
-        g = probe(0.5, "^gc=f")
+        # ⚠️ 胶囊的 `data-pick` 用的是 PICKS 里的键：黄金 `gc=f`（**无 `^`**）、10Y `^tnx`（有 `^`）
+        g = probe(0.5, "gc=f")
         print(f"  gold:   label={g.get('label')!r} axis={g.get('axisValue')}")
         check(g.get("label") and "%" not in g["label"] and g["label"].startswith("$")
               and abs((num(g["label"]) or 0) - (g.get("axisValue") or 0)) < 0.005,

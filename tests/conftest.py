@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src import analyzer as an  # noqa: E402
 from src import storage  # noqa: E402
 
 
@@ -50,3 +51,22 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", p)
     storage.init_db()
     return _TmpDb(p)
+
+
+@pytest.fixture(autouse=True)
+def isolate_watchlist_file(tmp_path, monkeypatch):
+    """自选股快照落盘隔离（autouse 护栏，2026-09-14）。
+
+    背景：`daily_report.main()` 与 `snapshot_report.main()` 都会调用
+    `analyzer.save_watchlist_snapshot()` 写 **真实** `data/watchlist.json`。
+    `dr.main()` 被 10 个测试文件真实调用，其中 `test_phase24.py` 注入了带 watchlist
+    的 config（AAPL/苹果）却**没**隔离该路径 → 每次跑测试都把 fixture 定值
+    （`{"AAPL": 210.0}` + 2 天序列）写进真实数据文件，再被 cron 的 `git add -A`
+    提交推送；等下次真实快照运行才被覆盖。实测污染提交 13+ 次（09-13 ~ 09-14）。
+
+    与 test_analyzer/test_web 的显式 patch 不冲突（显式 patch 在其后生效、仍是 tmp）。
+    重定向后 `an.load_watchlist_snapshot()` 返回 None —— 与既有「web 测试把快照读取
+    隔离为 None」的意图一致，不改变任何断言。
+    """
+    monkeypatch.setattr(an, "WATCHLIST_FILE", tmp_path / "watchlist.json")
+    return tmp_path
