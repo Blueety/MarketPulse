@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3876.9923,
-      "change_pct": -0.2859563717143255,
-      "status": "下跌趋势"
+      "value": 3894.2843,
+      "change_pct": 0.158784063395723,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 13319.97,
-      "change_pct": -1.123035511830858,
+      "value": 13436.919,
+      "change_pct": -0.2548982622779726,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 3266.443,
-      "change_pct": -1.6735504911290926,
+      "value": 3306.358,
+      "change_pct": -0.47202937713855975,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3951.5068,
       3934.4036,
       3888.1106,
-      3876.9923
+      3894.2843
     ],
     "sz": [
       14316.961,
@@ -307,7 +307,7 @@
       13723.322,
       13617.67,
       13471.257,
-      13319.97
+      13436.919
     ],
     "cyb": [
       3537.214,
@@ -339,7 +339,7 @@
       3354.969,
       3338.422,
       3322.039,
-      3266.443
+      3306.358
     ],
     "gld": [
       402.5400085449219,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "金融",
-        "change": -0.26,
-        "turnover": "450.2亿",
-        "top_stock": "中国银行"
+        "name": "医药",
+        "change": 2.73,
+        "turnover": "817.1亿",
+        "top_stock": "药石科技"
       },
       {
         "name": "光伏/新能源",
-        "change": -0.29,
-        "turnover": "1122.6亿",
+        "change": 0.72,
+        "turnover": "3054.8亿",
         "top_stock": "ST中路"
       },
       {
-        "name": "消费",
-        "change": -0.35,
-        "turnover": "43.8亿",
-        "top_stock": "*ST瑞茂"
-      },
-      {
-        "name": "医药",
-        "change": -0.49,
-        "turnover": "198.1亿",
-        "top_stock": "迈威生物"
-      },
-      {
         "name": "资源/有色",
-        "change": -0.6,
-        "turnover": "109.0亿",
+        "change": 0.39,
+        "turnover": "316.2亿",
         "top_stock": "闽东电力"
+      },
+      {
+        "name": "金融",
+        "change": 0.27,
+        "turnover": "1172.9亿",
+        "top_stock": "科伦药业"
+      },
+      {
+        "name": "消费",
+        "change": 0.18,
+        "turnover": "108.6亿",
+        "top_stock": "*ST瑞茂"
       }
     ],
     "losers": [
       {
         "name": "农业",
-        "change": -2.89,
-        "turnover": "147.8亿",
+        "change": -2.02,
+        "turnover": "330.7亿",
         "top_stock": "隆鑫通用"
       },
       {
         "name": "地产/基建",
-        "change": -2.51,
-        "turnover": "42.5亿",
-        "top_stock": "绿发电力"
+        "change": -1.84,
+        "turnover": "97.7亿",
+        "top_stock": "万通发展"
       },
       {
         "name": "通信/电子",
-        "change": -1.49,
-        "turnover": "723.6亿",
-        "top_stock": "百邦科技"
+        "change": -0.19,
+        "turnover": "1920.8亿",
+        "top_stock": "中京电子"
       },
       {
         "name": "军工",
-        "change": -0.96,
-        "turnover": "521.0亿",
-        "top_stock": "通达股份"
+        "change": -0.16,
+        "turnover": "1410.8亿",
+        "top_stock": "天通股份"
       },
       {
         "name": "其他",
-        "change": -0.62,
-        "turnover": "4516.9亿",
-        "top_stock": "中远海能"
+        "change": 0.14,
+        "turnover": "11925.0亿",
+        "top_stock": "凯盛新能"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "金融 drop 2026-09-14",
-    "光伏/新能源 drop 2026-09-14",
-    "消费 drop 2026-09-14",
-    "医药 drop 2026-09-14",
-    "资源/有色 drop 2026-09-14"
+    "医药 surge 2026-09-14",
+    "光伏/新能源 surge 2026-09-14",
+    "资源/有色 surge 2026-09-14",
+    "金融 surge 2026-09-14",
+    "消费 surge 2026-09-14"
   ],
   "correlation": [],
   "watchlist": {
