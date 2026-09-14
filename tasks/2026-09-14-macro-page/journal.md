@@ -3,7 +3,7 @@
 - **日期**：2026-09-14
 - **计划**：`tasks/2026-09-14-macro-page/plan.md`（已含执行者反馈后的 5 处更正）
 - **前置**：`tasks/2026-09-14-econ-data-source` ✅ 已完成（提供 `/api/econ`）
-- **状态**：**M-0 ~ M-4 已完成并实测**（含最高风险的抽 include）；M-5~M-9 进行中
+- **状态**：**M-0 ~ M-9 全部完成并实测**（含最高风险的抽 include 与宏观页 UI 验收）
 
 ---
 
@@ -98,9 +98,65 @@ PASS  F-5 nav=10（7 锚点 + 1 跨页 /macro + 2 占位）且 data-target/href 
 FAILED: 4   ← 只剩既有 4 条日期假红（与本任务无关）
 ```
 
+### M-5 `/macro` 路由 + `macro.html`
+
+- 新增路由（`base_prefix="/"` → 侧栏锚点变 `/#overview` 回首页；`active_page="macro"` → 高亮「宏观数据」）；
+- `macro.html` 七个模块骨架（hooks: `#mac-regime` / `#mac-market` / `#mac-vars` / `#mac-factors` /
+  `#mac-relation` / `#mac-history` / `#mac-econ`）+ 复用 `_topbar.html` / `_sidebar.html`；
+- `_asset_version()` 改为读 `_ASSET_FILES = ("style.css", "app.js", "macro.js")`（**不存在的文件自动跳过**，
+  否则新增 macro.js 之前会把整个版本号打成 "0"）。新增前端文件必须加进这个元组，否则改它不换 URL。
+
+### M-6 `macro.js`（主图 + 7 模块渲染）
+
+- 主图：单 canvas + 品种胶囊（5）+ 时间范围胶囊（5）；`maintainAspectRatio:false` + 容器
+  `height: clamp(340px,46vh,560px)`；**无任何 `!important` 覆盖 canvas 尺寸**（C2）。
+- **`toYieldDisplay(v)`（显示层单一函数，plan 要求的三条附加项全部满足）**：
+  `|v| > 20` 才 ÷10；越界时 `console.warn` **一次**（不静默）；单测/断言锁定当前口径
+  （`4.985 → 4.979%` 实测，见 MX-6）；**相关性不动**（Pearson 尺度不变，不必进数据层）。
+- 多变量「全部对比」→ 起点归一化 100（`v / 首个非空 * 100`，数据变换而非坐标轴 min）；
+  单变量 → **真实价**（10Y 走 `toYieldDisplay`）。
+- 模块渲染全部**只消费服务端结果**：`regime`（四维度）/ `correlation` / `history_regime` / `econ`
+  的 `quadrant` —— 前端零重算（§4.4 职责边界）。
+- Shell 行为（主题 / 移动端抽屉 / 市场状态 + 顶栏数据日）**刻意复制**自 app.js（约 35 行）：
+  首页刚做完 shell 抽取，不在同一任务再动它；文件头已注明「出现第三处复用应抽 `shell.js`」。
+
+### M-7 样式（research terminal）
+
+`style.css` 追加约 128 行 `.mac-*` 段：大留白 / 细边框 1px / 极浅背景（**刻意不用首页玻璃 token**）/
+状态色只落在文字、细边框与细条形上（**严禁堆彩色卡片**）；主图容器比首页主图更高（视觉中心）。
+断点对齐既有：≤1299 两列区合流、≤768 数字网格 2 列、≤480 单列。状态类 `.up/.down/.flat` 限定在
+`.mac` 作用域内，避免与既有类名相撞。
+
+### M-8 验收（`verify_ui.py` 扩展 `assert_macro_page`，MX-1~MX-15，**全部 PASS**）
+
+```
+MX-1  /macro 200
+level='Risk-On 风险偏好上行' quadrant='四象限：再通胀（通胀↑ · 增长↑）' score='68.8' factors=4
+canvas=1354x496  css=1354x496  wrapH=497          ← C2：位图 == 显示尺寸
+pills=[美元指数,10Y 美债,原油,黄金,全部对比] active=美元指数  ranges=[1M..5Y] pts=252
+tenYear='4.979%'                                  ← 口径正确（不是 42.5%，也不是 0.4985%）
+rel=6(strong=0, n/a=0)  hist=3  econAsOf='数据月份：2026年8月'
+MX-7 多变量 4 条线起点全为 100 ｜ MX-8 5Y > 1000 点 ｜ MX-13 主题切换后图表存活
+MX-14 375 档无横向溢出 + 两列区降为单列
+MX-12 /api/econ 断供（page.route abort）→ 页面仍 200、7 模块在位、模块 6/7 显示「数据暂缺」
+MX-15 console error = 0
+```
+
+整轮 `verify_ui`：**`FAILED: 4`**（只剩既有 4 条日期假红），截图 3 张
+（`shot-macro-1920/‑dark/‑375.png`）。目视：Light/Dark 两套都克制、无彩色卡片堆叠、
+状态色只出现在文字与细条形；主图为视觉中心。
+
+> 一处设计选择（记明）：宏观关系**固定列 6 对**，只对 `|r| ≥ 0.5` 加高亮（本次实测 strong=0 —— 
+> 当天 6 对都在 ±0.47 以内）。若改成"无显著对就整卡不渲染"，卡片会看起来像坏了；
+> 列全部 + 高亮显著 + null 显示「样本不足」信息更完整，也满足验收（不显示错误的 0）。
+
+### M-9 记录
+
+本文件 + `docs/architecture.md` 决策行 + `docs/pitfalls.md` 3 条（见下）。
+
 ---
 
-## 2. 与 plan 的差异（3 处，均已核对）
+## 2. 与 plan 的差异（4 处，均已核对）
 
 ### 2.1 「一个 `_shell.html`」→ 两个 include（`_topbar.html` / `_sidebar.html`）
 
@@ -123,6 +179,22 @@ DOM 逐字节保持。**意图（shell 单一来源）不变。**
   ⚠️ 另外更正一处前提：plan 说「宏观报价是日频数据」—— 这不适用于这 4 个品种（日频的是 BLS 经济数据）。
 - 取 **300s** 折中；若将来宏观页独立取数（不复用首页链路），可再放宽。改一行常量即可。
 
+### 2.4 `tail` 参数**不改**（保持 1260 = 5Y 全量）—— 附实测体积
+
+需求方问「tail 参数改不改（不改就记进 journal）」。**实测后决定：不改**，理由与数据如下：
+
+| 项 | 实测 |
+|---|---|
+| `/api/macro` 全量响应体 | **209,896 B ≈ 205 KB**（其中 `trend` 占 208,529 B = **99.3%**） |
+| 分段 | `stocks` 301 B / `regime` 503 B / `correlation` 435 B / `history_regime` 56 B |
+| 若改成 `tail=400` | `trend` ≈ 65,909 B（省 ~142 KB） |
+
+**为什么不改**：
+1. `tail` 直接决定「时间范围 1M/3M/6M/1Y/5Y 全有数据」这条验收判据 —— 砍到 400 点后 1Y/5Y 档就没数据了。
+2. 205 KB 在 **TTL=300s** 下每次页面加载只付一次；首页侧已实测零回归（§1 M-2）。
+3. 真正的优化空间不在 tail 而在**压缩**：加一行 `GZipMiddleware` 可把这类数值数组压到 ~1/5。
+   **但那是全局中间件改动（影响所有端点），超出本计划范围 → 本次不做**，作为可选后续记在此处。
+
 ---
 
 ## 3. 实测发现（5 条，均已随 plan 更正）
@@ -141,10 +213,19 @@ DOM 逐字节保持。**意图（shell 单一来源）不变。**
 
 ---
 
-## 4. 待办（M-5 ~ M-9）
+## 4. 交付物清单与验收对照
 
-- M-5 `/macro` 路由 + `macro.html`（7 模块）
-- M-6 `macro.js`：主图（单 canvas + 胶囊 + 1M/3M/6M/1Y/5Y）、**`toYieldDisplay(v)` 显示层自适应**
-  （`|v|>20` 才 ÷10 + `console.warn` 一次）、多变量起点归一化 100、消费 `/api/econ`
-- M-7 `style.css` 宏观页样式（research terminal 风格，不堆彩色卡片）
-- M-8/M-9 三视口 + 双主题验收、`docs/architecture.md` 决策、`docs/pitfalls.md`
+| 类型 | 文件 | 状态 |
+|---|---|---|
+| 新建 | `web/templates/_topbar.html`、`_sidebar.html`（shell 共用） | ✅ |
+| 新建 | `web/templates/macro.html`（7 模块） | ✅ |
+| 新建 | `web/static/macro.js`（主图 + 渲染 + shell 行为） | ✅（`node --check` 通过） |
+| 修改 | `web/app.py`（3 纯函数 + `/macro` + macro 端点 5Y + `_asset_version`） | ✅ |
+| 修改 | `web/templates/index.html`（改 include；「宏观数据」改可点） | ✅ |
+| 修改 | `web/static/style.css`（`.mac-*` 段 128 行） | ✅ |
+| 修改 | `src/fetcher.py`（`range_` 参数化） | ✅ |
+| 修改 | `tests/test_web.py`（+22 宏观纯函数/端点 + 2 路由）、`tests/test_phase24.py`（桩签名同步 + 1 新护栏） | ✅ |
+| 修改 | `verify_ui.py`（F-5 同步 + `assert_macro_page` MX-1~MX-15） | ✅ |
+
+**验收判据逐条**（plan §7.2 / 需求方清单）：见 §1 M-8 的 MX-* 全绿结果；护栏与回归：
+`verify_ui FAILED: 4`（仅既有日期假红）、`pytest 620 passed`、零新增落盘文件（`git status` 复核）。
