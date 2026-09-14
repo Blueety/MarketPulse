@@ -376,11 +376,7 @@
             ticks: { color: tick, maxTicksLimit: 8, font: { size: 11 }, autoSkip: true, maxRotation: 0 },
             grid: { display: false }
           },
-          y: {
-            position: "right",
-            ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 6 },
-            grid: { color: grid }
-          }
+          y: yScale
         }
       }
     });
@@ -388,7 +384,10 @@
     var foot = el("macro-chart-foot");
     if (foot) {
       var last = datasets[0] && datasets[0].data.length ? datasets[0].data.length : 0;
-      foot.textContent = (multi ? "全部对比（起点 = 100，消除量纲差异）" : "真实价格")
+      // 明写"强调哪条线"——否则"某条线更粗"会被当成渲染瑕疵而非设计（D3）
+      foot.textContent = (multi
+          ? "全部对比（起点 = 100，消除量纲差异）· 强调 " + (SERIES_LABEL[primaryKey] || primaryKey)
+          : "真实价格")
         + " · " + last + " 个交易日";
     }
   }
@@ -434,22 +433,47 @@
     }
   }
 
-  // ---- 模块 3：核心宏观变量 ----
+  // ---- 模块 3：核心宏观变量（4 行紧凑表：名称 / 数值 / 日变化 / 状态词）----
+  // ⚠️「状态词」是**日变化的分档口语化**（不是观点，也不是预测），分档阈值为工程取值；
+  //    它不引入任何新数据 —— 只把已经显示的 change_pct 说成人话（D6：原 2×2 网格下半屏空转）。
+  function varState(chg) {
+    if (chg == null || !isFinite(chg)) return { text: "—", cls: "flat" };
+    if (chg >= 1) return { text: "明显走强", cls: "up" };
+    if (chg >= 0.2) return { text: "小幅走强", cls: "up" };
+    if (chg > -0.2) return { text: "基本持平", cls: "flat" };
+    if (chg > -1) return { text: "小幅走弱", cls: "down" };
+    return { text: "明显走弱", cls: "down" };
+  }
+
   function renderVars() {
     var box = el("macro-vars");
     if (!box) return;
     var stocks = (state.macro || {}).stocks || [];
     if (!stocks.length) { box.innerHTML = '<p class="mac-empty">数据暂缺</p>'; return; }
     box.innerHTML = stocks.map(function (s) {
-      var v = displayValue(s.symbol.toLowerCase(), s.value);
+      var key = s.symbol.toLowerCase();
+      var v = displayValue(key, s.value);
       var digits = s.symbol === "^TNX" ? 3 : 2;
-      return '<div class="mac-var"><div class="v-label">' + escapeHtml(s.label || s.symbol) + "</div>" +
-        '<div class="v-value">' + fmt(v, digits) + '<span class="v-unit">' + unitOf(s.symbol.toLowerCase()) + "</span></div>" +
-        '<div class="v-chg ' + cls(s.change_pct) + '">' + fmtSigned(s.change_pct, 2) + "%</div></div>";
+      var st = varState(s.change_pct);
+      return '<div class="mac-var"><span class="v-label">' + escapeHtml(s.label || s.symbol) + "</span>" +
+        '<span class="v-value">' + fmt(v, digits) + '<span class="v-unit">' + unitOf(key) + "</span></span>" +
+        '<span class="v-chg ' + cls(s.change_pct) + '">' + fmtSigned(s.change_pct, 2) + "%</span>" +
+        '<span class="v-state ' + st.cls + '">' + st.text + "</span></div>";
     }).join("");
   }
 
   // ---- 模块 4：宏观因子（服务端给的四维度，前端不重算）----
+  // 「影响资产」= 把服务端已给的 impact 正负**翻译成典型资产**（前端静态映射，非模型输出）
+  function factorAssets(name, impact) {
+    var map = null;
+    for (var k in FACTOR_ASSETS) {
+      if (FACTOR_ASSETS.hasOwnProperty(k) && name && name.indexOf(k) >= 0) { map = FACTOR_ASSETS[k]; break; }
+    }
+    if (impact > 0) return map ? map.pos : "风险资产 受益";
+    if (impact < 0) return map ? map.neg : "风险资产 承压";
+    return "影响中性";
+  }
+
   function renderFactors() {
     var box = el("macro-factors");
     if (!box) return;
@@ -459,39 +483,72 @@
       var dir = f.impact > 0 ? "↑ 偏多" : (f.impact < 0 ? "↓ 偏空" : "→ 中性");
       return '<li class="mac-factor-row"><span class="fr-name">' + escapeHtml(f.name) + "</span>" +
         '<span class="fr-dir ' + cls(f.impact) + '">' + dir + "</span>" +
-        '<span class="fr-note">' + escapeHtml(f.note || "") + "</span></li>";
+        '<span class="fr-note">' + escapeHtml(f.note || "") + "</span>" +
+        '<span class="fr-assets">影响：' + factorAssets(f.name, f.impact) + "</span></li>";
     }).join("");
   }
 
-  // ---- 模块 5：宏观关系 ----
+  // ---- 模块 5：宏观关系（默认只列最强的 2~3 条 + 「查看全部」展开其余）----
+  // ⚠️ 过滤规则与标注文案**同源**（都由 REL_MIN / REL_TOP / REL_FALLBACK 生成）：
+  //    D2（2026-09-14）的缺陷正是"标注写 |r| ≥ 0.5，行为却把 6 对全列出来"（实测 6 行全 < 0.5，最大 0.47）。
+  //    后端**没有** |r| 阈值参数（固定返回 6 对）→ 过滤只能在前端做，所以"标注"必须跟着前端规则走。
+  function relRowHtml(c) {
+    if (c.r == null) {   // r=None：**显示「样本不足」而不是错误的 0**（plan R6）
+      return '<li class="mac-rel-row muted" data-sig="0"><span class="rel-pair">' +
+        escapeHtml(c.pair) + '</span><span class="rel-r">样本不足</span>' +
+        '<span class="rel-n">n=' + (c.n || 0) + "</span></li>";
+    }
+    var strong = Math.abs(c.r) >= REL_MIN;
+    var sign = c.r > 0 ? "正相关" : "负相关";
+    return '<li class="mac-rel-row' + (strong ? " strong" : "") + '" data-sig="' + (strong ? 1 : 0) + '">' +
+      '<span class="rel-pair">' + escapeHtml(c.pair) + '</span>' +
+      '<span class="rel-r ' + (c.r > 0 ? "up" : "down") + '">' + fmtSigned(c.r, 2) + "</span>" +
+      '<span class="rel-n">' + sign + " · n=" + (c.n || 0) + "</span></li>";
+  }
+
   function renderRelation() {
     var box = el("macro-rel");
     if (!box) return;
+    var note = el("macro-rel-note"), more = el("macro-rel-more");
     var rows = ((state.macro || {}).correlation || []).slice();
-    if (!rows.length) { box.innerHTML = '<li class="mac-empty">数据暂缺</li>'; return; }
+    if (!rows.length) {
+      box.innerHTML = '<li class="mac-empty">数据暂缺</li>';
+      if (note) note.textContent = "";
+      if (more) more.hidden = true;
+      return;
+    }
     rows.sort(function (a, b) {
       var ra = a.r == null ? -2 : Math.abs(a.r), rb = b.r == null ? -2 : Math.abs(b.r);
       return rb - ra;
     });
-    box.innerHTML = rows.map(function (c) {
-      // r=None：**显示「样本不足」而不是错误的 0**（plan R6）
-      if (c.r == null) {
-        return '<li class="mac-rel-row muted"><span class="rel-pair">' + escapeHtml(c.pair) + "</span>" +
-          '<span class="rel-r">样本不足</span><span class="rel-n">n=' + (c.n || 0) + "</span></li>";
-      }
-      var strong = Math.abs(c.r) >= REL_MIN;
-      var sign = c.r > 0 ? "正相关" : "负相关";
-      return '<li class="mac-rel-row' + (strong ? " strong" : "") + '"><span class="rel-pair">' +
-        escapeHtml(c.pair) + '</span><span class="rel-r ' + (c.r > 0 ? "up" : "down") + '">' +
-        fmtSigned(c.r, 2) + "</span><span class=\"rel-n\">" + sign + " · n=" + (c.n || 0) + "</span></li>";
-    }).join("");
+    var valid = rows.filter(function (c) { return c.r != null; });
+    var strong = valid.filter(function (c) { return Math.abs(c.r) >= REL_MIN; });
+    // 有显著对 → 只列最强的 REL_TOP 条；一条都没达阈值 → 兜底列最强 REL_FALLBACK 条
+    // 并在标注里**明说"无显著对"**（绝不把弱相关说成显著）
+    var mode = strong.length ? "significant" : "fallback";
+    var lead = strong.length ? strong.slice(0, REL_TOP) : valid.slice(0, REL_FALLBACK);
+    var shown = relExpanded ? rows : lead;
+    box.setAttribute("data-rel-mode", mode);
+    box.innerHTML = shown.map(relRowHtml).join("");
+    if (note) {
+      note.textContent = (mode === "significant"
+          ? "1 年滚动窗口 · |r| ≥ " + REL_MIN.toFixed(1) + " 的显著对，显示前 " + lead.length + " 组"
+          : "1 年滚动窗口 · 当前无显著对（|r| 均 < " + REL_MIN.toFixed(1) + "），显示最强的 " + lead.length + " 组")
+        + " · 共 " + rows.length + " 组";
+    }
+    if (more) {
+      var hidden = rows.length - shown.length;
+      more.hidden = hidden <= 0 && !relExpanded;
+      more.textContent = relExpanded ? "收起 ↑" : "查看全部 " + rows.length + " 组 →";
+    }
   }
 
-  // ---- 模块 6：历史宏观环境（30 天三态分布 + 四象限）----
+  // ---- 模块 6：历史宏观环境（**当前状态置顶** + 30 天三态分布 + 四象限）----
   function renderHistory() {
     var box = el("macro-history");
     if (!box) return;
-    var h = (state.macro || {}).history_regime || null;
+    var m = state.macro || {};
+    var h = m.history_regime || null;
     var note = el("mac-history-note");
     var econ = state.econ || {};
     if (note) {
@@ -499,12 +556,22 @@
       note.textContent = (h && h.days ? "近 " + h.days + " 个交易日" : "") + quad;
     }
     if (!h || !h.days) { box.innerHTML = '<p class="mac-empty">数据暂缺</p>'; return; }
+    // ⚠️ 只说**数据支持得了**的话：接口给的是"近 N 个交易日里各状态各占几天"，**没有**逐日序列，
+    //    因此**不写"已持续 X 天"**（那会是无中生有）—— 改为"近 N 个交易日中 M 天"（plan §3.3 要点 7 的原始
+    //    措辞"已持续 X 天"因数据不支持而下调，见 journal 2026-09-14）。
+    var cur = (m.regime || {}).level;
+    var curDays = cur && h[cur] != null ? h[cur] : null;
+    var now = (cur && curDays != null)
+      ? '<div class="mac-hist-now">当前：<b class="' + cur + '">' + (LEVEL_TEXT[cur] || cur) + "</b>" +
+        '<span class="now-sub">近 ' + h.days + " 个交易日中 " + curDays + " 天（" +
+        Math.round((curDays / h.days) * 100) + "%）</span></div>"
+      : "";
     var items = [
       { key: "risk_on", label: "Risk-On 风险偏好", v: h.risk_on },
       { key: "neutral", label: "Neutral 中性", v: h.neutral },
       { key: "risk_off", label: "Risk-Off 风险规避", v: h.risk_off }
     ];
-    box.innerHTML = items.map(function (it) {
+    box.innerHTML = now + items.map(function (it) {
       var pct = Math.round((it.v / h.days) * 100);
       return '<div class="mac-hist-row"><span class="h-label">' + it.label + "</span>" +
         '<span class="h-bar"><i class="' + it.key + '" style="width:' + pct + '%"></i></span>' +
@@ -590,6 +657,7 @@
     bindShell();
     renderPills();
     bindPills();
+    bindRelMore();
     loadAll();
   });
 })();

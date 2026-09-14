@@ -702,9 +702,20 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 
 /* 卡片：细边框 + 极浅背景（不做玻璃/阴影堆叠，保持纸面感） */
 .mac-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+/* 分层（2026-09-14 macro-page-refine）：改前 7 张卡**等权**堆叠 = "堆卡片"（PRD 缺陷 D7）。
+   现在 5 层：一级区块(无边框) < 弱化卡(四/五级) < 普通卡(三级) < 重卡(二级)。 */
+.mac-flat { padding: 2px 2px 0; }                        /* 一级：无边框/无底色，靠间距与卡片区分 */
+.mac-card-hero { padding: 22px 26px 20px; }              /* 二级：唯一"重"卡片（主图所在） */
+.mac-card-quiet {                                        /* 四/五级：降对比度 = "背景资料" */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+/* 合并卡内的两栏：**align-self:start 让两栏各按内容高**，不互相拉伸（= 不留空转留白 D5/D6） */
+.mac-col { display: flex; flex-direction: column; gap: 12px; align-self: start; min-width: 0; }
 .mac-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
   margin-bottom: 16px; flex-wrap: wrap; }
-.mac-card h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--text-primary); }
+.mac-card h2, .mac-col-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--text-primary); }
+.mac-col-title .mac-note { margin-left: 8px; font-weight: 400; }
 .mac-note { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .mac-foot { margin: 10px 0 0; font-size: 11px; color: var(--text-muted); }
 .mac-empty { color: var(--text-muted); font-size: 13px; padding: 10px 0; margin: 0; }
@@ -749,29 +760,49 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 
 /* 模块 3 + 4：两列区 */
 .mac-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.mac-vars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.mac-var .v-label { font-size: 11px; color: var(--text-secondary); }
-.mac-var .v-value { margin-top: 4px; font-family: var(--mono); font-size: 20px;
+/* 模块 3：4 行紧凑表（名称 / 数值 / 日变化 / 状态词）—— 替代 2×2 网格，收紧下半屏留白（D6） */
+.mac-vars { display: flex; flex-direction: column; gap: 2px; }
+.mac-var { display: grid; grid-template-columns: minmax(0, 1fr) 118px 74px 76px; gap: 10px;
+  align-items: baseline; padding: 7px 10px; border-radius: 8px; font-size: 12px; }
+.mac-var:nth-child(odd) { background: color-mix(in srgb, var(--bg-hover) 55%, transparent); }
+.mac-var .v-label { color: var(--text-secondary); }
+.mac-var .v-value { text-align: right; font-family: var(--mono); font-size: 16px; line-height: 1.2;
   font-variant-numeric: tabular-nums; color: var(--text-primary); }
-.v-unit { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
-.mac-var .v-chg { margin-top: 2px; font-family: var(--mono); font-size: 12px; }
-.mac-factor-row { display: grid; grid-template-columns: 72px 70px minmax(0, 1fr); gap: 10px;
-  font-size: 12px; align-items: baseline; }
+.v-unit { font-size: 11px; color: var(--text-muted); margin-left: 2px; }
+.mac-var .v-chg { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mac-var .v-state { text-align: right; font-size: 11px; }
+.mac-factor-row { display: grid; grid-template-columns: 72px 70px minmax(0, 1fr); gap: 4px 10px;
+  font-size: 12px; align-items: baseline; padding: 4px 0; }
 .fr-name { color: var(--text-secondary); }
 .fr-dir { font-weight: 600; }
 .fr-note { color: var(--text-muted); font-size: 11px; }
+/* 「市场影响」占第二行（第 2~3 列）—— 真正的"填充内容"，对应 D5 那 77px 空转留白 */
+.fr-assets { grid-column: 2 / -1; color: var(--text-secondary); font-size: 11px; }
 
-/* 模块 5：宏观关系（只强调significant，不做热力图） */
+/* 模块 5：宏观关系（只强调significant，不做热力图；默认只列最强的 2~3 条 + 「查看全部」） */
 .mac-rel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.mac-rel-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 170px; gap: 12px;
+.mac-rel-row { display: grid; grid-template-columns: minmax(0, 1fr) 68px 150px; gap: 12px;
   padding: 8px 10px; border-radius: 8px; border-left: 2px solid transparent; font-size: 12px; align-items: baseline; }
 .mac-rel-row.strong { border-left-color: var(--blue); background: var(--bg-hover); }
 .mac-rel-row.muted { color: var(--text-muted); }
 .rel-r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
 .rel-n { color: var(--text-muted); font-size: 11px; text-align: right; }
+/* 「查看全部 N 组 →」折叠开关（药丸按钮，与 .mac-pill 同族视觉） */
+.mac-more { align-self: flex-start; margin-top: 10px; background: transparent; border: 1px solid var(--border);
+  color: var(--text-secondary); padding: 4px 12px; border-radius: 999px; font-size: 11px; font-family: inherit;
+  cursor: pointer; transition: color var(--t-fast) ease, border-color var(--t-fast) ease; }
+.mac-more:hover { color: var(--text-primary); border-color: var(--blue); }
 
 /* 模块 6：历史宏观环境（细条形，低饱和） */
 .mac-hist { display: flex; flex-direction: column; gap: 10px; }
+/* 「当前状态」置顶行：三态色 + 一行说明（**只说数据支持得了的**：近 N 日中各状态占几天） */
+.mac-hist-now { padding-bottom: 8px; border-bottom: 1px solid var(--border); font-size: 12px;
+  color: var(--text-secondary); }
+.mac-hist-now b { font-size: 14px; font-weight: 600; }
+.mac-hist-now b.risk_on { color: var(--green); }
+.mac-hist-now b.risk_off { color: var(--red); }
+.mac-hist-now b.neutral { color: var(--text-primary); }
+.mac-hist-now .now-sub { margin-left: 8px; font-size: 11px; color: var(--text-muted); }
 .mac-hist-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 110px; gap: 14px;
   align-items: center; font-size: 12px; }
 .h-label { color: var(--text-secondary); }
@@ -792,14 +823,18 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .e-yoy { margin-top: 4px; font-family: var(--mono); font-size: 12px; }
 .e-date { margin-top: 2px; font-size: 10px; color: var(--text-muted); }
 
-/* 响应式：≤1299 两列区合流、环境区单列；≤768 数字网格降 2 列；≤480 降单列（375 档验收） */
-@media (max-width: 1299px) {
+/* 响应式（2026-09-14 macro-page-refine 调整断点）：
+   ⚠️ 两列区合流断点 **1299 → 1023**：改前 1280 档就塌成单列、页面被拉到 2.09 屏（D10）；
+      实测两列各 ~480px 仍可读（.mac-rel-row 最少需要 ~320px）。
+   ≤768 数字网格降 2 列；≤480 降单列（375 档验收）。 */
+@media (max-width: 1023px) {
   .mac-regime { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .regime-score { text-align: left; }
   .mac-2col { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 768px) {
-  .mac-chart-wrap { height: clamp(260px, 40vh, 400px); }
+  /* D11：375 档主图改前只有 325px（40vh）→ 图表这个"视觉中心"比卡片标题还弱；给足 360~420px */
+  .mac-chart-wrap { height: clamp(360px, 48vh, 420px); }
   .mac-econ { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
   .mac-econ-item:nth-child(3) { border-left: 0; padding-left: 0; }
   .mac-rel-row { grid-template-columns: minmax(0, 1fr) 64px; }
@@ -807,9 +842,13 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 }
 @media (max-width: 480px) {
   .mac-card { padding: 16px; }
-  .mac-vars, .mac-econ { grid-template-columns: minmax(0, 1fr); }
+  .mac-econ { grid-template-columns: minmax(0, 1fr); }
   .mac-econ-item { border-left: 0; padding-left: 0; }
+  /* 375 档：变量表 4 列（118+74+76+gaps）在 ~287px 卡内容宽里放不下 → 收成 3 列并隐去状态词 */
+  .mac-var { grid-template-columns: minmax(0, 1fr) 96px 66px; gap: 8px; padding: 7px 8px; }
+  .mac-var .v-state { display: none; }
   .mac-hist-row { grid-template-columns: 104px minmax(0, 1fr) auto; gap: 10px; }
   .mac-factor { grid-template-columns: 56px minmax(0, 1fr) 42px; }
   .f-note { display: none; }
+  .fr-assets { grid-column: 1 / -1; }
 }

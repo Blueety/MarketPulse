@@ -8,10 +8,16 @@
   <meta http-equiv="Expires" content="0">
   <title>宏观数据 · MarketPulse</title>
   <script>
+    // ⚠️ D1（2026-09-14 macro-page-refine）：**必须"显式应用存储到的主题值"**，而不是只处理 "light"。
+    // 原实现只在存储为 light 时写属性，而 <html> 的默认属性就是 light →
+    // 存储为 dark 时**没有任何代码把 dark 写回**，用户从首页（深色）进入本页会突然变浅色
+    // （macro.js 里虽有 getTheme()，但此前只在"点击切换"时才调用）。
+    // ⚠️ 与 macro.js 的 applyTheme() 同口径；改动必须两边同步（docs/pitfalls.md「主题初始化分叉」）。
     (function () {
       try {
-        if (localStorage.getItem("mp-theme") === "light") {
-          document.documentElement.setAttribute("data-theme", "light");
+        var t = localStorage.getItem("mp-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
         }
       } catch (e) {}
     })();
@@ -32,8 +38,9 @@
           <p class="mac-sub">经济与市场环境工作台<span class="mac-sep">·</span>数据截至 <span id="macro-asof">—</span></p>
         </header>
 
-        <!-- 模块 1：当前宏观环境（风险偏好三态 + 四象限 + Macro Score + 四维度） -->
-        <section class="mac-card" id="mac-regime">
+        <!-- 一级块：当前宏观环境（**无卡片边框** → 与下方卡片形成层级差；plan §3.2「降卡片感」；
+             七个等权卡片是"堆卡片"，这里开始分层：一级=区块、二级=重卡、三/四级=合并卡、五级=弱化卡） -->
+        <section class="mac-flat" id="mac-regime">
           <div class="mac-card-head">
             <h2>当前宏观环境</h2>
             <span class="mac-note" id="regime-basis"></span>
@@ -51,8 +58,8 @@
           </div>
         </section>
 
-        <!-- 模块 2：宏观市场（单大图 = 视觉中心；胶囊切换品种 + 时间范围） -->
-        <section class="mac-card" id="mac-market">
+        <!-- 二级块：宏观市场（**唯一"重"卡片**：主图 = 视觉中心；胶囊切换品种 + 时间范围） -->
+        <section class="mac-card mac-card-hero" id="mac-market">
           <div class="mac-card-head">
             <h2>宏观市场</h2>
             <div class="mac-tools">
@@ -67,41 +74,39 @@
           <p class="mac-foot" id="macro-chart-foot"></p>
         </section>
 
-        <!-- 模块 3 + 4：核心宏观变量 / 宏观因子 -->
-        <div class="mac-2col">
-          <section class="mac-card" id="mac-vars">
-            <div class="mac-card-head"><h2>核心宏观变量</h2></div>
-            <div class="mac-vars" id="macro-vars"></div>
-          </section>
-          <section class="mac-card" id="mac-factors">
-            <div class="mac-card-head">
-              <h2>宏观因子</h2>
-              <span class="mac-note">四维度打分（-2 ~ +2）</span>
+        <!-- 三级块：核心宏观变量 + 宏观因子（**同一卡片内两栏** —— 去掉"卡片套卡片"两层壳，
+             消除空转留白 D5/D6；两栏 align-self:start，互不拉伸） -->
+        <section class="mac-card" id="mac-metrics">
+          <div class="mac-2col">
+            <div class="mac-col" id="mac-vars">
+              <h3 class="mac-col-title">核心宏观变量<span class="mac-note">状态词按日变化分档</span></h3>
+              <div class="mac-vars" id="macro-vars"></div>
             </div>
-            <ul class="mac-factors" id="macro-factors"></ul>
-          </section>
-        </div>
-
-        <!-- 模块 5：宏观关系（1 年滚动窗口，仅列显著对） -->
-        <section class="mac-card" id="mac-relation">
-          <div class="mac-card-head">
-            <h2>宏观关系</h2>
-            <span class="mac-note">1 年滚动窗口 · 相关系数 |r| ≥ 0.5 才列出</span>
+            <div class="mac-col" id="mac-factors">
+              <h3 class="mac-col-title">宏观因子<span class="mac-note">四维度打分（-2 ~ +2）· 影响资产为前端静态映射</span></h3>
+              <ul class="mac-factors" id="macro-factors"></ul>
+            </div>
           </div>
-          <ul class="mac-rel" id="macro-rel"></ul>
         </section>
 
-        <!-- 模块 6：历史宏观环境（三态逐日回放 + 四象限消费 /api/econ） -->
-        <section class="mac-card" id="mac-history">
-          <div class="mac-card-head">
-            <h2>历史宏观环境</h2>
-            <span class="mac-note" id="mac-history-note"></span>
+        <!-- 四级块：宏观关系 + 历史环境（同一卡片内两栏；关系**默认只列最强的 2~3 条** + 「查看全部」） -->
+        <section class="mac-card mac-card-quiet" id="mac-signals">
+          <div class="mac-2col">
+            <div class="mac-col" id="mac-relation">
+              <h3 class="mac-col-title">宏观关系<span class="mac-note" id="macro-rel-note"></span></h3>
+              <ul class="mac-rel" id="macro-rel"></ul>
+              <button class="mac-more" type="button" id="macro-rel-more" hidden></button>
+            </div>
+            <div class="mac-col" id="mac-history">
+              <h3 class="mac-col-title">历史宏观环境<span class="mac-note" id="mac-history-note"></span></h3>
+              <div class="mac-hist" id="macro-history"></div>
+            </div>
           </div>
-          <div class="mac-hist" id="macro-history"></div>
         </section>
 
-        <!-- 模块 7：经济数据（/api/econ，**必须显示数据月份**，不得写「最新/实时」） -->
-        <section class="mac-card" id="mac-econ">
+        <!-- 五级块：经济数据（/api/econ，**必须显示数据月份**，不得写「最新/实时」；
+             **降低对比度**：更浅底色 + 更弱边框，"这是背景资料"——PRD 要点 8） -->
+        <section class="mac-card mac-card-quiet" id="mac-econ">
           <div class="mac-card-head">
             <h2>经济数据</h2>
             <span class="mac-note" id="econ-asof"></span>

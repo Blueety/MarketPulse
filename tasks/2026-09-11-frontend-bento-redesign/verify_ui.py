@@ -1375,14 +1375,19 @@ def assert_macro_refine(browser, url: str) -> None:
         check(d["scrollW"] == d["innerW"], "M-9 1920 档无横向溢出", (d["scrollW"], d["innerW"]))
 
         # M-3：**标注必须与实际行为一致**（D2 核心缺陷：标注写 ≥0.5，实际列出 6 行全 < 0.5）
-        thr, rs = d["relThreshold"], d["relR"]
-        if thr is not None:
-            bad = [v for v in rs if v is not None and v < thr]
-            check(not bad and 1 <= len(rs) <= 3,
-                  f"M-3 宏观关系：默认列出的每一条都 ≥ 标注阈值 {thr}（且 ≤3 条）", (d["relNote"], rs))
-        else:
+        #      以 data-rel-mode 为主判据（"有显著对"还是"无显著对兜底"），再校验文案/行数是否自洽。
+        mode, thr, rs = d["relMode"], d["relThreshold"], d["relR"]
+        if mode == "significant":
+            bad = [v for v in rs if v is not None and v < thr] if thr is not None else None
+            check(thr is not None and not bad and 1 <= len(rs) <= 3,
+                  f"M-3 宏观关系（显著模式）：标注阈值 {thr} 与列出的行一致，且 ≤3 条",
+                  (d["relNote"], rs))
+        elif mode == "fallback":
             check(len(rs) <= 2 and "无" in d["relNote"],
-                  "M-3 宏观关系：无显著对时标注显式说明且兜底 ≤2 条", (d["relNote"], rs))
+                  "M-3 宏观关系（兜底模式）：标注显式说明「无显著对」且仅列 ≤2 条",
+                  (d["relNote"], rs))
+        else:
+            check(False, "M-3 宏观关系容器必须声明 data-rel-mode（过滤口径可被验收）", mode)
         check(d["relMoreShown"], "M-3b 存在被折叠的对 → 「查看全部」可点", d["relMoreShown"])
         try:
             page.evaluate("() => { const b = document.getElementById('macro-rel-more'); if (b) b.click(); }")
