@@ -37,7 +37,7 @@ def _sample_inputs():
 class TestFetchWatchlist:
     def test_us_yahoo(self, monkeypatch):
         monkeypatch.setattr(ft, "_fetch_yahoo_watch",
-                            lambda s: (210.0, [("2026-08-28", 200.0), ("2026-08-29", 210.0)]))
+                            lambda s, *a: (210.0, [("2026-08-28", 200.0), ("2026-08-29", 210.0)]))
         monkeypatch.setattr(ft, "_fetch_a_share_watch",
                             lambda s: (10.0, [("2026-08-28", 9.0), ("2026-08-29", 10.0)]))
         values, series, errors = ft.fetch_watchlist([{"symbol": "AAPL"}, {"symbol": "600519.SS"}])
@@ -48,7 +48,7 @@ class TestFetchWatchlist:
 
     def test_a_share_dispatch(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s: (1.0, []))
+        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s, *a: (1.0, []))
         monkeypatch.setattr(ft, "_fetch_a_share_watch", lambda s: calls.append(s) or (2.0, []))
         values, series, errors = ft.fetch_watchlist([{"symbol": "000001.SZ"}])
         assert calls == ["000001.SZ"]
@@ -58,10 +58,10 @@ class TestFetchWatchlist:
         def ok(s):
             return (1.0, [("2026-08-28", 1.0), ("2026-08-29", 1.0)])
 
-        def bad(s):
+        def bad(s, *a):
             raise ValueError("boom")
 
-        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s: ok(s) if s == "AAPL" else bad(s))
+        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s, *a: ok(s) if s == "AAPL" else bad(s))
         monkeypatch.setattr(ft, "_fetch_a_share_watch", bad)
         values, series, errors = ft.fetch_watchlist(
             [{"symbol": "AAPL"}, {"symbol": "TSLA"}, {"symbol": "600519.SS"}])
@@ -69,13 +69,26 @@ class TestFetchWatchlist:
         assert set(errors.keys()) == {"TSLA", "600519.SS"}
         assert "AAPL" not in errors
 
+    def test_range_passthrough(self, monkeypatch):
+        """M-1 契约：range_ 透传到 Yahoo 取数层（默认 "2y" 不变；宏观端点传 "5y"）。
+
+        ⚠️ 这里同时是 R2 的护栏：range 是自选股与宏观**共用**的取数函数，
+        若有人把默认值直接改成 5y，本用例的 `seen == ["2y", "5y"]` 会失败。
+        """
+        seen = []
+        monkeypatch.setattr(ft, "_fetch_yahoo_watch",
+                            lambda s, r="2y": seen.append(r) or (1.0, []))
+        ft.fetch_watchlist([{"symbol": "AAPL"}])
+        ft.fetch_watchlist([{"symbol": "AAPL"}], range_="5y")
+        assert seen == ["2y", "5y"]
+
     def test_empty(self, monkeypatch):
-        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s: (1.0, []))
+        monkeypatch.setattr(ft, "_fetch_yahoo_watch", lambda s, *a: (1.0, []))
         values, series, errors = ft.fetch_watchlist([])
         assert values == {} and series == {} and errors == {}
 
     def test_timeout_isolated(self, monkeypatch):
-        def bad(s):
+        def bad(s, *a):
             raise TimeoutError("timeout")
 
         monkeypatch.setattr(ft, "_fetch_yahoo_watch", bad)

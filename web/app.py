@@ -25,6 +25,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src import storage as st
 from src.analyzer import ALERTS_DIR as _ALERTS_DIR
+from src.analyzer import _pearson, _returns      # 宏观相关性复用（2026-09-14）
 from src.analyzer import classify_move, classify_vix
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import load_watchlist_snapshot
@@ -600,17 +601,244 @@ def _load_macro_stocks() -> list[dict]:
 
 
 def _load_macro() -> dict:
-    """实时取宏观标的（复用自选股取数链路）；失败降级空结构（HTTP 200，不 500）。"""
+    """实时取宏观标的 + 派生宏观环境 / 相关性 / 历史三态分布（复用自选股取数链路）。
+
+    取数失败降级空结构（HTTP 200，不 500）。派生三键（`regime` / `correlation` /
+    `history_regime`）全部是**内存纯计算**，零落盘 —— 与 trend 合并成一份响应，
+    避免前端多次取数与口径漂移。
+    """
     empty = {"stocks": [], "trend": {"dates": [], "series": []}}
     stocks = _load_macro_stocks()
     if not stocks:
         return empty
     try:
-        values, series, _errors = fetch_watchlist(stocks)
-        return _build_watchlist_payload(stocks, values, series, tail=400)   # 三十四期：补全黄金 1Y 视图
+        # 2026-09-14：宏观页需要 5Y（trend.dates ≈ 1260 点）。range 必须传参 ——
+        # 改 _fetch_yahoo_watch 的默认值会连带把 /api/watchlist 也拉成 5y（它只要 30 天）。
+        values, series, _errors = fetch_watchlist(stocks, range_="5y")
+        payload = _build_watchlist_payload(stocks, values, series, tail=1260)  # 5Y 全量，下游各自截取
     except Exception as exc:
         log.warning("宏观标的取数失败，降级空结构: %s", exc)
         return empty
+    records = _last_records(_MACRO_RECORDS)
+    indices = (_compute_latest(records) or (None, []))[1]
+    payload["regime"] = _compute_macro_regime(indices, records, payload.get("trend") or {})
+    payload["correlation"] = compute_macro_correlation(payload.get("trend") or {})
+    payload["history_regime"] = _macro_history_regime(records)
+    return payload
+
+
+# ---- 宏观环境（2026-09-14 宏观页 /macro 专用）----
+#
+# ⚠️ 三条边界（勿越界）：
+# 1. **四象限（reflation / goldilocks / stagflation / deflation）不在这里算** —— 它由
+#    `src/econ_fetcher.py`（/api/econ）产出，宏观页只消费 `quadrant` / `inflation_axis` /
+#    `growth_axis`。在本层重算 → 与后端漂移（plan §4.4）。
+# 2. 本层只负责**风险偏好轴的三态**（Risk-On / Neutral / Risk-Off）及其 30 天分布，
+#    复用 analyzer 的阈值与首页 `_compute_risk_appetite` 口径（单一事实来源）。
+# 3. 以下阈值**全是工程取值**（形态参考 Equicurious《Using Risk-On/Risk-Off Dashboards》
+#    的四指标法：每项 -2~+2 → 总分 -8~+8 → ÷8 归一化 → ±0.25 分档）。原文用 IG/HY 信用利差
+#    （需 FRED，本机不通），这里用本库可得数据填满四维度。**不是行业标准**，前端须标「评分口径」。
+_MACRO_SCORE_MAX = 8              # 4 维度 × ±2
+_MACRO_NEUTRAL_BAND = 0.25        # 归一化后 ±0.25 内 = Neutral（与出处一致）
+_MACRO_MA_WINDOW = 50             # 美元相对均线窗口（交易日）
+_MACRO_CHG_DAYS = 5               # 利率 / 商品 5 日变化
+_MACRO_DXY_BANDS = (1.0, 2.0)     # 美元偏离均线分档（%）
+_MACRO_RATE_BANDS = (0.10, 0.25)  # 10Y 5 日变化分档（百分点）
+_MACRO_CMDTY_BANDS = (2.0, 5.0)   # 原油 5 日变化分档（%）
+_MACRO_RECORDS = 40               # 派生指标回看的记录条数（30 天回放 + 5 日变化余量）
+_MACRO_CORR_WINDOW = 252          # 相关性滚动窗口 = 1 年（业界惯例，见 docs/architecture.md）
+_MACRO_CORR_MIN_POINTS = 30       # 有效点下限；不足 → r=None（前端「样本不足」，不显示 0）
+_MACRO_HISTORY_DAYS = 30          # 历史环境分布窗口
+
+# 宏观两两相关（4 变量 → 6 对；不做热力图、不引通胀序列 —— 库内无通胀历史序列）
+MACRO_CORR_PAIRS = [
+    ("DX-Y.NYB", "GC=F", "美元 ↔ 黄金"),
+    ("DX-Y.NYB", "CL=F", "美元 ↔ 原油"),
+    ("DX-Y.NYB", "^TNX", "美元 ↔ 10Y 美债"),
+    ("GC=F", "CL=F", "黄金 ↔ 原油"),
+    ("GC=F", "^TNX", "黄金 ↔ 10Y 美债"),
+    ("CL=F", "^TNX", "原油 ↔ 10Y 美债"),
+]
+
+
+def _band_score(delta: float, bands: tuple[float, float], inverse: bool = False) -> int:
+    """按 `|delta|` 落档打分：< b0 → 0；b0~b1 → ±1；≥ b1 → ±2。
+
+    `inverse=True`：数值上行 = 风险偏好下行（美元走强 / 利率上行），符号取反。
+    """
+    b0, b1 = bands
+    mag = abs(delta)
+    if mag < b0:
+        return 0
+    sign = 1 if delta > 0 else -1
+    return (-sign if inverse else sign) * (1 if mag < b1 else 2)
+
+
+def _valid_points(raw) -> list[float]:
+    """trend.raw 里的有效数值点（None/非数一律剔除；缺口不补齐）。"""
+    return [v for v in (raw or []) if isinstance(v, (int, float))]
+
+
+def _chg_pct(points: list[float], days: int) -> float | None:
+    """最近 `days` 日变化（%）：末点 vs 倒数第 `days+1` 个有效点；点数不足 / 基准为 0 → None。"""
+    if len(points) < days + 1:
+        return None
+    prev = points[-(days + 1)]
+    if not prev:
+        return None
+    return round((points[-1] - prev) / prev * 100, 2)
+
+
+def _dev_from_ma_pct(points: list[float], window: int) -> float | None:
+    """最新值相对最近 `window` 个有效点均值的偏离（%）；点数不足 / 均值为 0 → None。"""
+    if len(points) < window:
+        return None
+    ma = sum(points[-window:]) / window
+    if not ma:
+        return None
+    return round((points[-1] - ma) / ma * 100, 2)
+
+
+def _compute_macro_regime(indices: list[dict], records: list[dict], trend: dict) -> dict:
+    """宏观环境四维度打分 → `{level, score, score100, normalized, factors, basis}`。
+
+    维度 / 来源（阈值见上方常量，**均为工程取值**）：
+
+    | 维度 | 输入 | 打分 |
+    |---|---|---|
+    | 风险偏好 | VIX 状态 + MOVE 状态（`analyzer.classify_*`，与首页同口径） | VIX 平静 +2 / 警惕 0 / 恐慌 -2；MOVE 恐慌再 -1；合计 clamp ±2 |
+    | 美元 | DX-Y.NYB 相对 50 日均线偏离 % | ±1% 内 0；1~2% → ∓1；≥2% → ∓2（**美元走强 = 负分**）|
+    | 利率 | ^TNX 5 日变化（百分点） | 0.10 内 0；0.10~0.25 → ∓1；≥0.25 → ∓2（**利率上行 = 负分**）|
+    | 商品 | CL=F 5 日变化 % | 2% 内 0；2~5% → ±1；≥5% → ±2（商品上行 = 再通胀 = 正分）|
+
+    缺数据的维度**不计分**（分母仍为 8 → 结果偏 Neutral，是刻意的保守默认，不猜）。
+    """
+    series = {s.get("key"): (s.get("raw") or []) for s in ((trend or {}).get("series") or [])}
+    factors: list[dict] = []
+    total = 0
+
+    # 维度 1：风险偏好（VIX + MOVE）
+    vix = next((it.get("value") for it in (indices or []) if it.get("symbol") == "VIX"), None)
+    move = next((it.get("value") for it in (indices or []) if it.get("symbol") == "MOVE"), None)
+    risk = 0
+    vix_state = move_state = None
+    if vix is not None:
+        vix_state = classify_vix(vix)[0]
+        risk += {"平静": 2, "警惕": 0, "恐慌": -2}.get(vix_state, 0)
+    if move is not None:
+        move_state = classify_move(move)[0]
+        risk += -1 if move_state == "恐慌" else 0   # 债市只在剧烈时扣分（与首页 _compute_risk_appetite 一致）
+    if vix is not None or move is not None:
+        risk = max(-2, min(2, risk))
+        total += risk
+        factors.append({"name": "风险偏好", "value": vix, "unit": "",
+                        "impact": risk,
+                        "note": "VIX %s / MOVE %s" % (vix_state or "—", move_state or "—")})
+
+    # 维度 2：美元（相对均线偏离，反向）
+    dxy = _valid_points(series.get("dx-y.nyb"))
+    dev = _dev_from_ma_pct(dxy, _MACRO_MA_WINDOW) if dxy else None
+    if dev is not None:
+        score = _band_score(dev, _MACRO_DXY_BANDS, inverse=True)
+        total += score
+        factors.append({"name": "美元", "value": dev, "unit": "%", "impact": score,
+                        "note": "相对 %d 日均线偏离" % _MACRO_MA_WINDOW})
+
+    # 维度 3：利率（10Y 5 日变化，反向）
+    tnx = _valid_points(series.get("^tnx"))
+    rate_chg = _chg_pct(tnx, _MACRO_CHG_DAYS) if tnx else None
+    if rate_chg is not None:
+        score = _band_score(rate_chg, _MACRO_RATE_BANDS, inverse=True)
+        total += score
+        factors.append({"name": "利率", "value": rate_chg, "unit": "pp", "impact": score,
+                        "note": "10Y %d 日变化" % _MACRO_CHG_DAYS})
+
+    # 维度 4：商品（原油 5 日变化）
+    oil = _valid_points(series.get("cl=f"))
+    oil_chg = _chg_pct(oil, _MACRO_CHG_DAYS) if oil else None
+    if oil_chg is not None:
+        score = _band_score(oil_chg, _MACRO_CMDTY_BANDS)
+        total += score
+        factors.append({"name": "商品", "value": oil_chg, "unit": "%", "impact": score,
+                        "note": "原油 %d 日变化" % _MACRO_CHG_DAYS})
+
+    normalized = round(total / _MACRO_SCORE_MAX, 3)
+    if normalized > _MACRO_NEUTRAL_BAND:
+        level = "risk_on"
+    elif normalized < -_MACRO_NEUTRAL_BAND:
+        level = "risk_off"
+    else:
+        level = "neutral"
+    return {
+        "level": level,
+        "score": total,
+        "score100": round((normalized + 1) / 2 * 100, 1),
+        "normalized": normalized,
+        "factors": factors,
+        "max_score": _MACRO_SCORE_MAX,
+        # 口径标注（前端直接展示，勿让它看起来像权威指标）
+        "basis": "四指标法（每项 -2~+2，总分 ÷8，±0.25 分档）；"
+                 "信用利差维度改用 波动率/美元/利率/商品，阈值为工程取值",
+    }
+
+
+def compute_macro_correlation(trend: dict, window: int = _MACRO_CORR_WINDOW) -> list[dict]:
+    """宏观品种两两相关（**1 年滚动窗口**）→ `[{a, b, pair, r, n}]`（固定 6 对，顺序稳定）。
+
+    ⚠️ **不复用** `analyzer.compute_correlation`（它绑定 `history` 的 10 个指数键与
+    `CORRELATION_PAIRS`）；只复用 `analyzer._returns` / `_pearson`。数据源是 `/api/macro`
+    的 `trend.raw`（5Y，同一批取数 → 日期天然对齐，无需跨源对齐）。
+
+    `r=None` 表示样本不足或零方差 —— 前端显示「样本不足」，**绝不显示错误的 0**。
+    """
+    dates = list((trend or {}).get("dates") or [])
+    series = {s.get("key"): (s.get("raw") or []) for s in ((trend or {}).get("series") or [])}
+    if not dates or not series:
+        return [{"a": a, "b": b, "pair": pair, "r": None, "n": 0} for a, b, pair in MACRO_CORR_PAIRS]
+    rows = []
+    for i, day in enumerate(dates):
+        row = {"date": day}
+        for key, raw in series.items():
+            row[key] = raw[i] if i < len(raw) else None
+        rows.append(row)
+    rows = rows[-window:]                     # 1 年滚动窗口
+    out = []
+    for a, b, pair in MACRO_CORR_PAIRS:
+        ret_a, ret_b = _returns(rows, a), _returns(rows, b)
+        common = sorted(set(ret_a) & set(ret_b))
+        xs = [ret_a[d] for d in common]
+        ys = [ret_b[d] for d in common]
+        n = len(xs)
+        out.append({"a": a, "b": b, "pair": pair,
+                    "r": _pearson(xs, ys) if n >= _MACRO_CORR_MIN_POINTS else None,
+                    "n": n})
+    return out
+
+
+def _macro_history_regime(records: list[dict], days: int = _MACRO_HISTORY_DAYS) -> dict:
+    """最近 `days` 个交易日的风险偏好三态分布（逐日回放）→ `{risk_on, neutral, risk_off, days}`。
+
+    复用 `_compute_risk_appetite`（单一事实来源）：每一天都**只用当天及之前**的记录回放，
+    绝不用未来信息；末尾多取 5 天仅为 VIX 5 日变化提供上下文（不足则自动少算该因子）。
+    """
+    rows = [r for r in (records or []) if isinstance(r, dict) and r.get("date")]
+    rows.sort(key=lambda r: r.get("date", ""))
+    window = rows[-(days + 5):]
+    counts = {"risk_on": 0, "neutral": 0, "risk_off": 0, "days": 0}
+    for i in range(max(0, len(window) - days), len(window)):
+        upto = window[:i + 1]
+        rec = upto[-1]
+        indices = [{"symbol": "VIX", "value": rec.get("vix")},
+                   {"symbol": "MOVE", "value": rec.get("move")}]
+        level = _compute_risk_appetite(indices, upto)["level"]
+        if level == "high":
+            counts["risk_on"] += 1
+        elif level == "low":
+            counts["risk_off"] += 1
+        elif level == "neutral":
+            counts["neutral"] += 1
+        counts["days"] += 1
+    return counts
 
 
 # ---- 端点 ----

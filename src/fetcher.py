@@ -562,13 +562,17 @@ def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
 
 
 # ---- 二十四期：自选股/持仓取数 ----
-def _fetch_yahoo_watch(symbol: str) -> tuple[float, list]:
-    """Yahoo chart REST 取美股/ETF 当日价 + 收盘序列（range=2y, interval=1d；三十四期窗口放宽到 2 年，深度由调用方 _series_tail 决定）。
+def _fetch_yahoo_watch(symbol: str, range_: str = "2y") -> tuple[float, list]:
+    """Yahoo chart REST 取美股/ETF 当日价 + 收盘序列（interval=1d，窗口由 `range_` 决定）。
+
+    ⚠️ `range_` **必须参数化**，不要写死成 5y：本函数被**自选股与宏观共用** ——
+    自选股只需 30 天（`/api/watchlist`），宏观页要 5 年（`/api/macro` 传 `"5y"`）。
+    直接改默认值会让自选股也多取 2.5 倍数据（深度由调用方 `_series_tail` 决定）。
 
     当日价取 meta.regularMarketPrice（缺失回退序列末值）；序列时间戳转美东日期，
     与 history.json 美东 date 键对齐。返回 (value, [(date, close), ...])。
     """
-    resp = _yahoo_chart_get(symbol, {"interval": "1d", "range": "2y"})  # 三十四期：2y 供 /api/macro 黄金 1Y 视图（下游 _series_tail 各自截取）
+    resp = _yahoo_chart_get(symbol, {"interval": "1d", "range": range_})
     r = resp.json()["chart"].get("result")
     if not r:
         raise ValueError("Yahoo 返回空图表数据")
@@ -618,8 +622,11 @@ def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
     return _fetch_yahoo_watch(symbol)
 
 
-def fetch_watchlist(stocks: list[dict]) -> tuple[dict, dict, dict]:
+def fetch_watchlist(stocks: list[dict], range_: str = "2y") -> tuple[dict, dict, dict]:
     """取自选股数据：返回 (values, series, errors)。
+
+    range_：透传给美股/ETF 的 Yahoo 窗口（默认 `"2y"` = 既有行为；`/api/macro` 传 `"5y"`）。
+    A 股(.SS/.SZ) 走新浪接口（固定 ~30 交易日），不受本参数影响。
 
     values[symbol]=当日收盘价；series[symbol]=[(date, close), ...] 近 30 日（含当日）；
     errors[symbol]=错误信息（取数失败/超时）。逐标的并行线程 + 整体限时 SECTOR_TIMEOUT，
@@ -637,7 +644,7 @@ def fetch_watchlist(stocks: list[dict]) -> tuple[dict, dict, dict]:
             if sym.endswith(".SS") or sym.endswith(".SZ"):
                 entry["value"], entry["series"] = _fetch_a_share_watch(sym)
             else:
-                entry["value"], entry["series"] = _fetch_yahoo_watch(sym)
+                entry["value"], entry["series"] = _fetch_yahoo_watch(sym, range_)
         except Exception as exc:
             entry["error"] = str(exc)
             log.warning("自选股 %s 获取失败: %s", sym, exc)

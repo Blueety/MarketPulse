@@ -1023,7 +1023,7 @@ def test_load_macro_stocks_config_raises(monkeypatch):
 
 def test_load_macro_fetch_raises(monkeypatch):
     """fetch_watchlist 抛 → 空结构降级（不 500）。"""
-    def boom(stocks):
+    def boom(*a, **k):                      # 宏观链路会传 range_，桩必须接得住
         raise RuntimeError("network down")
     monkeypatch.setattr(web.app, "fetch_watchlist", boom)
     assert _load_macro() == {"stocks": [], "trend": {"dates": [], "series": []}}
