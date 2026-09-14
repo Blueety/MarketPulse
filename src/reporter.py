@@ -554,7 +554,7 @@ def render_market_trend_chart(history: list[dict], date: str, market: str):
         return None
     return result.get("path")
 
-def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None, us_sector_heat=None, open_prices=None) -> str:
+def render_snapshot(date, values, statuses, market=None, time="noon", sector_heat=None, us_sector_heat=None) -> str:
     """渲染盘中快照。market=None 保持原三板块午盘快照（美东 12:30）逐字不变；
     market="a-share"/"us" 走单板块渲染（仅大盘表 + 日期/类型行，无 VIX 状态行，设计 D）。"""
     if market is None:
@@ -630,36 +630,11 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
     else:
         section_title = "🌏 美股大盘"
         syms = [s for s in SYMBOLS if s in STOCK_SYMBOLS and s not in A_SHARE_SYMBOLS]
-    # 添加与开盘对比列
-    def _vs_open(s):
-        if open_prices is None or open_prices.get(s) is None or values.get(s) is None:
-            return ""
-        open_val = open_prices[s]
-        cur_val = values[s]
-        if open_val == 0:
-            return ""
-        chg = (cur_val - open_val) / open_val * 100
-        sign = "+" if chg >= 0 else ""
-        return f"{sign}{chg:.2f}%"
-    
-    if time in ("midday", "close") and open_prices:
-        rows = [
-            f"| {SYMBOLS[s]['label']} | {('休市' if market == 'a-share' else '数据暂缺') if values[s] is None else fmt_value(values[s])} | {_vs_open(s) or '—'} | {statuses[s][0]} |"
-            for s in syms
-        ]
-        table = "\n".join(rows)
-    else:
-        rows = [
-            f"| {SYMBOLS[s]['label']} | {('休市' if market == 'a-share' else '数据暂缺') if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
-            for s in syms
-        ]
-        table = "\n".join(rows)
-    # 根据时段决定表格列
-    if time in ("midday", "close") and open_prices:
-        header = "| 指数 | 当前值 | 与开盘对比 | 趋势 |\n| :--- | :--- | :--- | :--- |"
-    else:
-        header = "| 指数 | 当前值 | 趋势 |\n| :--- | :--- | :--- |"
-    
+    rows = [
+        f"| {SYMBOLS[s]['label']} | {('休市' if market == 'a-share' else '数据暂缺') if values[s] is None else fmt_value(values[s])} | {statuses[s][0]} |"
+        for s in syms
+    ]
+    table = "\n".join(rows)
     body = f"""# 🕛 盘中快照
 
 **日期**：{date}（{tz_label}）
@@ -669,7 +644,8 @@ def render_snapshot(date, values, statuses, market=None, time="noon", sector_hea
 
 ## {section_title}
 
-{header}
+| 指数 | 当前值 | 趋势 |
+| :--- | :--- | :--- |
 {table}"""
 """
     if market == "a-share" and sector_heat is not None:

@@ -62,7 +62,7 @@ def main(market: str = "us", time: str = "noon") -> int:
     statuses = build_statuses(values, errors, last_values, history)
     path = save_snapshot(
         date,
-        render_snapshot(date, values, statuses, market, time, sector_heat=sector_heat, open_prices=quotes if time in ('midday', 'close') else None),
+        render_snapshot(date, values, statuses, market, time, sector_heat=sector_heat),
         suffix=f"{market}-{time}",
     )
     try:  # 告警失败仅记日志，不影响快照生成（决策 H）
