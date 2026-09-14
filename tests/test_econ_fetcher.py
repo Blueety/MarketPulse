@@ -95,13 +95,37 @@ def _patch_post(monkeypatch, payload=None, exc=None):
 class TestYoy:
     def test_normal(self):
         # 去年同月 324.24 → 今月 334.98 ≈ +3.31%
-        assert ef._yoy([324.24] + [0.0] * 11 + [334.98]) == pytest.approx(3.31, abs=0.01)
-
-    def test_insufficient_months(self):
-        assert ef._yoy([1.0] * 12) is None
+        assert ef._yoy(324.24, 334.98) == pytest.approx(3.31, abs=0.01)
 
     def test_zero_base_no_zero_division(self):
-        assert ef._yoy([0.0] + [1.0] * 11 + [100.0]) is None
+        assert ef._yoy(0.0, 100.0) is None
+
+    def test_missing_base(self):
+        assert ef._yoy(None, 100.0) is None
+
+
+class TestYoyAt:
+    """`_yoy_at`：**按月份键**找去年同月（BLS 有真实缺月，按位置取会静默算错基准）。"""
+
+    def test_insufficient_months(self):
+        rows = _series(_level_ramp(12))
+        assert ef._yoy_at(rows, len(rows) - 1) is None
+
+    def test_middle_gap_still_computes(self):
+        """实测场景：CPI-U / 失业率都缺 `2025-10` → 中间缺月**不影响**同比。"""
+        rows = [r for r in _series(_level_ramp(25)) if r[0] != "2025-10"]
+        by_ym = dict(rows)
+        yoy = ef._yoy_at(rows, len(rows) - 1)
+        assert yoy is not None
+        assert yoy == round((by_ym["2026-08"] / by_ym["2025-08"] - 1) * 100, 2)
+
+    def test_base_month_absent_returns_none(self):
+        rows = [r for r in _series(_level_ramp(25)) if r[0] != "2025-08"]
+        assert ef._yoy_at(rows, len(rows) - 1) is None
+
+    def test_end_out_of_range(self):
+        rows = _series(_level_ramp(14))
+        assert ef._yoy_at(rows, 99) is None
 
 
 # ---- 方向 ----
@@ -233,10 +257,16 @@ class TestBuildEconPayload:
         cpi = next(s for s in p["series"] if s["key"] == "cpi")
         assert cpi["date"] == "2026-08" and cpi["yoy"] is not None
 
-    def test_month_gap_makes_yoy_none(self):
-        """数据缺口：倒数第 13 个缺月 → 同比必须 None（不静默拿错基准）。"""
-        rows = _series(_level_ramp())
-        p = ef.build_econ_payload({"cpi": rows[:12] + rows[13:]})
+    def test_middle_gap_keeps_yoy(self):
+        """实测缺口（BLS 缺 `2025-10`）不再让同比变 None —— 基准按月份键取。"""
+        rows = [r for r in _series(_level_ramp(25)) if r[0] != "2025-10"]
+        p = ef.build_econ_payload({"cpi": rows})
+        cpi = next(s for s in p["series"] if s["key"] == "cpi")
+        assert cpi["yoy"] is not None and cpi["direction"] is not None
+
+    def test_missing_base_month_yields_none(self):
+        rows = [r for r in _series(_level_ramp(25)) if r[0] != "2025-08"]
+        p = ef.build_econ_payload({"cpi": rows})
         assert next(s for s in p["series"] if s["key"] == "cpi")["yoy"] is None
 
     def test_twelve_months_not_enough(self):

@@ -37,6 +37,8 @@ def _reset_watch_cache(monkeypatch):
     web.app._watch_cache["payload"] = None
     web.app._macro_cache["ts"] = 0.0
     web.app._macro_cache["payload"] = None
+    web.app._econ_cache["ts"] = 0.0
+    web.app._econ_cache["payload"] = None
     monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
     yield
 
@@ -1245,3 +1247,77 @@ def test_api_news_missing_items_key(client, tmp_path, monkeypatch):
     r = client.get("/api/news")
     assert r.status_code == 200
     assert r.json() == {"date": None, "items": [], "count": 0}
+
+
+# ---- /api/econ（经济数据 BLS，2026-09-14）----
+
+def _econ_months(n, end_year=2026, end_month=8):
+    """n 个连续月份键（升序），末尾为 end_year-end_month。"""
+    out, y, m = [], end_year, end_month
+    for _ in range(n):
+        out.append(f"{y}-{m:02d}")
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return list(reversed(out))
+
+
+def _econ_raw_14():
+    """最小可用 raw：4 序列各 14 个月（够算同比），水平温和上行 → 同比非空。"""
+    yms = _econ_months(14)
+    cpi = [(ym, 300.0 + i) for i, ym in enumerate(yms)]
+    return {
+        "cpi": cpi,
+        "ppi": list(cpi),
+        "payrolls": [(ym, 150000.0 + 100 * i) for i, ym in enumerate(yms)],
+        "unemployment": [(ym, 4.5 - 0.02 * i) for i, ym in enumerate(yms)],
+    }
+
+
+def test_api_econ_structure(monkeypatch):
+    """端点：200 + 4 序列（latest/yoy/direction 非空）+ as_of 为数据月份 + 四象限自洽。"""
+    monkeypatch.setattr(web.app, "fetch_econ_series", lambda *a, **k: _econ_raw_14())
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/econ")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["as_of"] == "2026-08"                      # ★ 数据月份，不是抓取时间
+    assert [s["key"] for s in data["series"]] == ["cpi", "ppi", "unemployment", "payrolls"]
+    for s in data["series"]:
+        assert s["latest"] is not None and s["yoy"] is not None and s["direction"]
+    assert data["quadrant"] in ("reflation", "goldilocks", "stagflation", "deflation")
+    assert data["quadrant_label"]
+    # 象限与两轴自洽（查表反推）
+    assert (data["inflation_axis"], data["growth_axis"]) in {
+        ("up", "expanding"), ("down", "expanding"), ("up", "contracting"), ("down", "contracting")}
+    assert data["basis"]["growth"]                       # 口径标注（勿被误读成 PMI）
+
+
+def test_api_econ_degrade_and_failure_not_cached(monkeypatch):
+    """BLS 失败 → 200 + 空结构（不 500）；且**失败不写缓存**（否则会锁死 6 小时）。"""
+    state = {"raw": {}}
+    monkeypatch.setattr(web.app, "fetch_econ_series", lambda *a, **k: state["raw"])
+    from fastapi.testclient import TestClient
+
+    c = TestClient(web.app.app)
+    bad = c.get("/api/econ").json()
+    assert bad["as_of"] is None and bad["quadrant"] is None and len(bad["series"]) == 4
+    # 恢复后立刻拿到数据（若失败被缓存，这里仍是空 → 断言失败）
+    state["raw"] = _econ_raw_14()
+    assert c.get("/api/econ").json()["as_of"] == "2026-08"
+
+
+def test_api_econ_ttl_cache(monkeypatch):
+    """连续调 3 次只触发 1 次 BLS 请求（6h TTL 生效）。"""
+    calls = []
+    monkeypatch.setattr(web.app, "fetch_econ_series",
+                        lambda *a, **k: calls.append(1) or _econ_raw_14())
+    from fastapi.testclient import TestClient
+
+    c = TestClient(web.app.app)
+    for _ in range(3):
+        assert c.get("/api/econ").json()["as_of"] == "2026-08"
+    assert len(calls) == 1
+    # 防回退：BLS 无 Key 限额 25 次/日，TTL 绝不能"对齐"成 90s（那是 960 次/日）
+    assert web.app._ECON_TTL == 6 * 3600

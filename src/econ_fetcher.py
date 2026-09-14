@@ -9,7 +9,9 @@
    （超限时 BLS 返回 `REQUEST_NOT_PROCESSED`）。经济数据是**月度**的，6 小时 TTL
    完全不影响新鲜度。
 2. **CPI-U / PPI 返回的是"指数"不是百分比**（CPI-U 2026-M08 = 334.980）。同比要自己算：
-   `(今月 / 去年同月 - 1) × 100`。因此 `startyear` 至少拉 3 年（算同比至少要 13 个月）。
+   `(今月 / 去年同月 - 1) × 100`，且**必须按月份键找去年同月**（不是"取第 13 个"）——
+   BLS 官方数据有**真实缺月**（实测 CPI-U / 失业率都缺 `2025-10`），按位置取会静默算错基准。
+   因此 `startyear` 至少拉 3 年（算同比至少要 13 个月）。
 3. **`as_of` 取"数据月份"（如 `2026-08`），不是抓取时间**。经济数据有发布滞后
    （8 月 CPI 在 9 月中才公布），用抓取时间会让前端显示成"最新/实时"，误导用户。
 
@@ -108,37 +110,28 @@ def fetch_econ_series(startyear: int | None = None, timeout: int = 20) -> dict[s
 
 # ---- 派生（纯函数）----
 
-def _yoy(values: list[float]) -> float | None:
-    """同比 %：`(今月 / 去年同月 - 1) × 100`；不足 13 个月 / 去年同月为 0 → `None`（不猜）。"""
-    if len(values) < 13:
+def _yoy(base: float | None, cur: float | None) -> float | None:
+    """同比 %：`(cur / base - 1) × 100`；`base` 为 `0` / `None` → `None`（不猜，防除零）。"""
+    if not base or cur is None:
         return None
-    base = values[-13]
-    if not base:
-        return None
-    return round((values[-1] / base - 1) * 100, 2)
+    return round((cur / base - 1) * 100, 2)
 
 
-def _is_consecutive_months(yms: list[str]) -> bool:
-    """月份键是否连续（`"2026-08"` 的前一个月必须是 `"2026-07"`，跨年 OK）。"""
-    for prev, cur in zip(yms, yms[1:]):
-        y, m = int(prev[:4]), int(prev[5:])
-        nxt = f"{y + 1}-01" if m == 12 else f"{y}-{m + 1:02d}"
-        if cur != nxt:
-            return False
-    return True
+def _yoy_at(rows: list[tuple[str, float]], end: int) -> float | None:
+    """以 `rows[end]` 为"今月"算同比。
 
-
-def _yoy_at(yms: list[str], values: list[float], end: int) -> float | None:
-    """以 `values[end]` 为"今月"算同比；窗口不足 / 月份不连续 → `None`。
-
-    ⚠️ 只取"第 13 个"在**数据缺口（缺月）时会静默算错基准**（拿到的不是去年同月），
-    所以先校验这 13 个月是否连续 —— 不连续一律 `None`，绝不猜。
+    ⚠️ **按月份键找去年同月**（`"2026-08"` → `"2025-08"`），**不要"取第 13 个"**：
+    BLS 官方数据存在**真实缺月** —— 实测 `CUUR0000SA0`（CPI-U）与 `LNS14000000`（失业率）
+    都缺 `2025-10`（43 条 vs 完整序列 44 条，PPI/非农不缺）。按位置取第 13 个会**静默把
+    错月份当基准**，算出来的同比是错的而且看不出来。
+    去年同月未发布 / 记录不足 13 条 → `None`，绝不猜。
     """
-    if end < 12 or end >= len(values):
+    if end < 0 or end >= len(rows) or len(rows) < 13:
         return None
-    if not _is_consecutive_months(yms[end - 12:end + 1]):
-        return None
-    return _yoy(values[end - 12:end + 1])
+    ym, cur = rows[end]
+    want = f"{int(ym[:4]) - 1}{ym[4:]}"          # "2026-08" → "2025-08"
+    base = next((val for key, val in rows if key == want), None)
+    return _yoy(base, cur)
 
 
 def _direction(cur: float | None, prev: float | None, eps: float = _DIRECTION_EPS) -> str | None:
@@ -216,8 +209,8 @@ def build_econ_payload(raw: dict | None) -> dict:
         rows = raw.get(key) or []
         yms = [r[0] for r in rows]
         vals = [r[1] for r in rows]
-        yoy = _yoy_at(yms, vals, len(vals) - 1)
-        prev_yoy = _yoy_at(yms, vals, len(vals) - 2)
+        yoy = _yoy_at(rows, len(rows) - 1)
+        prev_yoy = _yoy_at(rows, len(rows) - 2)
         if yms and (latest_month is None or yms[-1] > latest_month):
             latest_month = yms[-1]
         series.append({
