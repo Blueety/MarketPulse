@@ -1488,6 +1488,32 @@ def test_load_macro_derived_keys(tmp_path, monkeypatch):
     assert payload["history_regime"]["days"] == 28
 
 
+def test_macro_page_renders(client):
+    """GET /macro → 200 + 7 个模块骨架 + 共用 shell（顶栏/侧栏）+ macro.js（2026-09-14 宏观页）。"""
+    r = client.get("/macro")
+    assert r.status_code == 200
+    html = r.text
+    assert 'id="macro-chart"' in html
+    for mid in ("mac-regime", "mac-market", "mac-vars", "mac-factors",
+                "mac-relation", "mac-history", "mac-econ"):
+        assert 'id="%s"' % mid in html, mid
+    # 共用 shell（_topbar.html / _sidebar.html）
+    assert 'class="topbar"' in html and 'id="sidebar"' in html
+    assert 'href="/macro"' in html                        # 侧栏「宏观数据」
+    assert 'class="nav-item active" href="/macro"' in html   # active_page="macro" 高亮
+    assert 'href="/#overview"' in html                    # base_prefix="/" → 回首页锚点
+    assert '/static/macro.js?v=' in html
+    assert 'id="macro-asof"' in html and 'id="econ-asof"' in html
+
+
+def test_index_nav_macro_link_enabled(client):
+    """首页侧栏「宏观数据」已由占位改为可点链接（href=/macro），且首页锚点仍是无前缀形式。"""
+    html = client.get("/").text
+    assert '<a class="nav-item" href="/macro">' in html
+    assert '<a class="nav-item active" href="#overview"' in html
+    assert 'href="/#overview"' not in html                # 首页 base_prefix="" → 不带 / 前缀
+
+
 def test_api_econ_ttl_cache(monkeypatch):
     """连续调 3 次只触发 1 次 BLS 请求（6h TTL 生效）。"""
     calls = []

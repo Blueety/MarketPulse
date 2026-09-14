@@ -1083,6 +1083,171 @@ def assert_asof_narrow(page) -> None:
     check(d["cnH2"] == d["usH2"], "V-7b 375 档标注零增高", (d["cnH2"], d["usH2"]))
 
 
+# —— MX 宏观数据独立页（2026-09-14 macro-page 任务）——
+MACRO_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const txt = (s) => { const e = q(s); return e ? e.textContent.trim() : null; };
+  const canvas = q('#macro-chart');
+  const chart = (window.Chart && canvas) ? window.Chart.getChart(canvas) : null;
+  const ds = chart ? chart.data.datasets : [];
+  const firstVal = (d) => { const a = (d && d.data) || [];
+    for (const v of a) { if (v != null) return v; } return null; };
+  const varRow = (needle) => {
+    const rows = [...document.querySelectorAll('#macro-vars .mac-var')];
+    const hit = rows.find((e) => (e.querySelector('.v-label') || {}).textContent
+                                 && e.querySelector('.v-label').textContent.indexOf(needle) >= 0);
+    return hit ? hit.querySelector('.v-value').textContent.trim() : null;
+  };
+  const relRows = [...document.querySelectorAll('#macro-rel .mac-rel-row')];
+  return {
+    moduleIds: ['mac-regime', 'mac-market', 'mac-vars', 'mac-factors',
+                'mac-relation', 'mac-history', 'mac-econ'].filter((id) => !!document.getElementById(id)).length,
+    canvasBitmapW: canvas ? canvas.width : null, canvasCssW: canvas ? canvas.offsetWidth : null,
+    canvasBitmapH: canvas ? canvas.height : null, canvasCssH: canvas ? canvas.offsetHeight : null,
+    chartWrapH: q('#macro-chart-wrap') ? Math.round(q('#macro-chart-wrap').getBoundingClientRect().height) : null,
+    pills: [...document.querySelectorAll('#macro-pills .mac-pill')].map((e) => e.textContent.trim()),
+    ranges: [...document.querySelectorAll('#macro-range .mac-pill')].map((e) => e.textContent.trim()),
+    activePill: txt('#macro-pills .mac-pill.active'),
+    activeRange: txt('#macro-range .mac-pill.active'),
+    dsCount: ds.length, dsFirst: ds.map(firstVal), pointCount: ds.length ? ds[0].data.length : 0,
+    level: txt('#regime-level'), quadrant: txt('#regime-quadrant'), score: txt('#regime-score'),
+    factorCount: document.querySelectorAll('#regime-factors li').length,
+    tenYear: varRow('10Y'), varCount: document.querySelectorAll('#macro-vars .mac-var').length,
+    relRows: relRows.length,
+    relSignificant: document.querySelectorAll('#macro-rel .mac-rel-row.strong').length,
+    relInsufficient: [...document.querySelectorAll('#macro-rel .rel-r')]
+      .filter((e) => e.textContent.trim() === '样本不足').length,
+    // 每对必须给出「可读结果」：数值 或 「样本不足」；不允许 —/空/其它
+    relBadR: [...document.querySelectorAll('#macro-rel .rel-r')]
+      .map((e) => e.textContent.trim())
+      .filter((t) => t !== '样本不足' && !/^[+-]?\d+(\.\d+)?$/.test(t)).length,
+    histRows: document.querySelectorAll('#macro-history .mac-hist-row').length,
+    econAsOf: txt('#econ-asof'), econItems: document.querySelectorAll('#macro-econ .mac-econ-item').length,
+    econSectionText: q('#mac-econ') ? q('#mac-econ').textContent : '',
+    econEmpty: !!q('#macro-econ .mac-empty'),
+    scrollW: document.scrollingElement.scrollWidth, innerW: window.innerWidth,
+    twoColCols: q('.mac-2col') ? getComputedStyle(q('.mac-2col')).gridTemplateColumns.trim().split(/\s+/).length : null,
+    theme: document.documentElement.getAttribute('data-theme'),
+  };
+}
+"""
+
+
+def assert_macro_page(browser, url: str) -> None:
+    """MX-1~MX-15 宏观页（/macro）：7 模块 + 主图（C2）+ 口径（10Y / 归一化 / 数据月份）+ 降级 + 双主题 + 375。
+
+    独立 context（不污染首页主页面状态）。`/api/econ` 降级另开 context 用 `page.route` 断掉。
+    """
+    print("\n--- MX 宏观数据独立页（/macro）---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+        resp = page.goto(url + "macro", wait_until="load")
+        check(resp is not None and resp.status == 200, "MX-1 /macro 返回 200",
+              resp.status if resp else None)
+        page.wait_for_timeout(3500)          # /api/macro 冷启动 ~2.2s + /api/econ
+        d = page.evaluate(MACRO_JS)
+        print(f"  level={d['level']!r} quadrant={d['quadrant']!r} score={d['score']!r} "
+              f"factors={d['factorCount']}")
+        print(f"  canvas={d['canvasBitmapW']}x{d['canvasBitmapH']} css={d['canvasCssW']}x{d['canvasCssH']} "
+              f"wrapH={d['chartWrapH']}")
+        print(f"  pills={d['pills']} active={d['activePill']!r} ranges={d['ranges']} "
+              f"pts={d['pointCount']} ds={d['dsCount']} dsFirst={[round(v, 2) if v is not None else None for v in d['dsFirst']]}")
+        print(f"  tenYear={d['tenYear']!r} rel={d['relRows']}(strong={d['relSignificant']},"
+              f"n/a={d['relInsufficient']}) hist={d['histRows']} econAsOf={d['econAsOf']!r}")
+
+        check(d["moduleIds"] == 7, "MX-2 七个模块骨架齐全", d["moduleIds"])
+        # C2：canvas 位图 == 显示尺寸；容器必须显式高度（否则 Chart.js 塌成 0）
+        check(d["canvasBitmapW"] == d["canvasCssW"] and d["canvasBitmapH"] == d["canvasCssH"],
+              "MX-3 canvas 位图 == 显示尺寸（C2）",
+              (d["canvasBitmapW"], d["canvasBitmapH"], d["canvasCssW"], d["canvasCssH"]))
+        check(d["chartWrapH"] is not None and d["chartWrapH"] >= 300,
+              "MX-3b 主图容器有确定高度 ≥300px（R1/C2）", d["chartWrapH"])
+        check(len(d["pills"]) == 5 and len(d["ranges"]) == 5,
+              "MX-4 胶囊 5 品种 + 时间范围 5 档", (d["pills"], d["ranges"]))
+        check(d["activePill"] == "美元指数" and d["activeRange"] == "1Y",
+              "MX-4b 默认选中 美元指数 / 1Y", (d["activePill"], d["activeRange"]))
+        # ⚠️ 10Y 口径：Yahoo 返回的就是百分数（实测 4.985 = 4.985%），**不能 ÷10**。
+        # 取到的文本可能带单位（如 "4.985%"）→ 剥离非数字字符后再比。
+        ten_raw = d["tenYear"] or ""
+        ten_val = None
+        try:
+            ten_val = float(re.sub(r"[^\d.\-]", "", ten_raw) or "")
+        except ValueError:
+            ten_val = None
+        check(ten_val is not None and 0 < ten_val < 20,
+              "MX-6 10Y 显示为 ≈4.xx%（不是 42.5%，也不是 ÷10 后的 0.4985%）", ten_raw)
+        check(d["varCount"] == 4, "MX-6b 核心宏观变量 4 张", d["varCount"])
+        check(d["relRows"] == 6, "MX-9 宏观关系 6 对", d["relRows"])
+        check(d["relBadR"] == 0,
+              "MX-9b 每对都给出可读结果（数值或「样本不足」），不把 None 显示成 0.00",
+              (d["relBadR"], d["relInsufficient"], d["relSignificant"]))
+        check(d["histRows"] == 3, "MX-10 历史宏观环境 3 行三态分布", d["histRows"])
+        # 经济数据：**必须显示数据月份**，不得出现「最新/实时」
+        check(d["econAsOf"] and "年" in d["econAsOf"] and "月" in d["econAsOf"],
+              "MX-11 经济数据标注「YYYY年M月」（数据月份）", d["econAsOf"])
+        check(d["econItems"] == 4, "MX-11b 经济数据 4 项", d["econItems"])
+        check("最新" not in d["econSectionText"] and "实时" not in d["econSectionText"],
+              "MX-11c 经济数据区不含「最新/实时」字样")
+        check(not errors, "MX-15 /macro console error = 0", errors[:3])
+
+        page.screenshot(path=str(OUT_DIR / "shot-macro-1920.png"), full_page=True)
+
+        # 多变量：起点归一化 100（量纲不同，不可共用价格轴）
+        page.evaluate("() => document.querySelector('#macro-pills .mac-pill[data-pick=\"__all__\"]').click()")
+        page.wait_for_timeout(900)
+        dm = page.evaluate(MACRO_JS)
+        check(dm["dsCount"] == 4 and all(v is not None and abs(v - 100) < 0.01 for v in dm["dsFirst"]),
+              "MX-7 多变量对比：4 条线且起点归一化为 100", [round(v, 3) for v in dm["dsFirst"]])
+        page.evaluate("() => document.querySelector('#macro-range .mac-pill[data-range=\"5y\"]').click()")
+        page.wait_for_timeout(1200)
+        d5 = page.evaluate(MACRO_JS)
+        check(d5["pointCount"] > 1000, "MX-8 5Y 档点数 > 1000", d5["pointCount"])
+        check(d5["activeRange"] == "5Y", "MX-8b 5Y 档胶囊高亮", d5["activeRange"])
+
+        # 双主题：切换后 data-theme 变化且图表实例存活
+        before = d5["theme"]
+        page.evaluate("() => document.getElementById('sidebar-theme').click()")
+        page.wait_for_timeout(700)
+        dt = page.evaluate(MACRO_JS)
+        check(dt["theme"] != before and dt["dsCount"] > 0,
+              "MX-13 宏观页主题切换生效且图表存活（R10）", (before, dt["theme"], dt["dsCount"]))
+        page.screenshot(path=str(OUT_DIR / "shot-macro-dark.png"), full_page=True)
+
+        # 375：自然降为单列 + 无横向溢出
+        page.set_viewport_size({"width": 375, "height": 812})
+        page.wait_for_timeout(900)
+        d375 = page.evaluate(MACRO_JS)
+        check(d375["scrollW"] == d375["innerW"], "MX-14a 375 档无横向溢出",
+              (d375["scrollW"], d375["innerW"]))
+        check(d375["twoColCols"] == 1, "MX-14b 375 档两列区降为单列", d375["twoColCols"])
+        page.screenshot(path=str(OUT_DIR / "shot-macro-375.png"), full_page=True)
+    finally:
+        ctx.close()
+
+    # 降级：/api/econ 不可用 → 模块 7「数据暂缺」+ 四象限占位，页面不崩
+    ctx2 = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        p2 = ctx2.new_page()
+        p2.route("**/api/econ", lambda route: route.abort())
+        r2 = p2.goto(url + "macro", wait_until="load")
+        p2.wait_for_timeout(3500)
+        de = p2.evaluate(MACRO_JS)
+        print(f"  [econ 断供] econEmpty={de['econEmpty']} quadrant={de['quadrant']!r} "
+              f"level={de['level']!r}")
+        check(r2 is not None and r2.status == 200 and de["moduleIds"] == 7,
+              "MX-12 /api/econ 不可用时页面仍 200 且 7 模块在位", r2.status if r2 else None)
+        check(de["econEmpty"] is True and "数据暂缺" in (de["quadrant"] or ""),
+              "MX-12b /api/econ 不可用 → 模块 6/7 显示「数据暂缺」（不崩）",
+              (de["econEmpty"], de["quadrant"]))
+    finally:
+        ctx2.close()
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -1715,6 +1880,7 @@ def main() -> int:
             mob_card = page.evaluate(MEASURE_JS)
             assert_viewport(375, 812, mob_card)
 
+            assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 
