@@ -183,16 +183,21 @@
                   </table>
                 </div>
               </div>
+              <!-- 2026-09-14：美股 tab 由「条形列表」改为与 panel-cn 完全同构的表格
+                   （唯一差异是 tbody 的 id）。骨架屏同样用 .sk-row + colspan="5"：
+                   列数是 5（图标列 + 板块 + 涨跌幅 + 成交额 + 领涨股），写 4 会错位。 -->
               <div class="panel panel-us">
-                <div class="bar-list" id="us-sectors-body">
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
-                  <div class="skeleton sk-bar"></div>
+                <div class="table-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th class="col-ico"></th><th>板块</th><th class="num">涨跌幅</th><th class="col-turnover num">成交额</th><th>领涨股</th></tr>
+                    </thead>
+                    <tbody id="us-sectors-body">
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                      <tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

@@ -146,7 +146,7 @@ MEASURE_JS = r"""
     dashExists: !!q('.dash'),
     overviewCards: document.querySelectorAll('#overview-body .mini-card').length,
     sectorRows: document.querySelectorAll('#sector-body tr').length,
-    usSectorRows: document.querySelectorAll('#us-sectors-body .bar-row').length,
+    usSectorRows: document.querySelectorAll('#us-sectors-body tr').length,
     watchRows: document.querySelectorAll('#watchlist-body tr').length,
     watchHidden: !!q('#watchlist-section.hidden'),
     alertCards: document.querySelectorAll('.alert-card').length,
@@ -332,7 +332,7 @@ G9_JS = r"""
     sectorBody: !!q('#sector-body'),
     usSectorsBody: !!q('#us-sectors-body'),
     sectorBodyRows: document.querySelectorAll('#sector-body tr').length,
-    usSectorRows: document.querySelectorAll('#us-sectors-body .bar-row').length,
+    usSectorRows: document.querySelectorAll('#us-sectors-body tr').length,
     panelsCount: document.querySelectorAll('#us-sectors .panel').length,
     cnVisible: vis(q('.panel-cn')),
     usVisible: vis(q('.panel-us')),
@@ -518,8 +518,8 @@ FIDELITY_JS = r"""
     ovCards: document.querySelectorAll('#overview .mini-card').length,
     watchIcons: document.querySelectorAll('#watchlist-body tr .ico').length,
     watchRows: document.querySelectorAll('#watchlist-body tr').length,
-    usIcons: document.querySelectorAll('#us-sectors-body .bar-row .ico').length,
-    usRows: document.querySelectorAll('#us-sectors-body .bar-row').length,
+    usIcons: document.querySelectorAll('#us-sectors-body tr .ico').length,
+    usRows: document.querySelectorAll('#us-sectors-body tr').length,
     secIcons: document.querySelectorAll('#sector-body tr .ico').length,
     secRows: document.querySelectorAll('#sector-body tr').length,
     yPos: c ? c.scales.y.position : null,
@@ -770,7 +770,8 @@ POLISH_JS = r"""
     .filter((el) => el.scrollWidth > el.clientWidth + 1).length;
 
   // P-5 涨跌幅未复用 .pill（.pill.pos 是相关性语义且配色相反）
-  data.pillInData = document.querySelectorAll('.data-table .pill, .bar-row .pill').length;
+  // 2026-09-14：美股 tab 表格化后 .bar-row 已不存在 → 该选择器去掉（数据区应为 0 个 .pill）
+  data.pillInData = document.querySelectorAll('.data-table .pill').length;
 
   // P-4 骨架屏：数据到达后可见骨架必须清零（5 处加载态都被真实内容替换）
   data.skVisible = [...document.querySelectorAll('.skeleton')].filter((el) => el.offsetParent !== null).length;
@@ -779,7 +780,9 @@ POLISH_JS = r"""
   // 注：th 被 .data-table th 置 left、td 默认计算值为 start → 归一化后再比。
   const norm = (v) => (v === 'start' ? 'left' : (v === 'end' ? 'right' : v));
   data.alignMismatch = [];
-  ['#us-sectors .panel-cn table.data-table', '.watchlist-table'].forEach((sel) => {
+  // 2026-09-14：美股 tab 也改成同构表格 → 一并纳入（否则新表格的对齐问题无人看守）
+  ['#us-sectors .panel-cn table.data-table', '#us-sectors .panel-us table.data-table',
+   '.watchlist-table'].forEach((sel) => {
     const t = document.querySelector(sel);
     if (!t) return;
     const ths = [...t.querySelectorAll('thead th')].map((e) => norm(getComputedStyle(e).textAlign));
@@ -846,6 +849,123 @@ def assert_polish(page, base_url: str) -> None:
     # P-7 回归护栏（与 F-6a/CS-5 同口径，此处独立复测一次）
     check(d["scrollH"] <= 1240, "P-7a scrollHeight @1920 ≤1240", d["scrollH"])
     check(d["scrollW"] == d["innerW"], "P-7b 无横向溢出", (d["scrollW"], d["innerW"]))
+
+
+# —— U 美股板块表格化（2026-09-14 us-sector-table 任务）——
+# mock 用：结构与 fetch_us_sector_heat 的真实返回一致（name 为「行业 (代码)」，top_stock 为 ETF 代码）
+US_MOCK_GAINERS = [
+    {"name": "科技 (XLK)", "change": 3.21, "turnover": "$1.2B", "top_stock": "XLK"},
+    {"name": "可选消费 (XLY)", "change": 2.15, "turnover": "$960.9M", "top_stock": "XLY"},
+    {"name": "工业 (XLI)", "change": 1.07, "turnover": "$447.8M", "top_stock": "XLI"},
+    {"name": "通信服务 (XLC)", "change": 0.99, "turnover": "$301.4M", "top_stock": "XLC"},
+    {"name": "医疗健康 (XLV)", "change": -1.32, "turnover": "$260.2M", "top_stock": "XLV"},
+]
+
+US_TABLE_JS = r"""
+() => {
+  const norm = (v) => (v === 'start' ? 'left' : (v === 'end' ? 'right' : v));
+  const usT = document.querySelector('#us-sectors .panel-us table.data-table');
+  const cnT = document.querySelector('#us-sectors .panel-cn table.data-table');
+  const body = document.getElementById('us-sectors-body');
+  const rows = body ? [...body.querySelectorAll('tr')] : [];
+  const ths = (t) => (t ? [...t.querySelectorAll('thead th')].map((e) => e.textContent.trim()) : null);
+  // 只取涨跌幅列（td.chg）：成交额列同为 td.num 但 padding 是 4px，混进来会误判零增高对冲
+  const chgCells = body ? [...body.querySelectorAll('tr td.chg')] : [];
+  const firstTd = rows.length === 1 ? rows[0].querySelector('td') : null;
+  return {
+    usIsTable: !!(usT && usT.tagName === 'TABLE' && body && usT.contains(body)),
+    wrapIsTableScroll: !!(usT && usT.parentElement && usT.parentElement.classList.contains('table-scroll')),
+    thsUs: ths(usT), thsCn: ths(cnT),
+    thAlignUs: usT ? [...usT.querySelectorAll('thead th.num')].map((e) => norm(getComputedStyle(e).textAlign)) : [],
+    chgCells: chgCells.map((e) => {
+      const s = getComputedStyle(e);
+      return { align: norm(s.textAlign), pad: s.paddingTop + '/' + s.paddingBottom };
+    }),
+    rows: rows.length, cnRows: document.querySelectorAll('#sector-body tr').length,
+    icons: body ? body.querySelectorAll('tr td.col-ico .ico').length : 0,
+    pills: body ? body.querySelectorAll('td.chg .chg-pill').length : 0,
+    emptyText: (rows.length === 1 && firstTd && firstTd.hasAttribute('colspan'))
+               ? rows[0].textContent.trim() : null,
+    barLeft: document.querySelectorAll('#us-sectors-body .bar-row, #us-sectors .bar-list').length,
+    panelVisible: (() => { const p = document.querySelector('.panel-us');
+                           return !!p && getComputedStyle(p).display !== 'none'; })(),
+  };
+}
+"""
+
+
+def assert_us_table(page, browser, url: str) -> None:
+    """U-1~U-7 美股板块表格化：结构同构 + 零增高对冲 + 死代码残留 + 护栏回归。
+
+    今天 `us_sector_heat` 为空（R2 后果：日报运行时 11 并发超时返回 ([],[])），真实数据只能验到空态。
+    故另开 context 用 `page.route` 把 `/api/latest` 换成本地注入 5 条美股数据的响应 ——
+    否则「有数据时」的 5 行形态与 U-7（两 tab 行数相等）这两条护栏永远没人看守。
+    """
+    print("\n--- U 美股板块表格化（与 A股 同构）---")
+    page.evaluate("() => { document.getElementById('sector-tab-us').checked = true; }")
+    page.wait_for_timeout(200)
+    d = page.evaluate(US_TABLE_JS)
+    print(f"  真实数据：rows={d['rows']} cnRows={d['cnRows']} ths={d['thsUs']} "
+          f"thAlign={d['thAlignUs']} barLeft={d['barLeft']}")
+
+    check(d["panelVisible"], "U-3 切到美股 tab 后 .panel-us 可见", d["panelVisible"])
+    check(d["usIsTable"] and d["wrapIsTableScroll"],
+          "U-2 #us-sectors-body 是 table.data-table 的 tbody（外层 .table-scroll）",
+          (d["usIsTable"], d["wrapIsTableScroll"]))
+    check(bool(d["thsUs"]) and d["thsUs"] == d["thsCn"] and len(d["thsUs"]) == 5,
+          "U-2b 两 tab 表头逐列相同（5 列）", (d["thsUs"], d["thsCn"]))
+    check(d["rows"] >= 1, "U-3b 美股 tab 表格内有行（空态也占一行）", d["rows"])
+    check(d["barLeft"] == 0, "U-5 无 .bar-row / .bar-list 残留", d["barLeft"])
+    check(bool(d["thAlignUs"]) and all(a == "right" for a in d["thAlignUs"]),
+          "U-4 美股表格表头数字列右对齐", d["thAlignUs"])
+    if d["rows"] == 1:
+        check(d["emptyText"] == "数据暂缺", "U-3c 空态 = 表格内一行「数据暂缺」", d["emptyText"])
+        print("  ⚠️ 真实数据为空（今日美股板块取数超时）→「有数据时」的 5 行形态改用 mock 验证")
+
+    page.evaluate("() => { document.getElementById('sector-tab-cn').checked = true; }")
+    page.wait_for_timeout(150)
+
+    try:
+        with urllib.request.urlopen(url + "api/latest", timeout=15) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        check(False, "U-1 读取 /api/latest 以构造 mock（验证「有数据时」形态的前提）", exc)
+        return
+    payload["us_sector_heat"] = {"gainers": US_MOCK_GAINERS, "losers": US_MOCK_GAINERS}
+    body_json = json.dumps(payload, ensure_ascii=False)
+
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        p2 = ctx.new_page()
+        p2.route("**/api/latest", lambda route: route.fulfill(
+            status=200, content_type="application/json", body=body_json))
+        p2.goto(url, wait_until="load")
+        try:
+            p2.wait_for_selector("#us-sectors-body .chg-pill", timeout=20000)
+        except Exception:  # noqa: BLE001
+            pass
+        p2.evaluate("() => { document.getElementById('sector-tab-us').checked = true; }")
+        p2.wait_for_timeout(200)
+        m = p2.evaluate(US_TABLE_JS)
+        scroll_h = p2.evaluate("() => document.scrollingElement.scrollHeight")
+        scroll_w = p2.evaluate("() => document.scrollingElement.scrollWidth")
+        inner_w = p2.evaluate("() => window.innerWidth")
+        print(f"  mock 5 条：rows={m['rows']} cnRows={m['cnRows']} icons={m['icons']} "
+              f"pills={m['pills']} chgCells={m['chgCells'][:2]} scrollH={scroll_h}/{inner_w}")
+
+        check(m["rows"] == 5, "U-1 有数据时美股表格 5 行（slice(0,5)）", m["rows"])
+        check(m["rows"] == m["cnRows"],
+              "U-7 两 tab 行数相等（行高护栏：改回 8 行会撑高 .row-3）", (m["rows"], m["cnRows"]))
+        check(m["icons"] == m["rows"] and m["pills"] == 5,
+              "U-7b 每行 1 个图标 + 5 行涨跌幅均走 .chg-pill", (m["icons"], m["pills"]))
+        check(bool(m["chgCells"]) and all(c["align"] == "right" for c in m["chgCells"]),
+              "U-4b 涨跌幅列右对齐", m["chgCells"][:3])
+        check(bool(m["chgCells"]) and all(c["pad"] == "3px/3px" for c in m["chgCells"]),
+              "U-4c td.chg padding 3px（P-3 零增高对冲，漏 chg 会变 4px→每行 +2px）", m["chgCells"][:3])
+        check(scroll_h <= 1240, "U-6 mock 5 行后 scrollHeight @1920 ≤1240", scroll_h)
+        check(scroll_w == inner_w, "U-6b mock 5 行后无横向溢出", (scroll_w, inner_w))
+    finally:
+        ctx.close()
 
 
 def _tpl(js: str, cfg: dict) -> str:
@@ -1350,6 +1470,7 @@ def main() -> int:
             assert_g9(page, page.evaluate(G9_JS))
             assert_news(page, url)   # N-7 最新资讯（含 §7.2 要求的 #news DOM 实测）
             assert_polish(page, url)  # P-1~P-7 前端评审落地（对比度 / 千分位 / Badge / 骨架屏）
+            assert_us_table(page, browser, url)  # U-1~U-7 美股板块表格化（与 A股 同构）
             assert_autoscroll(page, url, CFG_NEWS)      # A-* 最新资讯自动循环滚动
             assert_autoscroll(page, url, CFG_ALERTS)    # B-* 告警记录自动循环滚动
             for _cfg in (CFG_NEWS, CFG_ALERTS):

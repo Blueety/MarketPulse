@@ -239,7 +239,6 @@ function renderSector(latest) {
   });
 }
 
-// === 美股行业板块：横幅条（条宽 = |change| / max|change|）===
 // 风险偏好仪表（三十二期）：/api/latest.risk_appetite 渲染；null/缺失 → 「数据暂缺」不隐藏（防布局跳变）
 function renderRiskAppetite(latest) {
   const body = document.getElementById('risk-appetite-body');
@@ -262,27 +261,31 @@ function renderRiskAppetite(latest) {
     '<ul class="ra-factors">' + items.join('') + '</ul>';
 }
 
+// === 美股行业板块：与 A股 同构的表格（2026-09-14 由条形列表改造）===
+// ⚠️ slice 必须与 A股 一样是 5：.row-3 三卡 stretch 等高，行高由内容更高的 panel 决定，
+//    美股侧一旦多出行数就会反超 A股 → 撑高 .row-3 → 顶破 scrollHeight ≤1240 护栏。
+// ⚠️ 涨跌幅列必须是 `<td class="num chg">`（不能省 chg）：`.chg-pill`(≈19px) 高于 12px 文字行高(≈17.4px)，
+//    靠 `#us-sectors .data-table td.chg { padding: 3px 8px }` 上下各减 1px 对冲；漏了是每行 +2px × 5 行。
 function renderUsSectors(latest) {
-  const box = document.getElementById('us-sectors-body');
-  if (!box) return;
+  const tbody = document.getElementById('us-sectors-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
   const gainers = (latest && latest.us_sector_heat && latest.us_sector_heat.gainers) || [];
-  const rows = gainers.slice(0, 8);
-  if (!rows.length) {
-    box.innerHTML = '<p class="empty">数据暂缺</p>';
+  if (!gainers.length) {
+    tbody.innerHTML = '<tr><td colspan="5">数据暂缺</td></tr>';   // 与 A股 同款空态
     return;
   }
-  let maxAbs = 0.01;
-  rows.forEach(function (r) { maxAbs = Math.max(maxAbs, Math.abs(r.change || 0)); });
-  box.innerHTML = rows.map(function (r, i) {
-    const chg = r.change || 0;
-    const width = Math.min(100, Math.abs(chg) / maxAbs * 100).toFixed(1);
-    const cls = chg >= 0 ? 'pos' : 'neg';
-    return '<div class="bar-row">' +
-      iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (r.name || '—').charAt(0)) +
-      '<span class="bar-name">' + escapeHtml(r.name || '—') + '</span>' +
-      '<span class="bar-track"><i class="' + cls + '" style="width:' + width + '%"></i></span>' +
-      '<span class="bar-val"><span class="chg-pill ' + cls + '">' + fmtPct(r.change) + '</span></span></div>';
-  }).join('');
+  gainers.slice(0, 5).forEach(function (g, i) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="col-ico">' + iconHtml(ICON_PALETTE[i % ICON_PALETTE.length], (g.name || '—').charAt(0)) + '</td>' +
+      '<td>' + escapeHtml(g.name || '—') + '</td>' +
+      '<td class="num chg"><span class="chg-pill ' + ((g.change || 0) >= 0 ? 'pos' : 'neg') + '">' +
+        fmtPct(g.change) + '</span></td>' +
+      '<td class="col-turnover num">' + escapeHtml(g.turnover || '—') + '</td>' +
+      '<td>' + escapeHtml(g.top_stock || '—') + '</td>';
+    tbody.appendChild(tr);
+  });
 }
 
 // === 告警记录 ===

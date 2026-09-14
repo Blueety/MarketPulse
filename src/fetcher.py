@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover - 仅极老 Python 回退
     _EASTERN_TZ = timezone.utc
 
 import requests
+from requests.adapters import HTTPAdapter
 
 log = logging.getLogger("marketpulse")
 
@@ -87,12 +88,22 @@ REALTIME_MARKETS = {
 
 TIMEOUT = 15          # 单次请求超时（秒）
 SECTOR_TIMEOUT = 10   # 板块热度获取限时（秒）；新浪接口无 timeout，超时返回 [] 不中断日报
+# 2026-09-14：美股板块要并发打 11 个 Yahoo ETF，每个走「双主机轮换 + sleep(1)」+
+# 连接池丢弃后重建，最坏路径远不止 10s → 实测偶发整块返回 ([],[])（日报仍全绿，只有前端空着）。
+# 独立超时只作用于美股板块；A 股侧继续用 SECTOR_TIMEOUT，行为不变。
+US_SECTOR_TIMEOUT = 20
 RETRIES = 1           # 失败重试次数（共尝试 2 次）
 
 # 二十六期：Yahoo chart 双主机轮换（单主机 403/429 重试逃不出主机级封锁，见 pitfalls 一期证据）
 YAHOO_HOSTS = ("query1", "query2")
 
 _SESSION = requests.Session()
+# 2026-09-14：11 个 ETF 并发线程共用同一 Session，超过 urllib3 默认 pool_maxsize=10 →
+# 实测告警「Connection pool is full, discarding connection ... Pool size: 10」；
+# 连接被丢弃后需重建（TLS 握手），把最坏耗时进一步拉长。放大到 16 覆盖 11 并发，
+# pool_connections 同步放大以覆盖 query1/query2 双主机轮换。
+_SESSION.mount("https://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
+_SESSION.mount("http://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
 # 二十六期：浏览器 UA + Accept json，降低 Yahoo 反爬 403 概率
 _SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -495,7 +506,8 @@ def _fmt_us_volume(dollars: float) -> str:
 def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
     """从 Yahoo Finance 获取 11 个 SPDR 行业 ETF 涨跌幅，返回 (gainers, losers)。
 
-    每个 ETF 独立线程并行取数（Yahoo chart REST），整体限时 SECTOR_TIMEOUT；
+    每个 ETF 独立线程并行取数（Yahoo chart REST），整体限时 US_SECTOR_TIMEOUT（20s，
+    比 A 股板块的 SECTOR_TIMEOUT 宽 —— 11 并发 + 双主机轮换的最坏路径更长）；
     超时 / 异常 / 缺必需字段均返回 ([], [])，不中断日报主流程。
     返回格式与 A 股板块一致：[{name, change, turnover, top_stock}]，
     name 为「行业 (代码)」，top_stock 为 ETF 代码。
@@ -533,14 +545,14 @@ def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
     ]
     for t in threads:
         t.start()
-    deadline = monotonic() + SECTOR_TIMEOUT
+    deadline = monotonic() + US_SECTOR_TIMEOUT
     for t in threads:
         remaining = deadline - monotonic()
         if remaining <= 0:
             break
         t.join(remaining)
     if any(t.is_alive() for t in threads):
-        log.warning("美股板块获取超时（>%ds），跳过", SECTOR_TIMEOUT)
+        log.warning("美股板块获取超时（>%ds），跳过", US_SECTOR_TIMEOUT)
         return ([], [])
     if not results:
         return ([], [])

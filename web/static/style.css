@@ -450,9 +450,10 @@ body {
 .pill.neg { color: var(--green); }
 .pill-row .ph-note { line-height: 1.6; }
 
-/* G-9 关键高度约束：右卡默认激活的 A股 tab 里是 4 列表格（thead + 5 行），比美股条形列表高
-   → 它决定 .row-3 的行高（stretch 等高）。实测自然内容高 299 → 会顶破 scrollHeight ≤1240 护栏，
-   故**只**对右卡面板内的表格做紧凑化（不影响其它表格）。 */
+/* G-9 关键高度约束：右卡两个 tab panel 现为**同构**表格（2026-09-14 美股由条形列表改造）。
+   .row-3 三卡 stretch 等高 → 行高由「内容更高的那个 panel」决定，而 A股 是默认激活、行数固定 5 的一侧。
+   ⚠️ 所以美股侧 slice 也必须保持 5：多出的行会反超 A股 撑高 .row-3 → 顶破 scrollHeight ≤1240（余量仅 ~24px）。
+   紧凑化**只**对右卡面板内的表格做（不影响其它表格）。 */
 #us-sectors .card-head { margin-bottom: 8px; }
 #us-sectors .tab-labels { margin-bottom: 6px; }
 #us-sectors .data-table th { padding: 4px 8px; }
@@ -507,11 +508,9 @@ body {
   outline-offset: 2px;
 }
 
-/* ===== 行业板块（横幅条）===== */
-.bar-list { display: flex; flex-direction: column; gap: 6px; }
-/* P-3：涨跌幅改为 .chg-pill 后末列需要容纳「胶囊 + 内边距」，58px 会裁切（-12.34% 约 62px）→ 放宽到 70px
-   （名称列是 minmax(0,1fr)，会自动吸收 → 不产生横向溢出、不影响行高） */
-.bar-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 64px 70px; align-items: center; gap: 8px; font-size: 12px; }
+/* ===== 行业板块：2026-09-14 美股 tab 由「横幅条」改为与 A股 同构的表格 =====
+   随之删除 .bar-list / .bar-row / .bar-name / .bar-track / .bar-val（含 375 断点的 .bar-row 覆盖）
+   与 .sk-bar（原美股骨架屏专用）—— 全仓库已无使用者，勿再回流。 */
 /* 三十二期：风险偏好仪表（后端合成数据，色值只用既有 token） */
 .ra-label { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
 .ra-label.pos { color: var(--green); }
@@ -522,12 +521,6 @@ body {
 .ra-factors li { line-height: 1.5; white-space: nowrap; }
 .ra-factors .pos { color: var(--green); }
 .ra-factors .neg { color: var(--red); }
-.bar-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-track { display: block; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
-.bar-track i { display: block; height: 100%; border-radius: 3px; }
-.bar-track i.pos { background: var(--green); }
-.bar-track i.neg { background: var(--red); }
-.bar-val { text-align: right; font-family: var(--mono); font-weight: 600; }
 
 /* ===== 告警列表：仅左侧色条 + 紧凑行式 ===== */
 .alert-list { display: flex; flex-direction: column; gap: 4px; max-height: 132px; overflow-y: auto; }
@@ -630,7 +623,6 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .chart-wrap { height: 280px; }
   .seg { gap: 5px; }
   .seg button { padding: 3px 9px; font-size: 11px; }
-  .bar-row { grid-template-columns: 18px minmax(0, 1fr) 48px 66px; gap: 6px; }
 }
 
 /* G-8 降级（方案 B）：不支持 backdrop-filter 的环境（老浏览器 / 关闭该特性）→
@@ -672,6 +664,5 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .sk-line { height: 12px; width: 72%; }
 /* 概览小卡骨架（尺寸对齐 .mini-card，2 行 × 3 列） */
 .sk-card { height: 92px; border-radius: 10px; }
-/* 行业板块横幅条骨架 / 告警列表条骨架 */
-.sk-bar { height: 18px; }
+/* 告警列表条骨架 */
 .sk-item { height: 30px; border-radius: 6px; }
