@@ -1,0 +1,27 @@
+【MarketPulse 数据提交任务】
+
+仓库：D:/AGENT/MarketPulse（默认分支 master）
+
+只做下面这件事，不要做任何额外动作：
+
+1. cd /d D:/AGENT/MarketPulse
+2. 查看白名单范围内是否有改动：`git status --porcelain -- data context alerts`
+   - 输出为空 → 本次什么都不做，直接结束（不产生提交、不推送）。
+3. 有改动时，只提交这三个目录：
+   git add data context alerts
+   git commit -m "auto: 每日数据更新"
+   git push origin master
+   - 若 `git commit` 报 nothing to commit，说明判断失误，直接结束，不要改用其它 add 方式。
+   - 若 push 失败（网络/代理），打印原始错误后结束，不要重试、不要回滚、不要 reset。
+
+硬性禁止：
+- 禁止 `git add -A`、`git add --all`、`git add .`、`git commit -a`。
+  这会扫走其它会话正在写的源码/测试/文档半成品（web/、src/、tests/、docs/、tasks/），
+  这是本任务被收窄的唯一原因。
+- 禁止提交 `data/marketpulse.db` 及其 `-wal`/`-shm`（已被 .gitignore 排除）。
+- 禁止 `git checkout` / `git restore` / `git stash` / `git reset --hard` / `git push --force`
+  等任何会丢弃或改写他人改动的命令；工作区里的其它改动（含未跟踪文件）一律原样保留。
+- 禁止修改仓库内任何文件（本任务只做 add / commit / push）。
+- 禁止新增或用其它方式改动 cron。
+
+完成后仅用一行汇报：`[data-commit] 改动=<有/无> 提交=<哈希或 none> 推送=<ok/fail>`

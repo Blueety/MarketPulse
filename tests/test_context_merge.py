@@ -17,6 +17,7 @@ import logging
 
 import pytest
 
+import snapshot_report as snap
 from src import alerter as al
 from src import analyzer as an
 from src import reporter as rep
@@ -182,6 +183,42 @@ class TestMergeCorrelationWatchlist:
         )
         data = _read(ctx_env)
         assert data["correlation"] == [{"a": "GSPC", "b": "SH", "pair": "p", "r": 0.9, "n": 30}]
+
+
+class TestSnapshotCallerWiring:
+    """R3 接线护栏：漏改 snapshot_report.py 的调用点 → 修复整体失效（`[]` 被判为"要覆盖"）。"""
+
+    def _stub(self, monkeypatch, tmp_path, captured):
+        monkeypatch.setattr(snap, "is_market_holiday", lambda market: False)  # 脱离运行日/周末影响
+        monkeypatch.setattr(snap, "load_last_values", lambda: dict(US_LAST))
+        monkeypatch.setattr(snap, "load_history", lambda: [])
+        monkeypatch.setattr(snap, "build_statuses",
+                            lambda *a, **k: {s: ("平静", "ok") for s in an.SYMBOLS})
+        monkeypatch.setattr(snap, "save_snapshot", lambda *a, **k: tmp_path / "s.md")
+        monkeypatch.setattr(snap, "run_alert_checks", lambda *a, **k: None)
+        monkeypatch.setattr(snap, "merge_history", lambda *a, **k: None)
+        monkeypatch.setattr(snap, "auto_commit_push", lambda *a, **k: None)
+        monkeypatch.setattr(snap, "load_config", lambda: {"watchlist": {"stocks": []}})
+        monkeypatch.setattr(snap, "generate_context",
+                            lambda *a, **k: captured.update(k) or tmp_path / "c.json")
+        return snap
+
+    def test_us_snapshot_passes_merge_and_keeps_none(self, monkeypatch, tmp_path):
+        captured = {}
+        snap = self._stub(monkeypatch, tmp_path, captured)
+        monkeypatch.setattr(snap, "fetch_all", lambda market: (dict(US_VALUES), {}))
+        assert snap.main("us", "open") == 0
+        assert captured.get("merge") is True
+        assert captured.get("sector_heat") is None  # 不得被转成 []
+
+    def test_a_share_empty_sector_heat_passthrough(self, monkeypatch, tmp_path):
+        captured = {}
+        snap = self._stub(monkeypatch, tmp_path, captured)
+        monkeypatch.setattr(snap, "fetch_all", lambda market: (dict(CN_VALUES), {}))
+        monkeypatch.setattr(snap, "fetch_sector_heat", lambda: ([], []))
+        assert snap.main("a-share", "midday") == 0
+        assert captured.get("merge") is True
+        assert captured.get("sector_heat") == ([], [])  # "取了但为空"必须原样透传
 
 
 class TestMergeFallbacks:
