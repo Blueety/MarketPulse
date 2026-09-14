@@ -1,12 +1,12 @@
 {
-  "date": "2026-09-14",
+  "date": "2026-09-03",
   "items": [
     {
-      "title": "AI开发放缓担忧升温，美股低开，费城半导体指数跌6%，10年期美债收益率三年来首破5%，布油涨...",
-      "url": "https://wallstreetcn.com/articles/3781670",
+      "title": "10年期美债收益率冲破5%！“预言家”警告：抛售还没结束",
+      "url": "https://wallstreetcn.com/articles/3781729",
       "source": "华尔街见闻",
       "published": "2026-09-14",
-      "summary": "AI巨头联手呼吁放慢前沿模型开发节奏，叠加油价飙升重燃通胀忧虑，全球股市承压"
+      "summary": "美国国债遭遇新一轮猛烈抛售，10年期收益率周一突破5%关口，创2023年以来新高，通胀忧虑与供给压力形成共振，令全球债市承压"
     },
     {
       "title": "美国通胀及就业数据支持本周加息– Market Outlook",
@@ -16,6 +16,13 @@
       "summary": "美国通胀及就业数据支持本周加息– Market Outlook"
     },
     {
+      "title": "集体踩刹车，微软加入OpenAI、Anthropic，表态放缓AI前沿开发",
+      "url": "https://wallstreetcn.com/articles/3781726",
+      "source": "华尔街见闻",
+      "published": "2026-09-14",
+      "summary": "微软发布了一份针对旗下人工智能模型的临时行为准则，明确设定多项限制，成为继三巨头之后，最新一家公开表态放缓AI前沿开发步伐的科技巨头"
+    },
+    {
       "title": "一张表看懂！华尔街“彻底信了”：美联储本周加息",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBwcWs3b3ppTWlqZWdHRDRMbkJUeEtkeTN1bXFuLVhLMjY1MUxwdE9RWkJiWGE3bk5QWHVRZkE0UVNoUFlUZERhRw?oc=5",
       "source": "财联社",
@@ -23,11 +30,11 @@
       "summary": "一张表看懂。华尔街“彻底信了”：美联储本周加息"
     },
     {
-      "title": "AI数据隐私担忧升温，英伟达、Palantir等限制Anthropic模型使用，微软借机争夺企业客户",
-      "url": "https://wallstreetcn.com/articles/3781723",
+      "title": "AI开发放缓担忧升温，美股低开，费城半导体指数跌6%，10年期美债收益率三年来首破5%，布油涨...",
+      "url": "https://wallstreetcn.com/articles/3781670",
       "source": "华尔街见闻",
       "published": "2026-09-14",
-      "summary": "随着AI深入企业核心业务，数据安全和知识产权保护正成为企业选择AI模型时越来越重要的考量"
+      "summary": "AI巨头联手呼吁放慢前沿模型开发节奏，叠加油价飙升重燃通胀忧虑，全球股市承压"
     },
     {
       "title": "二十年一遇！美欧日三大央行将同步加息 这意味着什么？",
@@ -35,13 +42,6 @@
       "source": "东方财富",
       "published": "2026-09-14",
       "summary": "二十年一遇。美欧日三大央行将同步加息 这意味着什么"
-    },
-    {
-      "title": "布油突破108美元，伯恩斯坦警告：霍尔木兹与红海危机叠加，油价或将冲向150美元",
-      "url": "https://wallstreetcn.com/articles/3781719",
-      "source": "华尔街见闻",
-      "published": "2026-09-14",
-      "summary": "沙特东西输油管道遭袭关闭、伊朗与海湾国家外交谈判宣告推迟，两大冲击同步发酵，令全球能源市场面临数十年来最严峻的供应压力"
     },
     {
       "title": "一片“连续加息”声中，特朗普要求美联储降息：美国应拥有全球最低利率",
