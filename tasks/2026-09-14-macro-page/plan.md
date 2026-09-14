@@ -18,13 +18,15 @@
 | 3 | 时间范围含 **5Y** | ⚠️ **不可得**（现状 400 天）→ 实测可扩，见 §2.3 |
 | 4 | **「进入独立页面」** | ⚠️ 现状是单页锚点架构，「宏观数据」是 `is-disabled` 占位 → 见 §2.2 |
 | 5 | `Macro Score 68/100` | ❌ 现有 score 是 **-3~+3 的 3 因子波动率分**，非百分制、无宏观维度 → 见 §3 |
-| 6 | 历史宏观环境（30 天分布） | ⚠️ 需**逐日回放**（现有函数只算最新一天），数据够、逻辑是新增 |
+| 6 | 历史宏观环境（30 天分布） | ⚠️ 需**逐日回放**（现有函数只算最新一天）→ 三态可算；**四象限依赖经济数据** → 见下 |
+| 7 | 「必须有通胀数据和增长数据」 | ✅ **已解决**：**BLS 官方 API**（免 Key / 数据到 2026-M08 / 2.1s）→ 前置任务 `2026-09-14-econ-data-source` |
 
 **已定决策（需求方 2026-09-14）**：
 - 页面形态 → **新增路由 `GET /macro`**（独立第二页）
 - 宏观关系 → **调研业界方案**（结论见 §3.2）
 - Macro Score → **调研业界方案**（结论见 §3.1）
 - 时间范围 → **扩 tail 到 5 年**（实测可行，见 §2.3）
+- **经济数据 → 接入 BLS**，模块 6 升级为**五态齐备**、模块 7 **正式 In Scope**（见 §4.3 / 前置任务）
 
 ---
 
@@ -191,26 +193,46 @@ GET /macro                → macro.html（新页）
 | `fetch_watchlist(stocks, range='2y')` 透传 | `src/fetcher.py` | 同上 |
 | `_load_macro` 传 `range='5y'` + `tail=1260` | `web/app.py:592-603` | 仅宏观端点 |
 | 新增 `_macro_correlation` 计算 + `/api/macro` 加 `correlation` 键 | `web/app.py` | 仅宏观端点 |
+| **消费 `/api/econ`**（通胀轴 / 增长轴 / 四象限） | `web/static/macro.js` | **依赖前置任务**（见下）|
 | 新增 `/macro` 路由 | `web/app.py` | 新增，不影响现有 |
 
 ⚠️ **Web 只读、零写盘**约束不变 —— 所有计算在内存完成，不落盘。
+
+⚠️ **前置依赖（需求方 2026-09-14 决定）**：`tasks/2026-09-14-econ-data-source/plan.md` **必须先完成** —— 它提供 `GET /api/econ`（BLS：CPI-U / PPI / 失业率 / 非农，6h TTL）。
 
 ### 4.3 页面信息架构（对应 PRD 七模块）
 
 | # | 模块 | 数据来源 | 第一版 |
 |---|---|---|---|
-| 1 | **宏观环境**（顶部） | 新增 `macro_regime` 计算（§3.1） | ✅ |
+| 1 | **宏观环境**（顶部） | §3.1 四维度打分 + `/api/econ` 的四象限 | ✅ |
 | 2 | **核心宏观变量**（4 张） | `/api/macro` 的 `stocks` | ✅ |
 | 3 | **宏观主图**（单大图 + 胶囊切换 + 1M/3M/6M/1Y/5Y） | `/api/macro` 的 `trend`（raw） | ✅ |
-| 4 | **宏观因子**（美元/利率/通胀/风险偏好） | 同 §3.1 的四维度明细 | ✅ |
+| 4 | **宏观因子**（美元/利率/通胀/风险偏好） | §3.1 四维度明细 + `/api/econ` 通胀轴 | ✅ |
 | 5 | **宏观关系** | 新增 `correlation`（§3.2） | ✅ |
-| 6 | **历史宏观环境**（30 天分布） | 新增逐日回放 | ⚠️ **见下** |
-| 7 | 经济数据（CPI/PCE/GDP/PMI） | — | ❌ Out of Scope |
+| 6 | **历史宏观环境**（30 天分布） | 逐日回放（风险偏好三态）+ **`/api/econ` 四象限** | ✅ **五态齐备** |
+| 7 | **经济数据**（CPI / PPI / 失业率 / 非农） | **`/api/econ`** | ✅ **In Scope**（原为 Out of Scope）|
 
-**模块 6 的处理**：需要**逐日回放** `_compute_risk_appetite` 式的打分（现有函数只算最新一天）。
-- 数据够（history 有 ~1260 天）
-- **但"通胀/通缩/滞胀"需要通胀与增长序列，库内没有** → 第一版**只做 Risk-On/Neutral/Risk-Off 三态分布**，不做四象限（Inflation/Deflation/Stagflation）
-- 与 PRD「状态算法不足的部分不要凭空编造」一致
+**模块 6 的升级（需求方 2026-09-14）**：
+
+原方案只能做三态，因为库内没有通胀与增长序列。接入 BLS 后**五态齐备**：
+
+| 状态 | 来源 |
+|---|---|
+| `Risk-On` / `Neutral` / `Risk-Off` | 风险偏好轴 —— **逐日回放 history**（现有 `risk_appetite` 逻辑扩展）|
+| `Reflation` 再通胀 / `Deflation` 通缩衰退 / `Stagflation` 滞胀 / `Goldilocks` 复苏 | 四象限 —— **直接消费 `/api/econ` 的 `quadrant` 字段** |
+
+**模块 7 的升级**：展示 CPI / PPI / 失业率 / 非农。
+⚠️ **必须显示数据月份**（如「2026年8月」），**不可显示为"实时"** —— 经济数据有发布滞后，`/api/econ` 的 `as_of` 就是数据月份。
+
+### 4.4 三处数据的职责边界（防重复实现）
+
+| 计算 | 归属 | 理由 |
+|---|---|---|
+| 通胀轴 / 增长轴 / **四象限** | **`src/econ_fetcher.py`**（前置任务） | 服务端纯函数、**可单测**、全站只算一次 |
+| 风险偏好三态（Risk-On / Neutral / Risk-Off） | `web/app.py` | 基于 history，与首页 `risk_appetite` 同源复用 |
+| 宏观关系相关性 | `web/app.py` | 基于 `/api/macro` 序列，宏观页专属 |
+
+⚠️ **禁止在前端重算四象限** —— 前端只消费 `/api/econ` 的 `quadrant` / `inflation_axis` / `growth_axis` 字段。算法必须在服务端，否则前端与其它消费方（未来可能的日报）会漂移。
 
 ---
 
@@ -220,6 +242,7 @@ GET /macro                → macro.html（新页）
 |---|---|---|
 | `src/fetcher.py` | 改 2 处 | `_fetch_yahoo_watch` / `fetch_watchlist` 加 `range` 参数（**默认 2y 不变**）|
 | `web/app.py` | 改 1 处 + 新增约 90 行 | `_load_macro` 传 5y/1260；新增 `_compute_macro_regime` / `compute_macro_correlation` / `_macro_history_regime`；`/api/macro` 加键；新增 `GET /macro` |
+| **（前置）`src/econ_fetcher.py` + `GET /api/econ`** | **另一任务** | `tasks/2026-09-14-econ-data-source/plan.md` —— **必须先完成** |
 | `web/templates/_shell.html` | **新建** | 顶栏 + 侧栏（参数化 `base_prefix` / `active_page`）|
 | `web/templates/index.html` | 改 | 抽走 shell 后改为 include；"宏观数据"项改可点 |
 | `web/templates/macro.html` | **新建** | 宏观页骨架（7 模块）|
@@ -270,6 +293,8 @@ _load_macro(): fetch_watchlist(stocks, range_="5y") → _build_watchlist_payload
 | `compute_macro_correlation(macro_series, index_series, window=252)` | 1 年滚动窗口两两相关 → `[{a,b,pair,r,n}]` |
 | `_macro_history_regime(records, days=30)` | 逐日回放 → `{risk_on: n, neutral: n, risk_off: n}` |
 
+⚠️ **四象限不在这里算**（见 §4.4）—— `quadrant` / `inflation_axis` / `growth_axis` 由前置任务的 `src/econ_fetcher.py` 产出，宏观页只消费。
+
 **验证**：新增单测覆盖（正常 / 数据不足 / 零方差 / 常量序列）。
 
 ### M-4 · 抽 `_shell.html`
@@ -308,11 +333,12 @@ def macro_page():
 
 ```text
 宏观数据
-┌ 当前宏观环境 ─────────────────────────────┐   ← Risk-On + Score 68 + 四维度方向 + 更新时间
+┌ 当前宏观环境 ─────────────────────────────┐   ← 五态之一 + Macro Score + 四维度方向 + 数据月份
 ├ 宏观市场（单大图 + 胶囊 + 1M/3M/6M/1Y/5Y）┤   ← canvas#macro-chart
 ├ 核心宏观变量（4 张）│ 宏观因子（4 项）      ┤
 ├ 宏观关系（显著对）                          ┤
-└ 历史宏观环境（30 天三态分布）                ┘
+├ 历史宏观环境（30 天五态分布）                ┤   ← 三态逐日回放 + 四象限来自 /api/econ
+└ 经济数据（CPI / PPI / 失业率 / 非农）        ┘   ← /api/econ，**必须标数据月份**
 ```
 
 ### M-6 · `macro.js` 主图
@@ -344,7 +370,7 @@ def macro_page():
 
 ### M-9 · 记录
 
-- journal：Macro Score 阈值取值理由与出处、5Y 实测数据、抽 include 的回归结果。
+- journal：Macro Score 阈值取值理由与出处、5Y 实测数据、抽 include 的回归结果、**`/api/econ` 的 `as_of` 实测值**。
 - `docs/architecture.md` 追加决策条目（新路由 + 评分口径 + 相关性独立函数）。
 - `docs/pitfalls.md` 追加：
   1. **`range` 参数共用陷阱**：`_fetch_yahoo_watch` 被自选股与宏观共用，改 range 必须参数化。
@@ -378,6 +404,10 @@ def macro_page():
 | 5Y 档点数 | 图表 | **>1000** |
 | Light / Dark | 目视 | 两套都克制、无彩色卡片堆叠 |
 | 数据缺失态 | 断网 | 显示「数据暂缺」+ 更新时间，**不显示错误旧值** |
+| **`/api/econ` 的 `as_of`** | JSON | **`"2026-08"`**（数据月份，非抓取时间）|
+| **经济数据区的月份标注** | 页内文本 | 含「**2026年8月**」（**不含**"最新"/"实时"字样）|
+| 宏观环境区显示的状态 | 页内文本 | 五态之一（含四象限名）|
+| **`/api/econ` 降级态** | 停前置任务 / 断网 | 模块 6/7 显示「数据暂缺」占位，**页面不崩** |
 
 ### 7.3 box-sizing 说明
 
@@ -410,7 +440,10 @@ def macro_page():
 | **R4** | **Macro Score 阈值被当成权威指标** | **中** | §3.1 标注工程取值与出处；前端显示「评分口径」说明；写入 journal |
 | **R5** | 5Y 数据拉长 → 响应体变大 | **中** | 实测 5y 耗时 0.3~0.4s；若响应过大可只传 `raw` 的首尾或降采样 |
 | **R6** | 宏观关系数据不足（新上市品种 / 日期不齐） | **中** | 纯函数返回 `r=None`；前端显示「样本不足」，**不显示错误的 0** |
-| **R7** | 模块 6 只有三态、没有 Inflation/Deflation/Stagflation | **中** | 库内无通胀/增长序列 → **第一版只做三态**，与 PRD「不要凭空编造」一致 |
+| **R7** | ~~模块 6 只有三态、没有 Inflation/Deflation/Stagflation~~ | ✅ **已解决** | 接入 BLS 后**五态齐备**（§4.3）：三态来自逐日回放，四象限来自 `/api/econ` |
+| **R13** | **前置任务未完成 → 模块 6/7 无数据** | **高** | `2026-09-14-econ-data-source` **必须先做完**；且宏观页须对 `/api/econ` 降级态做「数据暂缺」占位 |
+| **R14** | **经济数据被误读为实时值** | **高** | 前端显示**数据月份**（`as_of`，如「2026年8月」），**不得写"最新"/"实时"**；`as_of=None` 时显示占位 |
+| **R15** | 通胀轴/增长轴在前端重算 → 与后端漂移 | **中** | §4.4：前端只消费 `quadrant` / `inflation_axis` / `growth_axis`，算法只在 `econ_fetcher` |
 | **R8** | 页面过度卡片化（PRD 首要担心） | **中** | 明确 research terminal 风格；主图优先；**禁止堆彩色卡片** |
 | **R9** | 新增路由与首页导航语义混用（锚点 vs 路由） | **中** | `_shell.html` 参数化 `base_prefix`；宏观页侧栏用 `/#overview` 回首页 |
 | **R10** | 主题切换在宏观页失效 | **中** | `macro.js` 需复用 `localStorage["mp-theme"]` + `html.light` 类 + 图表重渲染（现有机制）|
@@ -429,6 +462,7 @@ def macro_page():
 | 新建 | `web/templates/_shell.html` | 约 70 行 |
 | 新建 | `web/templates/macro.html` | 约 180 行 |
 | 新建 | `web/static/macro.js` | 约 320 行 |
+| **（前置）** | `src/econ_fetcher.py` + `/api/econ` | **另一任务，不计入本文件规模** —— 见 `tasks/2026-09-14-econ-data-source/plan.md`（约 +350 行）|
 | 修改 | `web/static/style.css` | +约 120 行 |
 | 修改 | `tests/test_web.py` | +约 60 行 |
 | 新增 | `tasks/2026-09-14-macro-page/plan.md` / `journal.md` | 本文件 / 执行记录 |
@@ -440,14 +474,16 @@ def macro_page():
 
 ## 10. 不做什么
 
-- **不做 CPI / PCE / GDP / PMI**（PRD 明确的 Out of Scope）
+- ~~不做 CPI / PCE / GDP / PMI~~ → **已改（需求方 2026-09-14）**：**CPI / PPI / 失业率 / 非农 In Scope**（走前置任务的 `/api/econ`）。
+  **PCE 与 GDP 仍不做** —— PCE 的 AkShare 源停更在 2025-09（实测 24.3s / 2025-08-29），GDP 需 BEA Key。
 - **不做复杂热力图**（宏观关系只列显著对）
 - **不做 AI 自动宏观研报**
 - **不重构首页**（只抽 shell，布局与逻辑不变）
-- **不新增宏观数据供应商**
+- **本任务不新增数据供应商**（BLS 接入属前置任务 `2026-09-14-econ-data-source`）
 - **不改 `CORRELATION_PAIRS` / `generate_context` / 任何数据落盘**
 - **不把宏观品种写入 history**（改用 web 层现算，避开数据管线）
-- **不在第一版做 Inflation / Deflation / Stagflation 四象限**（无通胀与增长序列）
+- ~~不在第一版做四象限~~ → **已改**：四象限由前置任务的 `/api/econ` 提供，本页**消费**
+- **不在前端重算四象限**（§4.4 —— 算法只在服务端，防漂移）
 
 ---
 
@@ -459,6 +495,9 @@ def macro_page():
 - [ ] 已确认 **§3.1**：Macro Score 采用 Equicurious 四指标法（-8~+8 → ÷8 → ±0.25 阈值），阈值标注为工程取值
 - [ ] 已确认 **§3.2**：宏观关系用 **1 年滚动窗口**（业界惯例），只列显著对
 - [ ] 已知悉 **`^TNX` 是收益率×10**，必须除以 10（R3）
-- [ ] 已确认 **模块 6 第一版只做三态分布**，不做四象限（R7）
+- [x] **模块 6 五态齐备** —— 三态来自逐日回放，四象限消费 `/api/econ`（R7 已解决）
+- [ ] 已确认**前置任务** `2026-09-14-econ-data-source` **必须先完成**（R13）
+- [ ] 已确认经济数据**必须显示数据月份**（`as_of`），不得显示为"实时"（R14）
+- [ ] 已确认**四象限不在前端重算**（§4.4 / R15）
 - [ ] 已确认宏观页**不受首页 `scrollHeight ≤1240` 护栏约束**（独立页面）
 - [ ] 已确认 **Web 只读、零写盘**约束不变
