@@ -733,7 +733,10 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .regime-level.risk_off { color: var(--red); }
 .regime-level.neutral, .regime-level.none { color: var(--text-secondary); }
 .regime-quadrant { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
-.regime-score { text-align: right; padding-right: 6px; }
+/* ⚠️ 左对齐而非右对齐（2026-09-14）：改前右对齐 → 数字被推到中列末尾，
+   与左列文字之间出现"双空档"（列内空档 + 24px 列间距）≈ 380px（PRD 要点 2「中间空档太大」）。
+   左对齐后数字紧贴左列文字（实测 1396px 栅格 [587｜85｜675]，空档 380 → ~35px）。 */
+.regime-score { text-align: left; padding-right: 6px; }
 .score-num { font-family: var(--mono); font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .score-cap { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
 .regime-factors, .mac-factors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

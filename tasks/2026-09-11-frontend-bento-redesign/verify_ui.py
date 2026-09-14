@@ -1039,12 +1039,26 @@ ASOF_JS = r"""
 """
 
 
+_LATEST_CACHE: dict = {}
+
+
+def api_latest(url: str) -> dict:
+    """读 /api/latest（按 url 缓存）。
+
+    用途：让"期望值"**取自数据**而不是写死在断言里（2026-09-14：顶栏数据日与 V-2/V-4 都曾写死/隐含
+    "今天数据一定新鲜"，换一天就必然变红 —— 与 K-5「只断不变量、不断死数值」相冲突）。
+    """
+    if url not in _LATEST_CACHE:
+        with urllib.request.urlopen(url + "api/latest", timeout=10) as r:
+            _LATEST_CACHE[url] = json.loads(r.read().decode("utf-8"))
+    return _LATEST_CACHE[url]
+
+
 def assert_sector_asof(page, url: str) -> None:
     """V-1~V-6 板块陈旧回填标注：tab-aware 文案 + 零增高 + 标注在 h2 内。"""
     print("\n--- V 板块「数据截至」标注（陈旧回填）---")
     try:
-        with urllib.request.urlopen(url + "api/latest", timeout=10) as r:
-            payload = json.loads(r.read().decode("utf-8"))
+        payload = api_latest(url)
     except Exception as exc:  # noqa: BLE001
         check(False, "V-1 读取 /api/latest（标注断言的期望值来源）", exc)
         return
@@ -1058,15 +1072,21 @@ def assert_sector_asof(page, url: str) -> None:
           f"noLabelH2={d['usH2NoLabel']} h2ClientH={d['h2ClientH']} lineHeight={d['lineHeight']}")
 
     check(d["labelInH2"], "V-1 标注 span 在 h2 内（零增高的前提）", d["labelInH2"])
-    # A股 tab：今天数据新鲜（as_of == date）→ 必须为空
-    check(d["cnText"] == "", "V-2 A股 tab 数据新鲜 → 标注为空", d["cnText"])
+    # ⚠️ 2026-09-14（macro-page-refine）：这里原为"假设 A股 今天数据一定新鲜（as_of == date）→ 标注必须为空"。
+    #    但 as_of / date 都由**快照数据**决定（周末、节假日、盘中都会让两者不等），该前提在周末档不成立
+    #    （实测 09-14 周一：date=2026-09-14 而 cn.as_of=2026-09-13 → 页面**正确地**标注了"截至 09-13"）。
+    #    改为与 V-3 同款的**数据驱动期望值**：只断言"标注内容 == 陈旧与否对应的文案"，
+    #    不变量（标注跟着数据走）保持不变，去掉环境耦合（原来换一天必红）。
+    exp_cn = ("· 数据截至 " + cn_as_of) if (cn_as_of and cur and cn_as_of != cur) else ""
+    check(d["cnText"] == exp_cn,
+          "V-2 A股 tab 标注与 as_of/date 是否陈旧自洽（期望值取自 API）", (d["cnText"], exp_cn))
     # 美股 tab：回看到 2026-09-13 → 必须显示（期望值直接取自 API，避免写死日期）
     expected = ("· 数据截至 " + us_as_of) if (us_as_of and cur and us_as_of != cur) else ""
     check(d["usText"] == expected and (us_as_of is None or d["usText"] != ""),
           "V-3 美股 tab 显示「· 数据截至 <as_of>」（as_of 来自 API）",
           (d["usText"], expected))
-    check(d["resetToCn"] == "",
-          "V-4 切回 A股 tab 后标注清空（radio change 监听生效）", d["resetToCn"])
+    check(d["resetToCn"] == exp_cn,
+          "V-4 切回 A股 tab 后标注与 A股 状态一致（radio change 监听生效）", (d["resetToCn"], exp_cn))
     check(d["usH2"] == d["cnH2"] and d["usCard"] == d["cnCard"]
           and d["usH2"] == d["usH2NoLabel"] and d["usCard"] == d["usCardNoLabel"],
           "V-5 标注零增高（h2 与 #us-sectors 高度都不变）",
@@ -1937,7 +1957,7 @@ def measure(page, url: str, w: int, h: int) -> dict:
     return data
 
 
-def assert_viewport(w: int, h: int, m: dict) -> None:
+def assert_viewport(w: int, h: int, m: dict, expect_date: str = "") -> None:
     print(f"\n--- {w}x{h} ---")
     print(f"  scrollH={m['scrollH']} sections={m.get('sections')}")
     if m.get("overflowers"):
@@ -1973,7 +1993,12 @@ def assert_viewport(w: int, h: int, m: dict) -> None:
     check(m["tabCount"] == 4, f"{w} 趋势类别 tab 4 个", m["tabCount"])
     check(m["isWeekendFri"] is False and m["isWeekendSat"] is True,
           f"{w} isWeekendDate(周五)=false / (周六)=true", (m["isWeekendFri"], m["isWeekendSat"]))
-    check("2026-09-11" in (m["topbarDate"] or ""), f"{w} 顶栏显示数据日", m["topbarDate"])
+    # ⚠️ 2026-09-14（macro-page-refine）：原为写死 `"2026-09-11" in topbarDate` → **数据日一变就必红**
+    #    （违反 K-5「只断不变量、不断死数值」）。改为与 `/api/latest.date` **同源比对**；
+    #    /api/latest 不可用时退化为"格式像数据日"（不因网络抖动误报）。
+    td = (m["topbarDate"] or "").strip()
+    ok = (expect_date in td) if expect_date else bool(re.match(r"^\d{4}-\d{2}-\d{2}", td))
+    check(ok, f"{w} 顶栏显示数据日（期望值取自 /api/latest.date）", (td, expect_date))
 
 
 def main() -> int:
@@ -1991,6 +2016,11 @@ def main() -> int:
     report: dict = {"url": url, "viewports": {}}
     try:
         wait_ready(url)
+        try:                        # 期望值一律取自数据（顶栏数据日等），不写死日期（见 assert_viewport 注释）
+            data_date = api_latest(url).get("date") or ""
+        except Exception as exc:  # noqa: BLE001
+            data_date = ""
+            print(f"  [warn] /api/latest 不可用 → 顶栏数据日退化为格式校验：{exc}")
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
@@ -2006,7 +2036,7 @@ def main() -> int:
 
             for (w, h) in VIEWPORTS:
                 m = measure(page, url, w, h)
-                assert_viewport(w, h, m)
+                assert_viewport(w, h, m, data_date)
                 g = page.evaluate(GLASS_JS)      # G-1 玻璃判据（1~7）
                 assert_glass(w, h, g)
                 m["glass"] = g
@@ -2170,7 +2200,7 @@ def main() -> int:
             check(mob["chartWrapH"] == 280, "375 主图高度 280px", mob["chartWrapH"])
             check(mob["scrollW"] == mob["innerW"], "375 无横向溢出", (mob["scrollW"], mob["innerW"]))
             mob_card = page.evaluate(MEASURE_JS)
-            assert_viewport(375, 812, mob_card)
+            assert_viewport(375, 812, mob_card, data_date)
 
             assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
             assert_macro_refine(browser, url)  # M-* 宏观页 refinement（主题/关系口径/主图主次/留白/分层）
