@@ -101,15 +101,20 @@ class _RevalidateStatic(StaticFiles):
 
 app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static")
 
+# 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
+_ASSET_FILES = ("style.css", "app.js", "macro.js")
+
 
 def _asset_version() -> str:
-    """静态资源版本号 = style.css / app.js 的最大 mtime（秒），供模板拼 `?v=`。
+    """静态资源版本号 = 前端静态资源的最大 mtime（秒），供模板拼 `?v=`。
 
     与 `Cache-Control: no-cache` 双保险：万一某层缓存（IDE 预览 webview / CDN / 代理）忽略
     缓存头，资源 URL 变化也会强制换新副本。取 mtime 而非手写版本号 = 不会忘记递增。
+    ⚠️ 新增静态资源（如 macro.js）必须加进 `_ASSET_FILES`，否则改它不会换 URL → 验证时吃旧副本。
     """
     try:
-        return str(int(max((STATIC_DIR / n).stat().st_mtime for n in ("style.css", "app.js"))))
+        mtimes = [(STATIC_DIR / n).stat().st_mtime for n in _ASSET_FILES if (STATIC_DIR / n).exists()]
+        return str(int(max(mtimes))) if mtimes else "0"
     except OSError:
         return "0"
 
@@ -1017,6 +1022,20 @@ def api_econ() -> dict:
             _econ_cache["ts"] = time.time()
             _econ_cache["payload"] = fresh
     return fresh
+
+
+@app.get("/macro", response_class=HTMLResponse)
+def macro_page() -> HTMLResponse:
+    """宏观数据独立页（research terminal 风格：7 模块，大图为主视觉）。
+
+    与首页共用顶栏/侧栏（`_topbar.html` / `_sidebar.html`）：
+    `base_prefix="/"` → 侧栏锚点变成 `/#overview`（回首页）；`active_page="macro"` → 高亮「宏观数据」。
+    """
+    template = _TEMPLATES.get_template("macro.html")
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="/", active_page="macro"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.get("/", response_class=HTMLResponse)

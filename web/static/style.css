@@ -666,3 +666,131 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .sk-card { height: 92px; border-radius: 10px; }
 /* 告警列表条骨架 */
 .sk-item { height: 30px; border-radius: 6px; }
+
+/* ===== 宏观数据页（/macro）—— research terminal 风格（2026-09-14）=====
+   设计口径（PRD 首要要求）：首页 = Bento Dashboard（快速监控）；本页 = Research Terminal（分析工作台）。
+   → 大留白 / 极浅背景 / 细边框 1px / 低饱和状态色 / 数字与标题层级分明 / **主图占视觉中心**。
+   ⚠️ 刻意**不复用**首页的玻璃 token（--glass-*）：本页要"纸面感"而非"玻璃感"。
+   ⚠️ **严禁堆彩色卡片**：状态色只出现在文字、细边框与细条形上，不给卡片整块上色。
+   ⚠️ 颜色一律走 token（双主题自动跟随），低饱和处用 color-mix 从 token 派生。
+   注意：水平内边距由 .main 提供（20px 28px 24px），本段只加纵向节奏。 */
+.mac { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+.mac-head { padding: 6px 2px 2px; }
+.mac-head h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary); }
+.mac-sub { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+.mac-sep { margin: 0 6px; }
+
+/* 卡片：细边框 + 极浅背景（不做玻璃/阴影堆叠，保持纸面感） */
+.mac-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+.mac-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  margin-bottom: 16px; flex-wrap: wrap; }
+.mac-card h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--text-primary); }
+.mac-note { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.mac-foot { margin: 10px 0 0; font-size: 11px; color: var(--text-muted); }
+.mac-empty { color: var(--text-muted); font-size: 13px; padding: 10px 0; margin: 0; }
+.mac-fail { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 0; margin: 0; }
+
+/* 低饱和状态色：**只在 .mac 作用域内**定义，避免与首页既有类名相撞 */
+.mac .up { color: var(--green); }
+.mac .down { color: var(--red); }
+.mac .flat { color: var(--text-muted); }
+
+/* 模块 1：当前宏观环境 */
+.mac-regime { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr); gap: 24px; align-items: center; }
+.regime-level { font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.regime-level.risk_on { color: var(--green); }
+.regime-level.risk_off { color: var(--red); }
+.regime-level.neutral, .regime-level.none { color: var(--text-secondary); }
+.regime-quadrant { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+.regime-score { text-align: right; padding-right: 6px; }
+.score-num { font-family: var(--mono); font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.score-cap { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.regime-factors, .mac-factors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mac-factor { display: grid; grid-template-columns: 64px 92px 42px minmax(0, 1fr); gap: 10px;
+  font-size: 12px; align-items: baseline; }
+.f-name { color: var(--text-secondary); }
+.f-val { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.f-imp { font-family: var(--mono); font-weight: 600; }
+.f-note { color: var(--text-muted); font-size: 11px; }
+
+/* 模块 2：宏观市场（主图 = 视觉中心） */
+.mac-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.mac-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.mac-pill { background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 3px 10px; border-radius: 999px; font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease; }
+.mac-pill:hover { color: var(--text-primary); }
+.mac-pill.active { border-color: var(--blue); color: var(--text-primary); }
+/* ⚠️ 主图容器**必须显式给高度**（无高度时 Chart.js 会塌成 0，C2 教训）；
+   ⚠️ **禁止**用 !important 覆盖 canvas 尺寸（那会破坏 canvas 位图 == 显示尺寸）。
+   高度比首页主图（clamp(300px,40vh,460px)）更大 → 图表是本页视觉权重最大的元素。 */
+.mac-chart-wrap { position: relative; height: clamp(340px, 46vh, 560px); }
+.mac-chart-wrap canvas { display: block; }
+
+/* 模块 3 + 4：两列区 */
+.mac-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.mac-vars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.mac-var .v-label { font-size: 11px; color: var(--text-secondary); }
+.mac-var .v-value { margin-top: 4px; font-family: var(--mono); font-size: 20px;
+  font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.v-unit { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
+.mac-var .v-chg { margin-top: 2px; font-family: var(--mono); font-size: 12px; }
+.mac-factor-row { display: grid; grid-template-columns: 72px 70px minmax(0, 1fr); gap: 10px;
+  font-size: 12px; align-items: baseline; }
+.fr-name { color: var(--text-secondary); }
+.fr-dir { font-weight: 600; }
+.fr-note { color: var(--text-muted); font-size: 11px; }
+
+/* 模块 5：宏观关系（只强调significant，不做热力图） */
+.mac-rel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.mac-rel-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 170px; gap: 12px;
+  padding: 8px 10px; border-radius: 8px; border-left: 2px solid transparent; font-size: 12px; align-items: baseline; }
+.mac-rel-row.strong { border-left-color: var(--blue); background: var(--bg-hover); }
+.mac-rel-row.muted { color: var(--text-muted); }
+.rel-r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.rel-n { color: var(--text-muted); font-size: 11px; text-align: right; }
+
+/* 模块 6：历史宏观环境（细条形，低饱和） */
+.mac-hist { display: flex; flex-direction: column; gap: 10px; }
+.mac-hist-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 110px; gap: 14px;
+  align-items: center; font-size: 12px; }
+.h-label { color: var(--text-secondary); }
+.h-bar { display: block; height: 8px; border-radius: 4px; background: var(--bg-hover); overflow: hidden; }
+.h-bar i { display: block; height: 100%; border-radius: 4px; }
+.h-bar i.risk_on { background: color-mix(in srgb, var(--green) 55%, transparent); }
+.h-bar i.neutral { background: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+.h-bar i.risk_off { background: color-mix(in srgb, var(--red) 55%, transparent); }
+.h-val { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); }
+
+/* 模块 7：经济数据 */
+.mac-econ { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.mac-econ-item { border-left: 1px solid var(--border); padding-left: 14px; }
+.mac-econ-item:first-child { border-left: 0; padding-left: 0; }
+.e-label { font-size: 11px; color: var(--text-secondary); }
+.e-value { margin-top: 6px; font-family: var(--mono); font-size: 20px;
+  font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.e-yoy { margin-top: 4px; font-family: var(--mono); font-size: 12px; }
+.e-date { margin-top: 2px; font-size: 10px; color: var(--text-muted); }
+
+/* 响应式：≤1299 两列区合流、环境区单列；≤768 数字网格降 2 列；≤480 降单列（375 档验收） */
+@media (max-width: 1299px) {
+  .mac-regime { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .regime-score { text-align: left; }
+  .mac-2col { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 768px) {
+  .mac-chart-wrap { height: clamp(260px, 40vh, 400px); }
+  .mac-econ { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  .mac-econ-item:nth-child(3) { border-left: 0; padding-left: 0; }
+  .mac-rel-row { grid-template-columns: minmax(0, 1fr) 64px; }
+  .rel-n { display: none; }
+}
+@media (max-width: 480px) {
+  .mac-card { padding: 16px; }
+  .mac-vars, .mac-econ { grid-template-columns: minmax(0, 1fr); }
+  .mac-econ-item { border-left: 0; padding-left: 0; }
+  .mac-hist-row { grid-template-columns: 104px minmax(0, 1fr) auto; gap: 10px; }
+  .mac-factor { grid-template-columns: 56px minmax(0, 1fr) 42px; }
+  .f-note { display: none; }
+}

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>宏观数据 · MarketPulse</title>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("mp-theme") === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <!-- 与首页同一份 style.css（宏观页样式追加在同一文件尾部的 .mac-* 段） -->
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          onerror="window.__chartFailed=true"></script>
+</head>
+<body>
+  {% include "_topbar.html" %}
+  <div class="shell">
+    {% include "_sidebar.html" %}
+    <main class="main" id="main">
+      <div class="mac">
+        <header class="mac-head">
+          <h1>宏观数据</h1>
+          <p class="mac-sub">经济与市场环境工作台<span class="mac-sep">·</span>数据截至 <span id="macro-asof">—</span></p>
+        </header>
+
+        <!-- 模块 1：当前宏观环境（风险偏好三态 + 四象限 + Macro Score + 四维度） -->
+        <section class="mac-card" id="mac-regime">
+          <div class="mac-card-head">
+            <h2>当前宏观环境</h2>
+            <span class="mac-note" id="regime-basis"></span>
+          </div>
+          <div class="mac-regime">
+            <div class="regime-hero">
+              <div class="regime-level" id="regime-level">数据暂缺</div>
+              <div class="regime-quadrant" id="regime-quadrant"></div>
+            </div>
+            <div class="regime-score">
+              <div class="score-num" id="regime-score">—</div>
+              <div class="score-cap">Macro Score</div>
+            </div>
+            <ul class="regime-factors" id="regime-factors"></ul>
+          </div>
+        </section>
+
+        <!-- 模块 2：宏观市场（单大图 = 视觉中心；胶囊切换品种 + 时间范围） -->
+        <section class="mac-card" id="mac-market">
+          <div class="mac-card-head">
+            <h2>宏观市场</h2>
+            <div class="mac-tools">
+              <div class="mac-pills" id="macro-pills"></div>
+              <div class="mac-pills" id="macro-range"></div>
+            </div>
+          </div>
+          <div class="mac-chart-wrap" id="macro-chart-wrap">
+            <canvas id="macro-chart"></canvas>
+            <p class="mac-fail hidden" id="macro-chart-fail">图表加载失败</p>
+          </div>
+          <p class="mac-foot" id="macro-chart-foot"></p>
+        </section>
+
+        <!-- 模块 3 + 4：核心宏观变量 / 宏观因子 -->
+        <div class="mac-2col">
+          <section class="mac-card" id="mac-vars">
+            <div class="mac-card-head"><h2>核心宏观变量</h2></div>
+            <div class="mac-vars" id="macro-vars"></div>
+          </section>
+          <section class="mac-card" id="mac-factors">
+            <div class="mac-card-head">
+              <h2>宏观因子</h2>
+              <span class="mac-note">四维度打分（-2 ~ +2）</span>
+            </div>
+            <ul class="mac-factors" id="macro-factors"></ul>
+          </section>
+        </div>
+
+        <!-- 模块 5：宏观关系（1 年滚动窗口，仅列显著对） -->
+        <section class="mac-card" id="mac-relation">
+          <div class="mac-card-head">
+            <h2>宏观关系</h2>
+            <span class="mac-note">1 年滚动窗口 · 相关系数 |r| ≥ 0.5 才列出</span>
+          </div>
+          <ul class="mac-rel" id="macro-rel"></ul>
+        </section>
+
+        <!-- 模块 6：历史宏观环境（三态逐日回放 + 四象限消费 /api/econ） -->
+        <section class="mac-card" id="mac-history">
+          <div class="mac-card-head">
+            <h2>历史宏观环境</h2>
+            <span class="mac-note" id="mac-history-note"></span>
+          </div>
+          <div class="mac-hist" id="macro-history"></div>
+        </section>
+
+        <!-- 模块 7：经济数据（/api/econ，**必须显示数据月份**，不得写「最新/实时」） -->
+        <section class="mac-card" id="mac-econ">
+          <div class="mac-card-head">
+            <h2>经济数据</h2>
+            <span class="mac-note" id="econ-asof"></span>
+          </div>
+          <div class="mac-econ" id="macro-econ"></div>
+          <p class="mac-foot" id="econ-basis"></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/static/macro.js?v={{ asset_v }}"></script>
+</body>
+</html>

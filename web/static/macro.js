@@ -1,0 +1,510 @@
+/* 宏观数据页（/macro）逻辑 —— research terminal 风格。
+ *
+ * 数据源（全部只读，零落盘）：
+ *   /api/macro → { stocks, trend(5Y: dates + series[].{raw,values}), regime, correlation, history_regime }
+ *   /api/econ  → { as_of, series[4], inflation_axis, growth_axis, quadrant, quadrant_label }
+ *
+ * 职责边界（plan §4.4，勿越界）：
+ *   四象限 / 通胀轴 / 增长轴 **只在服务端算**（src/econ_fetcher.py），本文件只消费；
+ *   风险偏好三态与四维度打分也由服务端（web/app.py）给出，前端不重算。
+ *
+ * 本文件内刻意复制的三段 shell 行为（主题 / 移动端抽屉 / 市场状态 + 顶栏数据日）：
+ *   与 app.js 同口径。之所以复制而不抽公共文件 —— 首页 app.js 刚做完 shell 抽取（M-4），
+ *   不在同一任务里再动它；若将来出现第三处复用，应抽 `shell.js`（已记入 journal）。
+ */
+(function () {
+  "use strict";
+
+  // 时间范围：交易日数（1M≈22 / 3M≈66 / 6M≈126 / 1Y≈252 / 5Y=全部）
+  var RANGES = [
+    { id: "1m", label: "1M", days: 22 },
+    { id: "3m", label: "3M", days: 66 },
+    { id: "6m", label: "6M", days: 126 },
+    { id: "1y", label: "1Y", days: 252 },
+    { id: "5y", label: "5Y", days: 0 }        // 0 = 全部（≈1258 点）
+  ];
+  // 品种胶囊：单变量显示真实价；「全部对比」做起点归一化（量纲不同，不可共用价格轴）
+  var PICKS = [
+    { key: "dx-y.nyb", label: "美元指数", unit: "" },
+    { key: "^tnx", label: "10Y 美债", unit: "%" },
+    { key: "cl=f", label: "原油", unit: "$" },
+    { key: "gc=f", label: "黄金", unit: "$" },
+    { key: "__all__", label: "全部对比", unit: "" }
+  ];
+  // 与首页「市场概览」同款品种配色（--c-* 变量，双主题自动跟随）
+  var SERIES_VAR = {
+    "dx-y.nyb": "--c-ixic", "^tnx": "--c-move", "cl=f": "--c-vxn", "gc=f": "--c-gld"
+  };
+  var SERIES_FALLBACK = {
+    "dx-y.nyb": "#2FD6A8", "^tnx": "#A78BFA", "cl=f": "#E0913E", "gc=f": "#E5C07B"
+  };
+  var REL_MIN = 0.5;        // |r| 显著阈值（仅列出显著的；r=None 显示「样本不足」）
+  var SERIES_LABEL = {
+    "dx-y.nyb": "美元指数", "^tnx": "10Y 美债", "cl=f": "原油", "gc=f": "黄金"
+  };
+
+  var state = { macro: null, econ: null, range: "1y", pick: "dx-y.nyb", chart: null };
+
+  function el(id) { return document.getElementById(id); }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function fmt(v, digits) {
+    if (v == null || !isFinite(v)) return "—";
+    return Number(v).toFixed(digits == null ? 2 : digits);
+  }
+
+  function fmtSigned(v, digits) {
+    if (v == null || !isFinite(v)) return "—";
+    var s = Number(v).toFixed(digits == null ? 2 : digits);
+    return (v > 0 ? "+" : "") + s;
+  }
+
+  function cls(v) { return v == null ? "" : (v > 0 ? "up" : (v < 0 ? "down" : "flat")); }
+
+  // ⚠️ ^TNX 口径（2026-09-14 实测澄清）：Yahoo 这个接口返回的**已经是百分数**
+  //    （实测 raw 末值 4.985 = 4.985%；5 年前 1.277 对应 2021-09 的真实 ~1.3%），**不要 ÷10**。
+  //    原 plan 的「收益率 ×10 必须 ÷10」是基于业界常识而非实测 —— 照做会显示成 0.4985%。
+  //    此处量级自适应只为防上游口径变更：|v| > 20（如 49.85）才 ÷10，且**必须告警，不静默校正**
+  //    （项目纪律：静默降级会掩盖故障）。
+  //    边界：若 10Y 真涨到 20%+（系统性断裂场景）会被误除 —— 那种场景下本页已无意义，接受。
+  var TNX_SCALE_THRESHOLD = 20;
+  var _tnxWarned = false;
+  function toYieldDisplay(v) {
+    if (v == null || !isFinite(v)) return null;
+    if (Math.abs(v) > TNX_SCALE_THRESHOLD) {
+      if (!_tnxWarned) {
+        _tnxWarned = true;
+        console.warn("[macro] ^TNX 原始值 " + v + " 超出预期量级（>" + TNX_SCALE_THRESHOLD +
+                     "），按 ×10 口径换算后显示；请核对上游口径是否变更");
+      }
+      return v / 10;
+    }
+    return v;
+  }
+
+  // 品种值 → 显示值（只有 10Y 需要口径处理；其余原样）
+  function displayValue(key, v) {
+    return key === "^tnx" ? toYieldDisplay(v) : v;
+  }
+
+  function unitOf(key) {
+    for (var i = 0; i < PICKS.length; i++) { if (PICKS[i].key === key) return PICKS[i].unit; }
+    return "";
+  }
+
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    v = (v || "").trim();
+    return v || fallback;
+  }
+
+  // ---- 主题 / 抽屉 / 市场状态（与 app.js 同口径；见文件头注释）----
+  function getTheme() {
+    try { return localStorage.getItem("mp-theme") || "light"; } catch (e) { return "light"; }
+  }
+
+  function updateMarketStatus() {
+    var st = el("market-status"), tm = el("market-time"), dot = el("market-dot");
+    if (!st || !tm) return;
+    var open = false, hh = "—", mm = "—";
+    try {
+      var parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Shanghai", hourCycle: "h23",
+        weekday: "short", hour: "2-digit", minute: "2-digit"
+      }).formatToParts(new Date());
+      var map = {};
+      parts.forEach(function (p) { map[p.type] = p.value; });
+      var wdIdx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(map.weekday);
+      open = wdIdx >= 1 && wdIdx <= 5;
+      hh = map.hour; mm = map.minute;
+    } catch (e) { /* 时区数据缺失：保留默认文案 */ }
+    st.textContent = open ? "市场已开盘" : "休市";
+    tm.textContent = "北京时间 " + hh + ":" + mm;
+    if (dot) dot.classList.toggle("open", open);
+  }
+
+  function bindShell() {
+    var themeBtn = el("sidebar-theme");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", function () {
+        var next = getTheme() === "dark" ? "light" : "dark";
+        try { localStorage.setItem("mp-theme", next); } catch (e) {}
+        document.documentElement.setAttribute("data-theme", next);
+        renderChart();                      // 图表线色/网格色随主题重取
+      });
+    }
+    var menuBtn = el("menu-toggle");
+    if (menuBtn) menuBtn.addEventListener("click", function () { document.body.classList.toggle("nav-open"); });
+    var backdrop = document.createElement("div");
+    backdrop.className = "nav-backdrop";
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener("click", function () { document.body.classList.remove("nav-open"); });
+    var main = el("main");
+    if (main) main.addEventListener("click", function () { document.body.classList.remove("nav-open"); });
+    var refreshBtn = el("refresh-btn");
+    if (refreshBtn) refreshBtn.addEventListener("click", loadAll);
+    updateMarketStatus();
+    setInterval(updateMarketStatus, 60000);
+  }
+
+  // ---- 胶囊 ----
+  function renderPills() {
+    var box = el("macro-pills");
+    if (box) {
+      box.innerHTML = PICKS.map(function (p) {
+        return '<button type="button" class="mac-pill' + (p.key === state.pick ? " active" : "") +
+               '" data-pick="' + p.key + '">' + escapeHtml(p.label) + "</button>";
+      }).join("");
+    }
+    var rbox = el("macro-range");
+    if (rbox) {
+      rbox.innerHTML = RANGES.map(function (r) {
+        return '<button type="button" class="mac-pill' + (r.id === state.range ? " active" : "") +
+               '" data-range="' + r.id + '">' + r.label + "</button>";
+      }).join("");
+    }
+  }
+
+  function bindPills() {
+    var box = el("macro-pills");
+    if (box) {
+      box.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-pick]");
+        if (!b) return;
+        state.pick = b.dataset.pick;
+        renderPills(); renderChart();
+      });
+    }
+    var rbox = el("macro-range");
+    if (rbox) {
+      rbox.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-range]");
+        if (!b) return;
+        state.range = b.dataset.range;
+        renderPills(); renderChart();
+      });
+    }
+  }
+
+  // ---- 主图 ----
+  function pickRange() {
+    for (var i = 0; i < RANGES.length; i++) { if (RANGES[i].id === state.range) return RANGES[i]; }
+    return RANGES[3];
+  }
+
+  function sliceTrend(trend, n) {
+    var dates = trend.dates || [];
+    var out = { dates: n > 0 ? dates.slice(-n) : dates.slice(), series: {} };
+    (trend.series || []).forEach(function (s) {
+      var raw = s.raw || [];
+      out.series[s.key] = n > 0 ? raw.slice(-n) : raw.slice();
+    });
+    return out;
+  }
+
+  // 多变量对比：起点归一化 100（`v / 首个非空 * 100`）—— 数据变换，不用坐标轴 min 实现
+  function normalize(arr) {
+    var base = null;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] != null && isFinite(arr[i])) { base = arr[i]; break; }
+    }
+    if (!base) return arr.map(function () { return null; });
+    return arr.map(function (v) { return (v == null || !isFinite(v)) ? null : (v / base) * 100; });
+  }
+
+  function showChartFail(msg) {
+    var canvas = el("macro-chart");
+    var fail = el("macro-chart-fail");
+    if (canvas) canvas.classList.add("hidden");
+    if (fail) { fail.classList.remove("hidden"); fail.textContent = msg; }
+  }
+
+  function renderChart() {
+    var canvas = el("macro-chart");
+    if (!canvas || !window.Chart) { showChartFail("图表加载失败"); return; }
+    var trend = state.macro && state.macro.trend;
+    if (!trend || !(trend.dates || []).length) { showChartFail("数据暂缺"); return; }
+    canvas.classList.remove("hidden");
+    var fail = el("macro-chart-fail");
+    if (fail) fail.classList.add("hidden");
+
+    var win = sliceTrend(trend, pickRange().days);
+    var multi = state.pick === "__all__";
+    var keys = multi ? Object.keys(win.series) : [state.pick];
+    var tick = cssVar("--c-axis-tick", "#86868b");
+    var grid = cssVar("--c-grid-line", "rgba(0,0,0,.06)");
+
+    var datasets = keys.map(function (k) {
+      var raw = win.series[k] || [];
+      var data = multi
+        ? normalize(raw)
+        : raw.map(function (v) { return displayValue(k, v); });
+      return {
+        key: k,
+        label: SERIES_LABEL[k] || k,
+        data: data,
+        borderColor: cssVar(SERIES_VAR[k], SERIES_FALLBACK[k]),
+        backgroundColor: "transparent",
+        borderWidth: 1.6,
+        pointRadius: 0,
+        pointHoverRadius: 3,
+        tension: 0.15,
+        spanGaps: true
+      };
+    });
+
+    if (state.chart) { state.chart.destroy(); state.chart = null; }
+    state.chart = new window.Chart(canvas, {
+      type: "line",
+      data: { labels: win.dates, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,          // ★ C2：容器高度由 CSS 给，不能让 canvas 自撑
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            display: multi,
+            position: "top",
+            align: "end",
+            labels: { color: tick, boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var k = ctx.dataset.key;
+                if (multi) return ctx.dataset.label + " " + fmt(ctx.parsed.y, 2);
+                var u = unitOf(k);
+                var digits = k === "^tnx" ? 3 : 2;
+                return ctx.dataset.label + " " + fmt(ctx.parsed.y, digits) + (u ? u : "");
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: tick, maxTicksLimit: 8, font: { size: 11 }, autoSkip: true, maxRotation: 0 },
+            grid: { display: false }
+          },
+          y: {
+            position: "right",
+            ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 6 },
+            grid: { color: grid }
+          }
+        }
+      }
+    });
+
+    var foot = el("macro-chart-foot");
+    if (foot) {
+      var last = datasets[0] && datasets[0].data.length ? datasets[0].data.length : 0;
+      foot.textContent = (multi ? "全部对比（起点 = 100，消除量纲差异）" : "真实价格")
+        + " · " + last + " 个交易日";
+    }
+  }
+
+  // ---- 模块 1：当前宏观环境 ----
+  var LEVEL_TEXT = {
+    risk_on: "Risk-On 风险偏好上行",
+    neutral: "Neutral 中性",
+    risk_off: "Risk-Off 风险规避"
+  };
+
+  function renderRegime() {
+    var m = state.macro || {};
+    var r = m.regime || {};
+    var lv = el("regime-level");
+    if (lv) {
+      lv.textContent = LEVEL_TEXT[r.level] || "数据暂缺";
+      lv.className = "regime-level " + (r.level || "none");
+    }
+    var q = el("regime-quadrant");
+    var econ = state.econ || {};
+    if (q) {
+      q.textContent = econ.quadrant_label
+        ? "四象限：" + econ.quadrant_label + "（通胀" + (econ.inflation_axis === "up" ? "↑" : "↓") +
+          " · 增长" + (econ.growth_axis === "expanding" ? "↑" : "↓") + "）"
+        : "四象限：数据暂缺（/api/econ 不可用）";
+    }
+    var sc = el("regime-score");
+    if (sc) sc.textContent = r.score100 == null ? "—" : fmt(r.score100, 1);
+    var basis = el("regime-basis");
+    if (basis) basis.textContent = r.basis || "";
+
+    var box = el("regime-factors");
+    if (box) {
+      var fs = r.factors || [];
+      box.innerHTML = fs.length ? fs.map(function (f) {
+        var unit = f.unit === "pp" ? "pp" : (f.unit || "");
+        return '<li class="mac-factor"><span class="f-name">' + escapeHtml(f.name) + "</span>" +
+          '<span class="f-val ' + cls(f.impact) + '">' + fmtSigned(f.value, 2) + unit + "</span>" +
+          '<span class="f-imp ' + cls(f.impact) + '">' + fmtSigned(f.impact, 0) + "</span>" +
+          '<span class="f-note">' + escapeHtml(f.note || "") + "</span></li>";
+      }).join("") : '<li class="mac-empty">数据暂缺</li>';
+    }
+  }
+
+  // ---- 模块 3：核心宏观变量 ----
+  function renderVars() {
+    var box = el("macro-vars");
+    if (!box) return;
+    var stocks = (state.macro || {}).stocks || [];
+    if (!stocks.length) { box.innerHTML = '<p class="mac-empty">数据暂缺</p>'; return; }
+    box.innerHTML = stocks.map(function (s) {
+      var v = displayValue(s.symbol.toLowerCase(), s.value);
+      var digits = s.symbol === "^TNX" ? 3 : 2;
+      return '<div class="mac-var"><div class="v-label">' + escapeHtml(s.label || s.symbol) + "</div>" +
+        '<div class="v-value">' + fmt(v, digits) + '<span class="v-unit">' + unitOf(s.symbol.toLowerCase()) + "</span></div>" +
+        '<div class="v-chg ' + cls(s.change_pct) + '">' + fmtSigned(s.change_pct, 2) + "%</div></div>";
+    }).join("");
+  }
+
+  // ---- 模块 4：宏观因子（服务端给的四维度，前端不重算）----
+  function renderFactors() {
+    var box = el("macro-factors");
+    if (!box) return;
+    var fs = ((state.macro || {}).regime || {}).factors || [];
+    if (!fs.length) { box.innerHTML = '<li class="mac-empty">数据暂缺</li>'; return; }
+    box.innerHTML = fs.map(function (f) {
+      var dir = f.impact > 0 ? "↑ 偏多" : (f.impact < 0 ? "↓ 偏空" : "→ 中性");
+      return '<li class="mac-factor-row"><span class="fr-name">' + escapeHtml(f.name) + "</span>" +
+        '<span class="fr-dir ' + cls(f.impact) + '">' + dir + "</span>" +
+        '<span class="fr-note">' + escapeHtml(f.note || "") + "</span></li>";
+    }).join("");
+  }
+
+  // ---- 模块 5：宏观关系 ----
+  function renderRelation() {
+    var box = el("macro-rel");
+    if (!box) return;
+    var rows = ((state.macro || {}).correlation || []).slice();
+    if (!rows.length) { box.innerHTML = '<li class="mac-empty">数据暂缺</li>'; return; }
+    rows.sort(function (a, b) {
+      var ra = a.r == null ? -2 : Math.abs(a.r), rb = b.r == null ? -2 : Math.abs(b.r);
+      return rb - ra;
+    });
+    box.innerHTML = rows.map(function (c) {
+      // r=None：**显示「样本不足」而不是错误的 0**（plan R6）
+      if (c.r == null) {
+        return '<li class="mac-rel-row muted"><span class="rel-pair">' + escapeHtml(c.pair) + "</span>" +
+          '<span class="rel-r">样本不足</span><span class="rel-n">n=' + (c.n || 0) + "</span></li>";
+      }
+      var strong = Math.abs(c.r) >= REL_MIN;
+      var sign = c.r > 0 ? "正相关" : "负相关";
+      return '<li class="mac-rel-row' + (strong ? " strong" : "") + '"><span class="rel-pair">' +
+        escapeHtml(c.pair) + '</span><span class="rel-r ' + (c.r > 0 ? "up" : "down") + '">' +
+        fmtSigned(c.r, 2) + "</span><span class=\"rel-n\">" + sign + " · n=" + (c.n || 0) + "</span></li>";
+    }).join("");
+  }
+
+  // ---- 模块 6：历史宏观环境（30 天三态分布 + 四象限）----
+  function renderHistory() {
+    var box = el("macro-history");
+    if (!box) return;
+    var h = (state.macro || {}).history_regime || null;
+    var note = el("mac-history-note");
+    var econ = state.econ || {};
+    if (note) {
+      var quad = econ.quadrant_label ? " · 当前四象限：" + econ.quadrant_label : "";
+      note.textContent = (h && h.days ? "近 " + h.days + " 个交易日" : "") + quad;
+    }
+    if (!h || !h.days) { box.innerHTML = '<p class="mac-empty">数据暂缺</p>'; return; }
+    var items = [
+      { key: "risk_on", label: "Risk-On 风险偏好", v: h.risk_on },
+      { key: "neutral", label: "Neutral 中性", v: h.neutral },
+      { key: "risk_off", label: "Risk-Off 风险规避", v: h.risk_off }
+    ];
+    box.innerHTML = items.map(function (it) {
+      var pct = Math.round((it.v / h.days) * 100);
+      return '<div class="mac-hist-row"><span class="h-label">' + it.label + "</span>" +
+        '<span class="h-bar"><i class="' + it.key + '" style="width:' + pct + '%"></i></span>' +
+        '<span class="h-val">' + it.v + " 天 · " + pct + "%</span></div>";
+    }).join("");
+  }
+
+  // ---- 模块 7：经济数据（**必须显示数据月份**，不得写「最新/实时」）----
+  function renderEcon() {
+    var box = el("macro-econ");
+    var note = el("econ-asof");
+    var econ = state.econ || {};
+    var asOf = econ.as_of;                       // 形如 "2026-08"（**数据月份**，不是抓取时间）
+    if (note) {
+      note.textContent = asOf ? "数据月份：" + asOf.slice(0, 4) + "年" + parseInt(asOf.slice(5), 10) + "月" : "数据暂缺";
+    }
+    var basis = el("econ-basis");
+    if (basis) {
+      var b = econ.basis || {};
+      basis.textContent = b.inflation ? "口径：通胀轴 " + b.inflation + "；增长轴 " + b.growth : "";
+    }
+    if (!box) return;
+    var series = econ.series || [];
+    if (!series.length || !asOf) {
+      box.innerHTML = '<p class="mac-empty">数据暂缺（/api/econ 不可用）</p>';
+      return;
+    }
+    box.innerHTML = series.map(function (s) {
+      var digits = s.unit === "index" ? 2 : 2;
+      var arrow = s.direction === "up" ? "↑" : (s.direction === "down" ? "↓" : "→");
+      return '<div class="mac-econ-item"><div class="e-label">' + escapeHtml(s.label) + "</div>" +
+        '<div class="e-value">' + fmt(s.latest, digits) + "</div>" +
+        '<div class="e-yoy ' + cls(s.yoy) + '">同比 ' + fmtSigned(s.yoy, 2) + "% " + arrow + "</div>" +
+        '<div class="e-date">' + escapeHtml(s.date || asOf) + "</div></div>";
+    }).join("");
+  }
+
+  function renderAll() {
+    renderRegime();
+    renderVars();
+    renderFactors();
+    renderRelation();
+    renderHistory();
+    renderEcon();
+    renderChart();
+    var el2 = el("macro-asof");
+    if (el2) {
+      var dates = ((state.macro || {}).trend || {}).dates || [];
+      el2.textContent = dates.length ? dates[dates.length - 1] : "—";
+      var tb = el("topbar-date");
+      if (tb) tb.textContent = dates.length ? dates[dates.length - 1] : "—";
+    }
+  }
+
+  // ---- 取数（两个端点并行；任一失败不影响另一个）----
+  function getJSON(url, timeoutMs) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, timeoutMs || 15000);
+    return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+      .then(function (r) { return r.json(); })
+      .then(function (d) { clearTimeout(timer); return d; })
+      .catch(function (e) { clearTimeout(timer); throw e; });
+  }
+
+  function loadAll() {
+    getJSON("/api/macro", 15000)
+      .then(function (d) { state.macro = d || {}; renderAll(); })
+      .catch(function (e) {
+        console.error("[macro] /api/macro failed:", e);
+        state.macro = {};
+        renderAll();
+      });
+    getJSON("/api/econ", 15000)
+      .then(function (d) { state.econ = d || {}; renderAll(); })
+      .catch(function (e) {
+        console.error("[econ] /api/econ failed:", e);
+        state.econ = {};                        // 模块 6/7 显示「数据暂缺」，页面不崩
+        renderAll();
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    bindShell();
+    renderPills();
+    bindPills();
+    loadAll();
+  });
+})();
