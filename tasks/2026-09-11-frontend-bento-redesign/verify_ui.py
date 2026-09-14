@@ -923,6 +923,11 @@ def assert_us_table(page, browser, url: str) -> None:
         # 注意：不要在本文件 print 里用 emoji —— Windows 控制台是 GBK，非 GBK 字符会
         # UnicodeEncodeError 让验收脚本中途崩掉（本次踩过）。
         print("  真实数据为空（今日美股板块取数超时）->「有数据时」的 5 行形态改用 mock 验证")
+        # 目视证据：真实空态（表格内一行「数据暂缺」，而非旧版居中的 .empty 占位）
+        try:
+            page.locator("#us-sectors").screenshot(path=str(OUT_DIR / "shot-us-tab-empty.png"))
+        except Exception as exc:  # noqa: BLE001
+            print(f"  截图失败（不影响断言）: {exc}")
 
     page.evaluate("() => { document.getElementById('sector-tab-cn').checked = true; }")
     page.wait_for_timeout(150)
