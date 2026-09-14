@@ -689,6 +689,17 @@ def _chg_pct(points: list[float], days: int) -> float | None:
     return round((points[-1] - prev) / prev * 100, 2)
 
 
+def _chg_abs(points: list[float], days: int) -> float | None:
+    """最近 `days` 日的**绝对变化**（如国债收益率的百分点）；点数不足 → None。
+
+    ⚠️ 利率维度必须用绝对变化而不是百分比变化：4.00% → 4.30% 的"百分比变化"是 7.5%，
+    和分档阈值 `_MACRO_RATE_BANDS`（0.10 / 0.25 **百分点**）量纲不符 → 任何变动都会顶格。
+    """
+    if len(points) < days + 1:
+        return None
+    return round(points[-1] - points[-(days + 1)], 3)
+
+
 def _dev_from_ma_pct(points: list[float], window: int) -> float | None:
     """最新值相对最近 `window` 个有效点均值的偏离（%）；点数不足 / 均值为 0 → None。"""
     if len(points) < window:
@@ -744,14 +755,14 @@ def _compute_macro_regime(indices: list[dict], records: list[dict], trend: dict)
         factors.append({"name": "美元", "value": dev, "unit": "%", "impact": score,
                         "note": "相对 %d 日均线偏离" % _MACRO_MA_WINDOW})
 
-    # 维度 3：利率（10Y 5 日变化，反向）
+    # 维度 3：利率（10Y 5 日变化，**百分点**，反向）
     tnx = _valid_points(series.get("^tnx"))
-    rate_chg = _chg_pct(tnx, _MACRO_CHG_DAYS) if tnx else None
+    rate_chg = _chg_abs(tnx, _MACRO_CHG_DAYS) if tnx else None
     if rate_chg is not None:
         score = _band_score(rate_chg, _MACRO_RATE_BANDS, inverse=True)
         total += score
         factors.append({"name": "利率", "value": rate_chg, "unit": "pp", "impact": score,
-                        "note": "10Y %d 日变化" % _MACRO_CHG_DAYS})
+                        "note": "10Y %d 日变化（百分点）" % _MACRO_CHG_DAYS})
 
     # 维度 4：商品（原油 5 日变化）
     oil = _valid_points(series.get("cl=f"))
@@ -804,7 +815,10 @@ def compute_macro_correlation(trend: dict, window: int = _MACRO_CORR_WINDOW) -> 
     rows = rows[-window:]                     # 1 年滚动窗口
     out = []
     for a, b, pair in MACRO_CORR_PAIRS:
-        ret_a, ret_b = _returns(rows, a), _returns(rows, b)
+        # ⚠️ trend.series[].key 是 **sym.lower()**（见 _build_watchlist_payload），
+        # 而 MACRO_CORR_PAIRS 写的是展示用原始符号（含 ^TNX / DX-Y.NYB）→ 必须先转小写再查，
+        # 否则每对都取不到值，6 对全部静默变成 r=None（页面看起来"样本永远不足"）。
+        ret_a, ret_b = _returns(rows, a.lower()), _returns(rows, b.lower())
         common = sorted(set(ret_a) & set(ret_b))
         xs = [ret_a[d] for d in common]
         ys = [ret_b[d] for d in common]

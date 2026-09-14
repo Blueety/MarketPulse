@@ -1308,6 +1308,186 @@ def test_api_econ_degrade_and_failure_not_cached(monkeypatch):
     assert c.get("/api/econ").json()["as_of"] == "2026-08"
 
 
+# ---- 宏观环境纯函数（2026-09-14 宏观页 /macro）----
+#
+# ⚠️ 这里只测 web 层的「风险偏好轴」；四象限（reflation/…）由 src/econ_fetcher.py 产出，
+#    其单测在 tests/test_econ_fetcher.py（职责边界见 plan §4.4）。
+
+def _mk_trend(days, **series):
+    """构造 /api/macro 形状的 trend（dates + series[].raw）；键沿用 sym.lower()（含 ^tnx / cl=f）。"""
+    return {"dates": ["d%04d" % i for i in range(days)],
+            "series": [{"key": k, "raw": list(v)} for k, v in series.items()]}
+
+
+def _flat_then(value, days, last, tail):
+    """`days` 个 `value` 后接 `tail` 个 `last`（制造末点突变，便于落档）。"""
+    return [value] * (days - tail) + [last] * tail
+
+
+def _price_from_returns(rets, start=100.0):
+    """由逐日收益率构造价格序列（长度 = len(rets) + 1 → 恰好产生 len(rets) 个收益率）。"""
+    out, price = [start], start
+    for r in rets:
+        price *= (1 + r)
+        out.append(price)
+    return out
+
+
+class TestBandScore:
+    def test_bands(self):
+        got = [web.app._band_score(x, (1.0, 2.0)) for x in (0.5, 1.5, 3.0, -0.5, -1.5, -3.0)]
+        assert got == [0, 1, 2, 0, -1, -2]
+
+    def test_inverse_flips_sign(self):
+        assert [web.app._band_score(x, (1.0, 2.0), inverse=True) for x in (1.5, -1.5)] == [-1, 1]
+
+
+class TestMacroHelpers:
+    def test_chg_pct_normal(self):
+        assert web.app._chg_pct([100.0, 110.0], 1) == 10.0
+
+    def test_chg_pct_insufficient(self):
+        assert web.app._chg_pct([100.0], 5) is None
+
+    def test_chg_pct_zero_base(self):
+        assert web.app._chg_pct([0.0, 5.0], 1) is None
+
+    def test_chg_abs_is_absolute_not_percent(self):
+        """利率用绝对变化：4.00% → 4.30% 应得 0.3（百分点），不是 7.5（%）。"""
+        assert web.app._chg_abs([4.0, 4.3], 1) == 0.3
+
+    def test_chg_abs_insufficient(self):
+        assert web.app._chg_abs([4.0], 5) is None
+
+    def test_dev_from_ma(self):
+        # 最近 10 点 = 9×100 + 110 → 均值 101 → 偏离 (110-101)/101 = 8.91%
+        assert web.app._dev_from_ma_pct([100.0] * 10 + [110.0], 10) == 8.91
+
+    def test_dev_insufficient(self):
+        assert web.app._dev_from_ma_pct([100.0] * 5, 10) is None
+
+
+class TestMacroRegime:
+    def test_empty_is_neutral(self):
+        r = web.app._compute_macro_regime([], [], {})
+        assert r["level"] == "neutral" and r["score"] == 0
+        assert r["score100"] == 50.0 and r["factors"] == []
+
+    def test_all_risk_on_scores_max(self):
+        trend = _mk_trend(60, **{"dx-y.nyb": _flat_then(100.0, 60, 97.0, 3),
+                                 "^tnx": _flat_then(4.0, 60, 3.7, 3),
+                                 "cl=f": _flat_then(70.0, 60, 75.0, 3)})
+        r = web.app._compute_macro_regime(
+            [{"symbol": "VIX", "value": 15.0}, {"symbol": "MOVE", "value": 90.0}], [], trend)
+        assert r["score"] == 8 and r["normalized"] == 1.0
+        assert r["level"] == "risk_on" and r["score100"] == 100.0
+
+    def test_all_risk_off_scores_min(self):
+        trend = _mk_trend(60, **{"dx-y.nyb": _flat_then(100.0, 60, 103.0, 3),
+                                 "^tnx": _flat_then(4.0, 60, 4.3, 3),
+                                 "cl=f": _flat_then(70.0, 60, 65.0, 3)})
+        r = web.app._compute_macro_regime(
+            [{"symbol": "VIX", "value": 40.0}, {"symbol": "MOVE", "value": 150.0}], [], trend)
+        assert r["score"] == -8 and r["level"] == "risk_off" and r["score100"] == 0.0
+
+    def test_risk_pref_clamped(self):
+        """VIX 恐慌(-2) + MOVE 恐慌(-1) → clamp 到 -2（单维度不越界）。"""
+        r = web.app._compute_macro_regime(
+            [{"symbol": "VIX", "value": 40.0}, {"symbol": "MOVE", "value": 150.0}], [], {})
+        assert r["factors"][0]["impact"] == -2
+
+    def test_score100_formula(self):
+        r = web.app._compute_macro_regime(
+            [{"symbol": "VIX", "value": 25.0}, {"symbol": "MOVE", "value": 110.0}], [], {})
+        assert r["score100"] == round((r["normalized"] + 1) / 2 * 100, 1)
+
+    def test_missing_dims_keep_denominator(self):
+        """缺数据的维度不计分，但分母仍是 8 → 结果偏 Neutral（保守默认，不猜）。"""
+        trend = _mk_trend(60, **{"dx-y.nyb": _flat_then(100.0, 60, 97.0, 3)})
+        r = web.app._compute_macro_regime([], [], trend)
+        assert len(r["factors"]) == 1 and r["normalized"] == 0.25
+        assert r["level"] == "neutral"          # 恰在 ±0.25 边界上 → 不上调
+
+    def test_no_trend_factors_only_risk(self):
+        """trend 为空但 VIX 可得 → 只有风险偏好一个维度。"""
+        r = web.app._compute_macro_regime([{"symbol": "VIX", "value": 15.0}], [], {})
+        assert [f["name"] for f in r["factors"]] == ["风险偏好"]
+
+
+class TestMacroCorrelation:
+    def test_six_pairs_and_signs(self):
+        # ⚠️ 必须用**有波动**的收益率：恒定收益率的序列方差≈0（浮点噪声），
+        # Pearson 会退化成 0/0 噪声（实测 -0.01）而不是 ±1 —— 那是"零方差"不是"完全相关"。
+        days = 320
+        rets = [0.01 if i % 20 < 10 else -0.008 for i in range(days)]
+        up = _price_from_returns(rets)
+        down = _price_from_returns([-r for r in rets])
+        n = len(up)
+        trend = _mk_trend(n, **{"dx-y.nyb": up, "cl=f": up, "gc=f": down,
+                                "^tnx": [4.0] * n})            # ^tnx 常量 → 真零方差
+        corr = {c["pair"]: c for c in web.app.compute_macro_correlation(trend)}
+        assert len(corr) == 6
+        assert corr["美元 ↔ 黄金"]["r"] == -1.0
+        assert corr["美元 ↔ 原油"]["r"] == 1.0
+        assert corr["黄金 ↔ 原油"]["r"] == -1.0
+        # 常量序列（零方差）→ r=None，绝不显示错误的 0
+        assert corr["美元 ↔ 10Y 美债"]["r"] is None
+        assert corr["美元 ↔ 10Y 美债"]["n"] > 0     # 样本是够的，是零方差导致 None
+
+    def test_insufficient_points_returns_none(self):
+        trend = _mk_trend(10, **{"dx-y.nyb": [100.0 + i for i in range(10)],
+                                 "gc=f": [100.0 + 2 * i for i in range(10)]})
+        first = web.app.compute_macro_correlation(trend)[0]
+        assert first["r"] is None and first["n"] == 9
+
+    def test_empty_trend(self):
+        out = web.app.compute_macro_correlation({})
+        assert len(out) == 6 and all(c["r"] is None and c["n"] == 0 for c in out)
+
+
+class TestMacroHistoryRegime:
+    @staticmethod
+    def _records(n, vix, move):
+        return [{"date": "d%04d" % i, "vix": vix, "move": move} for i in range(n)]
+
+    def test_all_calm_is_risk_on(self):
+        out = web.app._macro_history_regime(self._records(35, 15.0, 90.0), days=30)
+        assert out == {"risk_on": 30, "neutral": 0, "risk_off": 0, "days": 30}
+
+    def test_all_panic_is_risk_off(self):
+        out = web.app._macro_history_regime(self._records(35, 40.0, 150.0), days=30)
+        assert out == {"risk_on": 0, "neutral": 0, "risk_off": 30, "days": 30}
+
+    def test_middle_is_neutral(self):
+        out = web.app._macro_history_regime(self._records(35, 25.0, 110.0), days=30)
+        assert out == {"risk_on": 0, "neutral": 30, "risk_off": 0, "days": 30}
+
+    def test_empty_records(self):
+        assert web.app._macro_history_regime([]) == {"risk_on": 0, "neutral": 0,
+                                                     "risk_off": 0, "days": 0}
+
+    def test_days_capped(self):
+        out = web.app._macro_history_regime(self._records(40, 15.0, 90.0), days=30)
+        assert out["days"] == 30 and out["risk_on"] == 30
+
+
+def test_load_macro_derived_keys(tmp_path, monkeypatch):
+    """_load_macro 除 stocks/trend 外还带 regime / correlation / history_regime（内存派生，零落盘）。"""
+    hist = [{"date": "2026-08-%02d" % (i + 1), "vix": 15.0, "move": 90.0} for i in range(28)]
+    _seed_history(tmp_path, monkeypatch, hist)
+    syms = ["DX-Y.NYB", "^TNX", "CL=F", "GC=F"]
+    values = {s: 100.0 for s in syms}
+    series = {s: [("d1", 100.0), ("d2", 101.0)] for s in syms}
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda s, **k: (values, series, {}))
+
+    payload = web.app._load_macro()
+    assert set(payload) >= {"stocks", "trend", "regime", "correlation", "history_regime"}
+    assert payload["regime"]["level"] in ("risk_on", "neutral", "risk_off")
+    assert payload["regime"]["score100"] is not None
+    assert len(payload["correlation"]) == 6
+    assert payload["history_regime"]["days"] == 28
+
+
 def test_api_econ_ttl_cache(monkeypatch):
     """连续调 3 次只触发 1 次 BLS 请求（6h TTL 生效）。"""
     calls = []
