@@ -1316,6 +1316,14 @@ MACRO_REFINE_JS = r"""
     factorsSlack: slack('#mac-factors'), varsSlack: slack('#mac-vars'),
     regimeIsCard: regime ? regime.classList.contains('mac-card') : null,
     regimeBorderTop: regime ? getComputedStyle(regime).borderTopWidth : null,
+    // 分层证据：一级块无边框/无底色，二级"重卡"有边框有底色（dark 下肉眼可辨）
+    heroBg: q('#mac-market') ? getComputedStyle(q('#mac-market')).backgroundColor : null,
+    heroBorder: q('#mac-market') ? getComputedStyle(q('#mac-market')).borderTopWidth : null,
+    quietBg: q('#mac-econ') ? getComputedStyle(q('#mac-econ')).backgroundColor : null,
+    // 一级块三段式（左中右）的列宽 —— 用来量化"左中右之间的大片空白"（plan 要点 2）
+    regimeColW: q('.mac-regime')
+      ? [...q('.mac-regime').children].map((c) => Math.round(c.getBoundingClientRect().width)) : null,
+    regimeW: q('.mac-regime') ? Math.round(q('.mac-regime').getBoundingClientRect().width) : null,
     twoColCols: q('.mac-2col') ? getComputedStyle(q('.mac-2col')).gridTemplateColumns.trim().split(/\s+/).length : null,
     chartWrapH: wrap ? Math.round(wrap.getBoundingClientRect().height) : null,
     docH: Math.round(document.scrollingElement.scrollHeight),
@@ -1372,6 +1380,8 @@ def assert_macro_refine(browser, url: str) -> None:
         print(f"  note={d['relNote']!r}")
         print(f"  slack: factors={d['factorsSlack']}px vars={d['varsSlack']}px | regimeIsCard={d['regimeIsCard']} "
               f"borderTop={d['regimeBorderTop']} | docH={d['docH']}")
+        print(f"  layers: hero bg={d['heroBg']} border={d['heroBorder']} | quiet bg={d['quietBg']} | "
+              f"regime cols={d['regimeColW']} of {d['regimeW']}")
         check(d["scrollW"] == d["innerW"], "M-9 1920 档无横向溢出", (d["scrollW"], d["innerW"]))
 
         # M-3：**标注必须与实际行为一致**（D2 核心缺陷：标注写 ≥0.5，实际列出 6 行全 < 0.5）

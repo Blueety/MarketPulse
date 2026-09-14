@@ -471,7 +471,7 @@
     }
     if (impact > 0) return map ? map.pos : "风险资产 受益";
     if (impact < 0) return map ? map.neg : "风险资产 承压";
-    return "影响中性";
+    return "中性（不构成方向）";
   }
 
   function renderFactors() {
@@ -531,10 +531,13 @@
     box.setAttribute("data-rel-mode", mode);
     box.innerHTML = shown.map(relRowHtml).join("");
     if (note) {
-      note.textContent = (mode === "significant"
-          ? "1 年滚动窗口 · |r| ≥ " + REL_MIN.toFixed(1) + " 的显著对，显示前 " + lead.length + " 组"
-          : "1 年滚动窗口 · 当前无显著对（|r| 均 < " + REL_MIN.toFixed(1) + "），显示最强的 " + lead.length + " 组")
-        + " · 共 " + rows.length + " 组";
+      var head = mode === "significant"
+        ? "1 年滚动窗口 · |r| ≥ " + REL_MIN.toFixed(1) + " 的显著对，显示前 " + lead.length + " 组"
+        : "1 年滚动窗口 · 当前无显著对（|r| 均 < " + REL_MIN.toFixed(1) + "），显示最强的 " + lead.length + " 组";
+      // 展开后标注也要跟着变 —— 否则"标注说显示 2 组、屏幕上是 6 行"又是一次标注/行为不一致
+      note.textContent = head + (relExpanded
+        ? " · 已展开全部 " + rows.length + " 组"
+        : " · 共 " + rows.length + " 组");
     }
     if (more) {
       var hidden = rows.length - shown.length;
