@@ -38,12 +38,28 @@
   var SERIES_FALLBACK = {
     "dx-y.nyb": "#2FD6A8", "^tnx": "#A78BFA", "cl=f": "#E0913E", "gc=f": "#E5C07B"
   };
-  var REL_MIN = 0.5;        // |r| 显著阈值（仅列出显著的；r=None 显示「样本不足」）
+  // 宏观关系展示口径（2026-09-14 macro-page-refine）——**标注文案由这些常量生成 = 单一事实来源**：
+  //   ⚠️ 后端 `compute_macro_correlation` **不带任何 |r| 阈值参数**（固定返回 6 对；r=None 只在样本不足时出现），
+  //      所以"只列显著对"这类过滤**只能在前端做**；而过滤规则与标注文案必须同源 ——
+  //      D2 的缺陷正是"标注写 |r| ≥ 0.5，行为却把 6 对全列出来"（实测 6 行全 < 0.5，最大 0.47）。
+  var REL_MIN = 0.5;        // 显著阈值：|r| ≥ 此值才算「显著对」
+  var REL_TOP = 3;          // 默认最多展示几条显著对（PRD 要点 6：只突出最重要的 2~3 个）
+  var REL_FALLBACK = 2;     // 无显著对时兜底展示的最强条数（不留空卡，但绝不假装显著）
+  var relExpanded = false;  // 「查看全部」展开态
   var SERIES_LABEL = {
     "dx-y.nyb": "美元指数", "^tnx": "10Y 美债", "cl=f": "原油", "gc=f": "黄金"
   };
 
-  var state = { macro: null, econ: null, range: "1y", pick: "dx-y.nyb", chart: null };
+  // 因子 → 影响资产（**前端静态映射，非模型输出**；方向由服务端已给的 impact 正负选边）
+  //   ⚠️ 这是"把偏多/偏空翻译成典型资产"的固定话术，不是研报结论，也不是预测。
+  var FACTOR_ASSETS = {
+    "波动率": { pos: "股票 / 信用 受益", neg: "避险资产（黄金、美债）受益" },
+    "美元": { pos: "风险资产 受益 · 黄金/原油 承压", neg: "黄金 / 原油 受益 · 美元计价资产承压" },
+    "利率": { pos: "美元 受益 · 黄金/长久期 承压", neg: "黄金 受益 · 长久期资产 承压" },
+    "商品": { pos: "能源 / 材料 受益", neg: "能源 / 材料 承压" }
+  };
+
+  var state = { macro: null, econ: null, range: "1y", pick: "dx-y.nyb", primary: "dx-y.nyb", chart: null };
 
   function el(id) { return document.getElementById(id); }
 
@@ -103,10 +119,41 @@
     return v || fallback;
   }
 
+  // 颜色降 alpha（图表"次要序列"用）：token 可能是 #rrggbb / #rgb / rgb() / rgba()
+  function withAlpha(color, a) {
+    var c = (color || "").trim();
+    var m = c.match(/^#([0-9a-f]{6})$/i);
+    if (m) {
+      var n = parseInt(m[1], 16);
+      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+    }
+    m = c.match(/^#([0-9a-f]{3})$/i);
+    if (m) {
+      var h = m[1], r3 = parseInt(h[0] + h[0], 16), g3 = parseInt(h[1] + h[1], 16), b3 = parseInt(h[2] + h[2], 16);
+      return "rgba(" + r3 + "," + g3 + "," + b3 + "," + a + ")";
+    }
+    m = c.match(/^rgba?\(([^)]+)\)$/i);
+    if (m) {
+      var p = m[1].split(",");
+      if (p.length >= 3) return "rgba(" + p[0].trim() + "," + p[1].trim() + "," + p[2].trim() + "," + a + ")";
+    }
+    return c;   // 兜底：宁可不变淡，也不要把线变成透明/黑色
+  }
+
   // ---- 主题 / 抽屉 / 市场状态（与 app.js 同口径；见文件头注释）----
   function getTheme() {
     try { return localStorage.getItem("mp-theme") || "light"; } catch (e) { return "light"; }
   }
+
+  // ⚠️ D1（2026-09-14 macro-page-refine）：**必须在 init 阶段就把主题落到 <html> 上**。
+  // macro.html 的内联脚本只覆盖"显式 light"，而 HTML 属性默认写死 data-theme="light" →
+  // 存储为 dark 时**没有任何代码把 dark 写回**，用户从首页（深色）点进本页会**突然变浅色**。
+  // 首页无此问题是因为 app.js 在模块顶层调用了 applyTheme(getTheme())；本页此前只在"点击切换"时才调。
+  // ⚠️ 改这里必须同步 macro.html 的 head 内联脚本（docs/pitfalls.md「主题初始化分叉」）。
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme || getTheme());
+  }
+  applyTheme();   // ★ 尽早执行（本文件在 </body> 前，先于 DOMContentLoaded 与首次渲染）
 
   function updateMarketStatus() {
     var st = el("market-status"), tm = el("market-time"), dot = el("market-dot");
@@ -134,7 +181,7 @@
       themeBtn.addEventListener("click", function () {
         var next = getTheme() === "dark" ? "light" : "dark";
         try { localStorage.setItem("mp-theme", next); } catch (e) {}
-        document.documentElement.setAttribute("data-theme", next);
+        applyTheme(next);                   // 与 init 阶段走同一入口（避免两套写法再次分叉）
         renderChart();                      // 图表线色/网格色随主题重取
       });
     }
@@ -177,6 +224,8 @@
         var b = e.target.closest("button[data-pick]");
         if (!b) return;
         state.pick = b.dataset.pick;
+        // 「全部对比」时把**最近选过的品种**当作焦点序列（加粗强调，D3 的主次来源）
+        if (state.pick !== "__all__") state.primary = state.pick;
         renderPills(); renderChart();
       });
     }
@@ -189,6 +238,16 @@
         renderPills(); renderChart();
       });
     }
+  }
+
+  // 「查看全部 N 组」折叠开关（宏观关系）
+  function bindRelMore() {
+    var more = el("macro-rel-more");
+    if (!more) return;
+    more.addEventListener("click", function () {
+      relExpanded = !relExpanded;
+      renderRelation();
+    });
   }
 
   // ---- 主图 ----
@@ -239,24 +298,50 @@
     var tick = cssVar("--c-axis-tick", "#86868b");
     var grid = cssVar("--c-grid-line", "rgba(0,0,0,.06)");
 
+    // 焦点序列（D3 的主次来源）：单变量 = 当前品种；「全部对比」= 最近选过的品种（默认 美元指数）
+    var primaryKey = multi ? (state.primary || keys[0]) : state.pick;
     var datasets = keys.map(function (k) {
       var raw = win.series[k] || [];
       var data = multi
         ? normalize(raw)
         : raw.map(function (v) { return displayValue(k, v); });
+      var isPrimary = k === primaryKey;
+      var base = cssVar(SERIES_VAR[k], SERIES_FALLBACK[k]);
       return {
         key: k,
         label: SERIES_LABEL[k] || k,
         data: data,
-        borderColor: cssVar(SERIES_VAR[k], SERIES_FALLBACK[k]),
+        // D3：**焦点序列最重、其余降存在感**（改前四条线一律 1.6 且全不透明 → 无主次、视觉纠缠）
+        borderColor: isPrimary ? base : withAlpha(base, 0.45),
         backgroundColor: "transparent",
-        borderWidth: 1.6,
+        borderWidth: isPrimary ? 2.4 : 1.2,
         pointRadius: 0,
         pointHoverRadius: 3,
         tension: 0.15,
         spanGaps: true
       };
     });
+
+    // D4：全部对比模式的 Y 轴**按数据 min/max ±8% 收紧**（改前由 Chart.js 自动取整成 50~200，
+    //     而实测数据只落在 88~180 → 上下各空一大截，有效起伏被压扁在中间；实测 range 150 vs 数据 92）。
+    // ⚠️ 单变量模式**不动**（真实价格轴已合规，plan D8）。
+    var yScale = {
+      position: "right",
+      ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 6 },
+      grid: { color: grid }
+    };
+    if (multi) {
+      var vals = [];
+      datasets.forEach(function (d) {
+        d.data.forEach(function (v) { if (v != null && isFinite(v)) vals.push(v); });
+      });
+      if (vals.length) {
+        var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+        var pad = Math.max((hi - lo) * 0.08, 0.5);
+        yScale.min = lo - pad;
+        yScale.max = hi + pad;
+      }
+    }
 
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     state.chart = new window.Chart(canvas, {

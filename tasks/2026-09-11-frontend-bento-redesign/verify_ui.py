@@ -1118,6 +1118,8 @@ MACRO_JS = r"""
     factorCount: document.querySelectorAll('#regime-factors li').length,
     tenYear: varRow('10Y'), varCount: document.querySelectorAll('#macro-vars .mac-var').length,
     relRows: relRows.length,
+    // 2026-09-14（macro-page-refine）：默认只列最强的 2~3 条 + 「查看全部」折叠其余（PRD 要点 6）
+    relMoreShown: !!(q('#macro-rel-more') && !q('#macro-rel-more').hidden),
     relSignificant: document.querySelectorAll('#macro-rel .mac-rel-row.strong').length,
     relInsufficient: [...document.querySelectorAll('#macro-rel .rel-r')]
       .filter((e) => e.textContent.trim() === '样本不足').length,
@@ -1193,10 +1195,18 @@ def assert_macro_page(browser, url: str) -> None:
         check(ten_val is not None and 0 < ten_val < 20,
               "MX-6 10Y 显示为 ≈4.xx%（不是 42.5%，也不是 ÷10 后的 0.4985%）", ten_raw)
         check(d["varCount"] == 4, "MX-6b 核心宏观变量 4 张", d["varCount"])
-        check(d["relRows"] == 6, "MX-9 宏观关系 6 对", d["relRows"])
-        check(d["relBadR"] == 0,
-              "MX-9b 每对都给出可读结果（数值或「样本不足」），不把 None 显示成 0.00",
-              (d["relBadR"], d["relInsufficient"], d["relSignificant"]))
+        # ⚠️ 2026-09-14（macro-page-refine 任务）**契约变更**：宏观关系默认只列「最重要的 2~3 条」，
+        #    其余折叠进「查看全部」（PRD 要点 6）→ 不再要求一次列出 6 对，改为「默认 ≤3 + 展开后 6 对齐全」。
+        #    原断言 `relRows == 6` 会随之失效（那不是回归，是刻意的信息层级调整）。
+        check(2 <= d["relRows"] <= 3 and d["relMoreShown"],
+              "MX-9 宏观关系默认只列 2~3 条 + 「查看全部」可展开", (d["relRows"], d["relMoreShown"]))
+        page.evaluate("() => { const b = document.getElementById('macro-rel-more'); if (b) b.click(); }")
+        page.wait_for_timeout(250)
+        d_all = page.evaluate(MACRO_JS)
+        check(d_all["relRows"] == 6, "MX-9b 展开后 6 对齐全", d_all["relRows"])
+        check(d_all["relBadR"] == 0,
+              "MX-9c 每对都给出可读结果（数值或「样本不足」），不把 None 显示成 0.00",
+              (d_all["relBadR"], d_all["relInsufficient"], d_all["relSignificant"]))
         check(d["histRows"] == 3, "MX-10 历史宏观环境 3 行三态分布", d["histRows"])
         # 经济数据：**必须显示数据月份**，不得出现「最新/实时」
         check(d["econAsOf"] and "年" in d["econAsOf"] and "月" in d["econAsOf"],
@@ -1257,6 +1267,172 @@ def assert_macro_page(browser, url: str) -> None:
               (de["econEmpty"], de["quadrant"]))
     finally:
         ctx2.close()
+
+
+# —— MR 宏观页 refinement（2026-09-14 macro-page-refine 任务）——
+# 断言口径：**只断不变量**（"标注阈值与列出的行一致""线条有主次""轴不超数据范围""留白 ≤20px"），
+# 不断死数值（不断"恰好 2.4px"/"恰好 18px"）—— 否则调参就退化成"改断言让它变绿"（plan R2）。
+MACRO_REFINE_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const txt = (s) => { const e = q(s); return e ? e.textContent.trim() : null; };
+  const canvas = q('#macro-chart');
+  const chart = (window.Chart && canvas) ? window.Chart.getChart(canvas) : null;
+  const ds = chart ? chart.data.datasets : [];
+  const relBox = q('#macro-rel');
+  const note = txt('#macro-rel-note') || '';
+  const m = note.match(/\|r\|\s*≥\s*([\d.]+)/);      // 标注里声明的阈值（若声明了）
+  const rows = [...document.querySelectorAll('#macro-rel .mac-rel-row')];
+  const rAt = (li) => { const e = li.querySelector('.rel-r'); if (!e) return null;
+    const t = e.textContent.trim();
+    return /^[+-]?\d+(\.\d+)?$/.test(t) ? Math.abs(parseFloat(t)) : null; };
+  const vals = [];
+  ds.forEach((d) => (d.data || []).forEach((v) => { if (v != null) vals.push(v); }));
+  const y = (chart && chart.scales && chart.scales.y) ? chart.scales.y : null;
+  // 模块"额外留白" = 元素高 − 标题 − 内容 − 上下 padding（与 plan §2.4 同一算法）
+  const slack = (sel) => {
+    const box = q(sel); if (!box) return null;
+    const cs = getComputedStyle(box);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const head = box.querySelector('.mac-card-head');
+    const headH = head ? head.getBoundingClientRect().height : 0;
+    let inner = 0;
+    [...box.children].forEach((c) => { if (c !== head) inner += c.getBoundingClientRect().height; });
+    return Math.round(box.getBoundingClientRect().height - headH - inner - pad);
+  };
+  const regime = q('#mac-regime');
+  const wrap = q('#macro-chart-wrap');
+  const more = q('#macro-rel-more');
+  return {
+    theme: document.documentElement.getAttribute('data-theme'),
+    bodyBg: getComputedStyle(document.body).backgroundColor,
+    relNote: note, relThreshold: m ? parseFloat(m[1]) : null,
+    relMode: relBox ? relBox.getAttribute('data-rel-mode') : null,
+    relRows: rows.length, relR: rows.map(rAt), relSig: rows.map((li) => li.getAttribute('data-sig')),
+    relMoreShown: !!(more && !more.hidden),
+    dsCount: ds.length, dsLabels: ds.map((d) => d.label), dsBorder: ds.map((d) => d.borderWidth),
+    yMin: y ? y.min : null, yMax: y ? y.max : null,
+    dataMin: vals.length ? Math.min(...vals) : null, dataMax: vals.length ? Math.max(...vals) : null,
+    factorsSlack: slack('#mac-factors'), varsSlack: slack('#mac-vars'),
+    regimeIsCard: regime ? regime.classList.contains('mac-card') : null,
+    regimeBorderTop: regime ? getComputedStyle(regime).borderTopWidth : null,
+    twoColCols: q('.mac-2col') ? getComputedStyle(q('.mac-2col')).gridTemplateColumns.trim().split(/\s+/).length : null,
+    chartWrapH: wrap ? Math.round(wrap.getBoundingClientRect().height) : null,
+    docH: Math.round(document.scrollingElement.scrollHeight),
+    scrollW: document.scrollingElement.scrollWidth, innerW: window.innerWidth,
+  };
+}
+"""
+
+
+def assert_macro_refine(browser, url: str) -> None:
+    """MR/M-1~M-10 宏观页 refinement（plan K-5 的 M-1~M-9）。
+
+    覆盖：D1 主题 / D2 关系口径 / D3 主图主次 / D4 Y 轴 / D5-D6 留白 / D7 分层 / D10 1280 两列 / D11 375 主图。
+
+    ⚠️ 主题判据必须**显式给 localStorage 再加载** —— 只点切换按钮测不出"带偏好进入页面"的缺陷（D1 就是这么漏的）。
+    """
+    print("\n--- MR 宏观页 refinement（macro-page-refine）---")
+    themes: dict = {}
+    for pref in ("dark", "light"):
+        for path, tag in (("/", "首页"), ("/macro", "宏观页")):
+            ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+            try:
+                pg = ctx.new_page()
+                pg.add_init_script("try { localStorage.setItem('mp-theme', '%s'); } catch (e) {}" % pref)
+                pg.goto(url + path.lstrip("/"), wait_until="load")
+                pg.wait_for_timeout(3500)
+                themes[(pref, tag)] = pg.evaluate(MACRO_REFINE_JS)
+                if pref == "dark" and tag == "宏观页":
+                    pg.screenshot(path=str(OUT_DIR / "shot-macro-refine-dark.png"), full_page=True)
+            finally:
+                ctx.close()
+    dk, lt = themes[("dark", "宏观页")], themes[("light", "宏观页")]
+    print(f"  pref=dark  -> attr={dk['theme']!r} bg={dk['bodyBg']!r} "
+          f"(首页 attr={themes[('dark', '首页')]['theme']!r} bg={themes[('dark', '首页')]['bodyBg']!r})")
+    print(f"  pref=light -> attr={lt['theme']!r} bg={lt['bodyBg']!r} "
+          f"(首页 attr={themes[('light', '首页')]['theme']!r} bg={themes[('light', '首页')]['bodyBg']!r})")
+    check(dk["theme"] == "dark", "M-1 /macro 在 localStorage=dark 下 data-theme=dark（D1 回归护栏）", dk["theme"])
+    check(dk["bodyBg"] != lt["bodyBg"], "M-1b dark / light 页面底色确实不同（attr 与 CSS 未脱节）",
+          (dk["bodyBg"], lt["bodyBg"]))
+    check(all(themes[(p, "首页")]["theme"] == themes[(p, "宏观页")]["theme"] for p in ("dark", "light")),
+          "M-2 /macro 与 / 的同偏好主题行为一致",
+          {p: (themes[(p, "首页")]["theme"], themes[(p, "宏观页")]["theme"]) for p in ("dark", "light")})
+
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(3500)
+        d = page.evaluate(MACRO_REFINE_JS)
+        print(f"  rel: mode={d['relMode']} rows={d['relRows']} r={d['relR']} sig={d['relSig']}")
+        print(f"  note={d['relNote']!r}")
+        print(f"  slack: factors={d['factorsSlack']}px vars={d['varsSlack']}px | regimeIsCard={d['regimeIsCard']} "
+              f"borderTop={d['regimeBorderTop']} | docH={d['docH']}")
+        check(d["scrollW"] == d["innerW"], "M-9 1920 档无横向溢出", (d["scrollW"], d["innerW"]))
+
+        # M-3：**标注必须与实际行为一致**（D2 核心缺陷：标注写 ≥0.5，实际列出 6 行全 < 0.5）
+        thr, rs = d["relThreshold"], d["relR"]
+        if thr is not None:
+            bad = [v for v in rs if v is not None and v < thr]
+            check(not bad and 1 <= len(rs) <= 3,
+                  f"M-3 宏观关系：默认列出的每一条都 ≥ 标注阈值 {thr}（且 ≤3 条）", (d["relNote"], rs))
+        else:
+            check(len(rs) <= 2 and "无" in d["relNote"],
+                  "M-3 宏观关系：无显著对时标注显式说明且兜底 ≤2 条", (d["relNote"], rs))
+        check(d["relMoreShown"], "M-3b 存在被折叠的对 → 「查看全部」可点", d["relMoreShown"])
+        try:
+            page.evaluate("() => { const b = document.getElementById('macro-rel-more'); if (b) b.click(); }")
+            page.wait_for_timeout(250)
+            d_exp = page.evaluate(MACRO_REFINE_JS)
+            check(d_exp["relRows"] == 6, "M-3c 展开后 6 对齐全（n= 次级信息保留）", d_exp["relRows"])
+            page.evaluate("() => { const b = document.getElementById('macro-rel-more'); if (b) b.click(); }")
+            page.wait_for_timeout(250)
+            check(page.evaluate(MACRO_REFINE_JS)["relRows"] == d["relRows"], "M-3d 再点收起回到默认视图")
+        except Exception as exc:  # noqa: BLE001
+            check(False, "M-3c 展开按钮可交互（点开 + 收起）", exc)
+
+        # M-7：一级模块必须**不再是等权卡片**（PRD「降卡片感」；plan §3.2）
+        check(d["regimeIsCard"] is False and str(d["regimeBorderTop"]).startswith("0"),
+              "M-7 「当前宏观环境」为无边框区块（不再是等权卡片）", (d["regimeIsCard"], d["regimeBorderTop"]))
+        # M-6：宏观因子列不得有空转留白（D5：改前 77px）
+        check(d["factorsSlack"] is not None and d["factorsSlack"] <= 20,
+              "M-6 宏观因子列额外留白 ≤ 20px（D5 改前 77px）", (d["factorsSlack"], d["varsSlack"]))
+
+        # M-4 / M-5：全部对比模式的线条主次 + Y 轴自适应（D3 / D4）
+        page.evaluate("() => document.querySelector('#macro-pills .mac-pill[data-pick=\"__all__\"]').click()")
+        page.wait_for_timeout(1300)
+        dm = page.evaluate(MACRO_REFINE_JS)
+        bw = dm["dsBorder"]
+        rng = (dm["yMax"] - dm["yMin"]) if (dm["yMax"] is not None and dm["yMin"] is not None) else None
+        drng = (dm["dataMax"] - dm["dataMin"]) if (dm["dataMax"] is not None and dm["dataMin"] is not None) else None
+        print(f"  multi: ds={dm['dsCount']} border={bw} labels={dm['dsLabels']}")
+        print(f"  multi: y=[{dm['yMin']}, {dm['yMax']}] data=[{dm['dataMin']}, {dm['dataMax']}]")
+        check(bool(bw) and len(set(bw)) > 1 and max(bw) >= 2.0 and min(bw) <= 1.4,
+              "M-4 全部对比：选中序列描边显著重于其他（有主次，D3）", bw)
+        check(rng is not None and drng is not None and drng <= rng <= drng * 1.25,
+              "M-5 全部对比 Y 轴贴合数据（≤ 数据范围 ×1.25 且不裁数据）", (rng, drng, dm["yMin"], dm["yMax"]))
+
+        # M-8 / M-10：1280 保持两列（D10）/ 375 主图 ≥360px（D11）+ 无横向溢出
+        for (w, h, label) in ((1280, 720, "1280"), (375, 812, "375")):
+            page.set_viewport_size({"width": w, "height": h})
+            page.wait_for_timeout(700)
+            dv = page.evaluate(MACRO_REFINE_JS)
+            print(f"  {label}: docH={dv['docH']} twoCol={dv['twoColCols']} chartWrapH={dv['chartWrapH']} "
+                  f"scrollW={dv['scrollW']}/{dv['innerW']}")
+            check(dv["scrollW"] == dv["innerW"], f"M-9 {label} 档无横向溢出", (dv["scrollW"], dv["innerW"]))
+            if w == 1280:
+                check(dv["twoColCols"] == 2, "M-10 1280 档两列区保持两列（D10）", dv["twoColCols"])
+            else:
+                check(dv["twoColCols"] == 1, "M-10b 375 档两列区降为单列", dv["twoColCols"])
+                check(dv["chartWrapH"] is not None and dv["chartWrapH"] >= 360,
+                      "M-8 375 档主图高 ≥360px（D11 改前 325px）", dv["chartWrapH"])
+        check(not errors, "M-9b /macro 三档 console error = 0", errors[:3])
+    finally:
+        ctx.close()
 
 
 # —— KY KPI 无静默截断（2026-09-14 kpi-responsive-fix 任务）——
@@ -1982,6 +2158,7 @@ def main() -> int:
             assert_viewport(375, 812, mob_card)
 
             assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
+            assert_macro_refine(browser, url)  # M-* 宏观页 refinement（主题/关系口径/主图主次/留白/分层）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
