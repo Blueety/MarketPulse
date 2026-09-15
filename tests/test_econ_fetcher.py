@@ -178,7 +178,9 @@ class TestQuadrants:
         assert p["growth_axis"] == ("expanding" if growth == "up" else "contracting")
         assert (p["quadrant"], p["quadrant_label"]) == expect
         # 自洽：象限必须能由两个轴查表反推
-        assert ef._QUADRANTS[(p["inflation_axis"], p["growth_axis"])] == expect
+        # ⚠️ 2026-09-14：`_QUADRANTS` 提升为公开 `QUADRANTS`（中国宏观页 cn_econ_fetcher 复用），
+        #    引用点同步改名（**不是**删断言/放松判据）。
+        assert ef.QUADRANTS[(p["inflation_axis"], p["growth_axis"])] == expect
 
 
 # ---- 拉取降级 ----

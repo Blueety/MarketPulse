@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>中国宏观 · MarketPulse</title>
+  <script>
+    // ⚠️ **原样照抄 macro.html**（2026-09-14）：<html data-theme="light"> 是**默认值**，
+    // 内联脚本必须"显式应用存储到的值"。只写 `if (t === "light")` 的旧写法在存储为 dark 时
+    // **没有任何代码把 dark 写回** → 从首页（深色）点进本页会突然变白，且**不报错、测不到**。
+    // ⚠️ 与 macro_cn.js 的 applyTheme() 同口径；**改一处必须改三处**（macro.html / macro_cn.html / 两份 js）。
+    (function () {
+      try {
+        var t = localStorage.getItem("mp-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <!-- 与首页 / 全球宏观页同一份 style.css（本页复用 .mac-* 类，仅追加少量 .cn-* 规则） -->
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          onerror="window.__chartFailed=true"></script>
+</head>
+<body>
+  {% include "_topbar.html" %}
+  <div class="shell">
+    {% include "_sidebar.html" %}
+    <main class="main" id="main">
+      <div class="mac">
+        <header class="mac-head">
+          <h1>中国宏观</h1>
+          <p class="mac-sub">经济与市场环境工作台<span class="mac-sep">·</span>数据截至 <span id="cn-asof">—</span></p>
+        </header>
+
+        <!-- 一级块：当前宏观环境（无卡片边框；`data-quadrant` 由 JS 写入，供验收断言核查口径） -->
+        <section class="mac-flat" id="cn-regime" data-quadrant="">
+          <div class="mac-card-head">
+            <h2>当前宏观环境</h2>
+            <span class="mac-note" id="cn-regime-note"></span>
+          </div>
+          <div class="mac-regime">
+            <div class="regime-hero">
+              <div class="regime-level" id="cn-level">数据暂缺</div>
+              <div class="regime-quadrant" id="cn-quadrant"></div>
+            </div>
+            <div class="regime-score">
+              <div class="score-num" id="cn-pmi">—</div>
+              <div class="score-cap">PMI 3M</div>
+            </div>
+            <ul class="regime-factors" id="cn-axis"></ul>
+          </div>
+          <p class="mac-foot" id="cn-basis"></p>
+        </section>
+
+        <!-- 二级块：中国宏观市场（唯一"重"卡片：主图 = 视觉中心） -->
+        <section class="mac-card mac-card-hero" id="cn-market">
+          <div class="mac-card-head">
+            <h2>中国宏观市场</h2>
+            <div class="mac-tools">
+              <div class="mac-pills" id="cn-pills"></div>
+              <div class="mac-pills" id="cn-range"></div>
+            </div>
+          </div>
+          <!-- ⚠️ C2 三件套：容器**显式给高度**（.mac-chart-wrap 的 clamp）+ maintainAspectRatio:false
+               + **禁止**用 !important 覆盖 canvas 尺寸（会破坏"位图 == 显示尺寸"） -->
+          <div class="mac-chart-wrap" id="cn-chart-wrap">
+            <canvas id="cn-chart"></canvas>
+            <p class="mac-fail hidden" id="cn-chart-fail">图表加载失败</p>
+          </div>
+          <p class="mac-foot" id="cn-chart-foot"></p>
+        </section>
+
+        <!-- 三级块：核心宏观变量 + 宏观因子（同一卡片内两栏） -->
+        <section class="mac-card" id="cn-metrics">
+          <div class="mac-2col">
+            <div class="mac-col" id="cn-vars-col">
+              <!-- ⚠️ 口径必须写在这里（2026-09-15 用户反馈「+21.20% 配 ↓ 箭头像 bug」）：
+                   同一格的绿色 + 正负号 = **同比本身**（本期 vs 去年同月），箭头 = **同比较上期** ↑/↓。
+                   社融「+21.20% ↓」= 同比仍正增长但增速回落，两句都对 → 靠这行说明消歧。 -->
+              <h3 class="mac-col-title">核心宏观变量<span class="mac-note">同比 = 本期 vs 去年同月（颜色/正负号）；箭头 = 同比较上期 ↑/↓</span></h3>
+              <div class="mac-vars" id="cn-vars"></div>
+            </div>
+            <div class="mac-col" id="cn-factors-col">
+              <h3 class="mac-col-title">宏观因子<span class="mac-note">四维度方向 · 影响资产为前端静态映射</span></h3>
+              <ul class="mac-factors" id="cn-factors"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- 四级块：利率与流动性 + 地产（北上双序列） -->
+        <section class="mac-card mac-card-quiet" id="cn-rates">
+          <div class="mac-2col">
+            <div class="mac-col" id="cn-rate-col">
+              <h3 class="mac-col-title">利率与流动性<span class="mac-note">LPR / SHIBOR / 10Y 国债</span></h3>
+              <div class="mac-vars" id="cn-rate-list"></div>
+            </div>
+            <div class="mac-col" id="cn-estate-col">
+              <!-- ⚠️ C1：接口**只覆盖北京·上海 2 城**，文案不得写成"70 城"（验收断言会查） -->
+              <h3 class="mac-col-title">地产 · 北京/上海<span class="mac-note">接口仅覆盖 2 城，非全国口径</span></h3>
+              <div class="cn-dual" id="cn-estate"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 五级块：经济数据明细（**必须显示数据月份**，不得写「最新/实时」） -->
+        <section class="mac-card mac-card-quiet" id="cn-econ-card">
+          <div class="mac-card-head">
+            <h2>经济数据</h2>
+            <span class="mac-note" id="cn-econ-asof"></span>
+          </div>
+          <div class="mac-econ" id="cn-econ"></div>
+          <p class="mac-foot" id="cn-econ-basis"></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <!-- ⚠️ 顺序：共享插件必须在业务脚本**之前**（顺序反了 Chart.js 静默忽略 plugins:[undefined]） -->
+  <script src="/static/chart-crosshair.js?v={{ asset_v }}"></script>
+  <script src="/static/macro_cn.js?v={{ asset_v }}"></script>
+</body>
+</html>

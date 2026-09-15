@@ -73,17 +73,22 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
 - 模块：4 张 KPI 卡（含 sparkline）· 趋势**四图合一 + 4 类别 tab**（单 `canvas#chart-main`，7D/30D/90D/1Y）· 自选列表 · 市场概览 6 小卡 · A股板块 Top5 · 美股行业板块（双 tab）· 告警记录 · 最新资讯 · 市场情绪/资金流向/风险偏好 · 3 个静态占位卡
 - 双主题：Light `#F7F8FA` / Dark `#0B0F14`，玻璃化（`backdrop-filter` + 氛围层）
 
-**7 个路由 / 6 个 JSON API**：
+**3 个页面路由 / 9 个 JSON API**：
 
 | 端点 | 说明 |
 |---|---|
 | `GET /` | 看板页面 |
+| `GET /macro` | 全球（美国）宏观数据独立页（research terminal 风格，7 模块） |
+| `GET /macro/cn` | **中国宏观独立页**（2026-09-14 新增，与 `/macro` 平行：四象限 + 13 序列 + 行情） |
 | `GET /api/history` | 历史序列；`days` 上限 365，另支持 `start_date`/`end_date` |
 | `GET /api/latest` | 最新日 10 指数概览 + `sector_heat` + `us_sector_heat` + `risk_appetite` + `correlation` |
 | `GET /api/alerts` | 最近告警（10 条） |
 | `GET /api/news` | 最新资讯（读 `data/news.json`，Hermes 落盘） |
 | `GET /api/watchlist` | 自选股（快照优先 + 实时回退，含 `as_of`） |
 | `GET /api/macro` | 宏观品种（美元指数/10Y美债/原油/黄金）；三级回退 env > config > 内置，TTL 90s |
+| `GET /api/econ` | 美国经济数据（BLS：CPI-U/PPI/失业率/非农）+ 四象限；TTL 6h，**失败不缓存** |
+| `GET /api/econ/cn` | **中国宏观**（AkShare 13 序列 + 中国版四象限）；`?group=` 分组（R1：全量 ≈10s > 8s 判据）；TTL 6h，**仅全部失败才不缓存** |
+| `GET /api/cn/quotes` | **中国行情**（CNY=X + 中债 10Y 国债 + 信用利差 bp）；TTL 90s |
 
 **零侵入**：不读 `last_values.json`、不写任何数据文件，与日报共用同一事实来源（`data/marketpulse.db` / `context/` / `alerts/`）。
 
@@ -183,6 +188,8 @@ Web 看板（独立进程，只读）：
 | 模块 | 行数 | 职责 |
 |---|---|---|
 | `reporter.py` | 993 | Markdown 日报/快照/开盘渲染、趋势图（matplotlib 懒加载 + 线程限时）、`generate_context` 原子写 |
+| `cn_econ_fetcher.py` | 562 | **中国宏观**（2026-09-14）：AkShare 13 序列并发取数（daemon 线程 + 整体限时）+ 中国版四象限（PMI 水平口径）+ 中债收益率曲线/信用利差；零写盘 |
+| `econ_fetcher.py` | 257 | 美国经济数据（BLS 官方 API，一次 POST 4 序列）+ 四象限（增长轴用就业替代，**非 PMI**）；零写盘。`QUADRANTS` 为两页共享常量 |
 | `analyzer.py` | 698 | 状态分类、涨跌幅、格式化、路径常量、history 读写、`build_search_keywords`、`compute_correlation`（纯 Python 零依赖） |
 | `fetcher.py` | 668 | Yahoo 取数（双主机轮换）、SYMBOLS 注册表、`fetch_sector_heat`（AkShare + 聚合）、`fetch_us_sector_heat`（11 SPDR ETF）、`fetch_watchlist` |
 | `storage.py` | 280 | SQLite 建表/upsert（preserve\|overwrite）/范围查询/按月备份/空库恢复；WAL |
@@ -292,12 +299,12 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 
 | 部分 | 规模 |
 |---|---|
-| `src/` | 14 模块 ≈ **3900 行** |
-| `web/` | `app.py` 750 · `app.js` 1235 · `style.css` 668 · `index.html` 235 · `report_card.html` 160 |
-| `scripts/` | 7 个 |
-| `tests/` | 27 个测试文件 |
-| `docs/` | `architecture.md`（决策台账）· `commands.md`（验证命令）· `pitfalls.md` 402 行（踩坑记录）· `architecture-diagram.html` · **本文** |
-| 迭代 | 34+ 期 |
+| `src/` | 17 模块 ≈ **5159 行** |
+| `web/` | `app.py` 1198 · `app.js` 1235 · `macro.js` 约 860 · `macro_cn.js` 653 · `style.css` 881 · `index.html` 235 · `report_card.html` 160 · 模板 `macro.html` / `macro_cn.html` / `_topbar.html` / `_sidebar.html` |
+| `scripts/` | 6 个 |
+| `tests/` | 31 个测试文件（约 659 条用例） |
+| `docs/` | `architecture.md`（决策台账）· `commands.md`（验证命令）· `pitfalls.md` 473 行（踩坑记录）· `architecture-diagram.html` · **本文** |
+| 迭代 | 35+ 期 |
 
 **其它目录**：
 - `skills/` — 2 个 Agent 工作流技能（`bug-fix/SKILL.md`、`pre-review/SKILL.md`）

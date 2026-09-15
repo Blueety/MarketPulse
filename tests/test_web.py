@@ -39,6 +39,13 @@ def _reset_watch_cache(monkeypatch):
     web.app._macro_cache["payload"] = None
     web.app._econ_cache["ts"] = 0.0
     web.app._econ_cache["payload"] = None
+    # 中国宏观（2026-09-14）：同样是模块级 TTL 状态，且多一份**跨组累积**的 raw 缓存
+    web.app._cn_econ_cache["ts"].clear()
+    web.app._cn_econ_cache["payload"].clear()
+    web.app._cn_econ_raw.clear()
+    web.app._cn_econ_raw_ts.clear()
+    web.app._cn_quotes_cache["ts"] = 0.0
+    web.app._cn_quotes_cache["payload"] = None
     monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
     yield
 
@@ -1527,3 +1534,83 @@ def test_api_econ_ttl_cache(monkeypatch):
     assert len(calls) == 1
     # 防回退：BLS 无 Key 限额 25 次/日，TTL 绝不能"对齐"成 90s（那是 960 次/日）
     assert web.app._ECON_TTL == 6 * 3600
+
+# ---- 中国宏观页 /macro/cn（2026-09-14）----
+
+def test_macro_cn_page_renders(client):
+    """GET /macro/cn → 200 + 5 层模块骨架 + 侧栏「中国宏观」active + macro_cn.js。"""
+    r = client.get("/macro/cn")
+    assert r.status_code == 200
+    html = r.text
+    assert 'id="cn-chart"' in html
+    for mid in ("cn-regime", "cn-market", "cn-vars", "cn-factors", "cn-rate-list",
+                "cn-estate", "cn-econ"):
+        assert 'id="%s"' % mid in html, mid
+    # 侧栏：本页 highight「中国宏观」，且「宏观数据」**不再** active
+    assert 'class="nav-item active" href="/macro/cn"' in html
+    assert 'class="nav-item active" href="/macro"' not in html
+    assert '/static/macro_cn.js?v=' in html
+    # 主题预应用脚本必须与 macro.html 同源（含 dark 分支），否则深色用户进本页会变白
+    assert 'if (t === "light" || t === "dark")' in html
+
+
+def test_sidebar_has_both_macro_links(client):
+    """侧栏同时存在「宏观数据」与「中国宏观」两个跨页链接（navCount 10 → 11）。"""
+    html = client.get("/").text
+    assert '<a class="nav-item" href="/macro">' in html
+    assert '<a class="nav-item" href="/macro/cn">' in html
+    # ⚠️ 新项必须是真链接：data-target 会被页内锚点处理器判成坏项，href="#" 会跳页顶
+    assert 'data-target="macro' not in html
+
+
+def test_api_econ_cn_degrades(monkeypatch):
+    """AkShare 全失败 → 200 + 空结构（不 500）；失败明细进 failed 供前端逐模块降级。"""
+    monkeypatch.setattr(web.app, "fetch_cn_econ_raw",
+                        lambda keys=None, timeout=None: ({k: [] for k in (keys or [])}, list(keys or [])))
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/econ/cn").json()
+    assert data["as_of"] is None and data["quadrant"] is None
+    assert data["failed"]                        # 13 个 key 全失败 → 如实列出
+    assert data["basis"]["growth"]               # 口径标注仍在（前端要显示"为什么没有"）
+
+
+def test_api_cn_quotes_degrades(monkeypatch):
+    """汇率 + 中债双双失败 → 200 + 三项 failed（不 500），且**失败不写缓存**。"""
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(web.app, "_fetch_yahoo_watch", boom)
+    monkeypatch.setattr(web.app, "fetch_bond_yield_curves", lambda *a, **k: {})
+    from fastapi.testclient import TestClient
+
+    c = TestClient(web.app.app)
+    data = c.get("/api/cn/quotes").json()
+    assert data["as_of"] is None
+    assert sorted(data["failed"]) == ["bond10y", "cny", "credit_spread"]
+    assert data["cny"] is None and data["bond10y"] is None and data["credit_spread"] is None
+
+
+def test_api_cn_quotes_shape(monkeypatch):
+    """汇率 + 国债曲线成功 → 三项齐全；信用利差 = 商金债AAA − 国债（bp，按日期对齐）。"""
+    monkeypatch.setattr(web.app, "_fetch_yahoo_watch",
+                        lambda *a, **k: (6.7, [("2026-09-13", 6.71), ("2026-09-14", 6.70)]))
+    monkeypatch.setattr(web.app, "fetch_bond_yield_curves", lambda *a, **k: {
+        "国债": [("2026-09-14", 1.6888)],
+        "商金债AAA": [("2026-09-14", 1.9516)],
+    })
+    from fastapi.testclient import TestClient
+
+    data = TestClient(web.app.app).get("/api/cn/quotes").json()
+    assert data["as_of"] == "2026-09-14"
+    assert data["failed"] == []
+    assert data["cny"]["value"] == 6.7
+    assert data["bond10y"]["value"] == 1.6888
+    # (1.9516 - 1.6888) * 100 = 26.28 bp
+    assert data["credit_spread"]["value"] == 26.28
+    assert data["credit_spread"]["unit"] == "bp"
+
+
+def test_cn_econ_ttl_is_hourly():
+    """防回退：13 个 AkShare 接口，TTL 绝不能"对齐"成 90s（那是每日近千次）。"""
+    assert web.app._CN_ECON_TTL == 6 * 3600

@@ -19,6 +19,10 @@
 | `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` | 独立重渲染日报图片（Hermes 追加 AI 解读后重渲染含解读图）；依赖 imgkit + 本地 wkhtmltoimage（先 `pip install -r requirements.txt` 装 imgkit，再 winget 装 wkhtmltopdf）；失败仅退出码非 0，不影响日报 md | 改了 `src/image_renderer.py` / 模板 / 重渲染入口后 |
 | `venv/Scripts/python -m pytest tests/test_phase26.py -v` | 自动提交（`src/git_ops.py`）行为单测（**16 条**）：env 门控 / 无改动跳过 / commit message 格式 / 代理注入不污染 env / 失败不抛异常 / **路径白名单实参 + status 同范围 + 源码 WIP 不触发提交 + `reports` 不入列 + 忽略文件不触发** | 改了 `src/git_ops.py` 后 |
 | `git status --porcelain -- data context alerts` | 与 `git_ops._has_changes` **同口径**：查看"哪些改动会被自动提交"（源码/测试/文档改动**不该**出现在输出里） | 排查"改动没进 commit" / 核对自动提交范围 |
+| `venv/Scripts/python scripts/probe_cn_macro.py [--include-rejected] [--show-cols]` | 中国宏观数据源回归（AkShare 13 个在册接口：可用性 / 最新数据月份 / 耗时 / 行数 / 列名）；退出码非 0 若任一在册接口变为不可用或最新月份落后 > 阈值（季度 GDP 给 6 个月）。`--include-rejected` 附带跑 8 个已否决接口（东财报告族，仅作对照、不参与退出码）。JSON 报告落 `%TEMP%\marketpulse-cn-macro-probe\` | 改了 `src/cn_econ_fetcher.py` / 怀疑接口停更 / 定期回归 |
+| `venv/Scripts/python -m pytest tests/test_cn_econ.py -v` | 中国宏观单测（14 条，不联网）：`_parse_ym` / 缺列守卫 / 失业率长表 / 房价双城 / credit 主列 / **增长轴取 PMI 水平** / GDP 冲突上报 / 同比按键找去年同月 / 部分失败缓存 / 全失败不缓存 / bond 空结果 / 零写盘 | 改了 `src/cn_econ_fetcher.py` 或 `/api/econ/cn` 后 |
+| `curl -s "localhost:<port>/api/econ/cn?group=price"` | 中国宏观分组端点（group ∈ price/growth/money/rate/labor/estate；省略 = 全量 ≈10s）；非法组名 → 422 | 改了 `/api/econ/cn` / 前端分组加载后 |
+| `curl -s localhost:<port>/api/cn/quotes` | 中国行情（CNY=X + 中债 10Y 国债 + 信用利差 bp）；失败降级 200 + `failed` 列出三项 | 改了 `/api/cn/quotes` 后 |
 
 ## 完整检查
 
@@ -38,6 +42,7 @@
 | history 读写/滚动 | 相关单元测试（test_analyzer.py TestHistory） |
 | 错误处理/离线容错 | 主脚本（断网场景） |
 | 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
+| 中国宏观页 `/macro/cn`（2026-09-14） | `scripts/probe_cn_macro.py`（数据源回归，退出码非 0 即停更）+ `pytest tests/test_cn_econ.py` + `pytest tests/test_web.py`（新增 6 条）+ `curl` 两个新端点（含空态）+ **`verify_ui.py`（新增 `assert_macro_cn_page` 与 F-5 补强，改了模板/静态/侧栏必跑）** |
 | cron 自动提交推送（二十六期） | 无需手动；daily_report / snapshot_report / opening_analyzer 末尾自动 commit+push；本地验证用 `AUTO_PUSH=0` 关闭（如 `AUTO_PUSH=0 venv/Scripts/python daily_report.py`）；真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交） |
 
 ## 验证要点（对应任务 prd 的 Verification Plan）

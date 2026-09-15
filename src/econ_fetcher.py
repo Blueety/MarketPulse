@@ -186,7 +186,10 @@ def _growth_axis(payroll_vals: list[float], unemp_vals: list[float]) -> dict:
     return {"axis": axis, "payroll_3m": p_now, "payroll_dir": p_dir, "unemployment_dir": u_dir}
 
 
-_QUADRANTS: dict[tuple[str, str], tuple[str, str]] = {
+# ⚠️ 公开（原名 `_QUADRANTS`，2026-09-14 提升为中国宏观页 `src/cn_econ_fetcher.py` 复用）：
+# 四象限是同一套语义（reflation/goldilocks/stagflation/deflation），复制一份必然漂移。
+# 改键或改文案前先 grep 引用方（`build_econ_payload` 与 `cn_econ_fetcher.build_cn_econ_payload`）。
+QUADRANTS: dict[tuple[str, str], tuple[str, str]] = {
     ("up", "expanding"):   ("reflation",   "再通胀"),
     ("down", "expanding"): ("goldilocks",  "复苏"),
     ("up", "contracting"): ("stagflation", "滞胀"),
@@ -232,7 +235,7 @@ def build_econ_payload(raw: dict | None) -> dict:
     growth_axis = growth["axis"]
     quadrant = quadrant_label = None
     if inflation_axis and growth_axis:
-        quadrant, quadrant_label = _QUADRANTS[(inflation_axis, growth_axis)]
+        quadrant, quadrant_label = QUADRANTS[(inflation_axis, growth_axis)]
 
     return {
         "as_of": latest_month,                 # ★ 数据月份，不是抓取时间

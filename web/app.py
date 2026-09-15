@@ -34,9 +34,17 @@ from src.config import load_config
 # 三十三期：资讯快照（Hermes 侧 tavily 搜索后落盘，契约见 docs/architecture.md 决策行；
 # 定义在使用方 web.app——monkeypatch 打这里，测试隔离不依赖真实 data/ 文件）
 NEWS_FILE = Path(__file__).resolve().parent.parent / "data" / "news.json"
-from src.fetcher import SYMBOLS, fetch_watchlist
+from src.fetcher import SYMBOLS, _fetch_yahoo_watch, fetch_watchlist
 # 经济数据（BLS）：模块级导入，测试 monkeypatch 打使用方 web.app（与既有纪律一致）
 from src.econ_fetcher import build_econ_payload, fetch_econ_series
+# 中国宏观（AkShare）：与 BLS 版**平行**的独立模块（数据源/序列数/失败语义都不同）
+from src.cn_econ_fetcher import (
+    CN_ECON_SERIES,
+    build_cn_econ_payload,
+    fetch_bond_yield_curves,
+    fetch_cn_econ_raw,
+    group_keys,
+)
 
 log = logging.getLogger("marketpulse")
 
@@ -104,7 +112,7 @@ app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static"
 # 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
 #    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
-_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js")
+_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js")
 
 
 def _asset_version() -> str:
@@ -1036,6 +1044,142 @@ def macro_page() -> HTMLResponse:
     template = _TEMPLATES.get_template("macro.html")
     resp = HTMLResponse(template.render(asset_v=_asset_version(),
                                         base_prefix="/", active_page="macro"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+# ---- 中国宏观（2026-09-14 新增 /macro/cn）----
+#
+# ⚠️ 与 BLS `/api/econ` 的**有意差异**（勿"统一"成同一套）：
+#   BLS 版：1 个上游请求 → **失败即全失败** → `as_of` 为空才不缓存。
+#   中国版：13 个**相互独立**的 AkShare 接口 → 只缓存"13 个全部失败（as_of 为空）"不缓存；
+#   **部分成功照常缓存**，失败明细走 `failed` 交给前端逐模块降级。
+#   否则一次单接口抖动就会让每次请求都重打 13 个接口（用户等 10s+）。
+_CN_ECON_TTL = 6 * 3600          # 月/季数据为主，与 _ECON_TTL 同纪律（日调用 ≤4 次）
+_CN_QUOTES_TTL = 90              # 行情类（汇率/国债收益率），与 _MACRO_TTL 同口径
+_cn_econ_raw: dict = {}          # key -> rows：**跨组累积**，供四象限算轴
+_cn_econ_raw_ts: dict = {}       # key -> 写入时间
+_cn_econ_cache: dict = {"ts": {}, "payload": {}}     # 按 group（"all" 或组名）分桶
+_cn_econ_lock = threading.Lock()
+_cn_quotes_cache: dict = {"ts": 0.0, "payload": None}
+_cn_quotes_lock = threading.Lock()
+
+
+@app.get("/api/econ/cn")
+def api_econ_cn(group: str | None = Query(
+        default=None, pattern="^(price|growth|money|rate|labor|estate)$")) -> dict:
+    """中国宏观数据（AkShare 13 序列）+ 中国版四象限。
+
+    `?group=` 走 **R1 分组降级路径**（2026-09-14 实测：全量并发 10.3s > 8s 判据）：
+    前端**分批**请求（先 `price`+`growth` 出四象限 ≈3.6s，再其余组逐组填充）——
+    ⚠️ 6 个组**同时**发是没有收益的：13 个上游请求照样同时在飞，墙钟不变。
+
+    失败语义：单序列失败 → `failed` 列该 key，HTTP 恒 200（前端逐模块「数据暂缺」）。
+    """
+    now = time.time()
+    only, cache_key = (None, "all") if group is None else (group_keys(group), group)
+    with _cn_econ_lock:
+        cached = _cn_econ_cache["payload"].get(cache_key)
+        if cached is not None and now - _cn_econ_cache["ts"].get(cache_key, 0.0) < _CN_ECON_TTL:
+            return cached
+        scope = list(CN_ECON_SERIES) if only is None else list(only)
+        stale = [k for k in scope if now - _cn_econ_raw_ts.get(k, 0.0) >= _CN_ECON_TTL]
+
+    if stale:
+        raw, _failed = fetch_cn_econ_raw(stale)
+        with _cn_econ_lock:
+            for k in stale:
+                _cn_econ_raw[k] = raw.get(k)
+                # ⚠️ **失败的 key 不写 ts**（下次请求会重试它）：若连失败也记 ts，
+                #    一次网络抖动会把空数据锁死 6 小时；而"部分成功"靠**上层 payload 缓存**
+                #    短路（6h 内不再走到这里），不会因此反复重打成功的接口。
+                if _cn_econ_raw[k]:
+                    _cn_econ_raw_ts[k] = time.time()
+                else:
+                    _cn_econ_raw_ts.pop(k, None)
+
+    with _cn_econ_lock:
+        raw_all = dict(_cn_econ_raw)
+    # 四象限按**累积 raw** 算（跨组）：先到的组可能还没有另一条轴 → quadrant 为 None，
+    # 后到的组自然补上；前端取"任一响应里 quadrant 非空"的那份。
+    fresh = build_cn_econ_payload(raw_all, [k for k in scope if not raw_all.get(k)], only=only)
+    if fresh.get("as_of"):
+        with _cn_econ_lock:
+            _cn_econ_cache["ts"][cache_key] = now
+            _cn_econ_cache["payload"][cache_key] = fresh
+    return fresh
+
+
+def _load_cn_quotes() -> dict:
+    """人民币汇率（Yahoo `CNY=X`）+ 中债 10Y 国债 + 信用利差（商金债AAA − 国债，bp）。
+
+    ⚠️ `CNH=X` 只返回 **1 个数据点**（离岸水深浅），**不能作趋势** → 用 `CNY=X`。
+    ⚠️ 信用利差是**同一次请求的副产品**（`bond_china_yield` 一次返回 3 条曲线），
+       正好补上美国版因 FRED 不通而被迫放弃的信用维度。
+    """
+    out: dict = {"as_of": None, "cny": None, "bond10y": None, "credit_spread": None, "failed": []}
+    try:
+        value, series = _fetch_yahoo_watch("CNY=X", "3mo")
+        out["cny"] = {"symbol": "CNY=X", "label": "美元/人民币", "value": round(float(value), 4),
+                      "series": [[d, round(float(v), 4)] for d, v in series[-120:]]}
+    except Exception as exc:  # noqa: BLE001 —— 汇率失败不影响国债/利差
+        log.warning("人民币汇率取数失败，降级: %s", exc)
+        out["failed"].append("cny")
+
+    curves = fetch_bond_yield_curves("10年")
+    gov = curves.get("国债") or []
+    aaa = curves.get("商金债AAA") or []
+    if gov:
+        out["bond10y"] = {"label": "10 年期国债收益率", "unit": "%", "value": gov[-1][1],
+                          "date": gov[-1][0], "series": [[d, v] for d, v in gov[-120:]]}
+    else:
+        out["failed"].append("bond10y")
+
+    if gov and aaa:
+        gov_map = dict(gov)
+        spread = [[d, round((v - g) * 100, 2)]                 # 百分点 → bp
+                  for d, v in aaa if (g := gov_map.get(d)) is not None]
+        if spread:
+            out["credit_spread"] = {"label": "信用利差（商金债AAA − 国债）", "unit": "bp",
+                                    "value": spread[-1][1], "date": spread[-1][0],
+                                    "series": spread[-120:]}
+    if out["credit_spread"] is None:
+        out["failed"].append("credit_spread")
+
+    candidates = []
+    if out["bond10y"]:
+        candidates.append(out["bond10y"]["date"])
+    if out["cny"] and out["cny"]["series"]:
+        candidates.append(out["cny"]["series"][-1][0])
+    out["as_of"] = max(candidates) if candidates else None
+    return out
+
+
+@app.get("/api/cn/quotes")
+def api_cn_quotes() -> dict:
+    """中国宏观行情（汇率 / 10Y 国债 / 信用利差）；TTL 缓存，失败降级、HTTP 恒 200。"""
+    now = time.time()
+    with _cn_quotes_lock:
+        cached = _cn_quotes_cache["payload"]
+        if cached is not None and now - _cn_quotes_cache["ts"] < _CN_QUOTES_TTL:
+            return cached
+    fresh = _load_cn_quotes()
+    if fresh.get("as_of"):
+        with _cn_quotes_lock:
+            _cn_quotes_cache["ts"] = now
+            _cn_quotes_cache["payload"] = fresh
+    return fresh
+
+
+@app.get("/macro/cn", response_class=HTMLResponse)
+def macro_cn_page() -> HTMLResponse:
+    """中国宏观独立页（与 `/macro` 平行：同为 `.mac-*` research terminal 风格）。
+
+    `active_page="macro-cn"` → 侧栏高亮「中国宏观」（**不是**「宏观数据」）。
+    """
+    template = _TEMPLATES.get_template("macro_cn.html")
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="/", active_page="macro-cn"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
 

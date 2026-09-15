@@ -509,13 +509,16 @@ FIDELITY_JS = r"""
 () => {
   const q = (s) => document.querySelector(s);
   const navBad = [];
-  let macroHref = null;
+  // ⚠️ 2026-09-14 中国宏观页：跨页链接从 1 个变 2 个（`macroHref` 单值 → `macroHrefs` 数组）。
+  //    原写法 `if (href === '/macro') macroHref = href` 会让新链接**静默不被任何断言覆盖**
+  //    —— 比断言变红更危险（新增了导航项却没人检查它是否合规）。
+  const macroHrefs = [];
   document.querySelectorAll('#sidebar .nav-item').forEach(function (el) {
     const t = el.getAttribute('data-target');
     const href = el.getAttribute('href') || '';
     if (t) { if (!document.getElementById(t)) navBad.push(el.textContent.trim() + '→' + t); }
     // 跨页链接（2026-09-14 宏观页）：href 以 / 开头 = 路由跳转，不是页内锚点 → 合规
-    else if (href.charAt(0) === '/') { if (href === '/macro') macroHref = href; }
+    else if (href.charAt(0) === '/') { macroHrefs.push(href); }
     else if (!el.classList.contains('is-disabled')) navBad.push(el.textContent.trim());
   });
   const c = window.Chart && window.Chart.getChart(document.getElementById('chart-main'));
@@ -535,7 +538,7 @@ FIDELITY_JS = r"""
     navCount: document.querySelectorAll('#sidebar .nav-item').length,
     navDisabled: document.querySelectorAll('#sidebar .nav-item.is-disabled').length,
     navBad: navBad,
-    macroHref: macroHref,
+    macroHrefs: macroHrefs,
     flagUs: document.querySelectorAll('#overview .ico.ico-flag-us').length,
     flagCn: document.querySelectorAll('#overview .ico.ico-flag-cn').length,
     flagImgs: document.querySelectorAll('#overview .ico-flag-img').length,
@@ -574,11 +577,14 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
           "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
           (f["flagUs"], f["flagCn"], f["flagImgs"]))
-    # F-5 nav=10 项：7 个页内锚点 + 1 个**跨页链接**（宏观数据 → /macro，2026-09-14 新增）
-    #     + 2 个占位（市场日历 / 设置）。判据同步自「7+3 占位」→「7+1 跨页+2 占位」。
-    check(f["navCount"] == 10 and f["navDisabled"] == 2 and not f["navBad"]
-          and f["macroHref"] == "/macro",
-          "F-5 nav=10（7 锚点 + 1 跨页 /macro + 2 占位）且 data-target/href 全命中", f)
+    # F-5 nav=11 项：7 个页内锚点 + 2 个**跨页链接**（/macro 全球 + /macro/cn 中国，
+    #     2026-09-14 新增中国页）+ 2 个占位（市场日历 / 设置）。
+    # ⚠️ 判别（pitfalls「抽 include 后失败先分清方案不可行 vs 断言脆弱」）：include/渲染路径
+    #    未变，只是产品决定多了一个合法跨页链接 → 属**断言脆弱**（navCount 写死），
+    #    处置是**补强**而非删除/放松：单值 macroHref 升级为数组，逐个链接都纳入判据。
+    check(f["navCount"] == 11 and f["navDisabled"] == 2 and not f["navBad"]
+          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn"]),
+          "F-5 nav=11（7 锚点 + 2 跨页 /macro·/macro/cn + 2 占位）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
@@ -1351,6 +1357,150 @@ MACRO_REFINE_JS = r"""
   };
 }
 """
+
+
+CN_MACRO_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const wrap = q('#cn-chart-wrap');
+  const cv = q('#cn-chart');
+  const reg = q('#cn-regime');
+  const econ = q('#cn-econ');
+  const estate = q('#cn-estate');
+  const c = window.Chart && window.Chart.getChart(cv);
+  const cnLink = q('#sidebar a[href="/macro/cn"]');
+  return {
+    moduleIds: ['cn-regime', 'cn-market', 'cn-vars', 'cn-factors',
+                'cn-rate-list', 'cn-estate', 'cn-econ']
+      .filter((i) => document.getElementById(i)).length,
+    chartWrapH: wrap ? Math.round(wrap.getBoundingClientRect().height) : null,
+    canvasBitmapW: cv ? cv.width : null, canvasBitmapH: cv ? cv.height : null,
+    canvasCssW: cv ? cv.offsetWidth : null, canvasCssH: cv ? cv.offsetHeight : null,
+    quadrant: reg ? reg.getAttribute('data-quadrant') : null,
+    basisText: (q('#cn-basis') || {}).textContent || '',
+    estateText: estate ? estate.textContent : '',
+    estateCities: estate ? estate.querySelectorAll('.cn-city').length : 0,
+    econAsOf: (q('#cn-econ-asof') || {}).textContent || '',
+    econText: econ ? econ.textContent : '',
+    econItems: econ ? econ.querySelectorAll('.mac-econ-item').length : 0,
+    navCount: document.querySelectorAll('#sidebar .nav-item').length,
+    cnActive: !!(cnLink && cnLink.classList.contains('active')),
+    // 2026-09-15 用户反馈：「+21.20% 配 ↓ 箭头」看着像 bug —— 数值符号（同比本身）与箭头
+    // （同比较上期）是两个口径，必须靠 title 消歧；同时不得出现「—%」（空同比拼了百分号）。
+    chgTitles: [...document.querySelectorAll('#cn-vars .v-chg, #cn-rate-list .v-chg, #cn-econ .e-yoy')]
+      .map((e) => e.getAttribute('title') || ''),
+    varsText: (q('#cn-vars') ? q('#cn-vars').textContent : '') +
+              (q('#cn-rate-list') ? q('#cn-rate-list').textContent : ''),
+    macroActive: (() => { const a = q('#sidebar a[href="/macro"]');
+                          return !!(a && a.classList.contains('active')); })(),
+    theme: document.documentElement.getAttribute('data-theme'),
+    pills: [...document.querySelectorAll('#cn-pills .mac-pill')].map((b) => b.textContent.trim()),
+    pointCount: c ? Math.max(...c.data.datasets.map((d) => d.data.length)) : 0,
+    scrollW: document.scrollingElement.scrollWidth, innerW: window.innerWidth,
+  };
+}
+"""
+
+
+def _expect_chart_wrap_h(vw: int, vh: int) -> float:
+    """`#cn-chart-wrap` 的期望高度（**从 CSS 定义推导，不写死数值**）。
+
+    复用 `.mac-chart-wrap`：`height: clamp(340px, 46vh, 560px)`；
+    `@media (max-width: 768px)` 覆盖为 `clamp(360px, 48vh, 420px)`。
+    """
+    lo, ratio, hi = (360, 0.48, 420) if vw <= 768 else (340, 0.46, 560)
+    return min(max(lo, ratio * vh), hi)
+
+
+def assert_macro_cn_page(browser, url: str) -> None:
+    """CN-1~CN-10 中国宏观页（/macro/cn）：模块 + C2 + 两个纠正项（C1 房价 2 城 / C2 PMI 水平）
+    + 数据月份口径 + 侧栏联动 + 主题同源 + 三档视口高度。
+
+    独立 context（不污染首页主页面状态），主题用 add_init_script 固定为 dark
+    —— 与首页同偏好进入本页，若本页 head 内联脚本缺少 dark 分支会**静默变白**。
+    """
+    print("\n--- CN 中国宏观独立页（/macro/cn）---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+        page.add_init_script("try { localStorage.setItem('mp-theme', 'dark'); } catch (e) {}")
+        resp = page.goto(url + "macro/cn", wait_until="load")
+        check(resp is not None and resp.status == 200, "CN-1 /macro/cn 返回 200",
+              resp.status if resp else None)
+        # R1 分组端点分两波加载（全量 ≈10~14s）→ 等到「经济数据」与「地产」都真的渲染出来
+        try:
+            page.wait_for_function(
+                "() => document.querySelectorAll('#cn-econ .mac-econ-item').length >= 10"
+                " && document.querySelectorAll('#cn-estate .cn-city').length >= 1",
+                timeout=40000)
+        except Exception:  # noqa: BLE001 —— 超时后照常取数，由下方断言如实报红
+            print("  [warn] /macro/cn 数据未就绪（AkShare 超时/失败）→ 断言会如实反映")
+        page.wait_for_timeout(1200)
+        d = page.evaluate(CN_MACRO_JS)
+        print(f"  quadrant={d['quadrant']!r} econItems={d['econItems']} "
+              f"econAsOf={d['econAsOf']!r} cities={d['estateCities']} pts={d['pointCount']}")
+        print(f"  canvas={d['canvasBitmapW']}x{d['canvasBitmapH']} "
+              f"css={d['canvasCssW']}x{d['canvasCssH']} wrapH={d['chartWrapH']}")
+
+        check(d["moduleIds"] == 7, "CN-2 七个模块骨架齐全（含 #cn-regime / #cn-chart-wrap / #cn-econ）",
+              d["moduleIds"])
+        # C2：canvas 位图 == 显示尺寸（容器显式高度 + maintainAspectRatio:false + 无 !important 覆盖）
+        check(d["canvasBitmapW"] == d["canvasCssW"] and d["canvasBitmapH"] == d["canvasCssH"],
+              "CN-3 canvas 位图 == 显示尺寸（C2）",
+              (d["canvasBitmapW"], d["canvasBitmapH"], d["canvasCssW"], d["canvasCssH"]))
+        # C2 纠正项：增长轴口径必须写进页面（水平 vs 50，不是同比方向）
+        check(bool(d["quadrant"]), "CN-4a 四象限已渲染（data-quadrant 非空）", d["quadrant"])
+        check("PMI 与 50" in d["basisText"] and "水平口径" in d["basisText"],
+              "CN-4b 口径注释写明「PMI 与 50 比较 · 水平口径」（非同比方向）", d["basisText"][:80])
+        # C1 纠正项：房价只有「北京 · 上海」，文案**不得**写成 70 城
+        check("北京" in d["estateText"] and "上海" in d["estateText"] and d["estateCities"] == 2,
+              "CN-5 地产模块为北京/上海双序列（仅 2 城）", (d["estateCities"], d["estateText"][:60]))
+        check("70 城" not in d["estateText"], "CN-5b 文案不含「70 城」（C1 回归）", d["estateText"][:80])
+        # 反馈回归护栏（2026-09-15 用户反馈「+21.20% 却配 ↓ 箭头」）：
+        #   同一格里「数值符号」= 同比本身、「箭头」= 同比较上期 → **必须**有 title 写明口径。
+        #   ⚠️ 别把这条改成"箭头跟随数值符号"：那会变成纯冗余，丢掉"增速回落"这层信息。
+        check(len(d["chgTitles"]) >= 10 and all(t.strip() for t in d["chgTitles"]),
+              "CN-4c 同比单元格全部带口径 title（数值符号 vs 箭头语义消歧）",
+              (len(d["chgTitles"]), [t for t in d["chgTitles"] if not t.strip()]))
+        check(any("去年同月" in t for t in d["chgTitles"]),
+              "CN-4d title 写明「去年同月」口径（自证 title 非空壳）", d["chgTitles"][:2])
+        check("—%" not in d["varsText"] and "—%" not in d["econText"],
+              "CN-4e 无「—%」（同比缺失时只显示「—」，不拼百分号）")
+        # as_of 口径：**必须显示数据月份**，不得写「最新 / 实时」
+        check(bool(re.search(r"\d{4}年\d{1,2}月", d["econText"])),
+              "CN-6a 经济数据显示数据月份（形如 2026年8月）", d["econAsOf"])
+        check("最新" not in d["econText"] and "实时" not in d["econText"],
+              "CN-6b 不得标注「最新 / 实时」（月度数据有发布滞后）")
+        # F-5 联动：本页高亮「中国宏观」且「宏观数据」不再 active
+        check(d["navCount"] == 11 and d["cnActive"] and not d["macroActive"],
+              "CN-7 侧栏 11 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
+        # R9 主题分叉：带 dark 偏好进入本页，data-theme 必须仍是 dark
+        check(d["theme"] == "dark", "CN-8 带 dark 偏好进入本页仍为 dark（主题初始化同源）", d["theme"])
+        check(len(d["pills"]) == 6 and d["pointCount"] > 0,
+              "CN-9 品种胶囊 6 项 + 主图有数据点", (d["pills"], d["pointCount"]))
+        check(d["scrollW"] == d["innerW"], "CN-10a 1920 无横向溢出", (d["scrollW"], d["innerW"]))
+
+        # §7.4：三个视口 + 两个中间盲区（1500 / 1024）—— 只改视口不重载，媒体查询即时重算
+        scanned = []
+        for (vw, vh) in ((1920, 1080), (1500, 900), (1280, 720), (1024, 768), (375, 812)):
+            page.set_viewport_size({"width": vw, "height": vh})
+            page.wait_for_timeout(500)
+            m = page.evaluate(CN_MACRO_JS)
+            scanned.append(vw)
+            exp = _expect_chart_wrap_h(vw, vh)
+            check(m["chartWrapH"] is not None and abs(m["chartWrapH"] - exp) <= 2,
+                  f"CN-10b {vw} 主图容器 ≈{exp:.0f}px（clamp 生效，非固定值）", m["chartWrapH"])
+            check(m["scrollW"] == m["innerW"], f"CN-10c {vw} 无横向溢出",
+                  (m["scrollW"], m["innerW"]))
+        # 覆盖度护栏：宽度扫描若选择器/渲染变化会**空跑并全绿**（KY-3 同款）
+        check(len(scanned) == 5, "CN-10d 已扫满 5 个宽度（含 1500 / 1024 两个中间盲区）", scanned)
+
+        check(not errors, "CN-11 console error = 0", errors[:5])
+    finally:
+        ctx.close()
 
 
 def assert_macro_refine(browser, url: str) -> None:
@@ -2328,6 +2478,7 @@ def main() -> int:
             assert_viewport(375, 812, mob_card, data_date)
 
             assert_macro_page(browser, url)   # MX-* 宏观数据独立页（2026-09-14 宏观页）
+            assert_macro_cn_page(browser, url)  # CN-* 中国宏观独立页（2026-09-14 /macro/cn）
             assert_macro_refine(browser, url)  # M-* 宏观页 refinement（主题/关系口径/主图主次/留白/分层）
             assert_macro_crosshair(browser, url)  # XC-* 宏观页悬停参考线（读数按轴语义分派）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
