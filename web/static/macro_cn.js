@@ -469,6 +469,26 @@
 
     var tick = cssVar("--text-muted", "#8b949e");
     var grid = cssVar("--border", "rgba(128,128,128,.18)");
+    // ⚠️ **不要每次 renderChart 都 destroy + new Chart**（2026-09-15 运行时取证）：
+    //    重建会清空插件的 `$crossY` / `$crossSource` → 悬停虚线**消失、不跟随鼠标**。
+    //    本页 `renderAll()` 被 6 个分组 + quotes + history 各调一次 → 实测**加载期重建 8 次**
+    //    （用实例标记轮询计数取证）→ 用户看到的就是"吸附有了但虚线没跟上去"。
+    //    重建只在**模式变化**时必要（单变量 ↔ 全部对比：图例显隐不同）；同模式一律原地换数据。
+    var modeKey = multi ? "multi" : "single";
+    if (state.chart && state.chartMode === modeKey) {
+      state.chart.data.labels = dates;
+      state.chart.data.datasets = datasets;
+      // 吸附索引仍有效就**保留吸附态**（数据同源同序，线不动）；越界才清（下次 mousemove 会重吸）
+      var nPts = state.chart.data.datasets[0].data.length;
+      var src0 = state.chart.$crossSource;
+      if (src0 && src0.dataIdx >= nPts) {
+        state.chart.$crossY = null;
+        state.chart.$crossSource = null;
+      }
+      state.chart.update("none");
+      renderChartFoot(dates.length, multi);
+      return;
+    }
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     state.chart = new window.Chart(canvas, {
       type: "line",
@@ -482,6 +502,9 @@
         maintainAspectRatio: false,       // ★ C2：容器高度由 CSS 给
         animation: false,
         interaction: { mode: "index", intersect: false },
+        // ⚠️ 视口/容器尺寸变化会重算 scale，此时旧的 `$crossY` 是**陈旧像素值**（线会停在错误高度
+        //    直到下一次 mousemove）→ resize 时清掉吸附态，宁可线消失也不画在错位置。
+        onResize: function (chart) { chart.$crossY = null; chart.$crossSource = null; },
         plugins: {
           legend: {
             display: multi, position: "top", align: "end",
@@ -505,10 +528,15 @@
       }
     });
 
+    state.chartMode = modeKey;
+    renderChartFoot(dates.length, multi);
+  }
+
+  function renderChartFoot(count, multi) {
     var foot = el("cn-chart-foot");
     if (foot) {
       foot.textContent = (multi ? "全部对比（起点 = 100，消除量纲差异）" : "真实价格") +
-        " · " + dates.length + " 个交易日";
+        " · " + count + " 个交易日";
     }
   }
 

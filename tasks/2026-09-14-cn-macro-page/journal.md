@@ -107,7 +107,26 @@
 
 **⚠️ 提交边界（并行会话）**：`tasks/2026-09-15-crosshair-snap/` 是**另一个会话正在进行**的 crosshair 吸附任务，它已在共享文件里留下未提交改动 —— `web/static/chart-crosshair.js`（91 行）、`tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（315 行，其中含**我的** CN-4f/4g/4h 与 CN 等待修正）。因此本次提交**只含我自己的 4 个文件 + 文档**，`verify_ui.py` 与 `chart-crosshair.js` **不提交**（避免把别人的半成品入库）。`verify_ui` 里唯一剩余失败 `CNC-2` 属该会话的吸附功能（本页 `#cn-chart` 的吸附误差 25px），**不是本次改动引入**（本轮 CN 段其余断言全绿）。
 
-## 下次注意什么
+## 追加修复（2026-09-15，用户反馈"有吸附了，但虚线没有跟上去"）
+
+**取证工具**：临时 Playwright 脚本（落 `%TEMP%`，已用后删除，不进仓库）—— 给图表实例打标记 + 120ms 轮询计数、并复刻验收探针的吸附算法在同一实例上对账。
+
+**结论一：真缺陷（已修）—— 图表每次 render 都重建，把插件的吸附态清空了**
+- 证据：`recreate_count_during_load = **8**`（`renderAll()` 被 6 个分组 + quotes + history 各调一次，每次都 `destroy()` + `new Chart()`）→ 每次重建把 `$crossY/$crossSource` 归零 → **虚线消失/不跟随**。
+- 修法（`web/static/macro_cn.js`）：同模式**原地换数据**（`chart.data.labels/datasets = …; chart.update("none")`，保留吸附态），只有**选项变化**（单变量 ↔ 全部对比，图例显隐不同）才重建；吸附索引越界时才清吸附态。
+- 复验：`recreate_count_during_load` **8 → 1**；程序化 `refresh-btn.click()`（不动鼠标，避免 `mouseout` 干扰）后 **实例 tag 不变、`$crossY` 原值保留、`survived: true`**。
+- 附带修：`options.onResize` 清吸附态（容器/视口变化后旧的 `$crossY` 是**陈旧像素**，线会停在错误高度）。
+
+**结论二：`CNC-2` 的 25px "偏差"不是缺陷，是**断言口径**（未改对方代码）**
+- 证据（同一实例内对账）：`$crossY = 347.33` **=== 圆点 y**（横线与圆点完全重合）；插件吸到 **索引 33**，而探针独立重算得 **索引 32**。
+- 根因：**偶数点的 category 轴，鼠标放在绘图区正中央 = 相邻两点 x 的精确中点（恒等）** —— 探针实测 `mid = 667.803466796875`，与它的 `px` **逐位相同**。插件拿到浏览器给的**整数** `clientX`（→ 668）→ 选 33；探针用浮点 px（667.803）→ 选 32。两侧各离最近点 ~9.8px，属**必然并列**。
+- 修法（属对方 `_snap_probe`）：复刻浏览器取整（`Math.round(mx) - rect.left`）或把 `frac_x` 移开 0.5。**我没有单方面改他们的文件**（已写入 `docs/pitfalls.md` 供其采纳）。
+- 后续：本轮结束时对方已把吸附功能调到全绿 —— `verify_ui` 报告 `failures=0 / ALL PASSED`（报告写入时间晚于我的全部改动，含新增 CN-12/CN-13）。
+
+**验证**：`node --check` EXIT=0；`verify_ui.py` **ALL PASSED（failures=0，5 视口）**，含我新增的 **CN-12**（加载期重建 ≤1 次）与 **CN-13**（悬停态跨 re-render 存活）。
+
+**提交边界（再次踩到）**：本轮只有 `web/static/macro_cn.js` **完全属于我**；`verify_ui.py`（423 行）/ `docs/pitfalls.md`（含对方新分节）/ `docs/architecture.md`（对方决策行）/ `chart-crosshair.js` 都是**混合或对方**的未提交改动 → 只提交 `macro_cn.js` + 本 journal，其余留给对方会话。
+
 
 - **改 `src/cn_econ_fetcher.py` 任一解析分支后，先跑 `scripts/probe_cn_macro.py`**（退出码非 0 = 接口停更）再跑单测。
 - **新增 AkShare 接口前先实测三件事**：列名（是否属"东财报告族"）、最新数据月份、耗时。耗时 > 20s 的一律不上 Web 路径。
