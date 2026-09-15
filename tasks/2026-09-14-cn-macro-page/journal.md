@@ -86,6 +86,27 @@
 **验证**：`node --check` EXIT=0；`pytest tests/test_web.py tests/test_cn_econ.py` **134 passed**；全量 `pytest tests/` **659 passed**；`verify_ui.py` **ALL PASSED / EXIT=0**（CN-4c/4d/4e 全绿，即**在真实浏览器 + 真实 AkShare 数据上**确认口径 title 已生效）。
 **未走"删箭头"方案**：箭头承载的"增速回落"是有效信息，删掉是净损失；口径混淆的正确解法是补标签（已记入 `docs/pitfalls.md`）。
 
+## 追加改造（2026-09-15，用户确认后实施：利率类改 Δ6M(bp)）
+
+**决定的依据**：用户问"改了有什么区别" → 用真实数据量化后确认要改（10Y 从死格变有值 / SHIBOR 量纲纠正 / LPR 语义更准）。
+
+**改动（4 文件，184+/20−）**
+- `src/cn_econ_fetcher.py`：新增 `_shift_month` + `_chg_6m_bp`（**按日期/月份定位**基准点）；三条利率序列标 `chg_bp: True`；`lpr` 的 `freq: day → month`；series 新增 `chg_6m_bp` 键（非利率序列恒 `None`）；模块 docstring 约束 5 → 6 条。
+- `web/static/macro_cn.js`：新增 `chgCell(s)`（利率 → `±X.Xbp`，自带单位、不配箭头；其余 → `同比 % + 箭头`）；`varRow`/`renderEcon` 共用；`spreadRow` 补 `title`（信用利差是第 5 行，原先缺 title）；新增 `logFetchError`（`AbortError → console.warn`，其余 `console.error`）；quotes/history 超时 20s → 30s。
+- `web/templates/macro_cn.html`：利率列说明改为「Δ = 与 6 个月前相比（bp，1bp = 0.01 个百分点）」。
+- `tests/test_cn_econ.py`：新增 4 条（按日期定位 / 月频与缺目标月 / lpr 月频与深度 36 / 只有利率带 `chg_6m_bp`）→ 14 → **18 条**。
+
+**真实值（2026-09-15）**：LPR `0.0bp`、SHIBOR `+11.44bp`、10Y 国债 `−8.96bp`（改造前：`0.00%` / `+3.65%` / `—`）。
+
+**验证**：`node --check` EXIT=0；`pytest tests/` **663 passed**；`verify_ui.py` **CN 段全绿（CN-4a~CN-4h + CN-11）**。
+
+**过程中修掉的 3 个我自己的问题（都是验收抓出来的）**
+1. **CN-4f 假红（断言竞态）**：等待条件 `#cn-econ ≥ 10 项` 在 rate 组到达前就满足（2+2+3+2+2=11）→ `#cn-rate-list` 只剩「社融」。修法：等待条件加 `#cn-rate-list .mac-var ≥ 4` + 外部 API 重载一次的容错（不放松判据）。
+2. **CN-4c 假红（信用利差行没有 title）**：`spreadRow` 的 `.v-chg` 只有「走阔/收窄」文字、无 `title` → 补上。
+3. **CN-11 假红（abort 被报成 error）**：**我自己加的"重载一次"容错**会 abort 在飞的 fetch → `console.error` → 被 console-error 断言抓到。修法：`AbortError` 降级为 `console.warn`（页面已用「数据暂缺」表达失败），真错误仍 `console.error`；顺带把 quotes 超时 20s→30s（含中债 8s 取数，冷启动偏紧）。
+
+**⚠️ 提交边界（并行会话）**：`tasks/2026-09-15-crosshair-snap/` 是**另一个会话正在进行**的 crosshair 吸附任务，它已在共享文件里留下未提交改动 —— `web/static/chart-crosshair.js`（91 行）、`tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（315 行，其中含**我的** CN-4f/4g/4h 与 CN 等待修正）。因此本次提交**只含我自己的 4 个文件 + 文档**，`verify_ui.py` 与 `chart-crosshair.js` **不提交**（避免把别人的半成品入库）。`verify_ui` 里唯一剩余失败 `CNC-2` 属该会话的吸附功能（本页 `#cn-chart` 的吸附误差 25px），**不是本次改动引入**（本轮 CN 段其余断言全绿）。
+
 ## 下次注意什么
 
 - **改 `src/cn_econ_fetcher.py` 任一解析分支后，先跑 `scripts/probe_cn_macro.py`**（退出码非 0 = 接口停更）再跑单测。

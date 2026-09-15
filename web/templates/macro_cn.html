@@ -96,7 +96,10 @@
         <section class="mac-card mac-card-quiet" id="cn-rates">
           <div class="mac-2col">
             <div class="mac-col" id="cn-rate-col">
-              <h3 class="mac-col-title">利率与流动性<span class="mac-note">LPR / SHIBOR / 10Y 国债</span></h3>
+              <!-- ⚠️ 利率类**不用同比%**（10Y 因中债接口只给 6 个月窗口永远取不到基数 → 死格；
+                   LPR 恒 0.00% 像坏数据）→ 改「与 6 个月前比的变化（bp）」，且**两种单位同列**
+                   （社融仍是同比%）→ 单位写在格子里自描述。见 src/cn_econ_fetcher._chg_6m_bp。 -->
+              <h3 class="mac-col-title">利率与流动性<span class="mac-note">Δ = 与 6 个月前相比（bp，1bp = 0.01 个百分点）</span></h3>
               <div class="mac-vars" id="cn-rate-list"></div>
             </div>
             <div class="mac-col" id="cn-estate-col">

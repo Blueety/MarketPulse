@@ -173,12 +173,26 @@
       .catch(function (e) { clearTimeout(timer); throw e; });
   }
 
+  // 取数失败的**分级日志**（2026-09-15）：`AbortError` = 客户端主动取消（超时 / 页面跳转重载），
+  // 不是页面缺陷，且页面已用「数据暂缺」把失败可见化 → 走 `console.warn`；
+  // 其余（网络/解析/HTTP）才是真错误，仍 `console.error`。
+  // ⚠️ 验收脚本的 console-error 断言只统计 `type === "error"` —— 把取消也报成 error
+  //    会让「重载一次再测」这类**有意重试**把页面误判成有缺陷。
+  function logFetchError(tag, e) {
+    var prefix = "[" + tag + "]";
+    if (e && e.name === "AbortError") {
+      console.warn(prefix + " aborted（超时或页面跳转，页面已显示「数据暂缺」）", e);
+    } else {
+      console.error(prefix + " failed:", e);
+    }
+  }
+
   function loadGroup(g) {
     return getJSON("/api/econ/cn?group=" + g, 30000).then(function (d) {
       state.groups[g] = d || {};
       renderAll();
     }).catch(function (e) {
-      console.error("[cn-econ] group " + g + " failed:", e);
+      logFetchError("cn-econ group " + g, e);
       state.groups[g] = {};
       renderAll();
     });
@@ -192,15 +206,16 @@
   }
 
   function loadQuotes() {
-    getJSON("/api/cn/quotes", 20000)
+    // 30s（与 econ 分组一致）：冷启动 + 并发时 `/api/cn/quotes` 含中债 8s 取数，20s 偏紧
+    getJSON("/api/cn/quotes", 30000)
       .then(function (d) { state.quotes = d || {}; renderAll(); })
-      .catch(function (e) { console.error("[cn-quotes] failed:", e); state.quotes = {}; renderAll(); });
+      .catch(function (e) { logFetchError("cn-quotes", e); state.quotes = {}; renderAll(); });
   }
 
   function loadHistory() {
-    getJSON("/api/history?days=365&symbols=SH,SZ,CYB", 20000)
+    getJSON("/api/history?days=365&symbols=SH,SZ,CYB", 30000)
       .then(function (d) { state.history = d || {}; renderAll(); })
-      .catch(function (e) { console.error("[cn-history] failed:", e); state.history = {}; renderAll(); });
+      .catch(function (e) { logFetchError("cn-history", e); state.history = {}; renderAll(); });
   }
 
   function loadAll() { loadEcon(); loadQuotes(); loadHistory(); }
@@ -513,15 +528,36 @@
     return "同比 " + fmtSigned(s.yoy, 2) + "%（本期 vs 去年同月）· " + d;
   }
 
-  function varRow(s) {
+  // 利率类的「变化」口径（2026-09-15）：**与 6 个月前比，单位 bp**（1bp = 0.01 个百分点）。
+  //   ⚠️ 单位必须写在格子里 —— 同一列里非利率序列仍是「同比 %」，**两种单位同列**；
+  //     靠「数值自带单位」自描述，不能再造一次口径歧义（同 09-15 箭头那次）。
+  //   ⚠️ 数值本身即变化量 → **不配箭头**（箭头只服务"同比 + 箭头=同比较上期"那个双口径格）。
+  function chgCell(s) {
+    if (s.chg_6m_bp != null) {
+      var bp = s.chg_6m_bp;
+      return {
+        text: (bp > 0 ? "+" : "") + fmt(bp, 1) + "bp",
+        cls: cls(bp),
+        title: "与 6 个月前相比 " + (bp > 0 ? "+" : "") + fmt(bp, 1) + " bp" +
+               "（1bp = 0.01 个百分点）· 现值 " + s.date
+      };
+    }
     var arrow = s.direction === "up" ? "↑" : (s.direction === "down" ? "↓" : "→");
     // yoy 为空时只显示「—」，**不要拼 "%"**（"—%" 看起来像格式化漏洞）
-    var yoyText = s.yoy == null ? "—" : fmtSigned(s.yoy, 2) + "% " + arrow;
+    return {
+      text: s.yoy == null ? "—" : fmtSigned(s.yoy, 2) + "% " + arrow,
+      cls: cls(s.yoy),
+      title: yoyTitle(s)
+    };
+  }
+
+  function varRow(s) {
+    var c = chgCell(s);
     return '<div class="mac-var"><span class="v-label">' + escapeHtml(s.label) + "</span>" +
       '<span class="v-value">' + fmt(s.latest, s.unit === "亿元" ? 0 : 2) +
       '<span class="v-unit">' + escapeHtml(s.unit || "") + "</span></span>" +
-      '<span class="v-chg ' + cls(s.yoy) + '" title="' + escapeHtml(yoyTitle(s)) + '">' +
-      yoyText + "</span>" +
+      '<span class="v-chg ' + c.cls + '" title="' + escapeHtml(c.title) + '">' +
+      c.text + "</span>" +
       '<span class="v-state">' + escapeHtml(s.date ? fmtPeriod(s.date) : "—") + "</span></div>";
   }
 
@@ -589,9 +625,12 @@
     var s = (it.series || []);
     var dir = s.length >= 2 ? (s[s.length - 1][1] > s[s.length - 2][1] ? "up"
               : (s[s.length - 1][1] < s[s.length - 2][1] ? "down" : "flat")) : "flat";
+    var word = dir === "up" ? "走阔" : (dir === "down" ? "收窄" : "持平");
+    // ⚠️ 变化格**必须有 title**（验收 CN-4c 要求所有变化格都带口径；信用利差同为一行）
     return '<div class="mac-var"><span class="v-label">信用利差</span>' +
       '<span class="v-value">' + fmt(it.value, 1) + '<span class="v-unit">bp</span></span>' +
-      '<span class="v-chg ' + dir + '">' + (dir === "up" ? "走阔" : (dir === "down" ? "收窄" : "持平")) + "</span>" +
+      '<span class="v-chg ' + dir + '" title="信用利差（商金债AAA − 国债）较上期' + word +
+      ' · 单位 bp">' + word + "</span>" +
       '<span class="v-state">' + escapeHtml(it.date ? fmtPeriod(it.date) : "—") + "</span></div>";
   }
 
@@ -624,13 +663,13 @@
       box.innerHTML = '<p class="mac-empty">数据暂缺（/api/econ/cn 不可用）</p>';
     } else {
       box.innerHTML = series.map(function (s) {
-        var arrow = s.direction === "up" ? "↑" : (s.direction === "down" ? "↓" : "→");
-        // 与 varRow 同口径：`同比` 是数值本身，箭头是**同比相对上期**的方向（title 里写明）
-        var yoyText = s.yoy == null ? "同比 —" : "同比 " + fmtSigned(s.yoy, 2) + "% " + arrow;
+        // 与 varRow 完全同源：利率走 bp（自带单位），其余走「同比 + 箭头」（title 写明口径）
+        var c = chgCell(s);
+        var text = (s.chg_6m_bp != null) ? c.text : "同比 " + c.text;
         return '<div class="mac-econ-item"><div class="e-label">' + escapeHtml(s.label) + "</div>" +
           '<div class="e-value">' + fmt(s.latest, s.unit === "亿元" ? 0 : 2) + "</div>" +
-          '<div class="e-yoy ' + cls(s.yoy) + '" title="' + escapeHtml(yoyTitle(s)) + '">' +
-          yoyText + "</div>" +
+          '<div class="e-yoy ' + c.cls + '" title="' + escapeHtml(c.title) + '">' +
+          text + "</div>" +
           '<div class="e-date">' + escapeHtml(fmtPeriod(s.date)) + "</div></div>";
       }).join("");
     }

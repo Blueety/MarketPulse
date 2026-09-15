@@ -6,7 +6,7 @@
 序列数（13 vs 4）、TTL、失败语义都不同；塞进一个模块会让「只缓存成功」等纪律互相污染。
 **共享的只有四象限常量** `QUADRANTS`（同一套语义，复制一份必然漂移）。
 
-⚠️ 五条「改错就废」的约束（勿"优化"掉）：
+⚠️ 六条「改错就废」的约束（勿"优化"掉）：
 
 1. **排序口径不统一 —— 必须按周期键排序后再取尾**（2026-09-14 实测）：
    `cpi`/`ppi`/`pmi`/`gdp`/`m2`/`credit`/`retail` 是**倒序**返回（`iloc[-1]` 是 2008 年），
@@ -22,6 +22,11 @@
    非 bug）→ 固定用 6 个月窗口 + 空结果守卫。`scripts/probe_cn_macro.py` 已把该行为固化为已知。
 5. **`as_of` 取「数据月份」**（不是抓取时间），且**优先取月度序列**：日频序列（SHIBOR / 10Y
    国债）会把 `as_of` 顶到今天，掩盖月度数据的发布滞后。
+6. **利率类（LPR / SHIBOR / 10Y 国债）的"变化"用 `chg_6m_bp`（与 6 个月前比的 bp），不用同比%**：
+   ① 利率是点位，百分比变化量纲失真（项目既有纪律：利率用百分点）；
+   ② 10Y 国债源自中债接口，**只有 6 个月窗口 → 永远取不到去年同期基数**，同比恒 `None`
+   （页面上就是一格死数据）；③ 基准点**必须按日期/月份定位**，不能按数组位置取
+   （LPR 2014-2018 每日报价、2020 起每月报价 → 120 个点是 6.6 年不是 6 个月）。详见 `_chg_6m_bp`。
 
 **列缺失守卫**（`_require_cols`）：AkShare 升级改列名是常态，缺列一律降级 `[]` 并记 warning，
 绝不抛异常中断其余 12 个序列（复用 `fetcher.fetch_sector_heat` 的守纪律）。
@@ -74,14 +79,20 @@ CN_ECON_SERIES: dict[str, dict] = {
                     "fn": "macro_china_new_house_price", "time_col": "日期",
                     "main_col": "新建商品住宅价格指数-同比", "kind": "yoy", "freq": "month",
                     "split_col": "城市", "index100": True},
+    # `chg_bp`：利率类**不用同比%**（量纲失真且 10Y 恒缺基数），改用「与 6 个月前比的变化（bp）」；
+    # ⚠️ `freq="month"`：实测 LPR **2014-2018 是每日报价、2020 起改为每月 20 日**（见约束 6），
+    #    标成 day 会让 history 深度 120 点 = 6.6 年，且同比基准走"同月末近似"。
     "lpr": {"group": "rate", "label": "LPR 1Y", "unit": "%", "fn": "macro_china_lpr",
-            "time_col": "TRADE_DATE", "main_col": "LPR1Y", "kind": "level", "freq": "day"},
+            "time_col": "TRADE_DATE", "main_col": "LPR1Y", "kind": "level", "freq": "month",
+            "chg_bp": True},
     "shibor": {"group": "rate", "label": "SHIBOR 隔夜", "unit": "%", "fn": "macro_china_shibor_all",
-               "time_col": "日期", "main_col": "O/N-定价", "kind": "level", "freq": "day"},
+               "time_col": "日期", "main_col": "O/N-定价", "kind": "level", "freq": "day",
+               "chg_bp": True},
     # 区间敏感（约束 4）：固定 6 个月窗口；一次请求返回 3 条曲线，只取国债曲线
     "bond_10y": {"group": "rate", "label": "10 年期国债收益率", "unit": "%", "fn": "bond_china_yield",
                  "kwargs": "AUTO_6M", "time_col": "日期", "main_col": "10年", "kind": "level",
-                 "freq": "day", "filter_col": "曲线名称", "filter_value": "中债国债收益率曲线"},
+                 "freq": "day", "chg_bp": True,
+                 "filter_col": "曲线名称", "filter_value": "中债国债收益率曲线"},
 }
 
 _CN_ECON_TIMEOUT = 25      # 整体限时（daemon 线程 + join；串行实测 ≈22s → 必须并发）
@@ -92,6 +103,7 @@ _CN_ECON_TIMEOUT = 25      # 整体限时（daemon 线程 + join；串行实测 
 _CN_ECON_WORKERS = 13
 _CN_HISTORY_MONTHS = 36    # 月/季序列输出给前端的 history 长度（3 年）
 _CN_HISTORY_DAYS = 120     # 日频序列输出给前端的 history 长度（≈6 个月）
+_CN_CHG_MONTHS = 6         # 利率类「变化」口径的观察窗（月）：与 6 个月前比 → bp
 
 # 分组（R1 降级路径）：单端点全量实测 10.3s > 8s 判据 → 前端按组分两波懒加载。
 # ⚠️ **同时**发 6 个分组请求不会有收益（13 个上游请求照样同时在飞，墙钟不变）——
@@ -372,6 +384,51 @@ def _prior_value(rows: Rows, end: int) -> float | None:
     return next((v for k, v in rows if k == want), None)
 
 
+def _shift_month(key: str, months: int) -> str:
+    """周期键前移 N 个月：`("2026-09", 6)` → `"2026-03"`（只处理 `YYYY-MM` 前缀）。"""
+    y, m = int(key[:4]), int(key[5:7])
+    idx = y * 12 + (m - 1) - months
+    return f"{idx // 12}-{idx % 12 + 1:02d}"
+
+
+def _chg_6m_bp(rows: Rows) -> float | None:
+    """利率类「与 6 个月前相比的变化」→ **bp**（1bp = 0.01 个百分点）。
+
+    ⚠️ 三条纪律（2026-09-15，接用户反馈后的口径改造）：
+
+    1. **必须按日期/月份定位基准点，不能取位置**（`rows[0]` / `rows[-120]`）：
+       实测 LPR 的 120 个点是 `2019-07-01 ~ 2026-08-20`（≈6.6 年）—— 因为它
+       **2014-2018 是每日报价、2020 起改为每月 20 日报价**（1537 个有效点，按年分布
+       249/250 × 5 年后降为 12/年）。按位置取会算出「7 年累计 −131bp」这种错值。
+    2. **基准取"目标时点所在的那个周期的首个可用点"**：日频 → 月份 ≥ 目标月的第一行
+       （= 6 个月前那个月的首个交易日）；月频 → 键 ≤ 目标月的最后一个（目标月缺报时
+       自动退到最近的可比月）。窗口不足时退到首点，**不返回 None**（否则又变成"死格"）。
+    3. 单位是**百分点差**不是百分比（`docs/pitfalls.md`「利率类指标的变化要用百分点」）：
+       `4.00% → 4.30%` 显示 `+30.0bp`，而不是 `+7.5%`。
+    """
+    if len(rows) < 2:
+        return None
+    latest_key, latest_val = rows[-1]
+    latest_key = str(latest_key)
+    if latest_val is None or not re.match(r"^\d{4}-\d{2}", latest_key):
+        return None
+    target = _shift_month(latest_key[:7], _CN_CHG_MONTHS)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", latest_key):
+        # 日频：目标月（含）之后的第一个点 = 6 个月前那个月的首个交易日
+        base = next((v for k, v in rows if str(k)[:7] >= target), rows[0][1])
+    else:
+        # 月频：**最后一个** 键 ≤ 目标月的点（不是第一个 —— 遍历要覆盖到目标月为止）
+        base = None
+        for k, v in rows:
+            if str(k) <= target:
+                base = v
+            else:
+                break
+        if base is None:                      # 目标月早于全部数据 → 退到首点
+            base = rows[0][1]
+    return None if base is None else round((latest_val - base) * 100, 2)
+
+
 def _yoy_at(rows: Rows, end: int) -> float | None:
     """`rows[end]` 的同比 %（水平序列用）；基数缺失 / 为 0 → `None`（不猜，防除零）。"""
     if end < 0 or end >= len(rows):
@@ -433,6 +490,8 @@ def _series_item(key: str, spec: dict, rows: Rows, label: str | None = None) -> 
         "yoy": yoy,
         "prev_yoy": prev_yoy,
         "direction": _direction(yoy, prev_yoy) or _direction(latest, prev),
+        # 利率类才有（其余序列恒 None，前端据此切换单位/口径，见 CHG_BP_KEYS）
+        "chg_6m_bp": _chg_6m_bp(rows) if spec.get("chg_bp") else None,
         "history": [[k, v] for k, v in rows[-depth:]],
     }
 

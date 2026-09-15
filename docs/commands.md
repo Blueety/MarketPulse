@@ -21,7 +21,7 @@
 | `git status --porcelain -- data context alerts` | 与 `git_ops._has_changes` **同口径**：查看"哪些改动会被自动提交"（源码/测试/文档改动**不该**出现在输出里） | 排查"改动没进 commit" / 核对自动提交范围 |
 | `venv/Scripts/python scripts/probe_cn_macro.py [--include-rejected] [--show-cols]` | 中国宏观数据源回归（AkShare 13 个在册接口：可用性 / 最新数据月份 / 耗时 / 行数 / 列名）；退出码非 0 若任一在册接口变为不可用或最新月份落后 > 阈值（季度 GDP 给 6 个月）。`--include-rejected` 附带跑 8 个已否决接口（东财报告族，仅作对照、不参与退出码）。JSON 报告落 `%TEMP%\marketpulse-cn-macro-probe\` | 改了 `src/cn_econ_fetcher.py` / 怀疑接口停更 / 定期回归 |
 | `venv/Scripts/python -m pytest tests/test_cn_econ.py -v` | 中国宏观单测（14 条，不联网）：`_parse_ym` / 缺列守卫 / 失业率长表 / 房价双城 / credit 主列 / **增长轴取 PMI 水平** / GDP 冲突上报 / 同比按键找去年同月 / 部分失败缓存 / 全失败不缓存 / bond 空结果 / 零写盘 | 改了 `src/cn_econ_fetcher.py` 或 `/api/econ/cn` 后 |
-| `curl -s "localhost:<port>/api/econ/cn?group=price"` | 中国宏观分组端点（group ∈ price/growth/money/rate/labor/estate；省略 = 全量 ≈10s）；非法组名 → 422 | 改了 `/api/econ/cn` / 前端分组加载后 |
+| `curl -s "localhost:<port>/api/econ/cn?group=price"` | 中国宏观分组端点（group ∈ price/growth/money/rate/labor/estate；省略 = 全量 ≈10s）；非法组名 → 422。**利率三条序列（lpr/shibor/bond_10y）带 `chg_6m_bp`**（与 6 个月前比的 bp，基准点按日期/月份定位），其余序列该键为 `null` | 改了 `/api/econ/cn` / 前端分组加载后 |
 | `curl -s localhost:<port>/api/cn/quotes` | 中国行情（CNY=X + 中债 10Y 国债 + 信用利差 bp）；失败降级 200 + `failed` 列出三项 | 改了 `/api/cn/quotes` 后 |
 
 ## 完整检查

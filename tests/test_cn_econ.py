@@ -182,6 +182,69 @@ def test_no_file_writes(fake_ak, monkeypatch):
     assert not offenders
 
 
+# ---- 利率类「与 6 个月前比的变化（bp）」口径（2026-09-15 用户反馈后改造）----
+
+def test_chg_6m_bp_looks_up_by_date_not_position():
+    """**按日期定位基准点**，不能取数组首位。
+
+    实测场景（LPR）：120 个点跨 6.6 年 —— 若按位置取首点，会算出"7 年累计 −131bp"。
+    """
+    # 日频：首行是 2 年前（120 点窗口装不下的历史），6 个月前那个月的首个交易日才是基准
+    rows = [("2024-09-02", 1.00), ("2026-03-02", 1.50), ("2026-09-15", 1.70)]
+    assert cn._chg_6m_bp(rows) == pytest.approx(20.0)      # 1.70 - 1.50 = +0.20% = +20bp
+    # 同数据若按位置取首点 → (1.70-1.00)*100 = 70bp（错值）：显式反证
+    assert round((rows[-1][1] - rows[0][1]) * 100, 2) == 70.0
+    # 单点无法算变化
+    assert cn._chg_6m_bp([("2026-09-15", 1.7)]) is None
+
+
+def test_chg_6m_bp_month_freq_and_missing_target():
+    """月频：取**最后一个**键 ≤ 目标月（目标月缺报时退到最近可比月）；目标月早于全部数据 → 退首点。"""
+    rows = [("2025-11", 3.5), ("2025-12", 3.5), ("2026-02", 3.0), ("2026-08", 3.0)]
+    # 目标 = 2026-02；存在则精确命中 → 0.0bp
+    assert cn._chg_6m_bp(rows) == pytest.approx(0.0)
+    # 去掉 2026-02（缺报）→ 退到 2025-12（≤ 目标月的最后一个）→ (3.0-3.5)*100 = −50bp
+    assert cn._chg_6m_bp([r for r in rows if r[0] != "2026-02"]) == pytest.approx(-50.0)
+    # 目标月早于首点 → 退首点
+    assert cn._chg_6m_bp([("2026-07", 2.0), ("2026-08", 2.1)]) == pytest.approx(10.0)
+
+
+def test_lpr_uses_month_freq_and_derives_bp(fake_ak):
+    """LPR 标 `freq="month"`（实测 2020 起每月 20 日报价）→ 键为 `YYYY-MM`，深度用月频 36。"""
+    assert cn.CN_ECON_SERIES["lpr"]["freq"] == "month"
+    months = []
+    y, m = 2026, 8
+    for _ in range(130):                                      # 130 个月，末月 = 2026-08
+        months.append((y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    months.reverse()
+    rows = [[f"{yy}-{mm:02d}-20", 3.0] for yy, mm in months]
+    rows.append(["2026-08-21", 3.0])                          # 同月两点 → 去重保留后者
+    fake_ak({"macro_china_lpr": lambda: pd.DataFrame(rows, columns=["TRADE_DATE", "LPR1Y"])})
+    out = cn._fetch_one("lpr")
+    assert len(out) == 130 and out[-1][0] == "2026-08"        # 月键 + 同月去重
+    item = cn._series_item("lpr", cn.CN_ECON_SERIES["lpr"], out)
+    # 深度必须用**月频**的 36，而不是日频的 _CN_HISTORY_DAYS=120
+    assert len(item["history"]) == cn._CN_HISTORY_MONTHS
+    assert item["chg_6m_bp"] == pytest.approx(0.0)            # 平整序列 → 0bp（不是"死格"）
+    assert item["yoy"] == pytest.approx(0.0)                  # 按月键精确找到 2025-08
+
+
+def test_chg_6m_bp_only_for_rate_series():
+    """端点契约：只有利率类带 `chg_6m_bp`，其余序列恒 None（前端据此切换单位）。"""
+    raw = {
+        "bond_10y": [("2026-03-02", 1.80), ("2026-09-15", 1.70)],
+        "cpi": [("2026-03", 0.5), ("2026-08", 0.8)],
+    }
+    p = cn.build_cn_econ_payload(raw, [], only=["bond_10y", "cpi"])
+    by_key = {s["key"]: s for s in p["series"]}
+    assert by_key["bond_10y"]["chg_6m_bp"] == pytest.approx(-10.0)   # 1.70−1.80 = −0.10% = −10bp
+    assert by_key["cpi"]["chg_6m_bp"] is None
+    assert by_key["bond_10y"]["yoy"] is None     # 中债只给 6 个月窗口 → 同比恒空（这正是改造动机）
+
+
 # ---- 端点语义（部分失败仍缓存 / 全失败不缓存）----
 # ⚠️ 与 BLS `/api/econ` 的**有意差异**：中国版 13 个接口相互独立，
 #    "1 个失败就整份不缓存"会让每次请求都重打 13 个接口（用户等 10s+）。
