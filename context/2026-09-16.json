@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3886.481,
-      "change_pct": 0.5745340256711337,
+      "value": 3891.6005,
+      "change_pct": 0.7070166820753209,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 13476.848,
-      "change_pct": 1.4213904994094644,
+      "value": 13454.743,
+      "change_pct": 1.2550370733717588,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3324.358,
-      "change_pct": 2.353507693236099,
+      "value": 3311.474,
+      "change_pct": 1.9568228015608782,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3888.1106,
       3885.3328,
       3864.2794,
-      3886.481
+      3891.6005
     ],
     "sz": [
       14414.427,
@@ -307,7 +307,7 @@
       13471.257,
       13384.568,
       13287.974,
-      13476.848
+      13454.743
     ],
     "cyb": [
       3602.083,
@@ -339,7 +339,7 @@
       3322.039,
       3285.583,
       3247.918,
-      3324.358
+      3311.474
     ],
     "gld": [
       404.9200134277344,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "通信/电子",
-        "change": 3.75,
-        "turnover": "2274.3亿",
+        "change": 3.3,
+        "turnover": "3507.9亿",
         "top_stock": "长芯博创"
       },
       {
         "name": "资源/有色",
-        "change": 1.88,
-        "turnover": "358.5亿",
+        "change": 2.07,
+        "turnover": "565.0亿",
         "top_stock": "闽东电力"
       },
       {
         "name": "光伏/新能源",
-        "change": 1.59,
-        "turnover": "3721.5亿",
+        "change": 1.46,
+        "turnover": "5614.5亿",
         "top_stock": "欣旺达"
       },
       {
-        "name": "军工",
-        "change": 1.39,
-        "turnover": "1327.6亿",
-        "top_stock": "东材科技"
+        "name": "其他",
+        "change": 1.35,
+        "turnover": "19605.6亿",
+        "top_stock": "华海药业"
       },
       {
-        "name": "其他",
-        "change": 1.36,
-        "turnover": "12372.2亿",
-        "top_stock": "华海药业"
+        "name": "军工",
+        "change": 1.34,
+        "turnover": "2070.9亿",
+        "top_stock": "东材科技"
       }
     ],
     "losers": [
       {
         "name": "消费",
-        "change": 0.01,
-        "turnover": "114.9亿",
-        "top_stock": "力源信息"
+        "change": 0.26,
+        "turnover": "176.6亿",
+        "top_stock": "生 意 宝"
       },
       {
         "name": "金融",
-        "change": 0.18,
-        "turnover": "1184.9亿",
+        "change": 0.28,
+        "turnover": "1867.7亿",
         "top_stock": "烽火通信"
       },
       {
         "name": "农业",
-        "change": 0.73,
-        "turnover": "258.2亿",
+        "change": 0.34,
+        "turnover": "369.6亿",
         "top_stock": "万向德农"
       },
       {
         "name": "医药",
-        "change": 0.85,
-        "turnover": "710.8亿",
-        "top_stock": "艾迪药业"
+        "change": 1.18,
+        "turnover": "1068.8亿",
+        "top_stock": "成都先导"
       },
       {
         "name": "地产/基建",
-        "change": 1.35,
-        "turnover": "93.7亿",
+        "change": 1.22,
+        "turnover": "150.4亿",
         "top_stock": "方大集团"
       }
     ]
@@ -484,8 +484,8 @@
     "通信/电子 surge 2026-09-16",
     "资源/有色 surge 2026-09-16",
     "光伏/新能源 surge 2026-09-16",
-    "军工 surge 2026-09-16",
-    "其他 surge 2026-09-16"
+    "其他 surge 2026-09-16",
+    "军工 surge 2026-09-16"
   ],
   "correlation": [],
   "watchlist": {
