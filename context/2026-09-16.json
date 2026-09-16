@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3851.4707,
-      "change_pct": -0.3314641275680026,
-      "status": "下跌趋势"
+      "value": 3886.481,
+      "change_pct": 0.5745340256711337,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 13229.512,
-      "change_pct": -0.4399617277998853,
-      "status": "下跌趋势"
+      "value": 13476.848,
+      "change_pct": 1.4213904994094644,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": 3233.677,
-      "change_pct": -0.4384655031315441,
-      "status": "下跌趋势"
+      "value": 3324.358,
+      "change_pct": 2.353507693236099,
+      "status": "连涨1日"
     },
     "VIX": {
       "value": null,
@@ -275,7 +275,7 @@
       3888.1106,
       3885.3328,
       3864.2794,
-      3851.4707
+      3886.481
     ],
     "sz": [
       14414.427,
@@ -307,7 +307,7 @@
       13471.257,
       13384.568,
       13287.974,
-      13229.512
+      13476.848
     ],
     "cyb": [
       3602.083,
@@ -339,7 +339,7 @@
       3322.039,
       3285.583,
       3247.918,
-      3233.677
+      3324.358
     ],
     "gld": [
       404.9200134277344,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "通信/电子",
-        "change": 0.8,
-        "turnover": "562.9亿",
-        "top_stock": "永鼎股份"
+        "change": 3.75,
+        "turnover": "2274.3亿",
+        "top_stock": "长芯博创"
       },
       {
-        "name": "医药",
-        "change": 0.6,
-        "turnover": "224.0亿",
-        "top_stock": "艾迪药业"
+        "name": "资源/有色",
+        "change": 1.88,
+        "turnover": "358.5亿",
+        "top_stock": "闽东电力"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 1.59,
+        "turnover": "3721.5亿",
+        "top_stock": "欣旺达"
       },
       {
         "name": "军工",
-        "change": 0.44,
-        "turnover": "394.5亿",
-        "top_stock": "航新科技"
+        "change": 1.39,
+        "turnover": "1327.6亿",
+        "top_stock": "东材科技"
       },
       {
-        "name": "地产/基建",
-        "change": 0.42,
-        "turnover": "30.2亿",
-        "top_stock": "统一股份"
-      },
-      {
-        "name": "农业",
-        "change": 0.32,
-        "turnover": "110.1亿",
-        "top_stock": "万向德农"
+        "name": "其他",
+        "change": 1.36,
+        "turnover": "12372.2亿",
+        "top_stock": "华海药业"
       }
     ],
     "losers": [
       {
-        "name": "资源/有色",
-        "change": -0.53,
-        "turnover": "92.1亿",
-        "top_stock": "闽东电力"
-      },
-      {
         "name": "消费",
-        "change": -0.42,
-        "turnover": "39.9亿",
-        "top_stock": "生 意 宝"
+        "change": 0.01,
+        "turnover": "114.9亿",
+        "top_stock": "力源信息"
       },
       {
         "name": "金融",
-        "change": -0.32,
-        "turnover": "337.6亿",
+        "change": 0.18,
+        "turnover": "1184.9亿",
         "top_stock": "烽火通信"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.1,
-        "turnover": "1119.3亿",
-        "top_stock": "乐凯胶片"
+        "name": "农业",
+        "change": 0.73,
+        "turnover": "258.2亿",
+        "top_stock": "万向德农"
       },
       {
-        "name": "其他",
-        "change": 0.03,
-        "turnover": "3486.8亿",
-        "top_stock": "东材科技"
+        "name": "医药",
+        "change": 0.85,
+        "turnover": "710.8亿",
+        "top_stock": "艾迪药业"
+      },
+      {
+        "name": "地产/基建",
+        "change": 1.35,
+        "turnover": "93.7亿",
+        "top_stock": "方大集团"
       }
     ]
   },
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "通信/电子 surge 2026-09-16",
-    "医药 surge 2026-09-16",
+    "资源/有色 surge 2026-09-16",
+    "光伏/新能源 surge 2026-09-16",
     "军工 surge 2026-09-16",
-    "地产/基建 surge 2026-09-16",
-    "农业 surge 2026-09-16"
+    "其他 surge 2026-09-16"
   ],
   "correlation": [],
   "watchlist": {
