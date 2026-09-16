@@ -156,7 +156,10 @@ MEASURE_JS = r"""
     placeholderCards: document.querySelectorAll('[data-placeholder="1"]').length,
     phNotes: [...document.querySelectorAll('[data-placeholder="1"] .ph-note')].map(e => e.textContent),
     topbarDate: (q('#topbar-date') || {}).textContent || null,
-    marketStatus: (q('#market-status') || {}).textContent || null,
+    // 2026-09-16（market-session-status）：单行 #market-status → 两行 #market-status-cn / -us。
+    // ⚠️ 不要再引用 #market-status 单数 id：它已不存在，取值恒 null ⇒ 断言会静默变假绿。
+    marketCn: (q('#market-status-cn') || {}).textContent || null,
+    marketUs: (q('#market-status-us') || {}).textContent || null,
     marketTime: (q('#market-time') || {}).textContent || null,
     card: cardStyle,
     sidebar: sidebar ? {
@@ -2247,6 +2250,245 @@ def assert_kpi_no_truncation(browser, url: str) -> None:
         ctx.close()
 
 
+# === 侧栏市场状态：两行两市场（market-session-status，2026-09-16）===
+#
+# 注入 UTC → 期望（A股 / 美股 标签 + 该市场此刻是否交易中）。
+# 口径 = plan §4.1「按**各市场本地时钟**判定，含左不含右；周末按 local weekday」。
+# ⚠️ 期望值不是手算的：由临时探针用 Python `zoneinfo` 独立核算后写入（证据见 journal §）。
+# ⚠️ 两个 12 月用例是 **DST 护栏**：任何写死「北京 21:30 / 22:30 = 美股开盘」的实现都会在此变红。
+# ⚠️ 与 plan §4.2 / Step 6 表格有**两处出入**，已实测复核并**按 §4.1 修正**（plan 表格笔误）：
+#    ① 北京 12:00 = 美东 00:00，美东 local weekday 仍是周三 ⇒ `t < 09:30` ⇒ **未开盘**（plan 写「已收盘」）；
+#    ② `2026-09-19T04:00Z` = 美东 09-19 00:00 是**周六** ⇒ **休市**（plan Step 6 写「已收盘」）。
+MS_CASES = [
+    # (注入 UTC,              期望 A股,        期望 美股,       A股绿, 美股绿, 说明)
+    ("2026-09-16T12:44:00Z", "A股 已收盘",   "美股 未开盘",  False, False, "用户截图场景（北京 20:44 / 美东 08:44 EDT）"),
+    ("2026-09-16T13:30:00Z", "A股 已收盘",   "美股 交易中",  False, True,  "北京 21:30 / 美东 09:30（EDT）"),
+    ("2026-12-01T13:30:00Z", "A股 已收盘",   "美股 未开盘",  False, False, "DST 护栏：北京 21:30 = 美东 08:30（EST）"),
+    ("2026-12-01T14:30:00Z", "A股 已收盘",   "美股 交易中",  False, True,  "DST 护栏：北京 22:30 = 美东 09:30（EST）"),
+    ("2026-09-16T04:00:00Z", "A股 午间休市", "美股 未开盘",  False, False, "北京 12:00 午休 / 美东 00:00"),
+    ("2026-09-16T02:00:00Z", "A股 交易中",   "美股 已收盘",  True,  False, "北京 10:00 盘中 / 美东前一日 22:00"),
+    ("2026-09-16T21:30:00Z", "A股 未开盘",   "美股 已收盘",  False, False, "北京次日 05:30 / 美东 17:30"),
+    ("2026-09-19T04:00:00Z", "A股 休市",     "美股 休市",    False, False, "周六 12:00（两个市场各自本地都是周六）"),
+    ("2026-09-18T19:00:00Z", "A股 休市",     "美股 交易中",  False, True,  "北京周六 03:00 = 美东周五 15:00（§4.1 点名的跨时区场景）"),
+]
+
+# 侧栏几何护栏（V6）：可见宽度预算在 ≥769px 全档恒 169px ⇒ 扫 3 档即覆盖全部风险面。
+# 769 是抽屉断点（`@media (max-width: 768px)`）的**下沿内联态**，必采（本项目踩过断点空档盲区）。
+MS_VIEWPORTS = [(1920, 1080), (1280, 720), (769, 720)]
+
+MS_JS = r"""
+() => {
+  const hook = (iso) => (typeof window.__marketSession === 'function')
+      ? window.__marketSession(iso) : null;
+
+  // 期望色不写死 rgb：从 CSS 变量现场解析（主题/改色后自动跟随）
+  const rgbVar = (name) => {
+    const t = document.createElement('div');
+    t.style.backgroundColor = 'var(' + name + ')';
+    t.style.position = 'absolute'; t.style.visibility = 'hidden';
+    document.body.appendChild(t);
+    const c = getComputedStyle(t).backgroundColor;
+    t.remove();
+    return c;
+  };
+
+  const nowState = hook(null);
+  const rows = {};
+  document.querySelectorAll('.market-status .ms-row').forEach((r) => {
+    const dot = r.querySelector('.ms-dot');
+    const txt = r.querySelector('span');
+    rows[r.dataset.market || '?'] = {
+      text: txt ? txt.textContent : null,
+      dotId: dot ? dot.id : null,
+      openClass: dot ? dot.classList.contains('open') : null,
+      color: dot ? getComputedStyle(dot).backgroundColor : null,
+      scrollW: r.scrollWidth, clientW: r.clientWidth,
+    };
+  });
+  const cases = {};
+  __CASES__.forEach((iso) => {
+    const s = hook(iso);
+    cases[iso] = s ? { cn: s.cn.label, us: s.us.label,
+                       cnOpen: !!s.cn.open, usOpen: !!s.us.open } : null;
+  });
+  const sb = document.getElementById('sidebar');
+  const ms = document.querySelector('.market-status');
+  const ft = document.querySelector('.sidebar-footer');
+  const rb = sb ? sb.getBoundingClientRect() : { bottom: 0 };
+  return {
+    rows: rows,
+    cases: cases,
+    hasHook: typeof window.__marketSession === 'function',
+    now: nowState ? { cn: nowState.cn.label, us: nowState.us.label,
+                      cnOpen: !!nowState.cn.open, usOpen: !!nowState.us.open } : null,
+    greenRgb: rgbVar('--green'), mutedRgb: rgbVar('--text-muted'),
+    footerH: ft ? Math.round(ft.getBoundingClientRect().height) : null,
+    msH: ms ? Math.round(ms.getBoundingClientRect().height) : null,
+    sbScrollH: sb ? sb.scrollHeight : null,
+    sbClientH: sb ? sb.clientHeight : null,
+    sbBottom: Math.round(rb.bottom), innerH: window.innerHeight,
+    scrollW: document.scrollingElement.scrollWidth,
+    clientW: document.documentElement.clientWidth,
+    time: (document.getElementById('market-time') || {}).textContent || null,
+  };
+}
+"""
+
+
+def _ms_js() -> str:
+    """把注入时刻表填进 MS_JS（只注入"要问的时刻"，期望值留在 Python 侧比对）。"""
+    return MS_JS.replace("__CASES__", json.dumps([c[0] for c in MS_CASES]))
+
+
+def _ms_labels(m: dict) -> dict:
+    """把一次 MS_JS 结果压成 {iso: 'A股 xx|美股 yy'}，供三页逐字比对。"""
+    return {iso: f"{v['cn']}|{v['us']}" for iso, v in (m.get("cases") or {}).items() if v}
+
+
+def assert_market_session(browser, url: str) -> None:
+    """MS-* 侧栏市场状态「两行两市场」（market-session-status，2026-09-16）。
+
+    MS-1 同源断言（DOM 文案 == 页面内同一函数 window.__marketSession）
+    MS-2 两行结构（data-market=cn/us 各行存在、点 id 对应、无占位符、两行文案不同）
+    MS-3 §4.1 覆盖表 9 例（含 2 例 DST 护栏 + 1 例跨时区周末）
+    MS-4 逐点着色（.open 类 + 实际色 == --green / --text-muted，不写死 rgb）
+    MS-5 三页逐字同口径（同一注入时刻表，/ · /macro · /macro/cn 全表一致）
+    MS-6 几何护栏 3 档视口（footer 63 / .market-status 50 / 无纵向滚动条 / 零横向溢出 / 贴底）
+    MS-7 本组页面 console error = 0
+
+    独立 context（不污染首页主页面），主题不固定（默认偏好）—— 色断言从 CSS 变量现场解析。
+    """
+    print("\n--- MS 侧栏市场状态（两行两市场 market-session-status）---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errors: list[str] = []
+        page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+        page.on("pageerror", lambda err: errors.append(f"pageerror: {err}"))
+        page.goto(url, wait_until="load")
+        page.wait_for_timeout(900)
+        ms = page.evaluate(_ms_js())
+
+        # --- MS-1 同源断言 ---
+        # 容差处理：DOM 在页面加载时写入、hook 在断言时重算，二者若**恰好跨越**
+        # 09:30/11:30/13:00/15:00/16:00 这类边界就会不一致 —— 等一个刷新周期重读一次
+        # （不是放松判据：重读后仍不一致即 FAIL）。
+        def _read() -> tuple:
+            m = page.evaluate(_ms_js())
+            rows = m.get("rows") or {}
+            n = m.get("now") or {}
+            return (m,
+                    ((rows.get("cn") or {}).get("text") or "").strip(),
+                    ((rows.get("us") or {}).get("text") or "").strip(),
+                    n.get("cn"), n.get("us"))
+
+        ms, dom_cn, dom_us, exp_cn, exp_us = _read()
+        if dom_cn != exp_cn or dom_us != exp_us:
+            page.wait_for_timeout(1500)      # > updateMarketStatus 的 60s 间隔之外的"重绘"不保证，
+            ms, dom_cn, dom_us, exp_cn, exp_us = _read()   # 故这里只是给"跨边界"留一次机会
+        check(ms.get("hasHook") is True, "MS-1a 页面暴露 window.__marketSession（验收同源钩子）",
+              ms.get("hasHook"))
+        check(dom_cn != "" and dom_cn == exp_cn and dom_us != "" and dom_us == exp_us,
+              "MS-1b DOM 两行文案 == window.__marketSession（同源，不写死词）",
+              (dom_cn, dom_us), (exp_cn, exp_us))
+
+        # --- MS-2 两行结构 ---
+        rows = ms.get("rows") or {}
+        check(sorted(rows.keys()) == ["cn", "us"],
+              "MS-2a .ms-row 恰两行且带 data-market=cn/us", sorted(rows.keys()))
+        check((rows.get("cn") or {}).get("dotId") == "market-dot-cn"
+              and (rows.get("us") or {}).get("dotId") == "market-dot-us",
+              "MS-2b 两行的点 id 分别为 market-dot-cn / market-dot-us",
+              ((rows.get("cn") or {}).get("dotId"), (rows.get("us") or {}).get("dotId")))
+        check("—" not in (rows.get("cn", {}).get("text") or "—")
+              and "—" not in (rows.get("us", {}).get("text") or "—"),
+              "MS-2c 两行文案已由脚本填充（不含占位符）",
+              ((rows.get("cn") or {}).get("text"), (rows.get("us") or {}).get("text")))
+        check((rows.get("cn") or {}).get("text") != (rows.get("us") or {}).get("text"),
+              "MS-2d 两行文案互不相同（防两行同一份拷贝）",
+              ((rows.get("cn") or {}).get("text"), (rows.get("us") or {}).get("text")))
+        check("北京时间" in (ms.get("time") or ""), "MS-2e 第三行仍为北京时间", ms.get("time"))
+
+        # --- MS-3 覆盖表（含 DST 护栏）---
+        # MS-0 覆盖度护栏：`_ms_labels` 会把 None 过滤掉 ⇒ 若不钉死条数，
+        # "所有用例都取不到值"会退化成"0 条 vs 0 条 = 一致"的**假绿**（红跑实测踩过）。
+        check(len(ms.get("cases") or {}) == len(MS_CASES)
+              and all(v is not None for v in (ms.get("cases") or {}).values()),
+              f"MS-0 注入用例全部产出**非空**结果（{len(MS_CASES)} 例，防空集假绿）",
+              {k: v for k, v in (ms.get("cases") or {}).items() if v is None}, "no-null")
+        for iso, e_cn, e_us, e_cno, e_uso, note in MS_CASES:
+            got = (ms.get("cases") or {}).get(iso)
+            ok = bool(got) and got.get("cn") == e_cn and got.get("us") == e_us \
+                and got.get("cnOpen") == e_cno and got.get("usOpen") == e_uso
+            check(ok, f"MS-3 {iso} → {e_cn} / {e_us}（{note}）",
+                  got, (e_cn, e_us, e_cno, e_uso))
+
+        # --- MS-4 逐点着色 ---
+        n = ms.get("now") or {}
+        green, muted = ms.get("greenRgb"), ms.get("mutedRgb")
+        for key, base in (("cn", "A股"), ("us", "美股")):
+            row = rows.get(key) or {}
+            exp_open = n.get(key + "Open")
+            # ⚠️ 必须显式要求两侧都是 bool：旧选择器取不到元素时 openClass/exp_open 同为 None，
+            #    `None == None` 会让断言**恒真（假绿）**（红跑实测踩过）。
+            check(isinstance(exp_open, bool) and row.get("openClass") is exp_open,
+                  f"MS-4a {base} 点的 .open 类 == 该市场此刻是否交易中",
+                  row.get("openClass"), exp_open)
+            check(row.get("color") == (green if exp_open else muted),
+                  f"MS-4b {base} 点色 == {'--green' if exp_open else '--text-muted'}",
+                  row.get("color"), (green if exp_open else muted))
+        check(green != muted, "MS-4c --green 与 --text-muted 可区分（色断言非同值假绿）",
+              (green, muted))
+
+        # --- MS-5 三页逐字同口径（注入时刻表 ⇒ 与真实 now 无关，确定性）---
+        base_labels = _ms_labels(ms)
+        for path, name in (("macro", "/macro"), ("macro/cn", "/macro/cn")):
+            p2 = ctx.new_page()
+            errs2: list[str] = []
+            p2.on("console", lambda m: errs2.append(m.text) if m.type == "error" else None)
+            p2.on("pageerror", lambda e: errs2.append(f"pageerror: {e}"))
+            p2.goto(url + path, wait_until="load")
+            p2.wait_for_timeout(1200)
+            m2 = p2.evaluate(_ms_js())
+            lab2 = _ms_labels(m2)
+            diff = {k: (base_labels.get(k), lab2.get(k))
+                    for k in base_labels if base_labels.get(k) != lab2.get(k)}
+            # ⚠️ 必须同时钉死条数：空集 vs 空集 会"一致"（假绿），见 MS-0 同源教训。
+            check(len(lab2) == len(MS_CASES) and not diff,
+                  f"MS-5a {name} 与首页同口径（{len(MS_CASES)} 例注入时刻全表逐字一致）",
+                  (len(lab2), list(diff.items())[:2]), len(MS_CASES))
+            check(sorted((m2.get("rows") or {}).keys()) == ["cn", "us"],
+                  f"MS-5b {name} 侧栏同样是两行两市场", sorted((m2.get("rows") or {}).keys()))
+            check(not errs2, f"MS-5c {name} console error = 0", errs2[:5])
+            p2.close()
+
+        # --- MS-6 几何护栏（3 档视口）---
+        for (w, h) in MS_VIEWPORTS:
+            page.set_viewport_size({"width": w, "height": h})
+            page.goto(url, wait_until="load")
+            page.wait_for_timeout(800)
+            g = page.evaluate(_ms_js())
+            check(g.get("footerH") == 63, f"MS-6a {w}x{h} .sidebar-footer 高 63（45+18）",
+                  g.get("footerH"), 63)
+            check(g.get("msH") == 50, f"MS-6b {w}x{h} .market-status 高 50（16+16+15+gap2×2）",
+                  g.get("msH"), 50)
+            check(g.get("sbScrollH") is not None and g["sbScrollH"] <= g["sbClientH"],
+                  f"MS-6c {w}x{h} #sidebar 无纵向滚动条", (g.get("sbScrollH"), g.get("sbClientH")))
+            bad = [r for r in (g.get("rows") or {}).values()
+                   if r.get("scrollW", 0) > r.get("clientW", 0) + 0.5]
+            check(not bad and sorted((g.get("rows") or {}).keys()) == ["cn", "us"],
+                  f"MS-6d {w}x{h} 两行均不溢出（nowrap 溢出会撑出侧栏横向滚动条）",
+                  [(r.get("scrollW"), r.get("clientW")) for r in (g.get("rows") or {}).values()])
+            check(g.get("scrollW") == g.get("clientW"), f"MS-6e {w}x{h} 无横向溢出",
+                  (g.get("scrollW"), g.get("clientW")))
+            check(abs(g.get("sbBottom", 0) - g.get("innerH", 0)) <= 2,
+                  f"MS-6f {w}x{h} 侧栏贴底", (g.get("sbBottom"), g.get("innerH")))
+
+        check(not errors, "MS-7 本组页面 console error = 0", errors[:5])
+    finally:
+        ctx.close()
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -2745,8 +2987,20 @@ def main() -> int:
                   "侧栏贴底（sticky 生效）", (sb.get("bottom"), sb.get("innerH")))
             check(to_int(m["zSidebar"]) > to_int(m["zBackdrop"]) and to_int(m["zTopbar"]) > to_int(m["zSidebar"]),
                   "层级 topbar > sidebar > backdrop", (m["zTopbar"], m["zSidebar"], m["zBackdrop"]))
-            check(m["marketStatus"] in ("市场已开盘", "休市") and "北京时间" in (m["marketTime"] or ""),
-                  "侧栏市场状态 + 北京时间", (m["marketStatus"], m["marketTime"]))
+            # 2026-09-16（market-session-status）：原断言 `marketStatus in ("市场已开盘","休市")` 有两个病：
+            #   ① 写死文案 → 下次改文案必红；② 旧实现"工作日恒为真"⇒ 工作日**恒真（假绿）**。
+            #   改为与页面内**同一个函数**（window.__marketSession）产出比对的同源断言 —— 不写死任何具体词；
+            #   真正的语义牙齿在 MS-3 覆盖表（含 DST 护栏）。
+            _ms_now = page.evaluate(
+                "() => (typeof window.__marketSession === 'function') ? window.__marketSession() : null")
+            _ms_exp = _ms_now or {}
+            check(bool(_ms_now)
+                  and (m["marketCn"] or "").strip() == (_ms_exp.get("cn") or {}).get("label")
+                  and (m["marketUs"] or "").strip() == (_ms_exp.get("us") or {}).get("label")
+                  and "北京时间" in (m["marketTime"] or ""),
+                  "侧栏市场状态两行 + 北京时间（期望同源 window.__marketSession，不写死词）",
+                  (m["marketCn"], m["marketUs"], m["marketTime"]),
+                  ((_ms_exp.get("cn") or {}).get("label"), (_ms_exp.get("us") or {}).get("label")))
 
             # G-9 断言需在 1920 视口（行 4 断点 ≥1400px）；三视口循环结束时页面停在 375 → 重新加载
             page.set_viewport_size({"width": 1920, "height": 1080})
@@ -2898,6 +3152,7 @@ def main() -> int:
             assert_macro_cn_crosshair(browser, url)  # CNC-* /macro/cn 吸附（此前零覆盖，plan §6 Step 4）
             assert_crosshair_dpr2(browser, url)  # CS-D* DPR=2 取证（默认 DPR=1 测不出坐标系混用）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
+            assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 

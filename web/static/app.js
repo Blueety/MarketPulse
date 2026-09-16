@@ -964,27 +964,94 @@ function updateTopbarDate(dateStr) {
 }
 
 // === 侧栏底部：市场状态 + 北京时间（纯前端，不新增端点）===
-function updateMarketStatus() {
-  const st = document.getElementById('market-status');
-  const tm = document.getElementById('market-time');
-  const dot = document.getElementById('market-dot');
-  if (!st || !tm) return;
-  let open = false, hh = '—', mm = '—';
+// ⚠️ 2026-09-16（market-session-status）：由单行「市场已开盘」改为**两行两市场**，逐市场按
+//    **该市场本地时钟**判交易时段。旧实现只判「今天是不是工作日」⇒ 工作日任意时刻
+//    （20:40、凌晨 3:00）都显示绿点「市场已开盘」，无法判断说的是哪个市场。
+// ⚠️ **不改用「换算成北京时间再比 21:30」**：11 月夏令时结束后会静默错一小时（代码里不得出现 21:30 魔数）。
+// ⚠️ 点色语义随之变更：原 `open` = 「今天是工作日」（全局单点）→ 新 `open` = 「**该市场此刻在交易**」
+//    （逐市场）；「任一市场在交易」⇔「至少一颗绿」。
+// ⚠️ 本段在 app.js / macro.js / macro_cn.js 各有一份**逐字副本** —— 改一处必须三处同改。
+const MARKET_SESSIONS = {
+  cn: { tz: 'Asia/Shanghai',    label: 'A股', open: '09:30', close: '15:00', midday: ['11:30', '13:00'] },
+  us: { tz: 'America/New_York', label: '美股', open: '09:30', close: '16:00', midday: null },
+};
+const SESSION_LABELS = { open: '交易中', pre: '未开盘', post: '已收盘', midday: '午间休市', weekend: '休市' };
+
+// 'HH:MM' → 分钟数
+function marketHM(hm) {
+  const p = hm.split(':');
+  return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+}
+
+// 该市场在 now 时刻的本地 {weekday, hh, mm}（口径与旧实现同：Intl + formatToParts，零新依赖）
+function marketLocalParts(tz, now) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', weekday: 'short', hour: '2-digit', minute: '2-digit'
+  }).formatToParts(now);
+  const map = {};
+  parts.forEach(function (p) { map[p.type] = p.value; });
+  return { weekday: map.weekday, hh: map.hour, mm: map.minute };
+}
+
+// 单市场会话态：'weekend' | 'midday' | 'open' | 'pre' | 'post'
+// 边界含左不含右（09:30:00 算开盘、11:30:00 算午休）；周末按**该市场 local weekday** 判
+// （北京周六 03:00 = 美东周五 15:00 ⇒ A股「休市」+ 美股「交易中」，无需特例）。
+// ⚠️ now 必须可注入 —— 验收的 DST / 时段边界断言依赖它。
+function marketSessionOf(cfg, now) {
+  const p = marketLocalParts(cfg.tz, now);
+  if (p.weekday === 'Sat' || p.weekday === 'Sun') return 'weekend';
+  const t = marketHM(p.hh + ':' + p.mm);
+  if (cfg.midday && t >= marketHM(cfg.midday[0]) && t < marketHM(cfg.midday[1])) return 'midday';
+  if (t >= marketHM(cfg.open) && t < marketHM(cfg.close)) return 'open';
+  return t < marketHM(cfg.open) ? 'pre' : 'post';
+}
+
+// 两个市场的完整状态（label + 是否交易中）——**渲染与验收共用这一个函数**（同源断言的基础）
+function marketStateOf(now) {
+  const out = {};
+  Object.keys(MARKET_SESSIONS).forEach(function (k) {
+    const cfg = MARKET_SESSIONS[k];
+    const s = marketSessionOf(cfg, now);
+    out[k] = { session: s, open: s === 'open', label: cfg.label + ' ' + SESSION_LABELS[s] };
+  });
+  return out;
+}
+
+// 北京时间（第三行，口径不变）
+function marketBeijingHM(now) {
+  const p = marketLocalParts('Asia/Shanghai', now);
+  return p.hh + ':' + p.mm;
+}
+
+// 验收同源钩子（verify_ui 的 MS-* 用它取期望值，避免断言写死文案）；
+// 传 ISO 字符串即注入「假 now」—— DST 与时段边界回归靠它，别删。
+window.__marketSession = function (iso) {
   try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Shanghai', hourCycle: 'h23',
-      weekday: 'short', hour: '2-digit', minute: '2-digit'
-    }).formatToParts(new Date());
-    const map = {};
-    parts.forEach(function (p) { map[p.type] = p.value; });
-    const wdIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(map.weekday);
-    open = wdIdx >= 1 && wdIdx <= 5;
-    hh = map.hour;
-    mm = map.minute;
-  } catch (e) { /* 时区数据缺失：保留默认文案 */ }
-  st.textContent = open ? '市场已开盘' : '休市';
-  tm.textContent = '北京时间 ' + hh + ':' + mm;
-  if (dot) dot.classList.toggle('open', open);
+    const now = iso ? new Date(iso) : new Date();
+    const st = marketStateOf(now);
+    return { cn: st.cn, us: st.us, time: '北京时间 ' + marketBeijingHM(now) };
+  } catch (e) { return null; }
+};
+
+function updateMarketStatus() {
+  const stCn = document.getElementById('market-status-cn');
+  const stUs = document.getElementById('market-status-us');
+  const tm = document.getElementById('market-time');
+  const dotCn = document.getElementById('market-dot-cn');
+  const dotUs = document.getElementById('market-dot-us');
+  if (!stCn || !stUs || !tm) return;
+  let st = null, hhmm = '—:—';
+  try {
+    const now = new Date();
+    st = marketStateOf(now);
+    hhmm = marketBeijingHM(now);
+  } catch (e) { /* 时区数据缺失（ICU 无 tz）：保留占位文案，不崩 */ }
+  if (!st) return;
+  stCn.textContent = st.cn.label;
+  stUs.textContent = st.us.label;
+  tm.textContent = '北京时间 ' + hhmm;
+  if (dotCn) dotCn.classList.toggle('open', st.cn.open);
+  if (dotUs) dotUs.classList.toggle('open', st.us.open);
 }
 
 // === 刷新 ===

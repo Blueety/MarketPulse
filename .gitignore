@@ -48,3 +48,7 @@ data/marketpulse.db-shm
 # 用户自定义配置（不入库；用户可改阈值，系统回退内置默认）
 config.json
 tasks/*/tmp/
+
+# Agent 工作记忆（2026-09-16）：.workbuddy/ 存跨会话的项目记忆与技能产物
+# 不入库；⚠️ 它是工作记忆**本体**（不是缓存），本地目录不要删，否则丢历史日志
+.workbuddy/
