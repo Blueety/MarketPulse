@@ -478,14 +478,22 @@
     if (state.chart && state.chartMode === modeKey) {
       state.chart.data.labels = dates;
       state.chart.data.datasets = datasets;
-      // 吸附索引仍有效就**保留吸附态**（数据同源同序，线不动）；越界才清（下次 mousemove 会重吸）
-      var nPts = state.chart.data.datasets[0].data.length;
-      var src0 = state.chart.$crossSource;
-      if (src0 && src0.dataIdx >= nPts) {
-        state.chart.$crossY = null;
-        state.chart.$crossSource = null;
-      }
       state.chart.update("none");
+      // ⚠️ update() 之后元素坐标已重算 → 必须把吸附态**重新对齐到那个点**：
+      //    只"保留旧 $crossY"会让**虚线停在旧像素高度、圆点已移到新位置**（正是用户要的
+      //    "虚线要跟着吸附在线上的那个点走"）。索引越界/该点无值 → 清掉（下次 mousemove 重吸）。
+      var src0 = state.chart.$crossSource;
+      if (src0) {
+        var meta0 = state.chart.getDatasetMeta(src0.dsIndex);
+        var pt0 = (meta0 && meta0.data) ? meta0.data[src0.dataIdx] : null;
+        if (pt0 && isFinite(pt0.x) && isFinite(pt0.y)) {
+          state.chart.$crossY = pt0.y;          // 线跟着那个点走
+        } else {
+          state.chart.$crossY = null;
+          state.chart.$crossSource = null;
+        }
+        state.chart.draw();
+      }
       renderChartFoot(dates.length, multi);
       return;
     }

@@ -135,3 +135,49 @@
 - **本页 `#cn-chart-wrap` 的高度由 `.mac-chart-wrap` 的 `clamp()` 提供**：验收 `_expect_chart_wrap_h()` 是从 CSS 定义推导期望值，改 CSS clamp 系数**不需要改断言**；但改容器 class 必须同步。
 - **验证一律串行**：`pytest` 与 `verify_ui.py` 同跑会让图表超时/滚动采样假红。
 - 本次会话期间外部 auto-commit cron 仍会扫入改动（会话开始时 `docs/pitfalls.md`、`tasks/2026-09-14-context-merge/journal.md` 的既有改动已消失，即被其提交）；核对改动请用 `git log --oneline -- <path>`。
+
+---
+
+## 追加修复（2026-09-16，用户澄清："虚线要跟着吸附在线上的那个点走"）
+
+**这一轮有一半是"我自己的取证错了"，必须记清楚：**
+
+1. **先做的像素取证给了假阴性**：我按"线色 × 0.65"匹配 canvas 像素并设 `alpha > 100` 门槛，结果
+   `/macro` 的虚线行 n=586（alpha 114 恰好越过）而 `/macro/cn` 的同行 n=145 → 我误判"CN 页没画虚线"。
+   **真相**：1px 线画在**小数 y**（`$crossY = 368.0855`）上被抗锯齿摊到两行，
+   `0.65 × 0.5855 ≈ 0.38 → alpha 97`，**低于门槛 100**。门槛降到 30 后同一行
+   `n=708 / 1273（55%，正是 4on/4off）/ 首像素 = [x=33, 244, 32, 45, 97]` → **虚线一直在画，且就在吸附点上**。
+   → 教训：**门槛必须先按"目标色 × 覆盖率"算一遍期望 alpha 再定**；行内计数还要排除网格线
+   （网格线 100% 覆盖会把"虚线 50%"抬成 100%）。已写入 pitfalls。
+
+2. **用户的症状确实存在，但根因是"我上一轮的优化"**：上一轮把"每次重建"改成"原地换数据"后，
+   `chart.update("none")` 会**重算元素坐标**，而我把 `$crossY` 原样保留 →
+   **圆点移到新位置、虚线冻在旧像素高度** = 用户说的"虚线没跟着那个点走"。
+   修法：`update()` 之后按 `$crossSource` 取**新的** `meta.data[dataIdx].y` 回写 `$crossY`
+   （取不到才清态），保证不变量 `$crossY === 圆点 y`。
+   ⚠️ 与上一轮是**一对**：重建 → 线消失；沿用旧值 → 线冻住；只有**重新对齐**才对。
+
+3. **另一条被证伪的猜想**："吸到索引 33、探针算索引 32、差 25px" —— 已确认是
+   **偶数点 category 轴上 `frac_x=0.5` 落在相邻两点的精确中点**（探针的 `mid` 与它的 `px` 逐位相同）
+   造成的**断言口径歧义**，不是功能缺陷（对方会话其后已把 `CNC-2` 调绿）。
+
+**改动**：`web/static/macro_cn.js`（原地更新后重新对齐吸附态）；`verify_ui.py` 新增
+**CN-14**「数据原地更新后虚线仍钉在吸附点上（`$crossY == 圆点 y`）」。
+
+**运行时验证**（临时脚本落 `%TEMP%`，状态 + 像素双证）：
+```
+A 悬停后:              crossY=284.80  dotY=284.80  线==点:True
+B 程序化 refresh 后:    crossY=284.80  dotY=284.80  线==点:True
+C 切 1Y（数据换长）后:   crossY=258.62  dotY=258.62  线==点:True
+```
+`node --check` EXIT=0；`verify_ui.py` **ALL PASSED**（CN-12/13/14 全绿，对方 `CNC-2` 亦绿）。
+全量 `pytest`：662 passed + **1 flaky**（`test_phase9.py::TestMarketTrendChart::test_us_png_generated`，
+`assert None is not None` —— matplotlib 趋势图在 CPU 争用下超过 `CHART_TIMEOUT=5s`；**单独复跑 2.29s 通过**，
+与本次改动无关，属 pitfalls 已记录的"验证一律串行 / 图表超时假红"）。
+
+## 本轮交接口径
+
+- **我完全拥有并已提交**：`web/static/macro_cn.js` + 本 journal。
+- **仍含对方 crosshair-snap 未提交改动**：`verify_ui.py`（含我的 CN-12/13/14 与等待竞态修正）、
+  `docs/pitfalls.md`（含我 3 条新分节）、`docs/architecture.md`、`web/static/chart-crosshair.js`。
+  → 未单方面提交；等对方收尾后一并提交或由用户决定。
