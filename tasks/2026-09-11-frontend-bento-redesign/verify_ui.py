@@ -2489,6 +2489,391 @@ def assert_market_session(browser, url: str) -> None:
         ctx.close()
 
 
+# —— NA /macro 四态 + 因子 chip + Score 语义色（2026-09-16 macro-page-frontend-refactor 任务）——
+# ⚠️ 标签用 `NA-*` 而不是 plan 里写的 `N-*` —— `N-*` 已被首页「最新资讯」断言占用
+#    （N-1 / N-7 / N-11 / N-12a…），重名会让失败报告无法定位是哪一处红（同 `XC-*` 的既有先例）。
+#
+# 四态口径（prd §4 N1）：loading（模板里的静态 .skeleton）→ ok / empty（.mac-empty）/
+#   failed（.mac-empty.is-failed + 重试条）。
+# ⚠️ `.mac-empty` 类名与「数据暂缺」文案是**可测契约**（MX-12b 依赖）→ 失败态只能**追加** is-failed；
+#    本组断言必须同时看住"mac-empty 还在"。
+# ⚠️ 1500 悬挂轮等三个场景都用 `page.route` mock，**不为上游红项造数**（C4）：mock 只存在于验收脚本。
+
+NA_DATES = ["2026-09-14", "2026-09-15", "2026-09-16"]
+
+
+def _na_payload(level="risk_on", score100=68.8, impacts=(2, 1, -1, 1)):
+    """构造 `/api/macro` 的 mock payload。
+
+    ⚠️ 因子名必须与服务端一致（`web/app.py:766-794` 的 **风险偏好/美元/利率/商品**），
+       否则 N3 的"资产 chip"映射走不到真实分支（`FACTOR_ASSETS` 按名字子串匹配）。
+    ⚠️ `score100` 与 `level` **有意解耦**：NA-7 要用"level=risk_off 但 score100=80"这类**矛盾输入**
+       证明颜色由 level 推导、而不是由 `score100 > 50` 推导（PRD §3 E1 的核心缺陷）。
+    """
+    names = ["风险偏好", "美元", "利率", "商品"]
+    units = ["", "%", "pp", "%"]
+    factors = [{"name": names[i], "value": 0.5, "unit": units[i], "impact": impacts[i], "note": "mock"}
+               for i in range(len(names))]
+    return {
+        "stocks": [{"symbol": "DX-Y.NYB", "label": "美元指数", "value": 98.1, "change_pct": 0.4},
+                   {"symbol": "^TNX", "label": "10Y美债", "value": 4.97, "change_pct": -0.2}],
+        "trend": {"dates": NA_DATES,
+                  "series": [{"key": "dx-y.nyb", "raw": [100.0, 101.0, 102.0]},
+                             {"key": "^tnx", "raw": [4.90, 4.95, 4.97]},
+                             {"key": "cl=f", "raw": [70.0, 71.0, 72.0]},
+                             {"key": "gc=f", "raw": [3300.0, 3310.0, 3320.0]}]},
+        "regime": {"level": level, "score": 5, "score100": score100,
+                   "normalized": (score100 / 100.0) * 2 - 1, "factors": factors,
+                   "basis": "mock 口径说明"},
+        "correlation": [{"pair": "美元 ↔ 黄金", "r": -0.62, "n": 250},
+                        {"pair": "原油 ↔ 美债", "r": 0.31, "n": 250}],
+        "history_regime": {"days": 30, "risk_on": 12, "neutral": 10, "risk_off": 8},
+    }
+
+
+NA_ECON = {
+    "as_of": "2026-08",
+    "series": [{"key": "cpi", "label": "CPI-U", "unit": "index", "latest": 320.5, "date": "2026-08",
+                "yoy": 2.8, "prev_yoy": 2.6, "direction": "up", "history": []}],
+    "quadrant": "reflation", "quadrant_label": "再通胀",
+    "inflation_axis": "up", "growth_axis": "expanding",
+    "basis": {"inflation": "CPI 同比", "growth": "就业"},
+}
+
+NA_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const rgbVar = (name) => {
+    const t = document.createElement('div');
+    t.style.backgroundColor = 'var(' + name + ')';
+    t.style.position = 'absolute'; t.style.visibility = 'hidden';
+    document.body.appendChild(t);
+    const c = getComputedStyle(t).backgroundColor;
+    t.remove();
+    return c;
+  };
+  const rows = [...document.querySelectorAll('#macro-factors .mac-factor-row')];
+  const imgs = [...document.querySelectorAll('#macro-factors .fr-chip img')];
+  const score = q('#regime-score'), level = q('#regime-level'), fac = q('#mac-factors');
+  let slack = null;
+  if (fac) {
+    const cs = getComputedStyle(fac);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const head = fac.querySelector('.mac-card-head');
+    const headH = head ? head.getBoundingClientRect().height : 0;
+    let inner = 0;
+    [...fac.children].forEach((c) => { if (c !== head) inner += c.getBoundingClientRect().height; });
+    slack = Math.round(fac.getBoundingClientRect().height - headH - inner - pad);
+  }
+  const bar = q('#mac-fail-bar');
+  const retry = q('#mac-retry');
+  const st = (typeof window.__macroState === 'function') ? window.__macroState() : null;
+  return {
+    skeletons: document.querySelectorAll('.skeleton').length,
+    skelVisible: [...document.querySelectorAll('.skeleton')].filter((n) => n.offsetParent !== null).length,
+    skelInChart: document.querySelectorAll('#macro-chart-wrap .skeleton').length,
+    hasHook: typeof window.__macroState === 'function',
+    blocks: st ? st.blocks : null,
+    retryUsed: st ? st.retryUsed : null,
+    failBarShown: bar ? !bar.classList.contains('hidden') : null,
+    failBarDisplay: bar ? getComputedStyle(bar).display : null,
+    failMsg: (q('#mac-fail-msg') || {}).textContent || null,
+    retry: retry ? { text: retry.textContent, disabled: !!retry.disabled } : null,
+    emptyCount: document.querySelectorAll('.mac-empty').length,
+    // ⚠️ 排除失败条自身：它的 `<p class="mac-empty is-failed">` 是**模板里常驻**的（靠 .hidden 控制显隐）
+    //    → 不排除的话"成功态不残留 is-failed"这条断言永远假红（实测踩过）。
+    emptyFailed: [...document.querySelectorAll('.mac-empty.is-failed')]
+      .filter((n) => !n.closest('#mac-fail-bar')).length,
+    econFailed: !!q('#macro-econ .mac-empty.is-failed'),
+    factorsFailed: !!q('#macro-factors .mac-empty.is-failed'),
+    econEmpty: !!q('#macro-econ .mac-empty'),
+    chartFailHidden: (q('#macro-chart-fail') || {}).classList
+        ? q('#macro-chart-fail').classList.contains('hidden') : null,
+    score: score ? { text: score.textContent.trim(), cls: score.className,
+                     color: getComputedStyle(score).color } : null,
+    level: level ? { text: level.textContent.trim(), cls: level.className } : null,
+    rowCount: rows.length,
+    chipsPerRow: rows.map((r) => r.querySelectorAll('.fr-chip').length),
+    imgPerRow: rows.map((r) => r.querySelectorAll('.fr-chip img').length),
+    badges: rows.map((r) => (r.querySelector('.fr-badge') || {}).textContent || null),
+    imgSrc: imgs.map((i) => i.getAttribute('src')),
+    imgBroken: imgs.filter((i) => !i.complete || i.naturalWidth === 0).length,
+    factorsSlack: slack,
+    green: rgbVar('--green'), red: rgbVar('--red'), muted: rgbVar('--text-muted'),
+    scrollW: document.scrollingElement.scrollWidth, innerW: window.innerWidth,
+  };
+}
+"""
+
+# 合法映射（**独立于 macro.js 的 LEVEL_CLASS**，即"需求"本身）：level → score 的 class
+NA_LEVEL_CLASS = {"risk_on": "up", "risk_off": "down", "neutral": "flat", "none": "flat"}
+
+# 本组"成功态"统一用的固定 payload（4 因子齐全 → N3 的素材映射走真实分支）
+NA_OK_PAYLOAD = _na_payload(level="risk_on", score100=68.8)
+
+
+def _na_open(browser, url: str, handler, *, timeout_ms=None, viewport=(1440, 900)):
+    """开一个 /macro 独立 context 并挂 mock。返回 (ctx, page, console_msgs, pageerrors)。
+
+    handler(pattern → route) 由调用方给：可 fulfill(200/json) / fulfill(500) / **不结算**（悬挂）。
+    """
+    ctx = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]},
+                              device_scale_factor=1)
+    page = ctx.new_page()
+    msgs: list[tuple] = []
+    pageerrors: list[str] = []
+    page.on("console", lambda m: msgs.append((m.type, m.text)))
+    page.on("pageerror", lambda e: pageerrors.append(str(e)))
+    if timeout_ms is not None:
+        page.add_init_script("window.__macroTimeoutMs = %d;" % timeout_ms)
+    page.route("**/api/macro", lambda r: handler("macro", r))
+    page.route("**/api/econ", lambda r: handler("econ", r))
+    return ctx, page, msgs, pageerrors
+
+
+def assert_macro_states(browser, url: str) -> None:
+    """NA-1~NA-9 `/macro` 四态 + 因子 chip + Score 语义色（2026-09-16 macro-page-frontend-refactor）。
+
+    NA-1 loading（悬挂 + 短超时）：静态骨架屏在场
+    NA-2 **超时 → failed**（R1 核心护栏：不得停在骨架屏；上游 403 常态下这决定体验比现状好还是更糟）
+    NA-3 500 → failed + 重试真的重发请求 + 用满上限后禁用（R5：失败路径不得产生 console.error）
+    NA-4 成功 → 骨架清零（N2 验收）、fail-bar 收起
+    NA-5 因子 chip（N3）：每行 ≥1 chip、有素材的资产渲染 `<img>` 且 naturalWidth>0、无破图
+    NA-6 `#mac-factors` slack ≤ 20（M-6 上限；N3 加内容后须实测并记录前后值）
+    NA-7 `#regime-score` 颜色**由 level 同源推导**（N4）：含两组"score100 与 level 矛盾"的反向护栏
+    NA-8 `/macro/cn` 零影响（R3）：新类名/新元素都不出现，共享 `.mac-factor-row` 网格未被改
+    NA-9 双主题截图留档（V6）
+    """
+    print("\n--- NA 宏观页四态 / 因子 chip / Score 语义色（macro-page-frontend-refactor）---")
+
+    # ---------- NA-1 / NA-2：悬挂 → loading → 超时切 failed ----------
+    held: list = []
+
+    def hanging(_which, route):
+        held.append(route)          # ★ 不结算 → 请求悬挂，页面停在 loading
+
+    ctx, page, msgs, pageerrors = _na_open(browser, url, hanging, timeout_ms=2000)
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(500)
+        a1 = page.evaluate(NA_JS)
+        page.screenshot(path=str(OUT_DIR / "shot-na-loading.png"), full_page=True)
+        print(f"  [悬挂 t=0.5s] skel={a1['skeletons']} visible={a1['skelVisible']} "
+              f"chart={a1['skelInChart']} blocks={a1['blocks']}")
+        check(a1["hasHook"] and a1["skelVisible"] >= 8,
+              "NA-1 loading 期静态骨架屏在场（可见 ≥8 个）", (a1["skeletons"], a1["skelVisible"]))
+        check(a1["skelInChart"] >= 1, "NA-1b 主图区有自己的骨架屏（不改变容器高度）", a1["skelInChart"])
+        check(a1["failBarShown"] is False and a1["failBarDisplay"] == "none",
+              "NA-1c loading 期不显示失败条", (a1["failBarShown"], a1["failBarDisplay"]))
+        check(a1["hasHook"] is True and not a1["blocks"],
+              "NA-1d loading 期各块尚未结算（blocks 为空）", (a1["hasHook"], a1["blocks"]))
+
+        page.wait_for_timeout(2700)          # 越过注入的 2s 客户端超时
+        a2 = page.evaluate(NA_JS)
+        page.screenshot(path=str(OUT_DIR / "shot-na-failed.png"), full_page=True)
+        print(f"  [悬挂 t>超时] skel={a2['skeletons']} failBar={a2['failBarShown']}/{a2['failBarDisplay']} "
+              f"blocks={sorted(set((a2['blocks'] or {}).values()))} retry={a2['retry']}")
+        check(a1["skelVisible"] >= 8 and a2["skeletons"] == 0 and a2["skelVisible"] == 0
+              and a2["skelInChart"] == 0,
+              "NA-2 超时后骨架屏**全部**撤掉（不得永远停在骨架屏，R1）",
+              (a1["skelVisible"], a2["skeletons"], a2["skelVisible"], a2["skelInChart"]))
+        check(a2["failBarShown"] is True and a2["failBarDisplay"] == "flex",
+              "NA-2b 超时 → 失败条出现（display 由 :not(.hidden) 承担）",
+              (a2["failBarShown"], a2["failBarDisplay"], a2["failMsg"]))
+        # ⚠️ 必须显式判 None：改动前页面没有 __macroState 钩子（blocks=None），
+        #    `len(None)` 会直接把整组断言炸掉 —— 红跑要"报红"，不是"崩溃"。
+        check(bool(a2["blocks"]) and len(a2["blocks"]) == 11
+              and all(v == "failed" for v in a2["blocks"].values()),
+              "NA-2c 两个取数源的所有块都结算为 failed（11 块）", a2["blocks"])
+        check(a2["retry"] is not None and a2["retry"]["disabled"] is False,
+              "NA-2d 失败态给可用的重试按钮", a2["retry"])
+        check(a2["emptyCount"] >= 1 and a2["emptyFailed"] >= 1 and a2["econFailed"]
+              and a2["factorsFailed"],
+              "NA-2e 失败态沿用 .mac-empty（块级也追加 is-failed，类名/文案不换）",
+              (a2["emptyCount"], a2["emptyFailed"], a2["econFailed"], a2["factorsFailed"]))
+        # R5：超时是"有意的容错动作" → 只能 warn（否则撞 M-9b 的 console error = 0）
+        # ⚠️ 必须带上"降级确实发生了"这个前置：改动前页面**没有** 2s 超时（写死 15s），
+        #    此处若只判"无 error"会**真空变绿**（红跑实测过）。
+        settled = bool(a2["blocks"]) and all(v == "failed" for v in a2["blocks"].values())
+        our_err = [t for (ty, t) in msgs if ty == "error" and "[macro]" in t]
+        check(settled and not our_err and not pageerrors,
+              "NA-2f 超时降级路径只 warn 不 error（M-9b 护栏）",
+              (settled, our_err[:2], pageerrors[:2]))
+    finally:
+        for r in held:            # 结算悬挂的 route：否则 context 关闭时 Playwright 会打一堆取消堆栈
+            try:
+                r.abort()
+            except Exception:  # noqa: BLE001
+                pass
+        ctx.close()
+
+    # ---------- NA-3：500 → failed + 重试真的重发 + 上限禁用 ----------
+    hits: list = []
+
+    def bad(_which, route):
+        hits.append(route.request.url)
+        route.fulfill(status=500, content_type="text/html", body="boom")
+
+    ctx, page, msgs, pageerrors = _na_open(browser, url, bad)
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(1200)
+        b1 = page.evaluate(NA_JS)
+        n0 = len(hits)
+        check(b1["failBarShown"] is True and bool(b1["blocks"])
+              and all(v == "failed" for v in b1["blocks"].values()),
+              "NA-3 上游 500 → 失败态（含默认 15s 超时之外的错误分支）", b1["blocks"])
+        check(b1["retry"] is not None and not b1["retry"]["disabled"],
+              "NA-3b 500 后重试按钮可用", b1["retry"])
+        btns = []
+        for i in range(3):
+            # ⚠️ 容忍按钮不存在（改动前页面没有它）→ 返回 False 而不是抛异常，否则红跑会崩在整组中间
+            page.evaluate(
+                "() => { const b = document.getElementById('mac-retry');"
+                " if (!b || b.disabled) return false; b.click(); return true; }")
+            page.wait_for_timeout(500)
+            st = page.evaluate(NA_JS)
+            btns.append((len(hits), st["retryUsed"],
+                         st["retry"]["disabled"] if st["retry"] else None))
+        print(f"  [重试] 请求数/重试计数/禁用 -> {btns}")
+        check(all(b[0] > n0 for b in btns), "NA-3c 点重试后**真的**再次发起请求", (n0, btns))
+        check(btns[-1][1] == 3 and btns[-1][2] is True,
+              "NA-3d 重试 3 次后按钮禁用（不无限打上游）", btns[-1])
+        our_err = [t for (ty, t) in msgs if ty == "error" and "[macro]" in t]
+        check(not our_err and not pageerrors,
+              "NA-3e 失败/重试路径只 warn 不 error（M-9b 护栏）", (our_err[:2], pageerrors[:2]))
+    finally:
+        ctx.close()
+
+    # ---------- NA-4 / NA-5 / NA-6：成功 → 骨架清零 + chip + slack ----------
+    def ok(which, route):
+        payload = NA_OK_PAYLOAD if which == "macro" else NA_ECON
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps(payload, ensure_ascii=False))
+
+    ctx, page, msgs, pageerrors = _na_open(browser, url, ok)
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(1200)
+        d = page.evaluate(NA_JS)
+        print(f"  [成功] skel={d['skeletons']} blocks={sorted(set((d['blocks'] or {}).values()))} "
+              f"chips/行={d['chipsPerRow']} img/行={d['imgPerRow']} badges={d['badges']} "
+              f"slack={d['factorsSlack']}px")
+        check(d["skeletons"] == 0 and d["skelVisible"] == 0 and bool(d["blocks"])
+              and all(v == "ok" for v in d["blocks"].values()),
+              "NA-4 取数成功后全页骨架清零且各块结算为 ok（N2 验收；不留永久 shimmer）",
+              (d["skeletons"], d["skelVisible"], sorted(set((d["blocks"] or {}).values()))))
+        check(d["failBarShown"] is False and not d["emptyFailed"],
+              "NA-4b 成功态不显示失败条、也不残留 is-failed",
+              (d["failBarShown"], d["emptyFailed"]))
+
+        check(d["rowCount"] == 4 and all(c >= 1 for c in d["chipsPerRow"]),
+              "NA-5 每行因子都有资产 chip（≥1）", (d["rowCount"], d["chipsPerRow"]))
+        check(len(d["badges"]) == d["rowCount"] and all(b for b in d["badges"]),
+              "NA-5b 每行都带方向 Badge（受益/承压/中性）", d["badges"])
+        check(d["imgSrc"] and all("/static/icons/" in s for s in d["imgSrc"]),
+              "NA-5c 有素材的资产渲染既有 4 个 SVG 之一", d["imgSrc"])
+        check(bool(d["imgSrc"]) and d["imgBroken"] == 0,
+              "NA-5d 有图标且无破图（离线时 onerror 自移除）", (len(d["imgSrc"]), d["imgBroken"]))
+        # 美元(dollar) / 利率(bond) / 商品→原油+能源(oil) 应出图标；风险偏好 → 纯文字 chip（无素材）
+        # ⚠️ 下标访问前先判长度（行数为 0 时不炸整组）
+        check(len(d["imgPerRow"]) == 4 and d["imgPerRow"][0] == 0 and d["imgPerRow"][1] >= 1
+              and d["imgPerRow"][2] >= 1 and d["imgPerRow"][3] >= 1,
+              "NA-5e 风险偏好行无素材→纯文字 chip；美元/利率/商品行有图标",
+              d["imgPerRow"])
+        check(d["factorsSlack"] is not None and d["factorsSlack"] <= 20,
+              "NA-6 加 chip 后 #mac-factors 留白仍 ≤20px（M-6 上限；基线 12px）",
+              d["factorsSlack"])
+    finally:
+        ctx.close()
+
+    # ---------- NA-7：Score 语义色与 level 同源（含矛盾输入的反向护栏）----------
+    # (level, score100, 期望 class, 期望色键, 说明)
+    cases = [
+        ("risk_on", 68.8, "up", "green", "正常一致：Risk-On 且 score100>50"),
+        ("risk_off", 80.0, "down", "red", "★反向护栏：score100=80>50 但 level=risk_off → 必须**红**"),
+        ("risk_on", 35.0, "up", "green", "★反向护栏：score100=35<50 但 level=risk_on → 必须**绿**"),
+        ("neutral", 50.0, "flat", "muted", "中性不得染绿/染红"),
+    ]
+    for (lvl, sc100, want_cls, want_color, note) in cases:
+        payload = _na_payload(level=lvl, score100=sc100)
+        ctx, page, msgs, pageerrors = _na_open(
+            browser, url,
+            lambda which, route, _p=payload: route.fulfill(
+                status=200, content_type="application/json",
+                body=json.dumps(_p if which == "macro" else NA_ECON, ensure_ascii=False)))
+        try:
+            page.goto(url + "macro", wait_until="load")
+            page.wait_for_timeout(1000)
+            d = page.evaluate(NA_JS)
+            got_cls = (d["score"] or {}).get("cls", "")
+            lv_cls = (d["level"] or {}).get("cls", "").split()[-1]
+            # ① score 的 class 必须是 level 的**同源映射**（用需求表独立校验，不读 macro.js 的映射）
+            # ② 实际渲染色必须等于该 class 对应的 token 色
+            ok_pair = got_cls.split()[-1] == want_cls == NA_LEVEL_CLASS.get(lv_cls, "flat")
+            ok_color = (d["score"] or {}).get("color") == d[want_color]
+            if want_cls == "flat":
+                ok_color = ok_color and (d["score"] or {}).get("color") not in (d["green"], d["red"])
+            check(ok_pair and ok_color,
+                  f"NA-7 {lvl}/score100={sc100} → score class={want_cls} 且色=--{want_color}（{note}）",
+                  ((d["score"] or {}).get("cls"), (d["score"] or {}).get("color"), lv_cls),
+                  (f"score-num {want_cls}", d[want_color]))
+        finally:
+            ctx.close()
+
+    # ---------- NA-8：/macro/cn 零影响 ----------
+    CN_NA_JS = r"""
+    () => {
+      const fac = document.querySelector('#cn-factors .mac-factor-row');
+      return {
+        skeletons: document.querySelectorAll('.skeleton').length,
+        failBar: document.querySelectorAll('#mac-fail-bar').length,
+        chips: document.querySelectorAll('.fr-chip').length,
+        badges: document.querySelectorAll('.fr-badge').length,
+        failed: document.querySelectorAll('.is-failed').length,
+        emptyColor: (() => { const e = document.querySelector('#cn-econ .mac-empty, #cn-rate-list .mac-empty');
+          return e ? getComputedStyle(e).color : null; })(),
+        rowCols: fac ? getComputedStyle(fac).gridTemplateColumns.split(/\s+/).slice(0, 2) : null,
+        scrollW: document.scrollingElement.scrollWidth, innerW: window.innerWidth,
+      };
+    }
+    """
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        pg = ctx.new_page()
+        pg.goto(url + "macro/cn", wait_until="load")
+        pg.wait_for_timeout(9000)            # 中国页分组加载 ≈10s
+        cn = pg.evaluate(CN_NA_JS)
+        pg.screenshot(path=str(OUT_DIR / "shot-na-cn.png"), full_page=True)
+        print(f"  [CN] skel={cn['skeletons']} chips={cn['chips']} badges={cn['badges']} "
+              f"failed={cn['failed']} rowCols={cn['rowCols']}")
+        check(cn["skeletons"] == 0 and cn["chips"] == 0 and cn["badges"] == 0
+              and cn["failBar"] == 0 and cn["failed"] == 0,
+              "NA-8 /macro/cn 零影响（新骨架/失败条/chip 都不出现在中国页）",
+              (cn["skeletons"], cn["chips"], cn["badges"], cn["failBar"], cn["failed"]))
+        check(cn["rowCols"] == ["72px", "70px"],
+              "NA-8b 共享 .mac-factor-row 网格未被改（CN 页仍是 72px/70px）", cn["rowCols"])
+        check(cn["scrollW"] == cn["innerW"], "NA-8c /macro/cn 无横向溢出",
+              (cn["scrollW"], cn["innerW"]))
+    finally:
+        ctx.close()
+
+    # ---------- NA-9：双主题截图留档（V6） ----------
+    for theme in ("light", "dark"):
+        ctx, page, msgs, pageerrors = _na_open(browser, url, ok)
+        try:
+            page.add_init_script("try { localStorage.setItem('mp-theme', '%s'); } catch (e) {}" % theme)
+            page.goto(url + "macro", wait_until="load")
+            page.wait_for_timeout(1200)
+            page.screenshot(path=str(OUT_DIR / f"shot-na-macro-{theme}.png"), full_page=True)
+            dt = page.evaluate(NA_JS)
+            check(dt["skeletons"] == 0 and bool(dt["imgSrc"]),
+                  f"NA-9 {theme} 主题下四态/chip 同样成立（截图留档）",
+                  (dt["skeletons"], len(dt["imgSrc"])))
+        finally:
+            ctx.close()
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -3153,6 +3538,7 @@ def main() -> int:
             assert_crosshair_dpr2(browser, url)  # CS-D* DPR=2 取证（默认 DPR=1 测不出坐标系混用）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
+            assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 

@@ -61,6 +61,96 @@
 
   var state = { macro: null, econ: null, range: "1y", pick: "dx-y.nyb", primary: "dx-y.nyb", chart: null };
 
+  // ---- N1/N2 四态 + 骨架屏（2026-09-16 macro-page-frontend-refactor）----
+  // 四态：loading（模板里的静态 .skeleton）/ ok / empty（.mac-empty）/ failed（.mac-empty.is-failed + 重试条）
+  // ⚠️ `.mac-empty` 类名与「数据暂缺」文案是**可测契约**（verify_ui MX-12b 等）→ 失败态只能**追加** is-failed，不得改名。
+  // ⚠️ shimmer 只用于 loading：把"取不到数"做成永久动画 = 用动画掩盖故障（pitfalls 专条）。
+  var RETRY_MAX = 3;
+  var retryUsed = 0;
+  var failMacro = false, failEcon = false;
+  var blocks = {};                     // block -> 'loading' | 'ok' | 'failed'（window.__macroState 可观测）
+  var SKEL_OF_SOURCE = {               // 取数源 → 结算时要撤掉的骨架块（模板里以 data-skel 标注）
+    macro: ["level", "quadrant", "score", "rfactors", "asof", "chart", "vars", "factors", "rel", "history"],
+    econ: ["econ"]
+  };
+  // 块 → 容器 id（失败态要把容器里的 .mac-empty 标成 is-failed，而不只是靠顶部失败条）
+  var BLOCK_HOST = {
+    level: "regime-level", quadrant: "regime-quadrant", score: "regime-score",
+    rfactors: "regime-factors", asof: "macro-asof", chart: "macro-chart-wrap",
+    vars: "macro-vars", factors: "macro-factors", rel: "macro-rel",
+    history: "macro-history", econ: "macro-econ"
+  };
+
+  // 客户端超时可注入：验收用 `window.__macroTimeoutMs` 把它压到 2s，从而**真实走一遍** AbortController 分支
+  // （R1 的核心护栏："上游挂了不能永远停在骨架屏"。生产不设置 → 15000ms）
+  function fetchTimeoutMs() {
+    return (typeof window.__macroTimeoutMs === "number" && window.__macroTimeoutMs > 0)
+      ? window.__macroTimeoutMs : 15000;
+  }
+
+  function clearSkel(block) {
+    var nodes = document.querySelectorAll('[data-skel="' + block + '"]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]);
+    }
+  }
+
+  function settleSource(source) {
+    var list = SKEL_OF_SOURCE[source] || [];
+    for (var i = 0; i < list.length; i++) { clearSkel(list[i]); }
+  }
+
+  function markSource(source, st) {
+    var list = SKEL_OF_SOURCE[source] || [];
+    for (var i = 0; i < list.length; i++) { blocks[list[i]] = st; }
+  }
+
+  // 失败态可见化：给该源各容器里的 `.mac-empty` **追加** is-failed（类名/文案都不换）
+  // ⚠️ 只加类不改文案：`.mac-empty` 与「数据暂缺」是 verify_ui 的可测契约（MX-12b）
+  // ⚠️ 必须在 **renderAll 之后**统一补挂 —— 渲染会重建容器 innerHTML；两个取数源各自结算，
+  //    谁后渲染谁就把先标记的 is-failed 抹掉（实测：macro 标完、econ 的 renderAll 又清空 factors 容器）
+  function markFailedEmpties(source) {
+    (SKEL_OF_SOURCE[source] || []).forEach(function (b) {
+      var host = el(BLOCK_HOST[b]);
+      if (!host) return;
+      var empties = host.querySelectorAll(".mac-empty");
+      for (var i = 0; i < empties.length; i++) { empties[i].classList.add("is-failed"); }
+    });
+  }
+
+  // 失败条：任一取数源失败才出现（重试按钮绑定见 bindRetry）。
+  // ⚠️ 显示语义靠 CSS 的 `#mac-fail-bar:not(.hidden)` —— 不要给 #mac-fail-bar 写 display（id 特异性会盖掉 .hidden）
+  function setFailBar() {
+    var bar = el("mac-fail-bar"), msg = el("mac-fail-msg");
+    var failed = [];
+    if (failMacro) failed.push("/api/macro");
+    if (failEcon) failed.push("/api/econ");
+    if (msg) msg.textContent = failed.length ? "数据暂缺 · " + failed.join(" / ") + " 获取失败" : "数据获取失败";
+    if (bar) bar.classList.toggle("hidden", failed.length === 0);
+  }
+
+  // 分级日志：AbortError（超时/取消）只 warn —— 它是**有意**的容错动作，报成 console.error 会撞
+  // M-9b「/macro console error = 0」（pitfalls 既有处置）。非 AbortError 同样走 warn：
+  // 上游 4xx/5xx 是可预期的降级条件，且页面已用失败态把它可见化。
+  function logFetch(tag, e) {
+    var name = (e && e.name) || "";
+    var brief = (e && e.message) ? e.message : String(e);
+    console.warn("[macro] " + tag + (name === "AbortError" ? " 超时/取消" : " 失败") + "：" + name + " " + brief);
+  }
+
+  // 验收可观测挂钩（verify_ui NA-* 用；只读，不影响渲染）
+  window.__macroState = function () {
+    var bar = el("mac-fail-bar");
+    return {
+      blocks: blocks, failMacro: failMacro, failEcon: failEcon,
+      retryUsed: retryUsed, retryMax: RETRY_MAX, retryDisabled: !!(el("mac-retry") || {}).disabled,
+      failBarShown: bar ? !bar.classList.contains("hidden") : null,
+      skeletons: document.querySelectorAll(".skeleton").length,
+      skelVisible: [].slice.call(document.querySelectorAll(".skeleton"))
+        .filter(function (n) { return n.offsetParent !== null; }).length
+    };
+  };
+
   function el(id) { return document.getElementById(id); }
 
   function escapeHtml(s) {
@@ -454,6 +544,8 @@
     neutral: "Neutral 中性",
     risk_off: "Risk-Off 风险规避"
   };
+  // N4：level → 语义色 class 的**唯一映射**（渲染与断言共用同一事实来源）
+  var LEVEL_CLASS = { risk_on: "up", risk_off: "down", neutral: "flat" };
 
   function renderRegime() {
     var m = state.macro || {};
@@ -472,7 +564,14 @@
         : "四象限：数据暂缺（/api/econ 不可用）";
     }
     var sc = el("regime-score");
-    if (sc) sc.textContent = r.score100 == null ? "—" : fmt(r.score100, 1);
+    if (sc) {
+      sc.textContent = r.score100 == null ? "—" : fmt(r.score100, 1);
+      // N4：颜色**必须由服务端 level 同源推导**（与 #regime-level 同一事实来源）。
+      //     ⚠️ 严禁写成"score100 > 50 就染绿"：score100 = (normalized+1)/2*100 是 **0~100、中性 50**
+      //        （web/app.py），不是 ±2 的分值区间 —— 按"正/负分"上色会让 50 也偏绿，
+      //        且可能出现"文案 Risk-Off、数字染绿"这类**标注与行为不同源**的缺陷。
+      sc.className = "score-num " + (LEVEL_CLASS[r.level] || "flat");
+    }
     var basis = el("regime-basis");
     if (basis) basis.textContent = r.basis || "";
 
@@ -530,6 +629,48 @@
     return "中性（不构成方向）";
   }
 
+  // ---- N3（2026-09-16）：影响资产 → 方向 Badge + 资产图标 chip（复用既有 4 个 SVG，**零新增素材**）----
+  // 素材映射：美元→dollar / 利率·美债→bond / 黄金→gold / 原油·能源→oil；
+  //   「股票 / 信用 / 材料 / 长久期」**无对应素材 → 纯文字 chip**（不新增 SVG）。
+  //   颜色复用本页主图同款 --c-* token ⇒ chip 与图表里那条线同色（同一资产同一视觉编码）。
+  var ASSET_ICON = {
+    "美元": { icon: "dollar", color: "--c-ixic" },
+    "美债": { icon: "bond",   color: "--c-move" },
+    "利率": { icon: "bond",   color: "--c-move" },
+    "黄金": { icon: "gold",   color: "--c-gld" },
+    "原油": { icon: "oil",    color: "--c-vxn" },
+    "能源": { icon: "oil",    color: "--c-vxn" }
+  };
+  // 识别用词表（含无素材的资产 —— 它们也要出 chip，只是没有 icon）
+  var ASSET_TOKENS = ["避险资产", "风险资产", "长久期", "美元", "美债", "黄金", "原油",
+                      "能源", "股票", "信用", "材料"];
+
+  function assetChipHtml(name) {
+    var m = ASSET_ICON[name];
+    var ico = m
+      ? '<i class="ico" style="background:var(' + m.color + ')">' +
+        '<img class="ico-flag-img" src="/static/icons/' + m.icon + '.svg" alt="" onerror="this.remove()"></i>'
+      : "";
+    return '<span class="fr-chip">' + ico + escapeHtml(name) + "</span>";
+  }
+
+  // 「影响资产」短语 → chip：按 `·` 分句 → 每句判方向（受益/承压）→ 句内按词表取资产 token
+  // （句内一个 token 都没命中时，整句作为**一个文字 chip**，绝不丢信息）
+  function assetChipsHtml(text) {
+    var out = [];
+    String(text || "").split("·").forEach(function (raw) {
+      var s = raw.replace(/[（）()]/g, " ").trim();
+      if (!s) return;
+      var dir = s.indexOf("受益") >= 0 ? "pos" : (s.indexOf("承压") >= 0 ? "neg" : "flat");
+      var badge = dir === "pos" ? "受益" : (dir === "neg" ? "承压" : "中性");
+      var names = ASSET_TOKENS.filter(function (t) { return s.indexOf(t) >= 0; });
+      if (!names.length) names = [s.replace(/(受益|承压|资产|\s)+/g, "") || s];
+      out.push('<span class="fr-badge fr-badge-' + dir + '">' + badge + "</span>" +
+               names.map(assetChipHtml).join(""));
+    });
+    return out.join("");
+  }
+
   function renderFactors() {
     var box = el("macro-factors");
     if (!box) return;
@@ -540,7 +681,7 @@
       return '<li class="mac-factor-row"><span class="fr-name">' + escapeHtml(f.name) + "</span>" +
         '<span class="fr-dir ' + cls(f.impact) + '">' + dir + "</span>" +
         '<span class="fr-note">' + escapeHtml(f.note || "") + "</span>" +
-        '<span class="fr-assets">影响：' + factorAssets(f.name, f.impact) + "</span></li>";
+        '<span class="fr-assets">' + assetChipsHtml(factorAssets(f.name, f.impact)) + "</span></li>";
     }).join("");
   }
 
@@ -676,6 +817,9 @@
     renderHistory();
     renderEcon();
     renderChart();
+    // 失败态修饰：**渲染之后**再补挂（渲染会重建 innerHTML；两个源各自结算，否则互相抹掉）
+    if (failMacro) markFailedEmpties("macro");
+    if (failEcon) markFailedEmpties("econ");
     var el2 = el("macro-asof");
     if (el2) {
       var dates = ((state.macro || {}).trend || {}).dates || [];
@@ -688,28 +832,72 @@
   // ---- 取数（两个端点并行；任一失败不影响另一个）----
   function getJSON(url, timeoutMs) {
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, timeoutMs || 15000);
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, timeoutMs || fetchTimeoutMs());
     return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        // 非 2xx 直接判失败：此前无条件 r.json() → 500 的响应体（HTML）会抛 SyntaxError，
+        // 报错信息完全指不到"上游返回了 500"这个事实（降级原因不可见）
+        if (!r.ok) { var err = new Error("HTTP " + r.status); err.status = r.status; throw err; }
+        return r.json();
+      })
       .then(function (d) { clearTimeout(timer); return d; })
       .catch(function (e) { clearTimeout(timer); throw e; });
   }
 
   function loadAll() {
-    getJSON("/api/macro", 15000)
-      .then(function (d) { state.macro = d || {}; renderAll(); })
+    setFailBar();                       // 重试时先收起旧失败条；新结果会再决定是否显示
+    getJSON("/api/macro", fetchTimeoutMs())
+      .then(function (d) {
+        state.macro = d || {};
+        failMacro = false;
+        settleSource("macro");
+        markSource("macro", "ok");
+        renderAll();
+        setFailBar();
+      })
       .catch(function (e) {
-        console.error("[macro] /api/macro failed:", e);
+        logFetch("/api/macro", e);
         state.macro = {};
-        renderAll();
+        failMacro = true;
+        markSource("macro", "failed");
+        renderAll();                    // 走既有 .mac-empty 降级（失败态由 renderAll 统一补 is-failed）
+        settleSource("macro");          // renderAll 覆盖了多数容器，图表骨架须显式撤掉（R1：不得停在骨架屏）
+        setFailBar();
       });
-    getJSON("/api/econ", 15000)
-      .then(function (d) { state.econ = d || {}; renderAll(); })
+    getJSON("/api/econ", fetchTimeoutMs())
+      .then(function (d) {
+        state.econ = d || {};
+        failEcon = false;
+        settleSource("econ");
+        markSource("econ", "ok");
+        renderAll();
+        setFailBar();
+      })
       .catch(function (e) {
-        console.error("[econ] /api/econ failed:", e);
+        logFetch("/api/econ", e);
         state.econ = {};                        // 模块 6/7 显示「数据暂缺」，页面不崩
+        failEcon = true;
+        markSource("econ", "failed");
         renderAll();
+        settleSource("econ");
+        setFailBar();
       });
+  }
+
+  // 重试（按钮在模板里，同一 IIFE 内绑定 → 可直达私有 loadAll）
+  function bindRetry() {
+    var btn = el("mac-retry");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      if (retryUsed >= RETRY_MAX) return;
+      retryUsed++;
+      // 上限用满则禁用（避免无限点 → 无限打上游）
+      if (retryUsed >= RETRY_MAX) {
+        btn.disabled = true;
+        btn.textContent = "重试已达上限";
+      }
+      loadAll();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -717,6 +905,7 @@
     renderPills();
     bindPills();
     bindRelMore();
+    bindRetry();
     loadAll();
   });
 })();

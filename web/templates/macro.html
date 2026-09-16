@@ -35,8 +35,17 @@
       <div class="mac">
         <header class="mac-head">
           <h1>宏观数据</h1>
-          <p class="mac-sub">经济与市场环境工作台<span class="mac-sep">·</span>数据截至 <span id="macro-asof">—</span></p>
+          <p class="mac-sub">经济与市场环境工作台<span class="mac-sep">·</span>数据截至 <span id="macro-asof"><span class="skeleton" data-skel="asof"></span></span></p>
         </header>
+
+        <!-- N1（2026-09-16 macro-page-frontend-refactor）：失败态条（默认 hidden；只在取数"失败"时出现）。
+             ⚠️ 只做**追加**：`.mac-empty` 类名与「数据暂缺」文案都是可测契约（verify_ui MX-12b），不得改。
+             ⚠️ `hidden` 的显示语义由 CSS 的 `#mac-fail-bar:not(.hidden)` 承担 —— 不要给 #mac-fail-bar
+                直接写 display（id 特异性会盖掉 `.hidden`，导致失败条常显）。 -->
+        <div class="hidden" id="mac-fail-bar">
+          <p class="mac-empty is-failed" id="mac-fail-msg">数据获取失败</p>
+          <button class="mac-more" type="button" id="mac-retry">重试</button>
+        </div>
 
         <!-- 一级块：当前宏观环境（**无卡片边框** → 与下方卡片形成层级差；plan §3.2「降卡片感」；
              七个等权卡片是"堆卡片"，这里开始分层：一级=区块、二级=重卡、三/四级=合并卡、五级=弱化卡） -->
@@ -47,14 +56,16 @@
           </div>
           <div class="mac-regime">
             <div class="regime-hero">
-              <div class="regime-level" id="regime-level">数据暂缺</div>
-              <div class="regime-quadrant" id="regime-quadrant"></div>
+              <div class="regime-level" id="regime-level"><span class="skeleton" data-skel="level"></span></div>
+              <div class="regime-quadrant" id="regime-quadrant"><span class="skeleton" data-skel="quadrant"></span></div>
             </div>
             <div class="regime-score">
-              <div class="score-num" id="regime-score">—</div>
+              <div class="score-num" id="regime-score"><span class="skeleton" data-skel="score"></span></div>
               <div class="score-cap">Macro Score</div>
             </div>
-            <ul class="regime-factors" id="regime-factors"></ul>
+            {# 四维指标骨架放 4 条：≥1440 时 .regime-factors 是 2 列 grid → 正好 2 行；<1440 是纵向 flex → 4 行。
+               与真实内容同量级高度，避免加载完成瞬间的跳动（CLS）。 #}
+            <ul class="regime-factors" id="regime-factors"><li data-skel="rfactors"><span class="skeleton"></span></li><li data-skel="rfactors"><span class="skeleton"></span></li><li data-skel="rfactors"><span class="skeleton"></span></li><li data-skel="rfactors"><span class="skeleton"></span></li></ul>
           </div>
         </section>
 
@@ -68,6 +79,7 @@
             </div>
           </div>
           <div class="mac-chart-wrap" id="macro-chart-wrap">
+            <div id="mac-chart-skel" data-skel="chart"><span class="skeleton"></span></div>
             <canvas id="macro-chart"></canvas>
             <p class="mac-fail hidden" id="macro-chart-fail">图表加载失败</p>
           </div>
@@ -80,11 +92,11 @@
           <div class="mac-2col">
             <div class="mac-col" id="mac-vars">
               <h3 class="mac-col-title">核心宏观变量<span class="mac-note">状态词按日变化分档</span></h3>
-              <div class="mac-vars" id="macro-vars"></div>
+              <div class="mac-vars" id="macro-vars"><div data-skel="vars"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div></div>
             </div>
             <div class="mac-col" id="mac-factors">
               <h3 class="mac-col-title">宏观因子<span class="mac-note">四维度打分（-2 ~ +2）· 影响资产为前端静态映射</span></h3>
-              <ul class="mac-factors" id="macro-factors"></ul>
+              <ul class="mac-factors" id="macro-factors"><li data-skel="factors"><span class="skeleton"></span><span class="skeleton"></span></li><li data-skel="factors"><span class="skeleton"></span><span class="skeleton"></span></li><li data-skel="factors"><span class="skeleton"></span><span class="skeleton"></span></li><li data-skel="factors"><span class="skeleton"></span><span class="skeleton"></span></li></ul>
             </div>
           </div>
         </section>
@@ -94,12 +106,12 @@
           <div class="mac-2col">
             <div class="mac-col" id="mac-relation">
               <h3 class="mac-col-title">宏观关系<span class="mac-note" id="macro-rel-note"></span></h3>
-              <ul class="mac-rel" id="macro-rel"></ul>
+              <ul class="mac-rel" id="macro-rel"><li data-skel="rel"><span class="skeleton"></span></li><li data-skel="rel"><span class="skeleton"></span></li></ul>
               <button class="mac-more" type="button" id="macro-rel-more" hidden></button>
             </div>
             <div class="mac-col" id="mac-history">
               <h3 class="mac-col-title">历史宏观环境<span class="mac-note" id="mac-history-note"></span></h3>
-              <div class="mac-hist" id="macro-history"></div>
+              <div class="mac-hist" id="macro-history"><div data-skel="history"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div></div>
             </div>
           </div>
         </section>
@@ -111,7 +123,7 @@
             <h2>经济数据</h2>
             <span class="mac-note" id="econ-asof"></span>
           </div>
-          <div class="mac-econ" id="macro-econ"></div>
+          <div class="mac-econ" id="macro-econ"><div data-skel="econ"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div></div>
           <p class="mac-foot" id="econ-basis"></p>
         </section>
       </div>

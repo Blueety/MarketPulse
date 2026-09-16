@@ -726,6 +726,68 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .mac .down { color: var(--red); }
 .mac .flat { color: var(--text-muted); }
 
+/* ===== N1–N4（2026-09-16 macro-page-frontend-refactor）：四态 / 因子 chip / Score 语义色 =====
+   ⚠️ 本节规则**一律靠 #mac-* / #macro-* id 限定**：`.mac-*` 与 `/macro/cn` 共用
+      （`macro_cn.html` 也用 `<div class="mac">` 与 `.mac-fail`）→ 改公共声明会连带改到中国宏观页。
+   ⚠️ `.skeleton` 只提供底色与脉冲动画（见上方 P-4 段），此处仅补**尺寸**，不改它本身。
+   ⚠️ N2：骨架屏只在 loading 期存在；取数结束必须被真实值或 `.mac-empty` **换掉**（不能留成永久动画）。 */
+
+/* N1 骨架屏尺寸：占位高度贴近真实内容，避免数据到达时行高突变（CLS）。
+   多行骨架用带 [data-skel] 的包裹层表达"若干行"。 */
+#mac-regime [data-skel="level"] { height: 22px; width: 132px; }
+#mac-regime [data-skel="quadrant"] { height: 12px; width: 210px; margin-top: 6px; }
+#mac-regime [data-skel="score"] { height: 36px; width: 92px; }
+#mac-regime [data-skel="rfactors"] .skeleton { height: 14px; }
+#mac-metrics [data-skel] { display: flex; flex-direction: column; gap: 6px; }
+#mac-metrics [data-skel="vars"] .skeleton { height: 30px; }
+#mac-metrics [data-skel="factors"] { gap: 4px 10px; }
+#mac-metrics [data-skel="factors"] .skeleton { height: 13px; }
+#mac-signals [data-skel] { display: flex; flex-direction: column; gap: 6px; }
+#mac-signals [data-skel="rel"] .skeleton { height: 30px; }
+#mac-signals [data-skel="history"] .skeleton { height: 22px; }
+/* ⚠️ 经济数据骨架的包裹层是 `.mac-econ`（4 列 grid）**的一个子项** → 必须 `grid-column: 1/-1` 铺满，
+   否则整层会缩进第一列里、再被内部 4 列切成 4 个小方块（实测截图可见，与"四张卡"的真实内容完全不符）。
+   内部再分 4 列镜像 `.mac-econ` 的断点，让骨架与真实卡片的排布一致。 */
+#mac-econ [data-skel] { grid-column: 1 / -1; display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+#mac-econ [data-skel="econ"] .skeleton { height: 54px; }
+@media (max-width: 768px) {
+  #mac-econ [data-skel] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+}
+@media (max-width: 480px) {
+  #mac-econ [data-skel] { grid-template-columns: minmax(0, 1fr); }
+}
+/* 主图骨架：绝对定位铺满既有 clamp 高度 ⇒ **不改容器高度**（M-8 / MX-3b 是护栏） */
+#mac-chart-skel { position: absolute; inset: 0; display: flex; }
+#mac-chart-skel .skeleton { flex: 1; border-radius: 10px; }
+/* 行内骨架（「数据截至 …」旁） */
+#macro-asof .skeleton { display: inline-block; height: 12px; width: 64px; vertical-align: middle; }
+
+/* N1 失败条：显示语义由 `:not(.hidden)` 承担 —— **不要**直接给 #mac-fail-bar 写 display，
+   id 特异性会盖掉 `.hidden{display:none}`，导致失败条常显（.hidden 只有 (0,1,0)）。 */
+#mac-fail-bar:not(.hidden) { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
+#mac-fail-bar .mac-empty { padding: 0; }
+#mac-fail-bar #mac-retry { margin-top: 0; }
+#mac-fail-bar #mac-retry:disabled { opacity: .5; cursor: not-allowed; }
+#mac-retry { cursor: pointer; }
+/* 失败态的**块级**标记：只追加一个左侧细红线，文案与类名（.mac-empty / 「数据暂缺」）都不动 ——
+   让"取数失败"与"取数成功但无数据"在块内也可区分，而不只是靠顶部失败条 */
+#mac-regime .mac-empty.is-failed, #mac-metrics .mac-empty.is-failed,
+#mac-signals .mac-empty.is-failed, #mac-econ .mac-empty.is-failed {
+  border-left: 2px solid var(--red); padding-left: 10px; color: var(--text-secondary); }
+
+/* N3 因子「影响资产」：方向 Badge + 资产 chip（仅在 #mac-factors 内生效，CN 页的 .mac-factor-row 不受影响） */
+#mac-factors .fr-assets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+#mac-factors .fr-badge { font-size: 10px; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-secondary); }
+#mac-factors .fr-badge-pos { color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+#mac-factors .fr-badge-neg { color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+#mac-factors .fr-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+  color: var(--text-secondary); }
+#mac-factors .fr-chip .ico { width: 14px; height: 14px; border-radius: 4px; }
+
 /* 模块 1：当前宏观环境（三段式：左 hero / 中 Macro Score / 右 四维指标）
    ⚠️ 2026-09-14 实测更正：改前 `1fr auto minmax(0,1.15fr)` 下左列被拉伸到 **587px**，
       而 hero 文案实际只有 ~230px → **左列尾部空出 ~380px**，这才是 PRD 说的"左中右之间大片空白"
