@@ -536,8 +536,11 @@ function buildLineDataset(s, color, pts, extra) {
     tension: 0.25,
     borderWidth: 1.8,
     pointRadius: function (c) { return c.dataIndex === c.dataset.data.length - 1 ? 2.5 : 0; },
-    pointHoverRadius: 'ontouchstart' in window ? 0 : 7,
-    pointHoverBorderWidth: 'ontouchstart' in window ? 0 : 2,
+    // ⚠️ 2026-09-16：悬停点交给 `chart-crosshair.js` 的**吸附标记**（每图只画一个，且必定与虚线同高）。
+    //    Chart.js 的 `interaction.mode:'index'` 会给**每个系列**都画悬停点 → 多系列图上出现多个点，
+    //    而虚线只穿过其中一个（用户反馈："虚线没跟那个点在一块"）。故系列自身不再画悬停点。
+    pointHoverRadius: 0,
+    pointHoverBorderWidth: 0,
     pointBackgroundColor: color,
     pointBorderColor: "#fff",
     pointBorderWidth: 1.5,

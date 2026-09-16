@@ -197,7 +197,10 @@
       ctx.moveTo(area.left, y);
       ctx.lineTo(area.right, y);
       ctx.stroke();
-      // 吸附点圆点：数据集 pointRadius 为 0（线上没有可见锚点），圆点是"吸在哪"的唯一可见证据
+      // 吸附点圆点：**全图唯一可见的点** —— 各页已把 `pointHoverRadius` 设为 0（见 `app.js` /
+      // `macro.js` / `macro_cn.js`），否则 Chart.js 的 `mode:'index'` 会给**每个系列**都画悬停点，
+      // 多系列图上就会出现"多个点、虚线只穿过其中一个"（用户 2026-09-16 反馈）。
+      // ⚠️ 新增图表时若重新打开 `pointHoverRadius`，必须同步这条不变量（否则该页会出现第二个点）。
       if (src) {
         var meta = chart.getDatasetMeta(src.dsIndex);
         var pt = (meta && meta.data) ? meta.data[src.dataIdx] : null;

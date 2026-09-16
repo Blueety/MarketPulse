@@ -7,6 +7,7 @@
 - **edit 工具多行替换容易误吞相邻代码**：Hy3 在多期实施中反复遇到——ASCII `+` 被当字面量、长 MATCH 块缺 `»` 导致误删相邻函数。多行编辑优先用 `write_file` 整体重写，避免 patch 锚点漂移。
 - **验证期模拟数据后必须恢复**：改 `last_values.json` 模拟异动后运行入口，若取数成功缓存会被真实值覆盖（正常）；若取数失败模拟值会残留——验证前先备份、验证后恢复。
 - **monkeypatch 路径常量要打在使用方模块**：`CHARTS_DIR`/`ALERTS_DIR`/`CONTEXT_DIR` 等在导入时绑定，测试必须 `monkeypatch.setattr(使用方模块, "XXX_DIR", tmp_path)`，打在定义方模块不生效。
+- **按 `CommandLine` 做模式匹配来杀进程 = 自匹配陷阱（2026-09-16 实测踩到）**：`Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'uvicorn web\.app:app' }` —— **模式串本身就出现在执行这条命令的 shell/包装进程的命令行里**，于是它匹配到**自己**并把执行者杀掉：命令中途终止（后续输出全部消失，看起来像"只匹配到 1 个"），更糟的是误伤了**别的会话**用来起预览服务的那个 shell。**正确做法**：① 先只读列出监听端口→PID 映射，再**按显式 PID** `Stop-Process`；② 或用不可能自匹配的锚点（`$_.Name -eq 'python.exe'` + `ExecutablePath` 前缀）。**判据**：任何"列出要杀的目标"的筛选条件，都要先问"这个条件会不会命中正在跑它的我自己"。
 
 ## 模块 src/（一期：数据获取）
 

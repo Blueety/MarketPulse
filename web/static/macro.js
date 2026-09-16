@@ -310,7 +310,8 @@
         backgroundColor: "transparent",
         borderWidth: isPrimary ? 2.4 : 1.2,
         pointRadius: 0,
-        pointHoverRadius: 3,
+        // 同 app.js：悬停点只由 `chart-crosshair.js` 的吸附标记提供（避免多系列图出现多个点）
+        pointHoverRadius: 0,
         tension: 0.15,
         spanGaps: true
       };

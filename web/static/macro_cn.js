@@ -447,7 +447,7 @@
           borderColor: isPrimary ? base : withAlpha(base, 0.45),
           backgroundColor: "transparent",
           borderWidth: isPrimary ? 2.4 : 1.2,
-          pointRadius: 0, pointHoverRadius: 3, tension: 0.15, spanGaps: true
+          pointRadius: 0, pointHoverRadius: 0, tension: 0.15, spanGaps: true
         };
       });
     } else {
@@ -462,7 +462,7 @@
       datasets = [{
         key: state.pick, label: LABELS[state.pick] || state.pick, data: vals1,
         borderColor: b1, backgroundColor: "transparent", borderWidth: 2.4,
-        pointRadius: 0, pointHoverRadius: 3, tension: 0.15, spanGaps: true
+        pointRadius: 0, pointHoverRadius: 0, tension: 0.15, spanGaps: true
       }];
     }
     if (!datasets.length) return;
