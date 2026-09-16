@@ -473,9 +473,10 @@ def assert_crosshair(page) -> None:
     check(tip is not None and tip > 0, "CS-6 悬停后 tooltip 仍显示（opacity>0）", tip)
     page.mouse.move(cx, y2)
     page.wait_for_timeout(400)
-    snap2 = page.evaluate(snap)
-    # CS-2 核心判据：同 x 不同 Y 画布指纹必然变化（横线跟手；无插件时两次相同）
-    check(snap1 != snap2, "CS-2 不同 Y 位置画布指纹不同（横线实时跟随）")
+    # CS-2（旧）已由下方 `assert_crosshair_snap` 的 CS-2a / CS-2b 取代（plan §6 Step 4）：
+    #   原判据「同 x 不同 Y 指纹必不同」测的是横线**跟手**；吸附后该语义**反转**
+    #   （同 x 纵移会吸在同一条线上）→ plan §3.6 实测必红。
+    #   ⚠️ 不是"删断言让它变绿"：替代断言 CS-2b 在**改动前**必红（跟手 → 两个 y 必然不同）。
     # CS-4 气泡文本 = 刻度同源格式化函数对该高度的输出，且格式 [+-]d.d%
     c4 = page.evaluate(
         """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
@@ -503,6 +504,315 @@ def assert_crosshair(page) -> None:
     check(c7["alive"] and c7["count"] == 1, "CS-7a 切 tab 后实例存活且唯一（R9）", c7)
     check("hoverCrosshair" in (c7["plugins"] or []),
           "CS-7b 重建后的新实例仍带 hoverCrosshair", c7["plugins"])
+
+
+# —— 吸附（crosshair snap，2026-09-15 crosshair-snap 任务）——
+# 独立探针：**不用插件的 $crossSource 当期望值**，而是自己按几何规则算出「应该吸到哪一点」，
+# 再与插件的 $crossY / $crossSource 比对 —— 否则就是「用插件验证插件」（恒真断言）。
+# 坐标系纪律：全部 **CSS 像素**（e.x/e.y 与 meta.data[].y 同空间），**不乘 devicePixelRatio**；
+# 并列（tie）取**较小索引**（plan §3.4(2) 实测 colCount 曾为 4，必须确定性）。
+SNAP_JS = r"""
+({id, mx, my}) => {
+  const cv = document.getElementById(id);
+  const c = window.Chart && window.Chart.getChart(cv);
+  if (!c) return null;
+  const r = cv.getBoundingClientRect();
+  const a = c.chartArea;
+  // ⚠️ Chart.js 的 getRelativePosition 对事件坐标做了 **Math.round**（整数像素）——
+  //    探针必须**同口径取整**，否则在两点并列（tie）处会算出与插件不同的索引
+  //    （实测：mouse.x=667.803 → 探针取 32、插件取 33；取整后两边都是 668 → 33）。
+  const px = Math.round(mx - r.left), py = Math.round(my - r.top);
+  const cx = Math.min(Math.max(px, a.left), a.right);   // x 钳制（可见性仍只判 y）
+  let idx0 = null, bestDx = Infinity;
+  c.data.datasets.forEach((ds, i) => {
+    const m = c.getDatasetMeta(i);
+    if (m.hidden) return;
+    (m.data || []).forEach((p, idx) => {
+      if (!p || !isFinite(p.x)) return;
+      const d = Math.abs(p.x - cx);
+      if (d < bestDx - 1e-9 || (Math.abs(d - bestDx) <= 1e-9 && idx0 !== null && idx < idx0)) {
+        bestDx = d; idx0 = idx;
+      }
+    });
+  });
+  if (idx0 === null) return { ok: false };
+  const OFFS = [0, -1, 1, -2, 2, -3, 3];               // 缺口回退（NaN 必经）
+  let best = null, usedIdx = null;
+  for (const off of OFFS) {
+    const idx = idx0 + off;
+    let b = null;
+    c.data.datasets.forEach((ds, i) => {
+      const m = c.getDatasetMeta(i);
+      if (m.hidden) return;
+      const p = (m.data || [])[idx];
+      if (!p || !isFinite(p.y)) return;
+      if (!b || Math.abs(p.y - py) < Math.abs(b.y - py)) b = { y: p.y, dsIndex: i };
+    });
+    if (b) { best = b; usedIdx = idx; break; }
+  }
+  const col = [];
+  if (usedIdx !== null) {
+    c.data.datasets.forEach((ds, i) => {
+      const m = c.getDatasetMeta(i);
+      if (m.hidden) return;
+      const p = (m.data || [])[usedIdx];
+      if (p && isFinite(p.y)) col.push({ dsIndex: i, y: p.y });
+    });
+  }
+  return {
+    ok: true,
+    mouse: { x: px, y: py },
+    idx0, usedIdx,
+    expectY: best ? best.y : null,
+    expectDs: best ? best.dsIndex : null,
+    col,
+    crossY: c.$crossY === undefined ? null : c.$crossY,
+    source: c.$crossSource || null,
+    label: c.$crosshairLabel === undefined ? null : c.$crosshairLabel,
+    axisValue: c.$crossY == null ? null : c.scales.y.getValueForPixel(c.$crossY),
+    dsCount: c.data.datasets.filter((d, i) => !c.getDatasetMeta(i).hidden).length,
+    dpr: window.devicePixelRatio,
+    bitmapW: cv.width, cssW: cv.offsetWidth
+  };
+}
+"""
+
+
+def _snap_geom(page, canvas_id: str):
+    """画布/绘图区几何（CSS 像素 + 视口偏移）。"""
+    return page.evaluate(
+        """(id) => {
+            const cv = document.getElementById(id);
+            const c = window.Chart && window.Chart.getChart(cv);
+            if (!c) return null;
+            const r = cv.getBoundingClientRect();
+            const a = c.chartArea;
+            return { rect: {left: r.left, top: r.top},
+                     area: {left: a.left, top: a.top, right: a.right, bottom: a.bottom} };
+        }""", canvas_id)
+
+
+def _snap_probe(page, canvas_id: str, frac_x: float, frac_y: float, settle: int = 350):
+    """鼠标移到绘图区 (frac_x, frac_y) → 独立预测 + 插件实测状态（坐标系：CSS 像素）。"""
+    g = _snap_geom(page, canvas_id)
+    if not g:
+        return None
+    a, r = g["area"], g["rect"]
+    mx = r["left"] + a["left"] + (a["right"] - a["left"]) * frac_x
+    my = r["top"] + a["top"] + (a["bottom"] - a["top"]) * frac_y
+    page.mouse.move(mx, my)
+    page.wait_for_timeout(settle)
+    # 二次派发同源事件：首次 mousemove 可能落在图表**入场动画未结束**的时刻（元素坐标仍在变），
+    # 插件按当时坐标吸附、探针随后读到的是稳定坐标 → 两者不一致。再移动一次（同坐标）让插件用
+    # 稳定坐标重算（节流仅在吸附 y 未变时早退，故动画场景下必然重算）。
+    page.mouse.move(mx, my)
+    page.wait_for_timeout(150)
+    return page.evaluate(SNAP_JS, {"id": canvas_id, "mx": mx, "my": my})
+
+
+def _second_mouse_y(probe, geom):
+    """推导「与 probe 吸到同一条线」的第二个鼠标 y（视口坐标）；推不出 → None。
+
+    单数据集：任意 y 都吸同一点。多数据集：从吸附点朝**背离最近邻线**方向偏移 30% 间距
+    （|0.3Δ| < |1.3Δ| ⇒ 最近数据集不变），越界则反向。
+    """
+    if not probe or not probe.get("ok") or probe.get("expectY") is None:
+        return None
+    a, r = geom["area"], geom["rect"]
+    y0 = probe["expectY"]
+    others = [c["y"] for c in (probe.get("col") or []) if c["dsIndex"] != probe["expectDs"]]
+    if not others:
+        step = 24.0
+        cand = y0 + (step if (y0 - a["top"]) < (a["bottom"] - y0) else -step)
+    else:
+        near = min(others, key=lambda y: abs(y - y0))
+        delta = y0 - near
+        step = abs(delta) * 0.3
+        cand = y0 + (step if delta > 0 else -step)
+    lo, hi = a["top"] + 2, a["bottom"] - 2
+    if not (lo <= cand <= hi):
+        cand = y0 - (cand - y0)
+    if not (lo <= cand <= hi):
+        return None
+    return r["top"] + cand
+
+
+def _snap_same_line(page, canvas_id: str, geom, base) -> bool:
+    """同 x、两个都靠近同一条线的鼠标 y → $crossY 是否相同（吸附"吸住"的核心判据）。"""
+    y2 = _second_mouse_y(base, geom)
+    if y2 is None:
+        return False
+    a, r = geom["area"], geom["rect"]
+    mx = r["left"] + a["left"] + (a["right"] - a["left"]) * 0.5
+    y1 = r["top"] + base["expectY"]
+    page.mouse.move(mx, y1)
+    page.wait_for_timeout(300)
+    page.mouse.move(mx, y1)      # 二次派发：规避入场动画未结束时按旧坐标吸附（同 _snap_probe）
+    page.wait_for_timeout(150)
+    s1 = page.evaluate(SNAP_JS, {"id": canvas_id, "mx": mx, "my": y1})
+    page.mouse.move(mx, y2)
+    page.wait_for_timeout(300)
+    page.mouse.move(mx, y2)
+    page.wait_for_timeout(150)
+    s2 = page.evaluate(SNAP_JS, {"id": canvas_id, "mx": mx, "my": y2})
+    return bool(s1 and s2 and s1["crossY"] is not None and s2["crossY"] is not None
+                and abs(s1["crossY"] - s2["crossY"]) < 0.5)
+
+
+def assert_crosshair_snap(page) -> None:
+    """CS-2a/2b/8/8b/9/10：横悬线吸附到数据线（crosshair-snap 任务）。
+
+    取代旧的「CS-2 同 x 不同 Y 指纹必不同」（= 横线跟手）：吸附后该语义**反转** —— 同 x 纵移
+    会吸在同一条线上。plan §3.6 已实测旧 CS-2 必红，故按 plan 拆成 CS-2a + CS-2b（补强，不删除）。
+    ⚠️ 先红后绿：CS-2b / CS-8 / CS-9 / CS-10 在**改动前**必红（$crossY 恒等于鼠标 y）。
+    """
+    print("\n--- 悬停横线吸附（crosshair snap）---")
+    cid = "chart-main"
+    geom = _snap_geom(page, cid)
+    check(bool(geom), "CS-8 前 #chart-main 实例可达")
+    if not geom:
+        return
+
+    # CS-8 核心数值判据（多宽度：吸附精度随点间距变化，1500 是既有脚本的盲区）
+    sampled, far = [], []
+    for w in (1920, 1500, 1280, 375):
+        page.set_viewport_size({"width": w, "height": 812 if w == 375 else 1080})
+        page.wait_for_timeout(600)
+        p = _snap_probe(page, cid, 0.5, 0.5)
+        if not p or not p.get("ok"):
+            continue
+        sampled.append(w)
+        dy = None if (p["crossY"] is None or p["expectY"] is None) else abs(p["crossY"] - p["expectY"])
+        check(dy is not None and dy < 0.5,
+              f"CS-8 {w} 档 $crossY 吸附到最近数据点（误差<0.5px）", (p["crossY"], p["expectY"]))
+        if p["crossY"] is not None:
+            far.append(abs(p["crossY"] - p["mouse"]["y"]))
+    check(len(sampled) == 4, "CS-8 覆盖度：四档全部取样成功（防选择器一变就空跑）", sampled)
+    # 注：标签只用 ASCII + 中文（Windows GBK 控制台打不出 U+2212 等符号，会 UnicodeEncodeError）
+    check(bool(far) and max(far) > 20, "CS-8b 横线不再跟手（|$crossY - mouseY| 显著大于 0）",
+          [round(d, 1) for d in far])
+
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.wait_for_timeout(600)
+    geom = _snap_geom(page, cid)
+
+    # CS-9 目标选择正确：独立几何推算 vs 插件 $crossSource 挂钩（含 tie 确定性）
+    p = _snap_probe(page, cid, 0.5, 0.5)
+    src = (p or {}).get("source")
+    if p and p.get("ok") and src:
+        check(src.get("dataIdx") == p["usedIdx"] and src.get("dsIndex") == p["expectDs"],
+              "CS-9 $crossSource = 最近 x 的列 + 该列 y 最近的数据集",
+              (src, p["usedIdx"], p["expectDs"]))
+    else:
+        check(False, "CS-9 $crossSource 已写入（可测挂钩存在且非空）", src)
+
+    # CS-2a 随 x 沿数据滑行：不同的 x → 不同的数据列
+    p1 = _snap_probe(page, cid, 0.3, 0.5)
+    p2 = _snap_probe(page, cid, 0.7, 0.5)
+    ok2a = bool(p1 and p2 and p1.get("usedIdx") is not None
+                and p2.get("usedIdx") is not None and p1["usedIdx"] != p2["usedIdx"])
+    check(ok2a, "CS-2a 不同 x 吸附到不同数据列（横线随数据走）",
+          ((p1 or {}).get("usedIdx"), (p2 or {}).get("usedIdx")))
+
+    # CS-10 读数随日期变化（第二个缺陷：旧实现恒读"鼠标高度处的轴值"，与 x 无关）
+    labels = []
+    for fx in (0.25, 0.5, 0.75):
+        pp = _snap_probe(page, cid, fx, 0.5)
+        if pp and pp.get("label"):
+            labels.append(pp["label"])
+    check(len(set(labels)) >= 2, "CS-10 不同 x 的读数不全相同（读数随日期变）", labels)
+
+    # CS-2b 同 x 吸住（改动前必红：跟手时两个 y 必然给出不同的 $crossY）
+    base = _snap_probe(page, cid, 0.5, 0.5)
+    if base and base.get("expectY") is not None:
+        check(_snap_same_line(page, cid, geom, base),
+              "CS-2b 同 x 不同鼠标 Y 吸在同一条线上（不再跟手）", base.get("expectY"))
+    else:
+        check(False, "CS-2b 能取到吸附目标 y", base and base.get("expectY"))
+
+
+def assert_crosshair_dpr2(browser, url: str) -> None:
+    """CS-D1~D4：DPR=2 取证（默认 DPR=1 **测不出**坐标系混用，见 plan §7 陷阱 2）。"""
+    print("\n--- 吸附 · DPR=2 取证 ---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=2)
+    try:
+        page = ctx.new_page()
+        errs: list[str] = []
+        page.on("pageerror", lambda e: errs.append(str(e)))
+        page.goto(url, wait_until="load")
+        page.wait_for_timeout(3500)
+        p = _snap_probe(page, "chart-main", 0.5, 0.5)
+        check(bool(p and p.get("ok")), "CS-D0 首页主图实例可达（DPR=2）", p and p.get("ok"))
+        if not p or not p.get("ok"):
+            return
+        check(p["dpr"] == 2, "CS-D1 devicePixelRatio = 2", p["dpr"])
+        # 容差 1px：CSS 宽可能是 1024.5 → offsetWidth 取 1024、位图取 2049（取整残差，非坐标系问题）
+        check(abs(p["bitmapW"] - p["cssW"] * 2) <= 1, "CS-D2 canvas 位图宽 == 显示宽×2（C2 回归）",
+              (p["bitmapW"], p["cssW"]))
+        dy = None if (p["crossY"] is None or p["expectY"] is None) else abs(p["crossY"] - p["expectY"])
+        check(dy is not None and dy < 0.5,
+              "CS-D3 DPR=2 下吸附误差仍 <0.5 CSS px（未混用位图坐标）", (p["crossY"], p["expectY"]))
+        check(not errs, "CS-D4 DPR=2 无 pageerror", errs[:3])
+    finally:
+        ctx.close()
+
+
+def assert_macro_cn_crosshair(browser, url: str) -> None:
+    """CNC-0~6：`#cn-chart` 的 crosshair 断言（plan §6 Step 4 记录的**覆盖缺口** —— 此前为零）。
+
+    该图默认单数据集，是"读数与 x 无关"缺陷最纯净的观察点（旧实现横向移动读数恒定）。
+    """
+    print("\n--- CNC /macro/cn 悬停参考线 ---")
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        errs: list[str] = []
+        page.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errs.append(f"pageerror: {e}"))
+        page.goto(url + "macro/cn", wait_until="load")
+        page.wait_for_timeout(3500)
+        info = page.evaluate(
+            """() => { const cv = document.getElementById('cn-chart');
+                const c = window.Chart && window.Chart.getChart(cv);
+                if (!c) return null;
+                return { plugins: (c.config.plugins || []).map((p) => p && p.id) }; }"""
+        )
+        check(bool(info), "CNC-0 #cn-chart 实例可达")
+        if not info:
+            return
+        check("hoverCrosshair" in (info["plugins"] or []),
+              "CNC-1 #cn-chart 已挂 hoverCrosshair", info["plugins"])
+
+        p = _snap_probe(page, "cn-chart", 0.5, 0.5)
+        if p and p.get("ok"):   # 诊断（不参与断言）：列/索引/坐标口径一目了然
+            print(f"  cn: idx0={p['idx0']} usedIdx={p['usedIdx']} expectY={p['expectY']} "
+                  f"crossY={p['crossY']} src={p['source']} dsCount={p['dsCount']} mouse={p['mouse']} "
+                  f"col={[(c['dsIndex'], round(c['y'], 2)) for c in p['col']]}")
+        check(bool(p and p.get("ok")), "CNC-2 探针取到吸附目标", p and p.get("ok"))
+        if p and p.get("ok"):
+            dy = None if (p["crossY"] is None or p["expectY"] is None) else abs(p["crossY"] - p["expectY"])
+            check(dy is not None and dy < 0.5,
+                  "CNC-2 $crossY 吸附到最近数据点（误差<0.5px）", (p["crossY"], p["expectY"]))
+            labels = []
+            for fx in (0.25, 0.5, 0.75):
+                pp = _snap_probe(page, "cn-chart", fx, 0.5)
+                if pp and pp.get("label"):
+                    labels.append(pp["label"])
+            check(len(set(labels)) >= 2, "CNC-3 不同 x 读数不全相同（旧实现恒为同一值）", labels)
+            geom = _snap_geom(page, "cn-chart")
+            check(bool(geom) and _snap_same_line(page, "cn-chart", geom, p),
+                  "CNC-4 同 x 不同 Y 吸在同一条线上", p.get("expectY"))
+
+        page.mouse.move(5, 5)
+        page.wait_for_timeout(500)
+        out = page.evaluate(
+            """() => { const c = window.Chart.getChart(document.getElementById('cn-chart'));
+                return c.$crossY === undefined ? null : c.$crossY; }"""
+        )
+        check(out is None, "CNC-5 移出绘图区后 $crossY 清空", out)
+        check(not errs, "CNC-6 /macro/cn 悬停交互 console error = 0", errs[:3])
+    finally:
+        ctx.close()
 
 
 FIDELITY_JS = r"""
@@ -1389,6 +1699,9 @@ CN_MACRO_JS = r"""
     // （同比较上期）是两个口径，必须靠 title 消歧；同时不得出现「—%」（空同比拼了百分号）。
     chgTitles: [...document.querySelectorAll('#cn-vars .v-chg, #cn-rate-list .v-chg, #cn-econ .e-yoy')]
       .map((e) => e.getAttribute('title') || ''),
+    // 利率类改造（2026-09-15）：Δ = 与 6 个月前相比（bp），10Y 不再恒「—」；单位写在格子里
+    rateChgTexts: [...document.querySelectorAll('#cn-rate-list .v-chg')].map((e) => e.textContent.trim()),
+    rateNote: (q('#cn-rate-col .mac-note') || {}).textContent || '',
     varsText: (q('#cn-vars') ? q('#cn-vars').textContent : '') +
               (q('#cn-rate-list') ? q('#cn-rate-list').textContent : ''),
     macroActive: (() => { const a = q('#sidebar a[href="/macro"]');
@@ -1427,19 +1740,94 @@ def assert_macro_cn_page(browser, url: str) -> None:
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.add_init_script("try { localStorage.setItem('mp-theme', 'dark'); } catch (e) {}")
+        # CN-12 探针（2026-09-15 用户反馈「吸附有了但虚线没跟上」）：
+        #   图表实例被**重建**会清空插件的 $crossY/$crossSource → 虚线消失/不跟随。
+        #   这里给实例打标记并轮询计数，把"加载期重建次数"变成可断言量（原实现实测 8 次）。
+        page.add_init_script(
+            "window.__cnRecreate = 0; window.__cnSeen = null;"
+            "setInterval(() => { const cv = document.getElementById('cn-chart');"
+            "  const c = window.Chart && window.Chart.getChart(cv); if (!c) return;"
+            "  if (!c.__tag) c.__tag = 'chart#' + (++window.__cnRecreate);"
+            "  window.__cnSeen = c.__tag; }, 120);"
+        )
         resp = page.goto(url + "macro/cn", wait_until="load")
         check(resp is not None and resp.status == 200, "CN-1 /macro/cn 返回 200",
               resp.status if resp else None)
         # R1 分组端点分两波加载（全量 ≈10~14s）→ 等到「经济数据」与「地产」都真的渲染出来
-        try:
+        def _wait_cn_ready() -> None:
+            """等到**所有分组**都渲染出来 —— 判据必须把 rate 组的行算进去。
+
+            ⚠️ 2026-09-15 实测踩坑：原判据只有 `#cn-econ ≥ 10 项 && #cn-estate ≥ 1 城`，
+               而 price(2)+growth(2)+money(3)+labor(2)+estate(2) = **11 项** →
+               **rate 组还在飞也能满足** → `#cn-rate-list` 只剩「社融」一行，
+               利率三行缺失 → CN-4f 报红。端点侧实测 `failed=[]`、`bp=[0,11.44,-8.96]`，
+               纯前端等待竞态（不是数据缺陷，也不是代码缺陷）。
+            """
             page.wait_for_function(
                 "() => document.querySelectorAll('#cn-econ .mac-econ-item').length >= 10"
-                " && document.querySelectorAll('#cn-estate .cn-city').length >= 1",
+                " && document.querySelectorAll('#cn-estate .cn-city').length >= 1"
+                " && document.querySelectorAll('#cn-rate-list .mac-var').length >= 4",
                 timeout=40000)
+
+        try:
+            _wait_cn_ready()
         except Exception:  # noqa: BLE001 —— 超时后照常取数，由下方断言如实报红
             print("  [warn] /macro/cn 数据未就绪（AkShare 超时/失败）→ 断言会如实反映")
         page.wait_for_timeout(1200)
         d = page.evaluate(CN_MACRO_JS)
+        # 外部 AkShare 瞬时失败 → **重载一次**（**不放松判据**，只是不把一次网络抖动当页面缺陷；
+        # 与 MX 段对 BLS 的处置同纪律：pitfalls「依赖外部 API 的断言要容忍一次瞬时失败」）
+        if len([t for t in d["rateChgTexts"] if t.endswith("bp")]) < 3:
+            print("  [retry] rate 组首轮未渲染齐（外部 AkShare 瞬时失败）→ 重载一次再测")
+            page.reload(wait_until="load")
+            try:
+                _wait_cn_ready()
+            except Exception:  # noqa: BLE001
+                pass
+            page.wait_for_timeout(1200)
+            d = page.evaluate(CN_MACRO_JS)
+        # CN-12 重建次数：>1 就是「虚线会消失」的回归（修复前实测 8 次）
+        rec = page.evaluate("() => window.__cnRecreate || 0")
+        check(rec <= 1, "CN-12 加载期图表重建 ≤1 次（重建会清空悬停态 → 虚线消失）", rec)
+
+        # CN-13 悬停吸附态必须**跨一次 re-render 存活**：程序化点 refresh（**不动鼠标**，
+        #   避免 mouseout 把吸附态清掉）→ 实例不应重建、$crossY 不应变化。
+        _g13 = page.evaluate(
+            """() => { const cv = document.getElementById('cn-chart');
+                       const c = window.Chart && window.Chart.getChart(cv);
+                       const r = cv.getBoundingClientRect(); const a = c.chartArea;
+                       return { rect: {left: r.left, top: r.top},
+                                area: {left: a.left, right: a.right, top: a.top, bottom: a.bottom} }; }"""
+        )
+        _a13, _r13 = _g13["area"], _g13["rect"]
+        _mx = _r13["left"] + _a13["left"] + (_a13["right"] - _a13["left"]) * 0.5
+        _my = _r13["top"] + _a13["top"] + (_a13["bottom"] - _a13["top"]) * 0.5
+        page.mouse.move(_mx, _my)
+        page.wait_for_timeout(400)
+        page.mouse.move(_mx, _my)
+        page.wait_for_timeout(200)
+        # ⚠️ 不变量：**虚线必须钉在吸附点上**（`$crossY === meta.data[dataIdx].y`）。
+        #    2026-09-16 实测踩坑：原地换数据（`chart.update("none")`）后元素坐标已重算，
+        #    若沿用旧 `$crossY` → **圆点移到新位置、虚线冻在旧高度**（用户原话
+        #    "虚线要跟着吸附在线上的那个点走"）。故更新后必须**重新对齐**，且用本条钉住。
+        _state_js = ("() => { const c = window.Chart.getChart(document.getElementById('cn-chart'));"
+                     " const s = c.$crossSource;"
+                     " const p = s ? c.getDatasetMeta(s.dsIndex).data[s.dataIdx] : null;"
+                     " return { tag: c.__tag, crossY: c.$crossY === undefined ? null : c.$crossY,"
+                     "          dotY: p ? p.y : null }; }")
+        _before = page.evaluate(_state_js)
+        page.evaluate("() => document.getElementById('refresh-btn').click()")
+        page.wait_for_timeout(4000)
+        _after = page.evaluate(_state_js)
+        check(_before["crossY"] is not None and _after["crossY"] == _before["crossY"]
+              and _after["tag"] == _before["tag"],
+              "CN-13 悬停吸附态跨 re-render 存活（实例不重建 + $crossY 不变）",
+              (_before, _after))
+        _aligned = (lambda s: s["crossY"] is not None and s["dotY"] is not None
+                    and abs(s["crossY"] - s["dotY"]) < 0.5)
+        check(_aligned(_after), "CN-14 数据原地更新后虚线仍钉在吸附点上（$crossY == 圆点 y）",
+              (_after["crossY"], _after["dotY"]))
+
         print(f"  quadrant={d['quadrant']!r} econItems={d['econItems']} "
               f"econAsOf={d['econAsOf']!r} cities={d['estateCities']} pts={d['pointCount']}")
         print(f"  canvas={d['canvasBitmapW']}x{d['canvasBitmapH']} "
@@ -1469,6 +1857,19 @@ def assert_macro_cn_page(browser, url: str) -> None:
               "CN-4d title 写明「去年同月」口径（自证 title 非空壳）", d["chgTitles"][:2])
         check("—%" not in d["varsText"] and "—%" not in d["econText"],
               "CN-4e 无「—%」（同比缺失时只显示「—」，不拼百分号）")
+        # 利率类 bp 口径（2026-09-15 改造）：LPR / SHIBOR / 10Y 三格都应是 `±X.Xbp`
+        #   —— 10Y 原先因中债接口只有 6 个月窗口而恒为「—」（那一格是死数据）。
+        bp_cells = [t for t in d["rateChgTexts"] if t.endswith("bp")]
+        check(len(bp_cells) >= 3, "CN-4f 利率与流动性三格均为 bp 口径（10Y 不再是死格）",
+              d["rateChgTexts"])
+        # ⚠️ 行数必须一起断言：否则「rate 组没到」时这条会**空跑并假绿**（2026-09-15 实测）。
+        #    下限 4 = LPR/SHIBOR/10Y + 社融（**利率三行必须到**）；上限不写死 ——
+        #    第 5 行「信用利差」来自 `/api/cn/quotes`，它失败时该行按设计不出现。
+        check(len(d["rateChgTexts"]) >= 4 and "—" not in d["rateChgTexts"],
+              "CN-4g 利率与流动性 ≥4 行（LPR/SHIBOR/10Y/社融）且无「—」",
+              d["rateChgTexts"])
+        check("bp" in d["rateNote"], "CN-4h 利率列说明写明单位 bp（两种单位同列必须自描述）",
+              d["rateNote"])
         # as_of 口径：**必须显示数据月份**，不得写「最新 / 实时」
         check(bool(re.search(r"\d{4}年\d{1,2}月", d["econText"])),
               "CN-6a 经济数据显示数据月份（形如 2026年8月）", d["econAsOf"])
@@ -1723,10 +2124,21 @@ def assert_macro_crosshair(browser, url: str) -> None:
               and re.fullmatch(r"\d+\.\d{2}", a["label"]) is not None
               and abs((num(a["label"]) or 0) - (a.get("axisValue") or 0)) < 0.005,
               "XC-4 全部对比读数 = 纯指数数字（无单位）", (a.get("label"), a.get("axisValue")))
-        # XC-5 横线跟手：不同 Y 的画布指纹不同（不依赖气泡文字，避免"数字碰巧一样"）
-        a2 = probe(0.72)
-        check(bool(a.get("snap")) and a2.get("snap") != a.get("snap"),
-              "XC-5 不同 Y 位置画布指纹不同（横线实时跟随）")
+        # XC-5（旧「不同 Y 指纹不同」= 跟手）→ 拆为 XC-5a + XC-5b（plan §6 Step 4）。
+        # ⚠️ plan §3.6 实测 XC-5 **仍会绿**（两点吸到不同的线）—— 绿的理由是"换了目标线"，
+        #    而非"吸附正确"，属语义漂移；绿 ≠ 不用改，故同样替换。
+        x1 = _snap_probe(page, "macro-chart", 0.3, 0.5)
+        x2 = _snap_probe(page, "macro-chart", 0.7, 0.5)
+        ok5a = bool(x1 and x2 and x1.get("usedIdx") is not None
+                    and x2.get("usedIdx") is not None and x1["usedIdx"] != x2["usedIdx"])
+        check(ok5a, "XC-5a 不同 x 吸附到不同数据列（横线随数据走）",
+              ((x1 or {}).get("usedIdx"), (x2 or {}).get("usedIdx")))
+        dy5 = None
+        if x1 and x1.get("expectY") is not None and x1.get("crossY") is not None:
+            dy5 = abs(x1["crossY"] - x1["expectY"])
+        check(dy5 is not None and dy5 < 0.5,
+              "XC-5b $crossY 吸附到最近数据点（误差<0.5px）",
+              ((x1 or {}).get("crossY"), (x1 or {}).get("expectY")))
         # XC-6 移出绘图区 → 隐藏
         page.mouse.move(5, 5)
         page.wait_for_timeout(500)
@@ -2440,6 +2852,8 @@ def main() -> int:
             assert_fidelity(page, m)
             # 悬停水平参考线（chart-hover-crosshair 任务）：鼠标交互与视口无关，1920 跑一次
             assert_crosshair(page)
+            # 横悬线吸附到数据线（crosshair-snap 任务）：多宽度 + 目标选择 + 读数随日期变
+            assert_crosshair_snap(page)
 
             # 375 档：抽屉 + 单列
             page.set_viewport_size({"width": 375, "height": 812})
@@ -2481,6 +2895,8 @@ def main() -> int:
             assert_macro_cn_page(browser, url)  # CN-* 中国宏观独立页（2026-09-14 /macro/cn）
             assert_macro_refine(browser, url)  # M-* 宏观页 refinement（主题/关系口径/主图主次/留白/分层）
             assert_macro_crosshair(browser, url)  # XC-* 宏观页悬停参考线（读数按轴语义分派）
+            assert_macro_cn_crosshair(browser, url)  # CNC-* /macro/cn 吸附（此前零覆盖，plan §6 Step 4）
+            assert_crosshair_dpr2(browser, url)  # CS-D* DPR=2 取证（默认 DPR=1 测不出坐标系混用）
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()

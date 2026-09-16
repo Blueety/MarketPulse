@@ -17,8 +17,11 @@
  *   2) 仍是**内联插件**（不 `Chart.register`，避免影响全局实例）；
  *   3) 仍写 `chart.$crosshairLabel`（气泡文本的唯一可测挂钩）；
  *   4) 气泡水平位置**动态读 `axis.position`**（不写死 left）；
- *   5) 仍用 `afterEvent` + 1px 节流 + `chart.draw()`（勿用 `update()`，会重算布局/动画）；
- *   6) 仍画在 `afterDatasetsDraw`（线在数据之上、tooltip 之下）。
+ *   5) 仍用 `afterEvent` + 节流 + `chart.draw()`（勿用 `update()`，会重算布局/动画）；
+ *      ⚠️ **节流对象必须是被绘制的量**（= 吸附后的 y），不是鼠标 y —— 绑错会让单数据集图
+ *      每帧无意义重绘（2026-09-15 L4）；阈值 0.5px（吸附点是离散像素值，1px 会吞掉换点）；
+ *   6) 仍画在 `afterDatasetsDraw`（线在数据之上、tooltip 之下）；
+ *   7) 仍写 `chart.$crossSource`（吸附目标的可测挂钩：`{dsIndex, dataIdx}`，无吸附目标时为 null）。
  *
  * ⚠️ 加载顺序：本文件必须在各页业务脚本（`app.js` / `macro.js`）**之前**引入。
  *    顺序错 → `window.hoverCrosshair === undefined` → `plugins: [undefined]` 被 Chart.js
@@ -93,9 +96,52 @@
     return defaultFormatter;
   }
 
+  // 吸附到最近的数据线（2026-09-15 crosshair-snap）：先按鼠标 x 定**唯一的数据列**，
+  // 再在该列的所有**可见**数据集里取 y 最近者 —— 「先定 x 再定线」保证吸附目标必然是
+  // 「当前日期的某条线」，不会跨日期。并列（tie）取**较小索引** → 确定性（实测会出现并列）。
+  // 只比较 **CSS 像素**：事件坐标 e.x/e.y 与 element 坐标 meta.data[i].x/.y 同空间，
+  // ⚠️ 此处**绝不能乘 devicePixelRatio**（DPR≠1 屏上会整体偏移一倍，而 DPR=1 的验收测不出）。
+  function snapToNearest(chart, mx, my) {
+    var area = chart.chartArea;
+    if (!area) return null;
+    var cx = Math.min(Math.max(mx, area.left), area.right);   // x 钳制（可见性仍只判 y）
+
+    var idx0 = null, bestDx = Infinity;
+    chart.data.datasets.forEach(function (ds, i) {
+      var m = chart.getDatasetMeta(i);
+      if (m.hidden) return;
+      (m.data || []).forEach(function (p, idx) {
+        if (!p || !isFinite(p.x)) return;
+        var d = Math.abs(p.x - cx);
+        if (d < bestDx - 1e-9 || (Math.abs(d - bestDx) <= 1e-9 && idx0 !== null && idx < idx0)) {
+          bestDx = d; idx0 = idx;
+        }
+      });
+    });
+    if (idx0 === null) return null;
+
+    // 缺口回退：多品种模式的日期轴是并集 → 该列可能全为 NaN，依次试邻列
+    var OFFS = [0, -1, 1, -2, 2, -3, 3];
+    for (var k = 0; k < OFFS.length; k++) {
+      var idx = idx0 + OFFS[k];
+      var best = null;
+      chart.data.datasets.forEach(function (ds, i) {
+        var m = chart.getDatasetMeta(i);
+        if (m.hidden) return;
+        var p = (m.data || [])[idx];
+        if (!p || !isFinite(p.y)) return;                     // ★ NaN 守卫（缺口必经）
+        if (!best || Math.abs(p.y - my) < Math.abs(best.y - my)) best = { y: p.y, dsIndex: i };
+      });
+      if (best) return { y: best.y, dsIndex: best.dsIndex, dataIdx: idx };
+    }
+    return null;                                              // 全空 → 调用方回退鼠标 y
+  }
+
   // === 悬停水平参考线主体 —— 内联插件，仅挂到各页自己的实例上，不 Chart.register ===
-  // 定调：横线 Y 取鼠标在绘图区内的纵向位置（非数据点）→ 一条中性色线 + 一个轴读数，
-  // 与系列无关。afterDatasetsDraw 绘制 → 线在数据之上、tooltip 之下。
+  // 定调（2026-09-15 修订）：横线 Y **吸附到当前 x 最近的数据线**（原为"鼠标纵向位置"）→
+  //   线**必然属于某个系列**，故线色取该系列的 borderColor（alpha .65）+ 在吸附点画 3px 圆点；
+  //   无吸附目标（缺口/单系列兜底）时仍用中性轴色。轴端气泡仍读**该 y 处的轴值**（与系列无关）。
+  //   afterDatasetsDraw 绘制 → 线在数据之上、tooltip 之下。
   var hoverCrosshair = {
     id: "hoverCrosshair",
     afterEvent: function (chart, args) {
@@ -103,18 +149,30 @@
       var area = chart.chartArea;
       // 离开画布 / 触屏抬手 → 清线重绘（触屏下 tooltip 被禁，横线+气泡是唯一读数）
       if (e.type === "mouseout" || e.type === "touchend") {
-        if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }
+        if (chart.$crossY != null) {
+          chart.$crossY = null; chart.$crossSource = null; chart.draw();
+        }
         return;
       }
       if ((e.type !== "mousemove" && e.type !== "touchmove") || !area) return;
       if (e.y < area.top || e.y > area.bottom) {
-        if (chart.$crossY != null) { chart.$crossY = null; chart.draw(); }   // 移出绘图区即隐藏
+        // 移出绘图区即隐藏（可见性规则**仍只判 y**：不为吸附顺手把 x 加进来）
+        if (chart.$crossY != null) {
+          chart.$crossY = null; chart.$crossSource = null; chart.draw();
+        }
         return;
       }
-      // 核心：Chart.js 只在激活元素集合变化时自动重绘，同 x 索引内纵向移动集合不变，
-      // 必须手动 chart.draw() 才能实时跟随（勿用 update()，会重算布局/动画）；1px 节流。
-      if (chart.$crossY != null && Math.abs(e.y - chart.$crossY) < 1) return;
-      chart.$crossY = e.y;
+      // 核心：横线吸附到最近的数据线；整列无数据（缺口）时回退鼠标 y，保证线不闪断。
+      var snap = snapToNearest(chart, e.x, e.y);
+      var targetY = snap ? snap.y : e.y;
+      // Chart.js 只在激活元素集合变化时自动重绘，同 x 索引内纵向移动集合不变，
+      // 必须手动 chart.draw()（勿用 update()，会重算布局/动画）。
+      // ★ 节流对象必须是**被绘制的量**（吸附后的 y），不是鼠标 y：单数据集图里
+      //   鼠标纵移而吸附点不变，绑 e.y 会导致每帧无意义重绘；阈值 0.5px（吸附点是离散像素值，
+      //   1px 会把真实的换点吞掉）。早退时**不写** $crossSource —— y 未变 ⇒ 吸附目标未变。
+      if (chart.$crossY != null && Math.abs(targetY - chart.$crossY) < 0.5) return;
+      chart.$crossY = targetY;
+      chart.$crossSource = snap ? { dsIndex: snap.dsIndex, dataIdx: snap.dataIdx } : null;
       chart.draw();
     },
     afterDatasetsDraw: function (chart) {
@@ -124,15 +182,36 @@
       var axis = chart.scales.y;
       var tc = themeColors();
       var ctx = chart.ctx;
+      var src = chart.$crossSource;
+      var srcDs = (src && chart.data.datasets[src.dsIndex]) || null;
+      var srcColor = (srcDs && typeof srcDs.borderColor === "string" && srcDs.borderColor)
+        ? srcDs.borderColor : null;
+      // 线色归因（方案 B）：吸附后横线**必然属于某个系列** → 取该系列色（alpha .65）；
+      // 无吸附目标（缺口回退鼠标 y）→ 中性轴色。单数据集时二者观感一致，不会突兀。
       ctx.save();
-      // 全宽虚线，中性色与系列无关；坐标一律 CSS 像素，勿乘 devicePixelRatio
+      // 全宽虚线；坐标一律 CSS 像素，勿乘 devicePixelRatio
       ctx.beginPath();
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = withAlpha(tc.axisTick, 0.65);
+      ctx.strokeStyle = srcColor ? withAlpha(srcColor, 0.65) : withAlpha(tc.axisTick, 0.65);
       ctx.moveTo(area.left, y);
       ctx.lineTo(area.right, y);
       ctx.stroke();
+      // 吸附点圆点：数据集 pointRadius 为 0（线上没有可见锚点），圆点是"吸在哪"的唯一可见证据
+      if (src) {
+        var meta = chart.getDatasetMeta(src.dsIndex);
+        var pt = (meta && meta.data) ? meta.data[src.dataIdx] : null;
+        if (pt && isFinite(pt.x) && isFinite(pt.y)) {
+          ctx.beginPath();
+          ctx.setLineDash([]);
+          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = srcColor || withAlpha(tc.axisTick, 0.65);
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = tc.tooltipBg;
+          ctx.stroke();
+        }
+      }
       // Y 轴端读数气泡：动态贴当前轴侧（勿写死 left），垂直钳制在画布内
       var text = resolveFormatter(chart)(axis.getValueForPixel(y), chart);
       chart.$crosshairLabel = text;   // 可测性挂钩：verify_ui.py 对气泡的唯一客观断言点
