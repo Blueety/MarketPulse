@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3877.458,
-      "change_pct": -0.3634108896840754,
+      "value": 3875.6044,
+      "change_pct": -0.4110416780961931,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 13415.414,
-      "change_pct": -0.2923058433743381,
+      "value": 13409.908,
+      "change_pct": -0.3332282155073564,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3307.625,
-      "change_pct": -0.11623222770283444,
+      "value": 3298.31,
+      "change_pct": -0.39752690191740037,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3885.3328,
       3864.2794,
       3891.6005,
-      3877.458
+      3875.6044
     ],
     "sz": [
       14289.442,
@@ -307,7 +307,7 @@
       13384.568,
       13287.974,
       13454.743,
-      13415.414
+      13409.908
     ],
     "cyb": [
       3586.043,
@@ -339,7 +339,7 @@
       3285.583,
       3247.918,
       3311.474,
-      3307.625
+      3298.31
     ],
     "gld": [
       398.9599914550781,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 1.39,
-        "turnover": "314.4亿",
+        "change": 1.97,
+        "turnover": "437.8亿",
         "top_stock": "敦煌种业"
       },
       {
         "name": "医药",
-        "change": 1.24,
-        "turnover": "911.5亿",
-        "top_stock": "键凯科技"
-      },
-      {
-        "name": "通信/电子",
-        "change": 0.19,
-        "turnover": "2476.6亿",
-        "top_stock": "亨通光电"
+        "change": 1.01,
+        "turnover": "1230.1亿",
+        "top_stock": "百花医药"
       },
       {
         "name": "地产/基建",
-        "change": 0.14,
-        "turnover": "108.5亿",
+        "change": 0.31,
+        "turnover": "152.3亿",
         "top_stock": "敦煌种业"
       },
       {
+        "name": "通信/电子",
+        "change": 0.27,
+        "turnover": "3572.1亿",
+        "top_stock": "科泰电源"
+      },
+      {
         "name": "消费",
-        "change": 0.06,
-        "turnover": "100.5亿",
+        "change": -0.11,
+        "turnover": "152.0亿",
         "top_stock": "生 意 宝"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": -2.77,
-        "turnover": "484.0亿",
+        "change": -2.56,
+        "turnover": "664.8亿",
         "top_stock": "亚盛集团"
       },
       {
         "name": "军工",
-        "change": -0.9,
-        "turnover": "1331.2亿",
+        "change": -0.55,
+        "turnover": "1971.7亿",
         "top_stock": "华民股份"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.47,
-        "turnover": "3615.4亿",
-        "top_stock": "中材科技"
+        "name": "金融",
+        "change": -0.41,
+        "turnover": "1812.9亿",
+        "top_stock": "歌尔股份"
       },
       {
         "name": "其他",
-        "change": -0.36,
-        "turnover": "13177.3亿",
-        "top_stock": "亨通光电"
+        "change": -0.28,
+        "turnover": "19409.0亿",
+        "top_stock": "中远海能"
       },
       {
-        "name": "金融",
-        "change": -0.36,
-        "turnover": "1177.2亿",
-        "top_stock": "烽火通信"
+        "name": "光伏/新能源",
+        "change": -0.21,
+        "turnover": "5341.8亿",
+        "top_stock": "德尔未来"
       }
     ]
   },
@@ -483,9 +483,9 @@
   "search_keywords": [
     "农业 surge 2026-09-17",
     "医药 surge 2026-09-17",
-    "通信/电子 surge 2026-09-17",
     "地产/基建 surge 2026-09-17",
-    "消费 surge 2026-09-17"
+    "通信/电子 surge 2026-09-17",
+    "消费 drop 2026-09-17"
   ],
   "correlation": [],
   "watchlist": {
