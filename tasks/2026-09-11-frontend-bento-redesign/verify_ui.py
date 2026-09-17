@@ -3218,6 +3218,190 @@ def assert_home_ux(browser, url: str) -> None:
         ctx.close()
 
 
+
+# —— PW 产线走查整改（2026-09-17，任务档 tasks/2026-09-17-production-walkthrough-fixes）——
+# G1 告警卡时间锚点 / G2 相关性空态文案 / G3 自选表头语义 / G4 趋势卡 loading-empty-failed 三态
+
+PW_ALERT_FIXTURE = [{
+    "symbol": "VIX", "date": "2026-09-11", "level": "WARN", "type": "回落", "state": "Neutral 中性",
+    "current": 15.84, "last": 17.84, "change_pct": -11.21, "threshold": 10,
+    "suggestion": "mock 建议", "report": "mock 报告",
+}]
+
+PW_LATEST_EMPTY = {            # correlation 为空 ⇒ 走 G2 的空态文案
+    "date": "2026-09-16",
+    "sector_heat": {"as_of": "2026-09-16", "items": []},
+    "us_sector_heat": {"as_of": "2026-09-16", "items": []},
+    "correlation": [],
+}
+
+PW_LATEST_HAS = json.loads(json.dumps(PW_LATEST_EMPTY))
+PW_LATEST_HAS["correlation"] = [{"pair": "标普500 ↔ 纳斯达克", "r": 0.72, "n": 30}]
+
+PW_HISTORY_EMPTY = {"dates": [], "series": []}   # G4 的 empty 分支
+
+PW_HISTORY_OK = {              # G4 的 ok 分支（GROUPS[0].keys = gspc/ixic）
+    "dates": ["2026-09-14", "2026-09-15", "2026-09-16"],
+    "series": [{"key": "gspc", "label": "标普500", "raw": [100.0, 101.0, 102.0], "change_7d": 2.0}],
+}
+
+PW_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const alertText = [...document.querySelectorAll('.alert-card .alert-row')]
+    .map((e) => e.textContent.trim());
+  const wrap = q('#chart-main-wrap');
+  return {
+    alertText: alertText,
+    relNote: (q('#market-relation .ph-note') || {}).textContent || null,
+    relTitle: (q('#market-relation .ph-note') || {}).getAttribute
+        ? q('#market-relation .ph-note').getAttribute('title') : null,
+    pillCount: document.querySelectorAll('#market-relation .pill').length,
+    icoLabel: (() => { const t = q('#watchlist-section thead th.col-ico');
+        return t ? t.getAttribute('aria-label') : null; })(),
+    barLabel: (() => { const t = q('#watchlist-section thead th.col-bar');
+        return t ? t.getAttribute('aria-label') : null; })(),
+    colspan: (() => { const td = q('#watchlist-body td[colspan]');
+        return td ? td.getAttribute('colspan') : null; })(),
+    skelShown: (() => { const s = q('#home-chart-skel'); return s ? !s.classList.contains('hidden') : null; })(),
+    wrapH: wrap ? Math.round(wrap.getBoundingClientRect().height) : null,
+    emptyText: (q('#chart-main-empty') || {}).textContent || null,
+    emptyHidden: (q('#chart-main-empty') || {}).classList
+        ? q('#chart-main-empty').classList.contains('hidden') : null,
+    chartAlive: !!(window.Chart && window.Chart.getChart && window.Chart.getChart(q('#chart-main'))),
+    failBarShown: (() => { const b = q('#home-fail-bar'); return b ? !b.classList.contains('hidden') : null; })(),
+  };
+}
+"""
+
+
+def assert_walkthrough(browser, url: str) -> None:
+    """PW-1~PW-4 产线走查整改（G1 告警时间锚点 / G2 相关性文案 / G3 表头语义 / G4 趋势三态）。
+
+    ⚠️ 全部用 mock 夹具（确定性；不为上游红项造数 —— mock 只存在于验收脚本）。
+    """
+    print("\n--- PW 产线走查整改（告警锚点 / 相关性文案 / 表头语义 / 趋势三态）---")
+
+    # ---------- PW-1 / PW-2 / PW-3：mock /api/alerts + /api/latest ----------
+    for case, latest in (("empty", PW_LATEST_EMPTY), ("has", PW_LATEST_HAS)):
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+        try:
+            pg = ctx.new_page()
+            pg.route("**/api/alerts", lambda r: r.fulfill(
+                status=200, content_type="application/json",
+                body=json.dumps(PW_ALERT_FIXTURE, ensure_ascii=False)))
+            pg.route("**/api/latest", lambda r: r.fulfill(
+                status=200, content_type="application/json",
+                body=json.dumps(latest, ensure_ascii=False)))
+            pg.route("**/api/history*", lambda r: r.fulfill(
+                status=200, content_type="application/json",
+                body=json.dumps(PW_HISTORY_OK, ensure_ascii=False)))
+            pg.goto(url, wait_until="load")
+            pg.wait_for_timeout(1200)
+            d = pg.evaluate(PW_JS)
+            joined = " ".join(d["alertText"])
+            # G1：措辞锚定告警日（日期由卡片头部承载 —— 实测带日期的行会折行、撞 B-12 护栏，
+            #     见 journal §4.3）。断言：① 行内出现「告警日收盘：」且不再有「当前值：」；
+            #     ② 头部的告警日期仍在（时间锚点由头部承载）。
+            check(("告警日收盘：" in joined) and ("当前值：" not in joined),
+                  f"PW-1 [{case}] 告警行措辞锚定告警日、不再出现「当前值：」", d["alertText"])
+            # G2：空态文案 + 解释（title）；有数据时 pills 正常（不得被新文案分支误伤）
+            if case == "empty":
+                check("均低于 0.5" in (d["relNote"] or "") and d["relTitle"],
+                      "PW-2 [empty] 相关性空态文案改为可读表述且带解释（title）",
+                      (d["relNote"], d["relTitle"]))
+                check(d["pillCount"] == 0, "PW-2 [empty] 不渲染 pills", d["pillCount"])
+            else:
+                check(d["pillCount"] >= 1 and d["relNote"] is None,
+                      "PW-2 [has] 有显著对时 pills 正常列出（新文案分支不误伤）",
+                      (d["pillCount"], d["relNote"]))
+            # PW-1b：时间锚点由卡片头部承载（alert-head 内必须有告警日期）
+            head_date = pg.evaluate(
+                "() => { const h = document.querySelector('.alert-card .alert-head');"
+                " return h ? h.textContent : null; }") or ""
+            check("2026-09-11" in head_date,
+                  f"PW-1b [{case}] 告警日期在卡片头部（时间锚点）", head_date)
+            # G3：表头语义 + colspan 契约不变
+            check(d["icoLabel"] == "标记" and d["barLabel"] == "涨跌幅分布",
+                  f"PW-3 [{case}] 空表头补 aria-label（标记 / 涨跌幅分布）",
+                  (d["icoLabel"], d["barLabel"]))
+            # ⚠️ colspan 是"模板骨架"契约：数据到达后骨架被真实行替换，运行时 DOM 里没有
+            #    （运行时断言会恒红）⇒ 改为对模板源的静态断言（P-6b 同款手法）
+            tpl_src = (Path(__file__).resolve().parents[2] / "web" / "templates" / "index.html").read_text(encoding="utf-8")
+            check(tpl_src.count('colspan="5"') >= 2
+                  and 'th class="col-ico" aria-label="标记"' in tpl_src,
+                  f"PW-3b [{case}] 模板骨架 colspan=5 契约不变 + 空表头标注在位（源级断言）",
+                  (tpl_src.count('colspan="5"'), 'th class="col-ico" aria-label="标记"' in tpl_src))
+        finally:
+            ctx.close()
+
+    # ---------- PW-4：趋势卡三态（loading / failed / empty / ok）----------
+    held: list = []
+    hang = {"on": False}
+
+    mode = {"empty": False}
+    def history_route(route):
+        if hang["on"]:
+            held.append(route)
+            return
+        body = PW_HISTORY_EMPTY if mode["empty"] else PW_HISTORY_OK
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps(body, ensure_ascii=False))
+
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        pg = ctx.new_page()
+        pg.route("**/api/history*", history_route)
+        pg.goto(url, wait_until="load")
+        pg.wait_for_timeout(1200)
+        d0 = pg.evaluate(PW_JS)
+        check(d0["chartAlive"] is True and d0["skelShown"] is False,
+              "PW-4a ok：图表渲染、骨架已撤", (d0["chartAlive"], d0["skelShown"]))
+        base_h = d0["wrapH"]
+
+        # loading：悬挂 → 骨架在场、容器高度不变（R3：canvas 位图==显示尺寸护栏的前提）
+        hang["on"] = True
+        pg.evaluate("() => document.getElementById('refresh-btn').click()")
+        pg.wait_for_timeout(400)
+        d1 = pg.evaluate(PW_JS)
+        print(f"  [loading] skel={d1['skelShown']} wrapH={d1['wrapH']}（基准 {base_h}）")
+        check(d1["skelShown"] is True, "PW-4b loading 期趋势卡骨架在场", d1["skelShown"])
+        check(d1["wrapH"] == base_h and base_h is not None,
+              "PW-4c 骨架不改变 #chart-main-wrap 高度（clamp 护栏）", (base_h, d1["wrapH"]))
+
+        # failed：abort → 失败条 + 骨架撤
+        for r in held:
+            try:
+                r.abort()
+            except Exception:      # noqa: BLE001
+                pass
+        pg.wait_for_timeout(500)
+        d2 = pg.evaluate(PW_JS)
+        check(d2["failBarShown"] is True and d2["skelShown"] is False,
+              "PW-4d 失败：失败条出现且骨架撤走（不停在 loading）",
+              (d2["failBarShown"], d2["skelShown"]))
+
+        # empty：history 为空结构 → 「暂无趋势数据」而非报错样式
+        hang["on"] = False
+        mode["empty"] = True
+        pg.evaluate("() => document.getElementById('refresh-btn').click()")
+        try:
+            pg.wait_for_function(
+                "() => { const e = document.getElementById('chart-main-empty');"
+                " return e && !e.classList.contains('hidden'); }", timeout=9000)
+        except Exception:          # noqa: BLE001
+            pass
+        pg.wait_for_timeout(300)
+        d3 = pg.evaluate(PW_JS)
+        print(f"  [empty] emptyText={d3['emptyText']!r} skel={d3['skelShown']} "
+              f"failBar={d3['failBarShown']}")
+        check((d3["emptyText"] or "").find("暂无趋势数据") >= 0,
+              "PW-4e empty：history 为空 → 「暂无趋势数据」（复用既有空态通道）", d3["emptyText"])
+        check(d3["skelShown"] is False, "PW-4f empty 态骨架已撤", d3["skelShown"])
+    finally:
+        ctx.close()
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -3884,6 +4068,7 @@ def main() -> int:
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
+            assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 

@@ -307,7 +307,11 @@ function renderAlerts(alerts) {
       '<div class="alert-head"><span class="badge ' + cls + '">' + escapeHtml(level) + "</span>" +
       "<span>" + escapeHtml(a.symbol || "") + " · " + escapeHtml(a.date || "") + "</span></div>" +
       '<div class="alert-meta">类型：' + escapeHtml(a.type || "—") + " ｜ 市场状态：" + escapeHtml(a.state || "—") + "</div>" +
-      '<div class="alert-row">当前值：' + fmtNum(a.current, 2) + " ｜ 昨日收盘：" + fmtNum(a.last, 2) +
+      // ⚠️ 2026-09-17（产线走查 G1）：「当前值：」无时间锚点 —— 告警是**历史文档**（如 09-11 收盘），
+      //    用户会拿它和顶部的最新值对不上。措辞锚定为「告警日收盘 / 前一日」，日期由卡片头部承载（原有）。
+      // ⚠️ **不要把日期写进这一行**：实测（mp_g1_fit 探针）带日期的行会折行 ⇒ 单条告警卡 134px > 容器 132px
+      //    ⇒ 触发 B-12「内容不足一屏仍滚动」的既有护栏（原地抖动）。选型过程见本任务 journal §4.3。
+      '<div class="alert-row">告警日收盘：' + fmtNum(a.current, 2) + " ｜ 前一日：" + fmtNum(a.last, 2) +
       " ｜ 变化率：" + fmtPct(a.change_pct) + "（阈值 ±" + fmtNum(a.threshold, 1) + "%）</div>" +
       '<div class="alert-sugg">建议：' + escapeHtml(a.suggestion || "—") + "</div>" +
       '<div class="alert-report">相关报告：' + escapeHtml(a.report || "—") + "</div>" +
@@ -329,7 +333,14 @@ function renderMarketRelation(latest) {
   const list = ((latest && latest.correlation) || [])
     .slice().sort(function (x, y) { return Math.abs(y.r) - Math.abs(x.r); }).slice(0, 5);
   if (!list.length) {
-    row.innerHTML = '<p class="ph-note">暂无显著相关对（近30日 |r|≤0.5）</p>';
+    // ⚠️ 2026-09-17（产线走查 G2 / P2-5）：原文案「暂无显著相关对（近30日 |r|≤0.5）」两处问题——
+    //    ①「≤0.5」写法有歧义（规则是"只列出 |r|>0.5 的对"，不存在"≤0.5 的对被排除"）；
+    //    ② 纯术语、无任何解释。
+    // ⚠️ 数字 0.5 是**引用**不是第二处阈值：correlation 由服务端只收 |r| ≥ CORRELATION_SIGNIFICANT
+    //    （src/analyzer.py:77，注释写明"颜色编码与 context 写入共用"）的对 ⇒ 此处"均低于 0.5"即"全部不显著"。
+    //    别在这里再发明一个阈值（D2 同款缺陷："标注写 X、行为做 Y"）。
+    row.innerHTML = '<p class="ph-note" title="相关系数：衡量两个指数同涨同跌的程度，|r| ≥ 0.5 视为明显联动。' +
+      '数据窗口为近 30 个交易日的收盘价。">近 30 日未发现明显联动关系（相关系数 |r| 均低于 0.5）</p>';
     return;
   }
   row.innerHTML = list.map(function (c) {
@@ -719,7 +730,9 @@ function renderMainChart() {
     canvas.style.display = 'none';
     if (emptyEl) {
       emptyEl.classList.remove('hidden');
-      emptyEl.textContent = '暂无数据';
+      // ⚠️ 2026-09-17（产线走查 G4）：「暂无数据」太泛 —— 这里是**趋势**卡，写明是趋势数据缺失，
+      //    与上方失败条（取数失败）区分：这是"取到了但没数据"，不是错误。
+      emptyEl.textContent = '暂无趋势数据';
     }
     renderTrendMeta(g, []);
     return;
@@ -1081,11 +1094,19 @@ function setRefreshBusy(b) {
   });
 }
 
+// 趋势卡 loading 骨架（G4，2026-09-17 产线走查整改）：fetch 期间显示、结算即撤。
+// 骨架在 #chart-main-wrap 内部绝对定位 ⇒ 不改容器高度（canvas 位图==显示尺寸断言不受影响）。
+function showHomeChartSkel(show) {
+  const sk = document.getElementById('home-chart-skel');
+  if (sk) sk.classList.toggle('hidden', !show);
+}
+
 function refresh() {
   const rangeLabel = document.getElementById('range-label');
   if (rangeLabel) rangeLabel.textContent = state.days >= 365 ? '近 1 年' : '近 ' + state.days + ' 日';
   if (refreshing) return;
   setRefreshBusy(true);
+  showHomeChartSkel(true);       // G4：loading 态（成功/失败结算时撤）
   fetch(buildQuery()).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);   // 非 2xx 直接判失败（500 的 HTML 体会抛 SyntaxError，报错指不到上游）
       return r.json();
@@ -1100,7 +1121,10 @@ function refresh() {
       renderMainChart();
       showHomeFailBar(true, e && e.message ? e.message : '加载失败');
     })
-    .then(function () { setRefreshBusy(false); });
+    .then(function () {
+      setRefreshBusy(false);
+      showHomeChartSkel(false);   // G4：结算（无论成败）都撤骨架 —— 不得停留在 loading
+    });
 
   fetch('/api/latest').then(function (r) { return r.json(); })
     .then(function (data) {
