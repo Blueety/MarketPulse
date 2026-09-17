@@ -960,8 +960,19 @@ function renderWatchlist(payload) {
   }
   let maxAbs = 0.01;
   stocks.forEach(function (s) { maxAbs = Math.max(maxAbs, Math.abs(s.change_pct || 0)); });
-  stocks.forEach(function (row, i) {
-    const ico = iconHtml(watchIconColor(row.symbol, i),
+  // 图标配色按**配置序**取（而非显示序）：行会按涨跌幅重排，若用显示下标，同一标的的图标颜色
+  // 会随名次每次刷新都跳。配置序索引稳定 ⇒ 颜色稳定，且仍能拿到 9 个不同色。
+  const cfgIndex = {};
+  stocks.forEach(function (s, i) { cfgIndex[s.symbol] = i; });
+  // 按涨跌幅从大到小；change_pct 缺失（数据暂缺/失败行）排到最后。
+  // Array.prototype.sort 稳定 ⇒ 同值保持配置序，不会来回抖。
+  const rows = stocks.slice().sort(function (a, b) {
+    const av = (a.change_pct == null || !isFinite(a.change_pct)) ? -Infinity : a.change_pct;
+    const bv = (b.change_pct == null || !isFinite(b.change_pct)) ? -Infinity : b.change_pct;
+    return bv - av;
+  });
+  rows.forEach(function (row) {
+    const ico = iconHtml(watchIconColor(row.symbol, cfgIndex[row.symbol] || 0),
       ICON_CHARS[row.symbol] || (row.label || '—').charAt(0));
     const tr = document.createElement('tr');
     if (row.value == null) {
