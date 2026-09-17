@@ -259,6 +259,11 @@ GLASS_JS = r"""
     topbarBackdrop: q('.topbar') ? cs(q('.topbar')).backdropFilter : null,
     sidebarBg: q('#sidebar') ? cs(q('#sidebar')).backgroundColor : null,
     sidebarBackdrop: q('#sidebar') ? cs(q('#sidebar')).backdropFilter : null,
+    // 抽屉覆盖层的实底色（2026-09-17 drawer-opaque-fixes：≤768 抽屉必须不透明）
+    elevatedBg: (() => { const t = document.createElement('div');
+        t.style.backgroundColor = 'var(--bg-elevated)'; t.style.position = 'absolute';
+        t.style.visibility = 'hidden'; document.body.appendChild(t);
+        const c = cs(t).backgroundColor; t.remove(); return c; })(),
     cardBox: mainCard ? { w: mainCard.offsetWidth, h: mainCard.offsetHeight } : null,
     scrollH: document.scrollingElement.scrollHeight,
     scrollW: document.scrollingElement.scrollWidth,
@@ -309,12 +314,24 @@ def assert_glass(w: int, h: int, g: dict) -> None:
           f"{w} 卡片边框 alpha ∈ [{lo}, {hi}]", g["borderAlpha"])
     check(g["shadowBlur"] is not None and g["shadowBlur"] >= 24,
           f"{w} 卡片外阴影模糊半径 ≥ 24px", g["shadowBlur"])
-    # G-6：顶栏做玻璃层、侧栏只透明（规避 R19 sticky + blur 残影）
+    # G-6：顶栏做玻璃层、侧栏只透明（规避 R19 sticky + blur 残影）—— **仅桌面（>768）**。
     check((g["topbarBackdrop"] or "none") != "none", f"{w} .topbar backdrop-filter 生效",
           g["topbarBackdrop"])
-    check((g["sidebarBackdrop"] or "none") == "none"
-          and (g["sidebarBg"] or "") in ("rgba(0, 0, 0, 0)", "transparent"),
-          f"{w} #sidebar 透明且无 backdrop-filter", (g["sidebarBg"], g["sidebarBackdrop"]))
+    #   ⚠️ 2026-09-17（drawer-opaque-fixes）按视口分语义：≤768 时侧栏是 **fixed 抽屉覆盖层**，
+    #   沿用 transparent 会叠在遮罩上 ⇒ 内容透出、文字不可读（用户真机 + 浅色主题实测）。
+    #   ⇒ 抽屉必须为实底 `--bg-elevated`（light #FFF / dark #111827），且同样**不加** backdrop-filter
+    #   （半透明玻璃在压暗背景上还是透，修不彻底）。桌面分支保持 G-6 原判据逐字不变。
+    check((g["sidebarBackdrop"] or "none") == "none",
+          f"{w} #sidebar 无 backdrop-filter（两个分支共同要求）",
+          (g["sidebarBg"], g["sidebarBackdrop"]))
+    if w > 768:
+        check((g["sidebarBg"] or "") in ("rgba(0, 0, 0, 0)", "transparent"),
+              f"{w} #sidebar 透明且无 backdrop-filter（G-6：桌面与页面同层）",
+              (g["sidebarBg"], g["sidebarBackdrop"]))
+    else:
+        check((g["sidebarBg"] or "") == (g["elevatedBg"] or ""),
+              f"{w} #sidebar 抽屉为实底 --bg-elevated（覆盖层不可透，drawer-opaque-fixes）",
+              (g["sidebarBg"], g["elevatedBg"]))
     check(g["hasFallbackRule"] is True, f"{w} 存在 backdrop-filter 的 @supports 降级块（G-8）",
           g["hasFallbackRule"])
 
@@ -3048,6 +3065,12 @@ HOME_UX_JS = r"""
     metaLive: q('#trend-meta') ? q('#trend-meta').getAttribute('aria-live') : null,
     drawerOpen: document.body.classList.contains('nav-open'),
     bodyOverflow: cs(document.body).overflow,
+    // drawer-opaque-fixes（2026-09-17）：≤768 抽屉必须为实底 --bg-elevated（覆盖层不可透）
+    sidebarBg: q('#sidebar') ? cs(q('#sidebar')).backgroundColor : null,
+    elevatedBg: (() => { const t = document.createElement('div');
+        t.style.backgroundColor = 'var(--bg-elevated)'; t.style.position = 'absolute';
+        t.style.visibility = 'hidden'; document.body.appendChild(t);
+        const c = cs(t).backgroundColor; t.remove(); return c; })(),
     activeInSidebar: (() => {
       const a = document.activeElement, sb = q('#sidebar');
       return !!(a && sb && sb.contains(a));
@@ -3106,6 +3129,10 @@ def assert_home_ux(browser, url: str) -> None:
                       round(c_ixic, 2))
             check(d["msTimeFont"] is not None and d["msTimeFont"] >= 11,
                   "UX-5 .ms-time 字号 ≥11px（走查报告：10px 过小）", d["msTimeFont"])
+            # drawer-opaque-fixes：修复只落在 ≤768 媒体查询内 ⇒ 桌面（1440）侧栏必须仍是透明的
+            check(d["sidebarBg"] in ("rgba(0, 0, 0, 0)", "transparent"),
+                  "UX-1c 桌面端 #sidebar 保持透明（G-6 不回退；透明只允许出现在 >768）",
+                  d["sidebarBg"])
         finally:
             ctx.close()
 
@@ -3214,6 +3241,10 @@ def assert_home_ux(browser, url: str) -> None:
               "UX-4c Escape 关闭抽屉并解除滚动锁定", (d2["drawerOpen"], d2["bodyOverflow"]))
         check(d2["activeIsMenuToggle"] is True,
               "UX-4d 关闭后焦点归还触发按钮 #menu-toggle", d2["activeIsMenuToggle"])
+        # UX-4e（drawer-opaque-fixes）：≤768 侧栏是覆盖层 ⇒ 必须实底 --bg-elevated（开/关都一样）
+        check(d2["sidebarBg"] == d2["elevatedBg"] and d2["elevatedBg"] is not None,
+              "UX-4e 抽屉为实底 --bg-elevated（覆盖层不可透；修复前为 rgba(0,0,0,0)）",
+              (d2["sidebarBg"], d2["elevatedBg"]))
     finally:
         ctx.close()
 

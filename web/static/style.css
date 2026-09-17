@@ -625,6 +625,12 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
     position: fixed; top: 0; left: 0; bottom: 0; width: 240px; height: 100vh;
     transform: translateX(-100%); transition: transform var(--t-med) ease;
     z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.28);
+    /* 2026-09-17（drawer-opaque-fixes）：抽屉是**覆盖层**，必须有实底 —— 基础规则的
+       `background: transparent`（G-6，桌面与页面同层）在 ≤768 会叠在遮罩上 ⇒ 内容透出、文字不可读
+       （用户真机 Android 浅色主题实测）。--bg-elevated 为浮层语义 token，双主题自带（light #FFF / dark #111827）；
+       **不用** --glass-bg + blur：G-6 明令侧栏不加 backdrop-filter，且半透明在压暗背景上还是透。
+       桌面端 transparent 保持不变（透明只存在于 >768，由 verify_ui UX-1c/G-6 分支双保险）。 */
+    background: var(--bg-elevated);
   }
   body.nav-open #sidebar { transform: translateX(0); }
   /* 2026-09-17（UX 走查 F4 / P2-④）：抽屉打开时锁定背景滚动（此前背景仍可滚）。
