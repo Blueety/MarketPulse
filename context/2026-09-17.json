@@ -2,14 +2,14 @@
   "date": "2026-09-17",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7621.25,
+      "change_pct": 0.9195146593995294,
+      "status": "连涨1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26298.867,
+      "change_pct": 1.2334966894065602,
+      "status": "连涨1日"
     },
     "SH": {
       "value": 3875.6044,
@@ -211,7 +211,7 @@
       7619.98,
       7585.73,
       7551.81,
-      null
+      7621.25
     ],
     "ixic": [
       26803.029296875,
@@ -243,7 +243,7 @@
       26186.414,
       25981.57,
       25978.424,
-      null
+      26298.867
     ],
     "sh": [
       3926.965,
@@ -407,8 +407,17 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "GSPC",
+        "current": 7621.25,
+        "previous": 7551.81,
+        "change_pct": 0.92,
+        "threshold": 0.8650098358536759,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "GSPC surge 2026-09-17",
     "农业 surge 2026-09-17",
     "医药 surge 2026-09-17",
     "地产/基建 surge 2026-09-17",
-    "通信/电子 surge 2026-09-17",
-    "消费 drop 2026-09-17"
+    "通信/电子 surge 2026-09-17"
   ],
   "correlation": [],
   "watchlist": {
