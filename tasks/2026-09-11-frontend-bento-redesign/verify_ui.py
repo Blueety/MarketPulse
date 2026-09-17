@@ -2476,10 +2476,12 @@ def assert_market_session(browser, url: str) -> None:
             page.goto(url, wait_until="load")
             page.wait_for_timeout(800)
             g = page.evaluate(_ms_js())
-            check(g.get("footerH") == 63, f"MS-6a {w}x{h} .sidebar-footer 高 63（45+18）",
-                  g.get("footerH"), 63)
-            check(g.get("msH") == 50, f"MS-6b {w}x{h} .market-status 高 50（16+16+15+gap2×2）",
-                  g.get("msH"), 50)
+            # ⚠️ 2026-09-17（UX 走查 F1）：.ms-time 10→11px ⇒ 该行 +2px，footer 63→65、.market-status 50→52
+            #    （三档实测一致，非抖动）。钉子随**有意的几何变更**同步更新，语义不变（防"无意的几何漂移"）。
+            check(g.get("footerH") == 65, f"MS-6a {w}x{h} .sidebar-footer 高 65（45+18+2，F1 .ms-time 11px）",
+                  g.get("footerH"), 65)
+            check(g.get("msH") == 52, f"MS-6b {w}x{h} .market-status 高 52（16+16+17+gap2×2）",
+                  g.get("msH"), 52)
             check(g.get("sbScrollH") is not None and g["sbScrollH"] <= g["sbClientH"],
                   f"MS-6c {w}x{h} #sidebar 无纵向滚动条", (g.get("sbScrollH"), g.get("sbClientH")))
             bad = [r for r in (g.get("rows") or {}).values()
@@ -2990,6 +2992,230 @@ def assert_macro_states(browser, url: str) -> None:
                   (dt["skeletons"], len(dt["imgSrc"])))
         finally:
             ctx.close()
+
+
+# —— UX 前端体验走查整改（2026-09-17，任务档 tasks/2026-09-17-frontend-ux-audit-fixes）——
+# F1 浅色对比度 / F2 刷新反馈 + 首页失败条 / F3 主题初始化同源 / F4 抽屉滚动锁定 + 焦点管理
+# ⚠️ 判读必须以完成标记为准（本组的探针会打印 UX-COMPLETE；中途崩溃 = 结果无效）。
+
+HOME_UX_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const cs = (e) => getComputedStyle(e);
+  const varColor = (name) => {
+    const t = document.createElement('div');
+    t.style.color = 'var(' + name + ')';
+    t.style.position = 'absolute'; t.style.visibility = 'hidden';
+    document.body.appendChild(t);
+    const c = cs(t).color;
+    t.remove();
+    return c;
+  };
+  const bgOf = (el) => {           // 沿祖先找第一个非透明背景
+    let e = el;
+    while (e) {
+      const c = cs(e).backgroundColor;
+      if (c && c !== 'transparent' && !/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(c)) return c;
+      e = e.parentElement;
+    }
+    return 'rgb(255, 255, 255)';
+  };
+  const chan = (c) => c.match(/[\d.]+/g).slice(0, 3).map(Number);
+  const lum = (rgb) => {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+  };
+  const contrast = (fg, bg) => {
+    const a = lum(chan(fg)), b = lum(chan(bg));
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const msTime = q('.ms-time');
+  const bar = q('#home-fail-bar');
+  return {
+    theme: document.documentElement.getAttribute('data-theme'),
+    mutedRgb: varColor('--text-muted'),
+    ixicRgb: varColor('--c-ixic'),
+    bodyBg: bgOf(document.body),
+    cardBg: bgOf(q('.card') || document.body),
+    msTimeFont: msTime ? parseFloat(cs(msTime).fontSize) : null,
+    failBarShown: bar ? !bar.classList.contains('hidden') : null,
+    failMsg: (q('#home-fail-msg') || {}).textContent || null,
+    failBarLive: bar ? bar.getAttribute('aria-live') : null,
+    retry: (() => { const b = q('#home-retry'); return b ? { disabled: !!b.disabled } : null; })(),
+    refreshDisabled: (() => { const b = q('#refresh-btn'); return b ? !!b.disabled : null; })(),
+    chartAlive: !!(window.Chart && window.Chart.getChart && window.Chart.getChart(q('#chart-main'))),
+    metaLive: q('#trend-meta') ? q('#trend-meta').getAttribute('aria-live') : null,
+    drawerOpen: document.body.classList.contains('nav-open'),
+    bodyOverflow: cs(document.body).overflow,
+    activeInSidebar: (() => {
+      const a = document.activeElement, sb = q('#sidebar');
+      return !!(a && sb && sb.contains(a));
+    })(),
+    activeIsMenuToggle: document.activeElement === q('#menu-toggle'),
+  };
+}
+"""
+
+
+def _contrast(fg_rgb: str, bg_rgb: str) -> float:
+    """WCAG 对比度（输入为 'rgb(r, g, b)' 字符串）。"""
+    def chan(c: str):
+        return [float(x) for x in c.replace('rgb(', '').replace('rgba', 'rgb(').replace(')', '')
+                .split(',')[:3]]
+    def lum(rgb):
+        def f(v):
+            v /= 255.0
+            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+        return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2])
+    a, b = lum(chan(fg_rgb)), lum(chan(bg_rgb))
+    hi, lo = max(a, b), min(a, b)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def assert_home_ux(browser, url: str) -> None:
+    """UX-1~UX-5 前端体验走查整改（F1–F4，2026-09-17）。
+
+    UX-1 浅色/深色对比度（F1）：--text-muted 与 --c-ixic（被 renderTrendMeta 当文字色用）≥ 4.5:1
+    UX-2 主题初始化（F3）：**隔离 app.js**（route abort）后，头部内联脚本必须自己落对 light/dark
+    UX-3 刷新反馈（F2）：history 失败 ⇒ 失败条 + 旧图仍在 + 刷新/重试按钮禁用；恢复 + 重试 ⇒ 失败条消失
+    UX-4 抽屉（F4）：开抽屉 ⇒ body 滚动锁定 + 焦点移入侧栏；Escape 关 ⇒ 焦点归还 #menu-toggle
+    UX-5 .ms-time 字号 ≥ 11px（走查项：10px 过小）
+    """
+    print("\n--- UX 前端体验走查整改（对比度 / 刷新反馈 / 主题初始化 / 抽屉）---")
+
+    # ---------- UX-1 对比度（两主题）----------
+    for theme in ("light", "dark"):
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+        try:
+            pg = ctx.new_page()
+            pg.add_init_script("try { localStorage.setItem('mp-theme', '%s'); } catch (e) {}" % theme)
+            pg.goto(url, wait_until="load")
+            pg.wait_for_timeout(1200)
+            d = pg.evaluate(HOME_UX_JS)
+            c_muted = _contrast(d["mutedRgb"], d["bodyBg"])
+            print(f"  [{theme}] muted={d['mutedRgb']} bg={d['bodyBg']} → {c_muted:.2f}:1 | "
+                  f"ixic={d['ixicRgb']} | ms-time={d['msTimeFont']}px")
+            check(c_muted >= 4.5,
+                  f"UX-1 {theme} --text-muted 对页底对比度 ≥4.5（走查报告：light 2.54:1）", round(c_muted, 2))
+            if theme == "light":
+                c_ixic = _contrast(d["ixicRgb"], d["cardBg"])
+                print(f"  [light] --c-ixic 对卡片底 → {c_ixic:.2f}:1")
+                check(c_ixic >= 4.5,
+                      "UX-1b light --c-ixic（被 .chart-meta 当文字色用）对比度 ≥4.5（原 #13C2C2 ≈2.21:1）",
+                      round(c_ixic, 2))
+            check(d["msTimeFont"] is not None and d["msTimeFont"] >= 11,
+                  "UX-5 .ms-time 字号 ≥11px（走查报告：10px 过小）", d["msTimeFont"])
+        finally:
+            ctx.close()
+
+    # ---------- UX-2 主题初始化（隔离 app.js，专测头部内联脚本）----------
+    for theme in ("dark", "light"):
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+        try:
+            pg = ctx.new_page()
+            pg.add_init_script("try { localStorage.setItem('mp-theme', '%s'); } catch (e) {}" % theme)
+            # 隔离 app.js：页面层主题只可能来自 <head> 的内联脚本（FOUC 的唯一来源）
+            pg.route("**/static/app.js*", lambda r: r.abort())
+            pg.goto(url, wait_until="domcontentloaded")
+            got = pg.evaluate("() => document.documentElement.getAttribute('data-theme')")
+            check(got == theme,
+                  f"UX-2 {theme}：隔离 app.js 后头部内联脚本仍落对主题（P2-③：旧实现只处理 light）",
+                  got)
+        finally:
+            ctx.close()
+
+    # ---------- UX-3 刷新反馈（history 失败 ≠ 静默）----------
+    held: list = []
+    hang = {"on": False}
+
+    def history_route(route):
+        if hang["on"]:
+            held.append(route)            # 悬挂：refresh 停在 in-flight
+        else:
+            route.continue_()
+
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        pg = ctx.new_page()
+        pg.route("**/api/history*", history_route)
+        pg.goto(url, wait_until="load")
+        pg.wait_for_timeout(2500)          # 初始 refresh 正常通过（有数据可画）
+        d0 = pg.evaluate(HOME_UX_JS)
+        check(d0["chartAlive"] is True and d0["failBarShown"] is False,
+              "UX-3a 初始加载：图表在、无失败条", (d0["chartAlive"], d0["failBarShown"]))
+
+        hang["on"] = True
+        pg.evaluate("() => document.getElementById('refresh-btn').click()")
+        pg.wait_for_timeout(400)
+        d1 = pg.evaluate(HOME_UX_JS)
+        print(f"  [悬挂] refreshDisabled={d1['refreshDisabled']} failBar={d1['failBarShown']}")
+        check(d1["refreshDisabled"] is True,
+              "UX-3b 刷新期间刷新按钮禁用（P1-②：无 loading 反馈）", d1["refreshDisabled"])
+        check(d1["failBarShown"] is False,
+              "UX-3c in-flight 期不误报失败", d1["failBarShown"])
+
+        for r in held:                     # 放行失败：fetch reject → 失败态
+            try:
+                r.abort()
+            except Exception:              # noqa: BLE001
+                pass
+        pg.wait_for_timeout(500)
+        d2 = pg.evaluate(HOME_UX_JS)
+        print(f"  [失败] failBar={d2['failBarShown']} msg={d2['failMsg']!r} "
+              f"chartAlive={d2['chartAlive']} live={d2['failBarLive']}")
+        check(d2["failBarShown"] is True and "趋势数据" in (d2["failMsg"] or ""),
+              "UX-3d history 失败 → 失败条出现（不再静默）", (d2["failBarShown"], d2["failMsg"]))
+        check(d2["chartAlive"] is True,
+              "UX-3e 失败后**旧图仍在**（保留离线看旧数据的既有行为）", d2["chartAlive"])
+        check(d2["failBarLive"] == "polite",
+              "UX-3f 失败条 aria-live=polite（刷数据不是紧急事件，不用 role=alert）", d2["failBarLive"])
+        check(d2["refreshDisabled"] is False and (d2["retry"] or {}).get("disabled") is False,
+              "UX-3g 失败态下刷新/重试按钮恢复可用", (d2["refreshDisabled"], d2["retry"]))
+
+        hang["on"] = False                 # 恢复路由
+        # ⚠️ 容忍按钮不存在（改动前首页没有它）→ 否则红跑会崩在整组中间（2026-09-17 实测）
+        pg.evaluate("() => { const b = document.getElementById('home-retry'); if (b) b.click(); }")
+        # /api/history 实测 ~2.5s（固定 1500ms 会误判"重试无效"）→ 等失败条真的消失，超时再取态
+        try:
+            pg.wait_for_function(
+                "() => { const b = document.getElementById('home-fail-bar');"
+                " return b && b.classList.contains('hidden'); }", timeout=9000)
+        except Exception:                  # noqa: BLE001
+            pass                           # 超时就按当前态取值判红（不崩）
+        pg.wait_for_timeout(300)
+        d3 = pg.evaluate(HOME_UX_JS)
+        check(d3["failBarShown"] is False and d3["chartAlive"] is True,
+              "UX-3h 恢复后重试 → 失败条消失、图表在", (d3["failBarShown"], d3["chartAlive"]))
+    finally:
+        ctx.close()
+
+    # ---------- UX-4 抽屉滚动锁定 + 焦点管理（375 视口）----------
+    ctx = browser.new_context(viewport={"width": 375, "height": 812}, device_scale_factor=1)
+    try:
+        pg = ctx.new_page()
+        pg.goto(url, wait_until="load")
+        pg.wait_for_timeout(1200)
+        pg.evaluate("() => document.getElementById('menu-toggle').click()")
+        pg.wait_for_timeout(600)
+        d = pg.evaluate(HOME_UX_JS)
+        print(f"  [抽屉开] overflow={d['bodyOverflow']} activeInSidebar={d['activeInSidebar']} "
+              f"drawerOpen={d['drawerOpen']}")
+        check(d["drawerOpen"] is True and d["bodyOverflow"] == "hidden",
+              "UX-4a 抽屉打开 ⇒ body 滚动锁定（P2-④：背景仍可滚动）",
+              (d["drawerOpen"], d["bodyOverflow"]))
+        check(d["activeInSidebar"] is True,
+              "UX-4b 抽屉打开 ⇒ 焦点移入侧栏（首个可聚焦项）", d["activeInSidebar"])
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(400)
+        d2 = pg.evaluate(HOME_UX_JS)
+        print(f"  [Escape 关] overflow={d2['bodyOverflow']} activeIsMenuToggle={d2['activeIsMenuToggle']}")
+        check(d2["drawerOpen"] is False and d2["bodyOverflow"] != "hidden",
+              "UX-4c Escape 关闭抽屉并解除滚动锁定", (d2["drawerOpen"], d2["bodyOverflow"]))
+        check(d2["activeIsMenuToggle"] is True,
+              "UX-4d 关闭后焦点归还触发按钮 #menu-toggle", d2["activeIsMenuToggle"])
+    finally:
+        ctx.close()
 
 
 def _tpl(js: str, cfg: dict) -> str:
@@ -3657,6 +3883,7 @@ def main() -> int:
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
+            assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])
             browser.close()
 

@@ -8,10 +8,17 @@
   <meta http-equiv="Expires" content="0">
   <title>MarketPulse 市场看板</title>
 <script>
+  // ⚠️ 2026-09-17（UX 走查 F3 / P2-③）：**原样对齐 macro.html:16-23 的 D1 修复版**。
+  // 旧写法只处理 `mp-theme === "light"`——<html> 默认就是 light，存储为 dark 时**没有任何代码把 dark 写回**
+  // → 首页首帧按浅色绘制、app.js 加载后才变深（FOUC），且不报错、测不到。
+  // ⚠️ 主题初始化共 **4 处**（index.html / macro.html / macro_cn.html 的 head 内联 + 各页 app 层 applyTheme 兜底）
+  //    —— 改一处必须四处同改（frontend-structure.md §7-1）；本页是最后对齐的第 4 处。
+  //    行为级回归护栏见 verify_ui 的 UX-2（**隔离 app.js** 后头部内联脚本仍须独立落对 light/dark）。
   (function () {
     try {
-      if (localStorage.getItem("mp-theme") === "light") {
-        document.documentElement.setAttribute("data-theme", "light");
+      var t = localStorage.getItem("mp-theme");
+      if (t === "light" || t === "dark") {
+        document.documentElement.setAttribute("data-theme", t);
       }
     } catch (e) {}
   })();
@@ -66,7 +73,15 @@
                 <button type="button" data-days="365">1Y</button>
               </div>
             </div>
-            <div class="chart-meta" id="trend-meta"></div>
+            <!-- 首页失败条（F2，2026-09-17 走查整改 P1-②/P2-⑤）：history 取数失败 ≠ 静默——
+                 保留旧图渲染（离线仍看旧数据）+ 显式失败条 + 重试。
+                 ⚠️ 与宏观页 #mac-fail-bar **同构但有意复制**（不抽共享 class，避免牵连宏观页 N-* 断言）；
+                 显示语义由 CSS 的 `#home-fail-bar:not(.hidden)` 承担 —— 不要给这个 id 写 display。 -->
+            <div class="hidden" id="home-fail-bar" aria-live="polite">
+              <p class="empty" id="home-fail-msg">趋势数据获取失败</p>
+              <button type="button" id="home-retry">重试</button>
+            </div>
+            <div class="chart-meta" id="trend-meta" aria-live="polite"></div>
             <div class="chart-wrap" id="chart-main-wrap">
               <canvas id="chart-main"></canvas>
             </div>

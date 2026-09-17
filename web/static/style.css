@@ -8,7 +8,11 @@
   --scroll-thumb-hover: #B4BCC7;
   --text-primary: #111827;
   --text-secondary: #6B7280;
-  --text-muted: #9CA3AF;
+  /* 2026-09-17（UX 走查 F1）：#9CA3AF 对页底 #F7F8FA 仅 **2.39:1**（白底 2.54），远低于 WCAG AA(4.5)。
+     提到与 --text-secondary 同值 → 4.55~4.83:1。⚠️ **dark 段此前已单独修过**（下方 #8E9BAE，≈6.8:1），
+     本轮补齐 light 侧的不对称。⚠️ 装饰用途（.kpi-card::before 色条 / .ms-dot / .h-bar i.neutral）
+     会随之加深 —— 与 dark 侧当时的取舍对等，已双主题目视留档。 */
+  --text-muted: #6B7280;
   --green: #16A085;
   --red: #F05A5A;
   --blue: #1677FF;
@@ -31,7 +35,10 @@
   --card-shadow: var(--glass-shadow);
   --card-glow: var(--glass-highlight);
   /* 图表序列色 + 图表 UI 色（Chart.js 不读 CSS 变量，app.js 经 cssVar 取值；切主题重渲染后生效） */
-  --c-gspc: #1677FF; --c-ixic: #13C2C2; --c-sh: #F5222D; --c-sz: #FA8C16; --c-cyb: #722ED1;
+  /* ⚠️ 2026-09-17（UX 走查 F1）：--c-ixic 除画线外还被 .chart-meta 当**文字色**用
+     （app.js renderTrendMeta 的 `span.style.color = palette[s.key]`）—— #13C2C2 在白卡上仅 2.08:1。
+     加深为同色相的 #0D7D7D（4.61~4.95:1）；dark 段的 #2FD6A8 不动（深底上 10.35:1）。 */
+  --c-gspc: #1677FF; --c-ixic: #0D7D7D; --c-sh: #F5222D; --c-sz: #FA8C16; --c-cyb: #722ED1;
   --c-vix: #CF1322; --c-vxn: #D4380D; --c-move: #2F54EB; --c-gld: #D4A017; --c-btc: #F7931A;
   --c-tip-bg: rgba(255, 255, 255, 0.95); --c-tip-title: #1d1d1f; --c-tip-body: #1d1d1f;
   --c-tip-border: #d2d2d7; --c-axis-tick: #86868b;
@@ -203,7 +210,7 @@ body {
 .ms-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
 .ms-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
 .ms-dot.open { background: var(--green); }
-.ms-time { font-size: 10px; color: var(--text-muted); font-family: var(--mono); white-space: nowrap; }
+.ms-time { font-size: 11px; color: var(--text-muted); font-family: var(--mono); white-space: nowrap; }
 
 .main {
   flex: 1;
@@ -553,6 +560,17 @@ body {
 
 .empty { color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; font-size: 13px; }
 
+/* ===== 首页失败条（F2，2026-09-17 走查整改 P1-②/P2-⑤）=====
+   与宏观页 #mac-fail-bar **同构但有意复制**（不抽共享 class，避免牵连宏观页 N-* 断言与 DOM 契约）。
+   显示语义由 `:not(.hidden)` 承担 —— **不要**给 #home-fail-bar 写 display（id 特异性会盖掉 `.hidden{display:none}`）。 */
+#home-fail-bar:not(.hidden) { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; }
+#home-fail-bar .empty { padding: 0; margin: 0; text-align: left; font-style: normal; }
+#home-retry { background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 3px 12px; border-radius: 999px; font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease; }
+#home-retry:hover { color: var(--text-primary); border-color: var(--blue); }
+#home-retry:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ===== 可访问性 / 微交互 ===== */
 button, .icon-btn, .nav-item, .seg button, .sidebar-theme-btn {
   transition: background var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease, opacity var(--t-fast) ease, transform var(--t-fast) ease;
@@ -604,6 +622,9 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
     z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.28);
   }
   body.nav-open #sidebar { transform: translateX(0); }
+  /* 2026-09-17（UX 走查 F4 / P2-④）：抽屉打开时锁定背景滚动（此前背景仍可滚）。
+     只在 ≤768 生效 —— 桌面端 #menu-toggle 为 display:none，nav-open 不会被置位。 */
+  body.nav-open { overflow: hidden; }
   #menu-toggle { display: inline-flex; }
   .main { padding: 16px 16px 28px; }
   .topbar { padding: 8px 12px; gap: 8px; }

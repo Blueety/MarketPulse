@@ -1060,16 +1060,47 @@ function loadFailed(msg, boxId) {
   if (box) box.innerHTML = '<p class="empty">加载失败：' + escapeHtml(msg) + '</p>';
 }
 
+// 首页失败条（F2，2026-09-17 走查整改 P1-②/P2-⑤）：history 取数失败 ≠ 静默 ——
+// **保留旧图渲染**（离线仍看旧数据的既有行为）+ 显式失败条 + 重试。
+// ⚠️ 与宏观页 #mac-fail-bar 同构但**有意复制**（不抽共享函数/class，避免牵连宏观页 N-* 断言与 DOM 契约）。
+function showHomeFailBar(show, msg) {
+  const bar = document.getElementById('home-fail-bar');
+  const m = document.getElementById('home-fail-msg');
+  if (m && msg) m.textContent = '趋势数据获取失败 · ' + msg;
+  if (bar) bar.classList.toggle('hidden', !show);
+}
+
+let refreshing = false;   // 防重入（刷新按钮 / 时间范围连点）
+
+function setRefreshBusy(b) {
+  refreshing = b;
+  // 刷新期间转圈/禁用（P1-②：此前无任何 loading 反馈）；失败条上的重试一并禁用
+  ['refresh-btn', 'home-retry'].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = b;
+  });
+}
+
 function refresh() {
   const rangeLabel = document.getElementById('range-label');
   if (rangeLabel) rangeLabel.textContent = state.days >= 365 ? '近 1 年' : '近 ' + state.days + ' 日';
-  fetch(buildQuery()).then(function (r) { return r.json(); })
+  if (refreshing) return;
+  setRefreshBusy(true);
+  fetch(buildQuery()).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);   // 非 2xx 直接判失败（500 的 HTML 体会抛 SyntaxError，报错指不到上游）
+      return r.json();
+    })
     .then(function (history) {
       state.history = history;
       renderMainChart();
       paintSparklines();
+      showHomeFailBar(false);
+    }, function (e) {
+      // ⚠️ 失败 ≠ 静默（P1-②）：**保留旧图渲染**（离线仍看旧数据的既有行为）+ 显式失败条
+      renderMainChart();
+      showHomeFailBar(true, e && e.message ? e.message : '加载失败');
     })
-    .catch(function () { renderMainChart(); });
+    .then(function () { setRefreshBusy(false); });
 
   fetch('/api/latest').then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1105,19 +1136,35 @@ document.addEventListener('DOMContentLoaded', function () {
       repaintSparklines();
     });
   }
-  // 移动端抽屉
+  // 移动端抽屉（F4，2026-09-17 走查整改 P2-④）：开 ⇒ 滚动锁定 + 焦点移入侧栏；关 ⇒ 焦点归还触发按钮
   const menuBtn = document.getElementById('menu-toggle');
-  if (menuBtn) menuBtn.addEventListener('click', function () { document.body.classList.toggle('nav-open'); });
+  const drawerIsOpen = function () { return document.body.classList.contains('nav-open'); };
+  const setDrawerOpen = function (open) {
+    const was = drawerIsOpen();
+    if (open === was) return;                       // 幂等：桌面端每次点击 main 都会调 close，不能抢焦点
+    document.body.classList.toggle('nav-open', open);
+    if (open) {
+      const sb = document.getElementById('sidebar');
+      const first = sb && sb.querySelector('a[href], button:not([disabled])');
+      if (first) first.focus();                     // 焦点移入侧栏首个可聚焦项
+    } else if (was && menuBtn) {
+      menuBtn.focus();                              // 关闭后焦点归还触发按钮
+    }
+  };
+  if (menuBtn) menuBtn.addEventListener('click', function () { setDrawerOpen(!drawerIsOpen()); });
   const navBackdrop = document.createElement('div');
   navBackdrop.className = 'nav-backdrop';
   document.body.appendChild(navBackdrop);
-  navBackdrop.addEventListener('click', function () { document.body.classList.remove('nav-open'); });
+  navBackdrop.addEventListener('click', function () { setDrawerOpen(false); });
   const mainEl = document.getElementById('main');
-  if (mainEl) mainEl.addEventListener('click', function () { document.body.classList.remove('nav-open'); });
+  if (mainEl) mainEl.addEventListener('click', function () { setDrawerOpen(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && drawerIsOpen()) setDrawerOpen(false);
+  });
   // 侧栏锚点导航 + active 态
   document.querySelectorAll('#sidebar .nav-item').forEach(function (item) {
     item.addEventListener('click', function (e) {
-      document.body.classList.remove('nav-open');
+      setDrawerOpen(false);
       const target = item.getAttribute('data-target');
       const el = target && document.getElementById(target);
       if (!el) return;
@@ -1130,6 +1177,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // 刷新按钮
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) refreshBtn.addEventListener('click', function () { refresh(); });
+  // 首页失败条的重试（F2）：与刷新同一条路径
+  const homeRetry = document.getElementById('home-retry');
+  if (homeRetry) homeRetry.addEventListener('click', function () { refresh(); });
   // 时间范围（7D / 30D / 90D / 1Y）
   const rangeBar = document.getElementById('range-bar');
   if (rangeBar) {
