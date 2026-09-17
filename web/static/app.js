@@ -78,12 +78,31 @@ const ICON_COLORS = {
   "DX-Y.NYB": "--c-ixic", "^TNX": "--c-move", "CL=F": "--c-vxn", "GC=F": "--c-gld",
   "515300.SS": "--c-gspc"
 };
-const ICON_CHARS = { "515300.SS": "红" };
+const ICON_CHARS = {
+  "515300.SS": "红",   // 红利低波
+  "399997.SZ": "酒",   // 中证白酒
+  "515880.SS": "通",   // 通信
+  "512010.SS": "医",   // 医药
+  "515790.SS": "光",   // 光伏
+  "512200.SS": "房",   // 房地产
+  "159732.SZ": "电",   // 消费电子
+  "159852.SZ": "软",   // 软件
+  "513130.SS": "港"    // 恒生科技（港股）
+};
 const ICON_PALETTE = ["--c-gspc", "--c-ixic", "--c-sh", "--c-sz", "--c-cyb", "--c-move", "--c-vix", "--c-gld"];
 const ICON_FALLBACK_VAR = "--text-muted";
 function iconHtml(colorVar, char) {
   const bg = "var(" + (colorVar || ICON_FALLBACK_VAR) + ")";
   return '<i class="ico" style="background:' + bg + '">' + escapeHtml(char || "") + "</i>";
+}
+// 自选股图标底色：ICON_COLORS 命中 → 该标的品牌色；否则**按行序**循环 `ICON_PALETTE_WATCH`。
+// ⚠️ 2026-09-17 用户反馈「自选股图标都是同一个颜色」：此前未命中的标的**一律落 `--text-muted` 中性灰**。
+//    修法沿用项目既有约定（无 brand 色 → 按行序循环，见上方注释）；这里单独用 10 色版调色板
+//    （比 `ICON_PALETTE` 多 `--c-vxn` / `--c-btc`），**不动板块表格的 8 色循环**，避免牵连无关视图。
+const ICON_PALETTE_WATCH = ["--c-gspc", "--c-ixic", "--c-sh", "--c-sz", "--c-cyb",
+                            "--c-move", "--c-vix", "--c-gld", "--c-vxn", "--c-btc"];
+function watchIconColor(symbol, index) {
+  return ICON_COLORS[symbol] || ICON_PALETTE_WATCH[index % ICON_PALETTE_WATCH.length];
 }
 // 旗标变体：真旗 SVG 素材（web/static/flags/，取自 twemoji 后做图标级简化）铺在上层；
 // 加载失败（离线）时 onerror 移除 <img>，露出底层 CSS 画旗（.ico-flag-us/cn）兜底。
@@ -941,8 +960,8 @@ function renderWatchlist(payload) {
   }
   let maxAbs = 0.01;
   stocks.forEach(function (s) { maxAbs = Math.max(maxAbs, Math.abs(s.change_pct || 0)); });
-  stocks.forEach(function (row) {
-    const ico = iconHtml(ICON_COLORS[row.symbol],
+  stocks.forEach(function (row, i) {
+    const ico = iconHtml(watchIconColor(row.symbol, i),
       ICON_CHARS[row.symbol] || (row.label || '—').charAt(0));
     const tr = document.createElement('tr');
     if (row.value == null) {

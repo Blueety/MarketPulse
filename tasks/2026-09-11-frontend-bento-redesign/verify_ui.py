@@ -3229,10 +3229,10 @@ def assert_home_ux(browser, url: str) -> None:
         print(f"  [抽屉开] overflow={d['bodyOverflow']} activeInSidebar={d['activeInSidebar']} "
               f"drawerOpen={d['drawerOpen']}")
         check(d["drawerOpen"] is True and d["bodyOverflow"] == "hidden",
-              "UX-4a 抽屉打开 ⇒ body 滚动锁定（P2-④：背景仍可滚动）",
+              "UX-4a 抽屉打开 -> body 滚动锁定（P2-④：背景仍可滚动）",
               (d["drawerOpen"], d["bodyOverflow"]))
         check(d["activeInSidebar"] is True,
-              "UX-4b 抽屉打开 ⇒ 焦点移入侧栏（首个可聚焦项）", d["activeInSidebar"])
+              "UX-4b 抽屉打开 -> 焦点移入侧栏（首个可聚焦项）", d["activeInSidebar"])
         pg.keyboard.press("Escape")
         pg.wait_for_timeout(400)
         d2 = pg.evaluate(HOME_UX_JS)

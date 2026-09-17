@@ -26,6 +26,28 @@
 - `931865`（中证半导体产业）：新浪无此码（KeyError）、东财被拒 ⇒ **当前无可用源，未收录**；
   用户如需半导体暴露可后测 512480/159813 等 ETF
 
+## 追加：自选图标同色问题（22:2x，用户反馈「图标有点丑，都是同一个颜色」）
+
+- **根因**：`app.js` 的 `ICON_COLORS` 只登记了 `515300.SS` 一条；未命中的标的 `iconHtml(undefined, …)`
+  一律落 `ICON_FALLBACK_VAR = --text-muted` ⇒ 新增 8 只**全同灰**。
+- **修法**（`web/static/app.js`）：
+  - 新增 `ICON_PALETTE_WATCH`（**10 色**版，比既有 `ICON_PALETTE` 多 `--c-vxn` / `--c-btc`）+
+    `watchIconColor(symbol, index)`：命中 `ICON_COLORS` 用品牌色，否则**按行序循环**（沿用项目既有约定；
+    先试过 symbol 散列，实测 9 行只出 4 个色 —— 分布差，弃用）；
+  - `renderWatchlist` 调用点改用它（`stocks.forEach(function (row, i)`）；
+  - `ICON_CHARS` 补 9 条**语义汉字**（红/酒/通/医/光/房/电/软/港）——原来取名称首字，
+    「南方中证全指房地产ETF」会显示「南」。
+  - **不动** `ICON_PALETTE`（板块表格仍 8 色循环）⇒ 无关视图零影响。
+- **实测**：改前 `distinct_colors=1`（9 行全灰）→ 改后 **`distinct_colors=9`**（探针 `%TEMP%\mp_icon_probe.py`，
+  截图 `%TEMP%\mp-icon-probe\watchlist.png` 人工复核配色观感正常）。
+- **顺带修掉验收脚本的一个致命缺陷**：`verify_ui.py` 的 `UX-4a/4b` 断言标签含 `⇒`(U+21D2)，
+  **GBK 控制台无法编码** → `print` 抛 `UnicodeEncodeError`，脚本在 UX-4 组**直接终止**（今早 1bbaa7a 引入，
+  与本次改动无关）。已把两处标签的 `⇒` 换成 `->`。
+  ⇒ **不修它则任何人从 GBK 控制台都拿不到完整验收结果**（前面几次「日志 0 字节/中途死」即此）。
+- **验收**：`verify_ui.py` 复跑 **ALL PASSED / EXIT=0**（首跑仅 `B-6b 回绕后继续前进` 一条红，
+  复跑转绿 ⇒ **抖动**，与本改动无关，已按基线 A/B 判据排除；同次运行也说明上游已恢复，G8 的 12 条基线红本轮为 0）。
+- 环境坑：PowerShell 工具给**后台**命令 120s 上限 → 5 分钟的 verify_ui 需**前台 + 显式 timeout** 才能跑完。
+
 ## 遗留 / 待办
 
 - **产线**：需在 Railway Variables 更新 `WATCHLIST_STOCKS`（新 JSON 已给用户）；不改则产线配置比对 mismatch → 实时回退，仍只显示旧 1 只
