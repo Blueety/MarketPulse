@@ -1399,11 +1399,19 @@ def assert_sector_asof(page, url: str) -> None:
     exp_cn = ("· 数据截至 " + cn_as_of) if (cn_as_of and cur and cn_as_of != cur) else ""
     check(d["cnText"] == exp_cn,
           "V-2 A股 tab 标注与 as_of/date 是否陈旧自洽（期望值取自 API）", (d["cnText"], exp_cn))
-    # 美股 tab：回看到 2026-09-13 → 必须显示（期望值直接取自 API，避免写死日期）
+    # 美股 tab：标注必须**跟着数据走**（陈旧才显示）—— 期望值直接取自 API，避免写死日期。
+    # ⚠️ 2026-09-17 修：原为 `d["usText"] == expected and (us_as_of is None or d["usText"] != "")`，
+    #    第二个合取项与第一个**逻辑冲突**：当 `as_of == date`（数据新鲜）时 `expected` 恒为 `""`，
+    #    而它却要求「as_of 非 None ⇒ 文案必须非空」⇒ **数据一新鲜就必红**。
+    #    实测（2026-09-17）`date=cn.as_of=us.as_of=2026-09-16`：页面**正确地**两条标注都为空，
+    #    与 V-2 输入完全相同、输出完全相同，却一个绿一个红 ⇒ 差异只在断言。
+    #    改为与 V-2 同款的**数据驱动期望值**（判据是"与数据推导出的文案逐字相等"，不比"非空"弱）。
+    #    原第二合取项想防的是"期望值退化成空 ⇒ 真空通过"，改用**输入前置**（V-3a）表达更准确。
+    check(bool(cur), "V-3a /api/latest 提供 date（陈旧判定基准；缺失会让 V-3 真空通过）", cur)
     expected = ("· 数据截至 " + us_as_of) if (us_as_of and cur and us_as_of != cur) else ""
-    check(d["usText"] == expected and (us_as_of is None or d["usText"] != ""),
-          "V-3 美股 tab 显示「· 数据截至 <as_of>」（as_of 来自 API）",
-          (d["usText"], expected))
+    check(d["usText"] == expected,
+          "V-3 美股 tab 标注与 as_of/date 是否陈旧自洽（期望值取自 API）",
+          (d["usText"], expected, us_as_of, cur))
     check(d["resetToCn"] == exp_cn,
           "V-4 切回 A股 tab 后标注与 A股 状态一致（radio change 监听生效）", (d["resetToCn"], exp_cn))
     check(d["usH2"] == d["cnH2"] and d["usCard"] == d["cnCard"]
@@ -2612,6 +2620,15 @@ NA_JS = r"""
     // 中性行不得把「中性」写两遍（badge 一个 + 文案里一个 = 读起来像 bug）
     neutralDup: [...document.querySelectorAll('#macro-factors .fr-assets')]
       .filter((a) => (a.textContent.match(/中性/g) || []).length > 1).length,
+    // 每行的「资产 + 方向」配对（NA-11 用：校验影响资产方向与后端 inverse 语义同源）
+    assetPairs: (() => {
+      const out = {};
+      rows.forEach((r) => {
+        const nm = ((r.querySelector('.fr-name') || {}).textContent || '?').trim();
+        out[nm] = [...r.querySelectorAll('.fr-grp')].map((g) => g.textContent.trim());
+      });
+      return out;
+    })(),
     imgSrc: imgs.map((i) => i.getAttribute('src')),
     imgBroken: imgs.filter((i) => !i.complete || i.naturalWidth === 0).length,
     factorsSlack: slack,
@@ -2626,6 +2643,25 @@ NA_LEVEL_CLASS = {"risk_on": "up", "risk_off": "down", "neutral": "flat", "none"
 
 # 本组"成功态"统一用的固定 payload（4 因子齐全 → N3 的素材映射走真实分支）
 NA_OK_PAYLOAD = _na_payload(level="risk_on", score100=68.8)
+
+
+def _has_pair(groups, asset: str, direction: str) -> bool:
+    """该行的「资产 + 方向」配对里是否存在「asset 且 direction」同组。"""
+    return any(asset in g and direction in g for g in (groups or []))
+
+
+# NA-11：影响资产方向的对照用例（impacts 顺序与 _na_payload 一致：风险偏好 / 美元 / 利率 / 商品）
+#   ⚠️ 期望值来自**需求口径**（inverse ⇒ 变量下行 = 正分），不是从 macro.js 抄的
+NA_ASSET_CASES = [
+    ((2, 1, -1, 1), "美元弱/利率上行",
+     [("美元", "黄金", "受益", True), ("美元", "原油", "受益", True),
+      ("利率", "黄金", "承压", True), ("利率", "长久期", "承压", True),
+      ("利率", "黄金", "受益", False)]),
+    ((2, -1, 1, 1), "美元强/利率下行",
+     [("美元", "黄金", "承压", True), ("美元", "原油", "承压", True),
+      ("利率", "黄金", "受益", True), ("利率", "长久期", "受益", True),
+      ("利率", "黄金", "承压", False)]),
+]
 
 
 def _na_open(browser, url: str, handler, *, timeout_ms=None, viewport=(1440, 900)):
@@ -2648,7 +2684,7 @@ def _na_open(browser, url: str, handler, *, timeout_ms=None, viewport=(1440, 900
 
 
 def assert_macro_states(browser, url: str) -> None:
-    """NA-1~NA-9 `/macro` 四态 + 因子 chip + Score 语义色（2026-09-16 macro-page-frontend-refactor）。
+    """NA-1~NA-11 `/macro` 四态 + 因子 chip + Score 语义色 + 影响资产方向（macro-page-frontend-refactor）。
 
     NA-1 loading（悬挂 + 短超时）：静态骨架屏在场
     NA-2 **超时 → failed**（R1 核心护栏：不得停在骨架屏；上游 403 常态下这决定体验比现状好还是更糟）
@@ -2658,7 +2694,8 @@ def assert_macro_states(browser, url: str) -> None:
     NA-6 `#mac-factors` slack ≤ 20（M-6 上限；N3 加内容后须实测并记录前后值）
     NA-7 `#regime-score` 颜色**由 level 同源推导**（N4）：含两组"score100 与 level 矛盾"的反向护栏
     NA-8 `/macro/cn` 零影响（R3）：新类名/新元素都不出现，共享 `.mac-factor-row` 网格未被改
-    NA-9 双主题截图留档（V6）
+    NA-10 双主题截图留档（V6）
+    NA-11 影响资产方向与后端 `inverse` 语义同源（2026-09-17 用户追问后修复）
     """
     print("\n--- NA 宏观页四态 / 因子 chip / Score 语义色（macro-page-frontend-refactor）---")
 
@@ -2903,6 +2940,41 @@ def assert_macro_states(browser, url: str) -> None:
               (cn["scrollW"], cn["innerW"]))
     finally:
         ctx.close()
+
+    # ---------- NA-11：影响资产方向必须与后端 inverse 语义同源 ----------
+    # 口径（`web/app.py:685-695` 的 `_band_score` docstring）：`inverse=True` 的维度
+    #   **数值上行 = 风险偏好下行** ⇒ impact>0 表示**该变量下行**、impact<0 表示**上行**。
+    #   「美元」「利率」两维都用 inverse；「商品」不用（impact>0 = 油价上行）。
+    # ⚠️ 2026-09-17 实测缺陷：`FACTOR_ASSETS` 的 美元/利率 两支按"变量上行 = pos"写 ⇒ **整体反了**，
+    #    表现为「利率 ↓偏空（= 收益率上行）」那行却写「黄金 受益」，而同一张截图里黄金就是 −0.36%。
+    # ⚠️ 断言只用"页面渲染出的资产+方向配对"，不读 `macro.js` 的映射表（避免拿实现自证）。
+    for impacts, note, expect in NA_ASSET_CASES:
+        payload = _na_payload(level="neutral", score100=50.0, impacts=impacts)
+        ctx, page, msgs, pageerrors = _na_open(
+            browser, url,
+            lambda which, route, _p=payload: route.fulfill(
+                status=200, content_type="application/json",
+                body=json.dumps(_p if which == "macro" else NA_ECON, ensure_ascii=False)))
+        try:
+            page.goto(url + "macro", wait_until="load")
+            page.wait_for_timeout(1000)
+            g = page.evaluate(NA_JS)
+            pairs = g["assetPairs"] or {}
+            print(f"  [NA-11 {note}] 配对 = {pairs}")
+            for (row, asset, direction, must) in expect:
+                # ⚠️ 变量名**不能叫 `ok`** —— 那是本函数后面 NA-9 用的 route handler 函数名，
+                #    覆盖成 bool 后 `_na_open(..., ok)` 会让 handler 不可调用，整组**崩溃**
+                #    （2026-09-17 实测踩到：表现为 `Page.wait_for_timeout: 'bool' object is not callable`）。
+                hit = _has_pair(pairs.get(row), asset, direction)
+                check((hit if must else not hit),
+                      f"NA-11 {note} → {row} 行{'必须' if must else '不得'}出现「{asset} {direction}」",
+                      (row, pairs.get(row)))
+            # 覆盖度护栏：两个维度必须都真的渲染出来了（否则上面全是真空绿）
+            check(all(bool(pairs.get(r)) for r in ("美元", "利率")),
+                  f"NA-11 覆盖度：{note} 下 美元/利率 两行均有配对（防空集假绿）",
+                  {k: v for k, v in pairs.items() if k in ("美元", "利率")})
+        finally:
+            ctx.close()
 
     # ---------- NA-9：双主题截图留档（V6） ----------
     for theme in ("light", "dark"):
