@@ -88,6 +88,8 @@ REALTIME_MARKETS = {
 
 TIMEOUT = 15          # 单次请求超时（秒）
 SECTOR_TIMEOUT = 10   # 板块热度获取限时（秒）；新浪接口无 timeout，超时返回 [] 不中断日报
+WATCHLIST_TIMEOUT = 30  # 自选股获取限时（秒）；2026-09-17 扩到 10 标的后 10s 被整体掐死（实测 10 只仅 1 只完成），
+                        # 从 SECTOR_TIMEOUT 拆出专用常量 —— 不要"顺手"把板块链路也放宽
 # 2026-09-14：美股板块要并发打 11 个 Yahoo ETF，每个走「双主机轮换 + sleep(1)」+
 # 连接池丢弃后重建，最坏路径远不止 10s → 实测偶发整块返回 ([],[])（日报仍全绿，只有前端空着）。
 # 独立超时只作用于美股板块；A 股侧继续用 SECTOR_TIMEOUT，行为不变。
@@ -596,28 +598,49 @@ def _fetch_yahoo_watch(symbol: str, range_: str = "2y") -> tuple[float, list]:
 
 
 def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
-    """取 A 股(.SS/.SZ) 当日收盘价 + 近 ~30 交易日序列。
+    """取 A 股/ETF/深指(.SS/.SZ) 当日收盘价 + 近 ~45 交易日序列。
 
-    优先用新浪接口（代理兼容），失败则回退 Yahoo。返回 (value, [(date, close), ...])。
+    路由（2026-09-17 自选股扩展，实测取证）：
+    - ETF（代码前缀 51/56/58/15）→ 东财 `fund_etf_hist_em`：新浪 `stock_zh_a_daily` 的 klc 接口
+      对 ETF 已返回不可解码内容（JSONDecodeError，连既有 515300 都挂），东财 8/8 成功且含当日收盘；
+    - 深市指数（39 开头，如 399997 中证白酒）→ 新浪 `stock_zh_index_daily`（个股接口不含指数，
+      index_zh_a_hist 的东财源本机被拒）；
+    - 其余个股 → 新浪 `stock_zh_a_daily`（原有路径），失败回退 Yahoo。
+    返回 (value, [(date, close), ...])。
     """
     import akshare as ak
     code = symbol[:-3]  # 去掉 .SS / .SZ
-    prefix = "sh" if symbol.endswith(".SS") else "sz"
-    sina_symbol = prefix + code
     end = datetime.now().strftime("%Y%m%d")
     start = (datetime.now() - timedelta(days=70)).strftime("%Y%m%d")
+    series: list = []
     try:
-        df = ak.stock_zh_a_daily(symbol=sina_symbol, start_date=start, end_date=end, adjust="")
-        if df is not None and len(df) > 0:
-            series = []
+        if code[:2] in ("51", "56", "58", "15"):
+            # ETF：东财基金历史（含当日收盘；日期列为 str）
+            df = ak.fund_etf_hist_em(symbol=code, period="daily",
+                                     start_date=start, end_date=end, adjust="")
+            for _, row in df.iterrows():
+                series.append((str(row["日期"])[:10], float(row["收盘"])))
+        elif code.startswith("39"):
+            # 深市指数：新浪指数接口（全量历史，截尾）
+            df = ak.stock_zh_index_daily(symbol="sz" + code)
             for _, row in df.iterrows():
                 d = row["date"]
                 d_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
                 series.append((d_str, float(row["close"])))
-            if series:
-                return float(series[-1][1]), series
+        else:
+            # 个股：新浪（原有路径）
+            sina_symbol = ("sh" if symbol.endswith(".SS") else "sz") + code
+            df = ak.stock_zh_a_daily(symbol=sina_symbol, start_date=start, end_date=end, adjust="")
+            if df is not None and len(df) > 0:
+                for _, row in df.iterrows():
+                    d = row["date"]
+                    d_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
+                    series.append((d_str, float(row["close"])))
     except Exception:
-        pass  # 新浪失败，回退 Yahoo
+        series = []  # 主路失败 → 回退 Yahoo
+    if series:
+        series = series[-45:]  # 与原"近 ~30 交易日"同量级，留余量
+        return float(series[-1][1]), series
     # 回退：用 Yahoo 获取
     return _fetch_yahoo_watch(symbol)
 
@@ -629,7 +652,7 @@ def fetch_watchlist(stocks: list[dict], range_: str = "2y") -> tuple[dict, dict,
     A 股(.SS/.SZ) 走新浪接口（固定 ~30 交易日），不受本参数影响。
 
     values[symbol]=当日收盘价；series[symbol]=[(date, close), ...] 近 30 日（含当日）；
-    errors[symbol]=错误信息（取数失败/超时）。逐标的并行线程 + 整体限时 SECTOR_TIMEOUT，
+    errors[symbol]=错误信息（取数失败/超时）。逐标的并行线程 + 整体限时 WATCHLIST_TIMEOUT，
     单标的失败置 None 不中断，全失败返回空 dict。美股/ETF 走 Yahoo；A 股(.SS/.SZ) 走 AkShare。
     """
     results: dict = {}
@@ -654,14 +677,14 @@ def fetch_watchlist(stocks: list[dict], range_: str = "2y") -> tuple[dict, dict,
     threads = [threading.Thread(target=_one, args=(it,), daemon=True) for it in stocks]
     for t in threads:
         t.start()
-    deadline = monotonic() + SECTOR_TIMEOUT
+    deadline = monotonic() + WATCHLIST_TIMEOUT
     for t in threads:
         remaining = deadline - monotonic()
         if remaining <= 0:
             break
         t.join(remaining)
     if any(t.is_alive() for t in threads):
-        log.warning("自选股获取超时（>%ds），未完成标的信息缺失", SECTOR_TIMEOUT)
+        log.warning("自选股获取超时（>%ds），未完成标的信息缺失", WATCHLIST_TIMEOUT)
 
     values, series, errors = {}, {}, {}
     for it in stocks:
