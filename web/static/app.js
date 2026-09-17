@@ -87,7 +87,9 @@ const ICON_CHARS = {
   "512200.SS": "房",   // 房地产
   "159732.SZ": "电",   // 消费电子
   "159852.SZ": "软",   // 软件
-  "513130.SS": "港"    // 恒生科技（港股）
+  "513130.SS": "港",   // 恒生科技（港股）
+  "512480.SS": "半",   // 半导体（中证全指半导体）
+  "159813.SZ": "芯"    // 半导体芯片（国证）
 };
 const ICON_PALETTE = ["--c-gspc", "--c-ixic", "--c-sh", "--c-sz", "--c-cyb", "--c-move", "--c-vix", "--c-gld"];
 const ICON_FALLBACK_VAR = "--text-muted";
