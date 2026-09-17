@@ -654,19 +654,31 @@
     return '<span class="fr-chip">' + ico + escapeHtml(name) + "</span>";
   }
 
-  // 「影响资产」短语 → chip：按 `·` 分句 → 每句判方向（受益/承压）→ 句内按词表取资产 token
-  // （句内一个 token 都没命中时，整句作为**一个文字 chip**，绝不丢信息）
+  // 「影响资产」短语 → 组（chip + 它自己的方向 Badge）。
+  // ⚠️ 2026-09-17 用户反馈「怎么又受益又承压的」—— 根因是**配对方式**：原先按"每句出一个 badge、
+  //    再跟 N 个 chip"平铺，元素排成 `受益 黄金 承压 长久期` ⇒ 中间那个 chip 被两个 badge **夹心**，
+  //    必被读成"黄金又受益又承压"。而真实语义是两个**不同资产**各有各的方向
+  //    （利率偏空 → 黄金受益、长久期承压）。
+  //    修法：**资产在前、方向在后**，且每个 chip 与它的 badge 同组 `.fr-grp`（配对不可拆散）。
+  // ⚠️ 中性（impact=0）不是"影响资产"，没有可配对的对象 → **不出 badge**，直接显示原文
+  //    （否则会出现「中性 中性 不构成方向」这种把同一个词写两遍的读法）。
   function assetChipsHtml(text) {
     var out = [];
     String(text || "").split("·").forEach(function (raw) {
       var s = raw.replace(/[（）()]/g, " ").trim();
       if (!s) return;
       var dir = s.indexOf("受益") >= 0 ? "pos" : (s.indexOf("承压") >= 0 ? "neg" : "flat");
-      var badge = dir === "pos" ? "受益" : (dir === "neg" ? "承压" : "中性");
+      if (dir === "flat") {
+        out.push('<span class="fr-grp">' + assetChipHtml(raw.replace(/[（）()]/g, "").trim()) + "</span>");
+        return;
+      }
+      var badge = dir === "pos" ? "受益" : "承压";
       var names = ASSET_TOKENS.filter(function (t) { return s.indexOf(t) >= 0; });
       if (!names.length) names = [s.replace(/(受益|承压|资产|\s)+/g, "") || s];
-      out.push('<span class="fr-badge fr-badge-' + dir + '">' + badge + "</span>" +
-               names.map(assetChipHtml).join(""));
+      names.forEach(function (n) {
+        out.push('<span class="fr-grp">' + assetChipHtml(n) +
+                 '<span class="fr-badge fr-badge-' + dir + '">' + badge + "</span></span>");
+      });
     });
     return out.join("");
   }

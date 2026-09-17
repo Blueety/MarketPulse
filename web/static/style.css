@@ -776,8 +776,11 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 #mac-signals .mac-empty.is-failed, #mac-econ .mac-empty.is-failed {
   border-left: 2px solid var(--red); padding-left: 10px; color: var(--text-secondary); }
 
-/* N3 因子「影响资产」：方向 Badge + 资产 chip（仅在 #mac-factors 内生效，CN 页的 .mac-factor-row 不受影响） */
-#mac-factors .fr-assets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+/* N3 因子「影响资产」：资产 chip + 它自己的方向 Badge（仅在 #mac-factors 内生效，CN 页互不影响）
+   ⚠️ 2026-09-17：`chip + badge` 必须同组（`.fr-grp`），且**组间间距 > 组内间距** ——
+      否则「利率偏空 → 黄金受益 · 长久期承压」会被读成"黄金又受益又承压"（用户实测反馈）。 */
+#mac-factors .fr-assets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+#mac-factors .fr-grp { display: inline-flex; align-items: center; gap: 5px; }
 #mac-factors .fr-badge { font-size: 10px; padding: 1px 6px; border-radius: 999px;
   border: 1px solid var(--border); color: var(--text-secondary); }
 #mac-factors .fr-badge-pos { color: var(--green);

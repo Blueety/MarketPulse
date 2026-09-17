@@ -2596,6 +2596,22 @@ NA_JS = r"""
     chipsPerRow: rows.map((r) => r.querySelectorAll('.fr-chip').length),
     imgPerRow: rows.map((r) => r.querySelectorAll('.fr-chip img').length),
     badges: rows.map((r) => (r.querySelector('.fr-badge') || {}).textContent || null),
+    // ⚠️ 2026-09-17（用户反馈「怎么又受益又承压的」）：一个"影响资产"格里会同时出现**两个方向**
+    //    （如「利率偏空 → 黄金受益 · 长久期承压」）→ 若 badge 与 chip 只是平铺，元素会排成
+    //    `受益 黄金 承压 长久期`，中间的 chip 被两个 badge **夹心** → 必被读成同一资产自相矛盾。
+    //    不变量：① 每个 chip 必须在 `.fr-grp` 组内；② 组内 badge 必须在 chip **之后**（资产在前、方向在后）。
+    chipsOutsideGrp: [...document.querySelectorAll('#mac-factors .fr-chip')]
+      .filter((c) => !c.closest('.fr-grp')).length,
+    grpCount: document.querySelectorAll('#mac-factors .fr-grp').length,
+    badgeNotAfterChip: [...document.querySelectorAll('#mac-factors .fr-grp')]
+      .filter((g) => {
+        const b = g.querySelector('.fr-badge'); if (!b) return false;
+        const c = g.querySelector('.fr-chip');
+        return !c || !(c.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }).length,
+    // 中性行不得把「中性」写两遍（badge 一个 + 文案里一个 = 读起来像 bug）
+    neutralDup: [...document.querySelectorAll('#macro-factors .fr-assets')]
+      .filter((a) => (a.textContent.match(/中性/g) || []).length > 1).length,
     imgSrc: imgs.map((i) => i.getAttribute('src')),
     imgBroken: imgs.filter((i) => !i.complete || i.naturalWidth === 0).length,
     factorsSlack: slack,
@@ -2784,6 +2800,36 @@ def assert_macro_states(browser, url: str) -> None:
         check(d["factorsSlack"] is not None and d["factorsSlack"] <= 20,
               "NA-6 加 chip 后 #mac-factors 留白仍 ≤20px（M-6 上限；基线 12px）",
               d["factorsSlack"])
+
+        # --- NA-5f/g：方向 Badge 与资产 chip 的**配对不可拆散**（2026-09-17 用户反馈「又受益又承压」）---
+        check(d["chipsOutsideGrp"] == 0,
+              "NA-5f 每个资产 chip 都在 .fr-grp 组内（不裸平铺）", d["chipsOutsideGrp"])
+        check(d["badgeNotAfterChip"] == 0 and d["grpCount"] >= d["rowCount"],
+              "NA-5g 组内**资产在前、方向在后**（防「受益 X 承压」夹心读法）",
+              (d["badgeNotAfterChip"], d["grpCount"], d["rowCount"]))
+    finally:
+        ctx.close()
+
+    # ---------- NA-5h：中性因子行（impact=0）不得把「中性」写两遍 ----------
+    flat_payload = _na_payload(level="neutral", score100=50.0, impacts=(0, 0, 0, 0))
+    ctx, page, msgs, pageerrors = _na_open(
+        browser, url,
+        lambda which, route: route.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps(flat_payload if which == "macro" else NA_ECON, ensure_ascii=False)))
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(1000)
+        f = page.evaluate(NA_JS)
+        print(f"  [全中性因子] rows={f['rowCount']} chips/行={f['chipsPerRow']} "
+              f"badges={f['badges']} neutralDup={f['neutralDup']} "
+              f"chipsOutsideGrp={f['chipsOutsideGrp']}")
+        check(f["rowCount"] == 4 and all(c >= 1 for c in f["chipsPerRow"]),
+              "NA-5h 中性因子行仍各带 ≥1 个 chip（PRD 验收：每行 chip ≥1）", f["chipsPerRow"])
+        check(f["neutralDup"] == 0,
+              "NA-5h2 中性行不把「中性」写两遍（badge 一个 + 文案里一个）",
+              (f["neutralDup"], f["badges"]))
+        check(f["chipsOutsideGrp"] == 0, "NA-5h3 中性行的 chip 同样在组内", f["chipsOutsideGrp"])
     finally:
         ctx.close()
 
