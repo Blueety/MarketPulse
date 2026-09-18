@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>事件时间线 · MarketPulse</title>
+  <script>
+    // ⚠️ 与 macro.html / macro_cn.html 的 head 内联脚本**同源**（D1 修复版：显式应用存储到的主题值，
+    //    而不是只处理 "light"）。主题初始化共 4 处：三个模板的 head + 各 JS 的 applyTheme()，
+    //    改一处必须同步（docs/pitfalls.md「主题初始化分叉」）。
+    (function () {
+      try {
+        var t = localStorage.getItem("mp-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <!-- 与其它页同一份 style.css（本页样式追加在同一文件尾部的 .tl-* 段） -->
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+</head>
+<body>
+  {% include "_topbar.html" %}
+  <div class="shell">
+    {% include "_sidebar.html" %}
+    <main class="main" id="main">
+      <div class="tl">
+        <header class="tl-head">
+          <h1>事件时间线</h1>
+          <p class="tl-sub">
+            官方发布日程（FOMC / 非农 / CPI / PPI / GDP / PCE / 零售 / 工业产出）
+            <span class="mac-sep">·</span>日历为<b>排定值</b>，与行情<b>并列展示</b>、不构成因果
+            <span class="mac-sep">·</span>数据截至 <span id="tl-asof">—</span>
+          </p>
+          <p class="tl-note" id="tl-scope">—</p>
+        </header>
+
+        <section class="tl-card" id="tl-upcoming">
+          <div class="tl-card-head">
+            <h2>即将到来</h2>
+            <span class="tl-hint" id="tl-upcoming-hint">未来 30 天</span>
+          </div>
+          <div class="tl-list" id="tl-upcoming-body">
+            <p class="tl-empty">加载中…</p>
+          </div>
+        </section>
+
+        <section class="tl-card" id="tl-past">
+          <div class="tl-card-head">
+            <h2>已发生</h2>
+            <span class="tl-hint" id="tl-past-hint">近 90 天</span>
+          </div>
+          <div class="tl-list" id="tl-past-body">
+            <p class="tl-empty">加载中…</p>
+          </div>
+          {# 「加载更早」：plan §5.2 要求「已发生」默认近 90 天、可加载更早
+             （官方日历可回溯到 2021 的 FOMC）。到库内最早事件时按钮自行隐藏（由 JS 判定）。 #}
+          <div class="tl-more-wrap"><button type="button" class="tl-more" id="tl-more" hidden>加载更早</button></div>
+        </section>
+
+        <section class="tl-card tl-meta" id="tl-meta">
+          <div class="tl-card-head"><h2>口径与来源</h2></div>
+          <ul class="tl-src" id="tl-src"></ul>
+          <ul class="tl-honest">
+            <li>日历时间是「排定 / 估计」值，<b>不是数据真正公开的时刻</b>（口径参考 OpenBB 文档的提示）。</li>
+            <li>BLS / BEA / Census 的日程经<b>第三方镜像</b>获得，原始来源为 bls.gov / bea.gov / census.gov。</li>
+            <li>新闻篇数是<b>检索口径</b>（受每次 100 条上限影响）⇒ 只能读作「<b>至少</b>这么多篇」。</li>
+            <li>事件与行情<b>并列展示</b>：时间先后<b>不构成因果</b>，本页不生成「因 X 所以 Y」、不打「利好 / 利空」标签。</li>
+            <li>「事件后 +N 日」是<b>点对点</b>口径，只说明同期表现，<b>不说明是事件造成的</b>
+              （要谈「异常影响」需升级到事件研究法的 AR / CAR，见 plan §8 的 P4）。</li>
+          </ul>
+          <p class="tl-fail" id="tl-fail" hidden></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/static/timeline.js?v={{ asset_v }}"></script>
+</body>
+</html>

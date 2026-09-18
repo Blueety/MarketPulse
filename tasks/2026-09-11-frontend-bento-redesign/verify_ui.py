@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from datetime import timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -907,14 +908,14 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
           "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
           (f["flagUs"], f["flagCn"], f["flagImgs"]))
-    # F-5 nav=11 项：7 个页内锚点 + 2 个**跨页链接**（/macro 全球 + /macro/cn 中国，
-    #     2026-09-14 新增中国页）+ 2 个占位（市场日历 / 设置）。
+    # F-5 nav=12 项：7 个页内锚点 + 3 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 事件时间线，
+    #     后者 2026-09-18 新增）+ 2 个占位（市场日历 / 设置）。
     # ⚠️ 判别（pitfalls「抽 include 后失败先分清方案不可行 vs 断言脆弱」）：include/渲染路径
     #    未变，只是产品决定多了一个合法跨页链接 → 属**断言脆弱**（navCount 写死），
     #    处置是**补强**而非删除/放松：单值 macroHref 升级为数组，逐个链接都纳入判据。
-    check(f["navCount"] == 11 and f["navDisabled"] == 2 and not f["navBad"]
-          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn"]),
-          "F-5 nav=11（7 锚点 + 2 跨页 /macro·/macro/cn + 2 占位）且 data-target/href 全命中", f)
+    check(f["navCount"] == 12 and f["navDisabled"] == 2 and not f["navBad"]
+          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline"]),
+          "F-5 nav=12（7 锚点 + 3 跨页 /macro·/macro/cn·/timeline + 2 占位）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
@@ -1904,8 +1905,8 @@ def assert_macro_cn_page(browser, url: str) -> None:
         check("最新" not in d["econText"] and "实时" not in d["econText"],
               "CN-6b 不得标注「最新 / 实时」（月度数据有发布滞后）")
         # F-5 联动：本页高亮「中国宏观」且「宏观数据」不再 active
-        check(d["navCount"] == 11 and d["cnActive"] and not d["macroActive"],
-              "CN-7 侧栏 11 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
+        check(d["navCount"] == 12 and d["cnActive"] and not d["macroActive"],
+              "CN-7 侧栏 12 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
         # R9 主题分叉：带 dark 偏好进入本页，data-theme 必须仍是 dark
         check(d["theme"] == "dark", "CN-8 带 dark 偏好进入本页仍为 dark（主题初始化同源）", d["theme"])
         check(len(d["pills"]) == 6 and d["pointCount"] > 0,
@@ -3684,6 +3685,199 @@ def assert_walkthrough(browser, url: str) -> None:
         ctx.close()
 
 
+# ==================== TL 事件时间线（/timeline，2026-09-18）====================
+# 任务档 tasks/2026-09-18-event-timeline-page（plan v3 定稿）。
+# 页面 = 官方发布日历（骨架）× 行情（影响）× 新闻（叙事）；事件与行情**并列展示**、不构成因果。
+TL_KINDS = ("FOMC", "非农", "CPI", "PPI", "GDP", "PCE", "零售", "工业产出", "其他")
+# ⚠️ 上面这份枚举是**刻意第二份**（与 src/econ_calendar.KINDS 同源）：枚举本身由
+#    tests/test_econ_calendar.py 的归一化用例锁定；本脚本只负责"页面上不得出现枚举外的类型"。
+TL_CAUSAL = ("因为", "导致", "利好", "利空", "由于")
+
+TL_JS = r"""
+() => {
+  const q = (s) => [...document.querySelectorAll(s)];
+  const txt = document.body.innerText;
+  const days = q('.tl-day').map((d) => ({
+    date: d.dataset.date,
+    kinds: [...d.querySelectorAll('.tl-ev')].map((e) => e.dataset.kind),
+    fwd: (d.querySelector('.tl-fwd') || {}).innerText || '',
+    causal: (d.innerText.match(/因为|导致|利好|利空|由于/g) || []),
+  }));
+  return {
+    modules: ['tl-upcoming', 'tl-past', 'tl-meta'].filter((id) => document.getElementById(id)).length,
+    dayCount: days.length,
+    days: days,
+    evCount: q('.tl-ev').length,
+    allKinds: [...new Set(q('.tl-kind').map((k) => k.textContent.trim()))],
+    cancelled: (txt.match(/CANCELLED/gi) || []).length,
+    causalOutside: days.reduce((n, d) => n + d.causal.length, 0),
+    honest: ['不构成因果', '第三方镜像', '至少'].filter((k) => txt.includes(k)).length,
+    navCount: q('#sidebar .nav-item').length,
+    active: (document.querySelector('#sidebar .nav-item.active span') || {}).textContent || null,
+    srcCount: q('.tl-src li').length,
+    newsCount: q('.tl-news').length,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  };
+}
+"""
+
+
+def _tl_fmt(v):
+    """与 timeline.js 的 fmtPct 同口径（2 位小数；|v|<0.005 不写符号）。"""
+    if v is None:
+        return "待走满"
+    s = "%.2f%%" % abs(v)
+    if abs(v) < 0.005:
+        return s
+    return ("+" if v > 0 else "-") + s
+
+
+def assert_timeline(browser, url: str) -> None:
+    """TL-1~TL-9 事件时间线（/timeline）。
+
+    TL-1 页面 200 + 三块骨架齐全 + 至少有事件行
+    TL-2 **独立口径**核对事件数：sqlite3 直查 db 的 distinct (date,kind) 窗口计数 == API stats == 页面 DOM
+    TL-3 事件类型 ∈ 归一化枚举（防 §4.2 漏配把原始事件名漏到页面上），且 DOM 类型集 == API 类型集
+    TL-4 无 CANCELLED（过滤生效；DOM 与 API 两侧都查）
+    TL-5 同一天内 (date, kind) 不重复渲染
+    TL-6 forward 为 null 时渲染「待走满」、**不得显示 0.00%**（逐格与 API 对打；合法四舍五入到 0 的除外）
+    TL-7 无因果措辞（只查 .tl-day；页面同时必须写明三条诚实边界）
+    TL-8 375/768/1280/1920 四视口无横向溢出
+    TL-9 侧栏 12 项且本页 active
+    """
+    print("\n--- TL 事件时间线（/timeline）---")
+    import sqlite3
+
+    # 前置容错：改动前的基线里 `/api/timeline` 与 `econ_events` 表都不存在 ——
+    # 红跑必须**报红**而不是崩溃（pitfalls「红跑要报红而不是崩溃」）⇒ 降级成空壳继续，
+    # 后续每条断言各自据实报红。
+    api_err = None
+    try:
+        api = json.loads(urllib.request.urlopen(url + "api/timeline?days=90&future_days=30",
+                                                timeout=30).read().decode("utf-8"))
+    except Exception as exc:            # noqa: BLE001
+        api_err = "{}: {}".format(type(exc).__name__, exc)
+        api = {"as_of": "", "stats": {}, "past": [], "upcoming": [], "sources": [], "failed": []}
+    check(api_err is None, "TL-0 /api/timeline 可取（本组其余断言的前提）", api_err)
+
+    # ---------- TL-2 的独立口径：直接查 db（绕过 API 与 storage 代码路径）----------
+    today = api.get("as_of") or ""
+    d0 = _date_from_iso(today) if today else None
+    past_from = (d0 - timedelta(days=90)).isoformat() if d0 else ""
+    fut_to = (d0 + timedelta(days=30)).isoformat() if d0 else ""
+    db = ROOT / "data" / "marketpulse.db"
+    db_err = None
+    try:
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute("SELECT DISTINCT date, kind FROM econ_events").fetchall()
+        conn.close()
+    except Exception as exc:            # noqa: BLE001
+        db_err = "{}: {}".format(type(exc).__name__, exc)
+        rows = []
+    check(db_err is None, "TL-2c econ_events 表可查（独立核算前提）", db_err)
+    uniq = {(d, k) for d, k in rows}
+    exp_past = sum(1 for (d, _k) in uniq if past_from <= d < today)
+    exp_up = sum(1 for (d, _k) in uniq if today <= d <= fut_to)
+    print(f"  [db 独立核算] 全库 {len(uniq)} 条去重事件；窗口 past={exp_past} upcoming={exp_up}")
+    stats = api.get("stats") or {}
+    check((stats.get("past_events"), stats.get("upcoming_events")) == (exp_past, exp_up),
+          "TL-2 API 事件数与 db 独立核算一致（不复用服务端代码路径）",
+          (stats.get("past_events"), stats.get("upcoming_events"), exp_past, exp_up))
+
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        perrs: list[str] = []
+        page.on("pageerror", lambda e: perrs.append(str(e)))
+        resp = page.goto(url + "timeline", wait_until="load")
+        page.wait_for_timeout(1200)
+        d = page.evaluate(TL_JS)
+        print(f"  [page] modules={d['modules']} days={d['dayCount']} events={d['evCount']} "
+              f"kinds={d['allKinds']} news={d['newsCount']} src={d['srcCount']}")
+
+        # ---------- TL-1 ----------
+        check(resp is not None and resp.status == 200 and d["modules"] == 3 and d["dayCount"] >= 1,
+              "TL-1 /timeline 200 且三块骨架齐全、有事件行",
+              (resp.status if resp else None, d["modules"], d["dayCount"]))
+
+        # ---------- TL-2b：DOM 侧事件数 ----------
+        dom_ev = d["evCount"]
+        check(dom_ev >= 1 and dom_ev == exp_past + exp_up,
+              "TL-2b 页面渲染的事件数 == db 独立核算的窗口事件数（前置 dom_ev>=1：空集相等不算过）",
+              (dom_ev, exp_past + exp_up))
+
+        # ---------- TL-3 ----------
+        api_kinds = {e["kind"] for day in (api["past"] + api["upcoming"]) for e in day["events"]}
+        bad = [k for k in (set(d["allKinds"]) | api_kinds) if k not in TL_KINDS]
+        check(bool(api_kinds) and not bad and set(d["allKinds"]) == api_kinds,
+              "TL-3 事件类型全部落在归一化枚举内，且页面与 API 类型集一致"
+              "（前置 api_kinds 非空：两侧都空时集合相等无意义）", (bad, sorted(api_kinds)))
+
+        # ---------- TL-4 ----------
+        api_cancelled = [e["title"] for day in (api["past"] + api["upcoming"]) for e in day["events"]
+                         if "CANCELLED" in (e["title"] or "").upper()]
+        check(d["dayCount"] >= 1 and d["cancelled"] == 0 and not api_cancelled,
+              "TL-4 无 CANCELLED 事件（STATUS 过滤生效；DOM + API 双侧查）",
+              (d["cancelled"], api_cancelled[:2]))
+
+        # ---------- TL-5 ----------
+        dup = [day["date"] for day in d["days"] if len(day["kinds"]) != len(set(day["kinds"]))]
+        check(len(d["days"]) >= 1 and not dup,
+              "TL-5 同一天内 (date, kind) 不重复渲染（两源同事件已去重；前置有事件行）", dup[:3])
+
+        # ---------- TL-6：逐日逐窗口与 API 对打 ----------
+        mismatches, legit_zero = [], 0
+        for day in api["past"]:
+            dom = next((x for x in d["days"] if x["date"] == day["date"]), None)
+            if dom is None:
+                mismatches.append((day["date"], "DOM 缺该天"))
+                continue
+            for h in ("1", "3", "5", "10"):
+                v = ((day.get("forward") or {}).get(h) or {}).get("gspc")
+                want = _tl_fmt(v)
+                if v is not None and abs(v) < 0.005:
+                    legit_zero += 1
+                if want not in dom["fwd"]:
+                    mismatches.append((day["date"], h, v, want, dom["fwd"][:60]))
+        zero_on_page = sum(x["fwd"].count("0.00%") for x in d["days"])
+        check(bool(api["past"]) and not mismatches and zero_on_page <= legit_zero,
+              "TL-6 forward 未走满渲染「待走满」、null 绝不显示 0.00%（逐格对打；"
+              "页面上 0.00% 的个数不超过 API 里合法四舍五入到 0 的个数）",
+              (mismatches[:3], zero_on_page, legit_zero))
+
+        # ---------- TL-7 ----------
+        check(d["causalOutside"] == 0 and d["honest"] == 3,
+              "TL-7 事件区无因果措辞（仅在诚实边界声明里出现「不构成因果」），且三条边界齐全",
+              (d["causalOutside"], d["honest"]))
+
+        # ---------- TL-9 ----------
+        check(d["navCount"] == 12 and d["active"] == "事件时间线",
+              "TL-9 侧栏 12 项且本页 active = 事件时间线", (d["navCount"], d["active"]))
+        check(resp is not None and resp.status == 200 and not perrs,
+              "TL-9b /timeline 200 且无 pageerror（前置 200：404 页面上无报错不算过）",
+              (resp.status if resp else None, perrs[:2]))
+    finally:
+        ctx.close()
+
+    # ---------- TL-8：四视口无横向溢出 ----------
+    for w, h in ((375, 812), (768, 1024), (1280, 900), (1920, 1080)):
+        ctx = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=1)
+        try:
+            page = ctx.new_page()
+            page.goto(url + "timeline", wait_until="load")
+            page.wait_for_timeout(900)
+            o = page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+            days = page.evaluate("() => document.querySelectorAll('.tl-day').length")
+            check(o == 0 and days >= 1, f"TL-8 {w} 档无横向溢出且有事件行", (o, days))
+        finally:
+            ctx.close()
+
+
+def _date_from_iso(s: str):
+    from datetime import date as _d
+    return _d.fromisoformat(s)
+
+
 def _tpl(js: str, cfg: dict) -> str:
     """把探针模板里的占位符替换为该容器的 id / 选择器 / 滚动器键。"""
     return (js.replace("__BODY__", cfg["body_id"])
@@ -4350,6 +4544,7 @@ def main() -> int:
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
             assert_quadrant_matrix(browser, url)     # QM-* 四象限矩阵（macro-quadrant-matrix，2026-09-18）
+            assert_timeline(browser, url)            # TL-* 事件时间线（event-timeline-page，2026-09-18）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])

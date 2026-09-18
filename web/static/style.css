@@ -994,3 +994,81 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .f-note { display: none; }
   .fr-assets { grid-column: 1 / -1; }
 }
+
+/* ===== 事件时间线页（/timeline）—— 2026-09-18（任务档 tasks/2026-09-18-event-timeline-page）=====
+   与宏观页同一"纸面感"取向：极浅背景 / 1px 细边框 / 低饱和。
+   ⚠️ 只加 `.tl-*` 新类，**不改 `.mac-*` / `.cn-*`**（那两段被 /macro 与 /macro/cn 共享）。
+   ⚠️ 颜色一律走 token（双主题自动跟随）；**不给事件染红绿** —— 红绿只用于"涨跌"这一类数字，
+     事件类型/机构一律中性色（plan §10：不做因果推断、不打利好利空）。 */
+.tl { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.tl-head { padding: 6px 2px 2px; }
+.tl-head h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary); }
+.tl-sub { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); }
+.tl-note { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+
+.tl-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.tl-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.tl-card-head h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.tl-hint { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* 一天一行：日期列（固定）+ 事件/指标列 */
+.tl-day { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px;
+  padding: 12px 0; border-top: 1px solid var(--border); }
+.tl-day:first-child { border-top: 0; padding-top: 0; }
+.tl-date { font-family: var(--mono); font-size: 14px; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; }
+.tl-week { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+/* 距今天数/未来标（「3 天后」「已过 12 天」） */
+.tl-rel { display: block; font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+
+.tl-events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tl-ev { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; }
+.tl-kind { font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.tl-time { font-family: var(--mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.tl-title { font-size: 13px; color: var(--text-primary); }
+.tl-ev-note, .tl-agency, .tl-status { font-size: 10px; color: var(--text-muted); }
+.tl-agency { border-left: 1px solid var(--border); padding-left: 6px; }
+.tl-status { border: 1px dashed var(--border); border-radius: 999px; padding: 0 6px; }
+
+/* 影响层：当日 / 事件后（数字才用涨跌色，且与全站同口径：up=绿 down=红，见 style.css 的 .mac .up） */
+.tl-metrics { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
+  font-size: 12px; color: var(--text-secondary); }
+.tl-metric { white-space: nowrap; }
+.tl-metric b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.tl-label { color: var(--text-muted); }
+.tl .up { color: var(--green); }
+.tl .down { color: var(--red); }
+.tl .flat { color: var(--text-secondary); }
+
+/* 叙事层 */
+.tl-news { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+.tl-news a { color: var(--text-secondary); text-decoration: none; border-bottom: 1px dotted var(--border); }
+.tl-news a:hover { color: var(--text-primary); }
+.tl-news-n { color: var(--text-muted); font-family: var(--mono); margin-right: 6px; }
+
+.tl-empty { margin: 0; padding: 10px 0; font-size: 12px; color: var(--text-muted); }
+.tl-src { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tl-src li { font-size: 12px; color: var(--text-secondary); }
+.tl-src a { color: var(--text-secondary); border-bottom: 1px dotted var(--border); text-decoration: none; }
+.tl-src span { color: var(--text-muted); }
+.tl-honest { margin: 12px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.tl-honest li { font-size: 12px; color: var(--text-secondary); line-height: 1.55; }
+.tl-honest b { color: var(--text-primary); font-weight: 600; }
+.tl-fail { margin: 12px 0 0; font-size: 12px; color: var(--orange); }
+
+@media (max-width: 768px) {
+  .tl-day { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .tl-date { display: flex; align-items: baseline; gap: 8px; }
+  .tl-week, .tl-rel { display: inline; margin-top: 0; }
+  .tl-card { padding: 14px; }
+}
+@media (max-width: 480px) {
+  .tl-agency { display: none; }
+}
+/* 「加载更早」：默认 90 天窗口之外的入口（plan §5.2）；到库内最早事件时 JS 自动 hidden */
+.tl-more-wrap { margin-top: 12px; }
+.tl-more { font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer;
+  background: var(--bg-hover); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 8px; }
+.tl-more:hover { color: var(--text-primary); border-color: var(--text-muted); }

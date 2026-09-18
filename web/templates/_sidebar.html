@@ -7,6 +7,10 @@
         <a class="nav-item" href="{{ base_prefix }}#watchlist-section" data-target="watchlist-section"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l1.8 3.6 4 .6-2.9 2.8.7 4-3.6-1.9L4.4 13.8l.7-4L2.2 6.2l4-.6z"/></svg><span>自选列表</span></a>
         <a class="nav-item" href="{{ base_prefix }}#news" data-target="news"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 6h6M5 9h4"/></svg><span>新闻资讯</span></a>
         <a class="nav-item" href="{{ base_prefix }}#alerts" data-target="alerts"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l6 11H2z"/><path d="M8 6.5v3M8 11.2v.3"/></svg><span>告警记录</span></a>
+        {# 2026-09-18 事件时间线（/timeline）：与「告警记录」同源的**记录类**入口（plan §6.2 指定位置）。
+           同为**跨页链接**（`href` 以 / 开头，**不写 data-target**：页内锚点处理器找不到会静默失效，
+           verify_ui 的 F-5 把"无 data-target 又非 is-disabled"判为坏项）。新增后 navCount 11 → 12。 #}
+        <a class="nav-item{% if active_page == 'timeline' %} active{% endif %}" href="/timeline"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5v11"/><circle cx="3" cy="5" r="1.2"/><circle cx="3" cy="9.5" r="1.2"/><path d="M6 5h7M6 9.5h5"/></svg><span>事件时间线</span></a>
         <div class="nav-divider"></div>
         {# 2026-09-14 宏观页：由占位改为**跨页链接**。
            ⚠️ 不要写 data-target=""：app.js 的锚点处理器靠 `if (!el) return` 放行（返回前不 preventDefault），

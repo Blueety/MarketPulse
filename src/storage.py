@@ -42,6 +42,35 @@ CREATE TABLE IF NOT EXISTS history (
     PRIMARY KEY (date, symbol)
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_date ON history(symbol, date);
+
+-- 经济事件日历（2026-09-18，任务档 tasks/2026-09-18-event-timeline-page）
+-- 主键 (date, kind, source)：同一 `(日期, 类型)` 允许来自不同源（fed 官方 / 镜像），
+-- 页面上再按 (date, kind) 去重（官方优先）—— 库里保留两源便于对账与排障。
+CREATE TABLE IF NOT EXISTS econ_events (
+    date       TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    agency     TEXT,
+    source     TEXT NOT NULL,
+    time_et    TEXT,
+    status     TEXT,
+    note       TEXT,
+    fetched_at TEXT,
+    PRIMARY KEY (date, kind, source)
+);
+CREATE INDEX IF NOT EXISTS idx_econ_events_date ON econ_events(date);
+
+-- 事件叙事层（P3）：**按 (date, kind) 存** —— 叙事是"这个事件当天媒体在谈什么"，
+-- 同一天若有多个事件（如 09-30 GDP + PCE），各事件各有各的检索口径，不共用一条。
+CREATE TABLE IF NOT EXISTS econ_event_news (
+    date       TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    news_count INTEGER,
+    title      TEXT,
+    link       TEXT,
+    fetched_at TEXT,
+    PRIMARY KEY (date, kind)
+);
 """
 
 
@@ -278,3 +307,124 @@ def restore_if_empty(db_path=None, backup_dir=None) -> str:
             wal_checkpoint(db_path)
             return "json"
     return "empty"
+
+
+# ------------------------------------------------------------------ 经济事件日历（2026-09-18）
+
+_ECON_COLS = ("date", "kind", "title", "agency", "source", "time_et", "status", "note", "fetched_at")
+
+
+def upsert_econ_events(events, db_path=None) -> int:
+    """批量 upsert 事件（dict 列表），返回写入条数。
+
+    日期强制 `YYYY-MM-DD`（畸形跳过并告警，纪律同 `upsert_history_rows`）；
+    `kind`/`source` 必填（缺失跳过）。同一 `(date, kind, source)` 视为同一条 → 覆盖更新
+    （calendars 会改期：SEQUENCE 变化时标题/时刻都可能变）。
+    """
+    clean = []
+    for ev in events or []:
+        date = str(ev.get("date") or "")
+        kind = str(ev.get("kind") or "").strip()
+        source = str(ev.get("source") or "").strip()
+        if not _DATE_RE.match(date) or not kind or not source:
+            log.warning("econ_events 行字段缺失/日期非法，跳过: %r", {k: ev.get(k) for k in ("date", "kind", "source")})
+            continue
+        clean.append((date, kind, str(ev.get("title") or "")[:300], ev.get("agency"),
+                      source, ev.get("time_et"), ev.get("status") or "ok",
+                      ev.get("note"), ev.get("fetched_at") or datetime.now().isoformat(timespec="seconds")))
+    if not clean:
+        return 0
+    sql = ("INSERT INTO econ_events(date, kind, title, agency, source, time_et, status, note, fetched_at) "
+           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+           "ON CONFLICT(date, kind, source) DO UPDATE SET "
+           "title = excluded.title, agency = excluded.agency, time_et = excluded.time_et, "
+           "status = excluded.status, note = excluded.note, fetched_at = excluded.fetched_at")
+    conn = _connect(db_path)
+    try:
+        with conn:
+            conn.executemany(sql, clean)
+    finally:
+        conn.close()
+    return len(clean)
+
+
+def query_econ_events(start_date=None, end_date=None, kinds=None, db_path=None) -> list[dict]:
+    """查事件（date 升序）；损坏 DB → 返回 []（不崩，纪律同 history 查询侧）。"""
+    sql = "SELECT %s FROM econ_events" % ", ".join(_ECON_COLS)
+    conds, params = [], []
+    if start_date:
+        conds.append("date >= ?")
+        params.append(str(start_date))
+    if end_date:
+        conds.append("date <= ?")
+        params.append(str(end_date))
+    if kinds:
+        ks = sorted({str(k) for k in kinds})
+        conds.append("kind IN (%s)" % ",".join("?" * len(ks)))
+        params.extend(ks)
+    if conds:
+        sql += " WHERE " + " AND ".join(conds)
+    sql += " ORDER BY date ASC, kind ASC, source ASC"
+    conn = _connect(db_path)
+    try:
+        return [dict(zip(_ECON_COLS, r)) for r in conn.execute(sql, params)]
+    except sqlite3.DatabaseError as exc:
+        log.warning("econ_events 查询失败（DB 损坏？），按空处理: %s", exc)
+        return []
+    finally:
+        conn.close()
+
+
+def count_econ_events(db_path=None) -> int:
+    """事件总行数；损坏 DB → 0。"""
+    conn = _connect(db_path)
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM econ_events").fetchone()[0])
+    except sqlite3.DatabaseError as exc:
+        log.warning("econ_events 计数失败（DB 损坏？），按 0 处理: %s", exc)
+        return 0
+    finally:
+        conn.close()
+
+
+def upsert_event_news(rows, db_path=None) -> int:
+    """批量 upsert 叙事层 [(date, kind, count, title, link), ...]（同 (date,kind) 覆盖）。"""
+    clean = []
+    for date, kind, count, title, link in rows or []:
+        date, kind = str(date or ""), str(kind or "").strip()
+        if not _DATE_RE.match(date) or not kind:
+            log.warning("econ_event_news 字段非法，跳过: %r/%r", date, kind)
+            continue
+        clean.append((date, kind, count, title, link, datetime.now().isoformat(timespec="seconds")))
+    if not clean:
+        return 0
+    sql = ("INSERT INTO econ_event_news(date, kind, news_count, title, link, fetched_at) "
+           "VALUES (?, ?, ?, ?, ?, ?) "
+           "ON CONFLICT(date, kind) DO UPDATE SET news_count = excluded.news_count, "
+           "title = excluded.title, link = excluded.link, fetched_at = excluded.fetched_at")
+    conn = _connect(db_path)
+    try:
+        with conn:
+            conn.executemany(sql, clean)
+    finally:
+        conn.close()
+    return len(clean)
+
+
+def query_event_news(dates=None, db_path=None) -> dict[tuple[str, str], dict]:
+    """查叙事层 → `{(date, kind): {count, title, link}}`（损坏 DB → {}）。"""
+    sql = "SELECT date, kind, news_count, title, link FROM econ_event_news"
+    params: list = []
+    if dates:
+        ds = sorted({str(d) for d in dates})
+        sql += " WHERE date IN (%s)" % ",".join("?" * len(ds))
+        params.extend(ds)
+    conn = _connect(db_path)
+    try:
+        return {(r[0], r[1]): {"count": r[2], "title": r[3], "link": r[4]}
+                for r in conn.execute(sql, params)}
+    except sqlite3.DatabaseError as exc:
+        log.warning("econ_event_news 查询失败（DB 损坏？），按空处理: %s", exc)
+        return {}
+    finally:
+        conn.close()

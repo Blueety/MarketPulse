@@ -45,6 +45,8 @@ from src.cn_econ_fetcher import (
     fetch_cn_econ_raw,
     group_keys,
 )
+# 事件时间线（2026-09-18）：日历（db）× 行情影响 × 新闻叙事 → 组装成页面 payload
+from src import timeline as _timeline
 
 log = logging.getLogger("marketpulse")
 
@@ -112,7 +114,7 @@ app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static"
 # 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
 #    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
-_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js")
+_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js", "timeline.js")
 
 
 def _asset_version() -> str:
@@ -969,6 +971,60 @@ def _load_news() -> dict:
 def api_news() -> dict:
     """最新资讯（data/news.json，Hermes 落盘；未接入/坏文件 → 空结构，200 恒定）。"""
     return _load_news()
+
+
+# ---- 事件时间线（2026-09-18，任务档 tasks/2026-09-18-event-timeline-page）----
+#
+# 数据来自 **db**（`econ_events` / `econ_event_news`，由 `scripts/sync_econ_calendar.py` 落盘）
+# + 既有 history 表 —— 本端点**不联网**，因此不会像 `/api/econ` 那样受上游抖动影响。
+# 缓存按 `(days, future_days)` 分键：TTL 6h 与 `/api/econ` 同纪律（日历变动是月度/年度级别），
+# 且**只缓存有事件的结果**（全空不写缓存，否则一次空库会锁死 6 小时 —— 同 `/api/econ` 的"失败不缓存"）。
+_TIMELINE_TTL = 6 * 3600
+_timeline_lock = threading.Lock()
+_timeline_cache: dict = {"ts": {}, "payload": {}}
+
+
+@app.get("/api/timeline")
+def api_timeline(
+    days: int = Query(90, ge=1, le=3650),
+    future_days: int = Query(30, ge=0, le=730),
+) -> dict:
+    """事件时间线：`{as_of, window, stats, sources, past[], upcoming[]}`（HTTP 恒 200）。
+
+    每个 day 携带 `events[]` + `market`（当日涨跌，按**该标的的交易日**取前收）
+    + `forward`（+1/3/5/10 交易日点对点，**逐键判空**）；事件自带叙事层字段（可空）。
+    """
+    key = (days, future_days)
+    now = time.time()
+    with _timeline_lock:
+        cached = _timeline_cache["payload"].get(key)
+        if cached is not None and now - _timeline_cache["ts"].get(key, 0.0) < _TIMELINE_TTL:
+            return cached
+
+    events = st.query_econ_events()
+    history = st.rows_to_records(st.query_history())
+    news = st.query_event_news()
+    payload = _timeline.build_timeline(events, history, news,
+                                       past_days=days, future_days=future_days)
+    stats = payload.get("stats") or {}
+    if stats.get("past_events") or stats.get("upcoming_events"):
+        with _timeline_lock:
+            _timeline_cache["payload"][key] = payload
+            _timeline_cache["ts"][key] = time.time()
+    return payload
+
+
+@app.get("/timeline", response_class=HTMLResponse)
+def timeline_page() -> HTMLResponse:
+    """事件时间线独立页（官方日历 = 骨架，行情 = 影响，新闻 = 叙事）。
+
+    `active_page="timeline"` → 侧栏高亮「事件时间线」。
+    """
+    template = _TEMPLATES.get_template("timeline.html")
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="/", active_page="timeline"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 def _watch_failed(payload: dict) -> bool:

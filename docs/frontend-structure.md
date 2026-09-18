@@ -10,20 +10,21 @@
 
 | 维度 | 现状 |
 | --- | --- |
-| 页面 | **3 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观） |
-| JSON API | **9 个**：`/api/history` `/api/latest` `/api/alerts` `/api/news` `/api/watchlist` `/api/macro` `/api/econ` `/api/econ/cn` `/api/cn/quotes` |
-| 模板 | 5 个 web 模板（3 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
-| 静态资产 | `style.css` 1 份 + 业务 JS 3 份 + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
+| 页面 | **4 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观）、**`/timeline`（事件时间线，2026-09-18）** |
+| JSON API | **10 个**：`/api/history` `/api/latest` `/api/alerts` `/api/news` `/api/watchlist` `/api/macro` `/api/econ` `/api/econ/cn` `/api/cn/quotes` **`/api/timeline`** |
+| 模板 | 6 个 web 模板（4 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
+| 静态资产 | `style.css` 1 份 + 业务 JS **4 份**（`app.js` / `macro.js` / `macro_cn.js` / **`timeline.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
 | JS 框架 | **无框架、无构建**：原生 ES5 风格 IIFE + Chart.js 4.4.1（CDN）+ chartjs-plugin-zoom |
-| 前端总规模 | ≈ **5,300 行**（`style.css` 881 + `app.js` 1229 + `macro.js` 722 + `macro_cn.js` 805 + `chart-crosshair.js` 262 + 模板 489 + `web/app.py` 1198（含后端） |
+| 前端总规模 | ≈ **6,100 行**（`style.css` 1074 + `app.js` 1229 + `macro.js` 722 + `macro_cn.js` 805 + **`timeline.js` 380** + `chart-crosshair.js` 262 + 模板 ~572 + `web/app.py` 1254（含后端） |
 | 主题 | 双主题（light / dark），CSS 自定义属性 token 驱动，`localStorage["mp-theme"]` 持久化 |
-| 验收 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，**5 视口**，退出码 0/1） |
+| 验收 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，**5 视口**，退出码 0/1；断言组 `MX/NA/QM/UX/PW/TL`） |
 
 **请求拓扑**
 
 ```
 浏览器
- ├─ GET /  |  /macro  |  /macro/cn        → Jinja2 渲染（no-cache 头，注入 asset_v / base_prefix / active_page）
+ ├─ GET /  |  /macro  |  /macro/cn  |  /timeline
+ │                                        → Jinja2 渲染（no-cache 头，注入 asset_v / base_prefix / active_page）
  ├─ GET /static/*                        → _RevalidateStatic（强制 Cache-Control: no-cache，未变则 304）
  └─ fetch /api/*                         → FastAPI 只读端点（各自 TTL 内存缓存，失败恒 HTTP 200 降级空结构）
 ```
@@ -37,17 +38,19 @@
 | `web/templates/index.html` | 200 | 10.6 K | 看板页（bento 四行） | `/` 路由 |
 | `web/templates/macro.html` | 125 | 6.5 K | 全球宏观页（五级块） | `/macro` 路由 |
 | `web/templates/macro_cn.html` | 129 | 7.0 K | 中国宏观页（五级块） | `/macro/cn` 路由 |
-| `web/templates/_topbar.html` | 18 | 1.5 K | 顶栏（品牌 / 搜索 / 数据日 / 通知 / 头像 / 刷新） | 3 页 include，**无参数** |
-| `web/templates/_sidebar.html` | 35 | 5.6 K | 侧栏（11 项导航 + 主题按钮 + 市场状态） | 3 页 include，吃 `base_prefix` / `active_page` |
+| `web/templates/timeline.html` | 83 | 4.0 K | **事件时间线页**（即将到来 / 已发生 / 口径与来源三块） | `/timeline` 路由 |
+| `web/templates/_topbar.html` | 18 | 1.5 K | 顶栏（品牌 / 搜索 / 数据日 / 通知 / 头像 / 刷新） | **4 页** include，**无参数** |
+| `web/templates/_sidebar.html` | 39 | 8.0 K | 侧栏（**12 项**导航 + 主题按钮 + 市场状态） | **4 页** include，吃 `base_prefix` / `active_page` |
 | `web/templates/report_card.html` | 160 | 4.6 K | **非 web**：`src/image_renderer.py:202` 长图 HTML 模板 | 图片渲染链路 |
-| `web/static/style.css` | 881 | 53.3 K | 全站唯一样式表（含 `@media` × 14 处） | 3 页 `<link>` |
+| `web/static/style.css` | 1074 | 68 K | 全站唯一样式表（含 `@media` × 16 处） | **4 页** `<link>` |
 | `web/static/app.js` | 1229 | 56.3 K | 看板页业务脚本（21 个区块） | `index.html` |
 | `web/static/macro.js` | 722 | 35.1 K | 全球宏观页业务脚本（单 IIFE） | `macro.html` |
 | `web/static/macro_cn.js` | 805 | 36.1 K | 中国宏观页业务脚本（单 IIFE） | `macro_cn.html` |
-| `web/static/chart-crosshair.js` | 262 | 14.8 K | **跨页共享**：crosshair 插件 + `cssVar`/`themeColors`/`withAlpha` | 3 页（**必须在业务脚本前**） |
+| `web/static/timeline.js` | 380 | 20 K | **事件时间线页**业务脚本（单 IIFE；本页无图表 ⇒ **不引入** Chart.js） | `timeline.html` |
+| `web/static/chart-crosshair.js` | 262 | 14.8 K | **跨页共享**：crosshair 插件 + `cssVar`/`themeColors`/`withAlpha` | 3 页（**必须在业务脚本前**；`/timeline` 无图表故不引） |
 | `web/static/flags/{cn,us}.svg` | — | — | 国旗图形素材（图标级简化） | `app.js:iconFlagHtml` |
 | `web/static/icons/{dollar,bond,gold,oil}.svg` | — | — | 品种类圆形素材 | `app.js:iconAssetHtml` |
-| `web/app.py` | 1198 | 56.4 K | FastAPI 应用：3 页路由 + 9 API + 静态挂载 + 资产版本号 | — |
+| `web/app.py` | 1254 | 60 K | FastAPI 应用：**4 页路由 + 10 API** + 静态挂载 + 资产版本号 | — |
 
 ---
 
@@ -106,6 +109,23 @@
 
 ---
 
+### 3.5 `timeline.html`（`/timeline`）—— 事件时间线（2026-09-18）
+
+| 区块 | id | 内容 | 数据源 |
+| --- | --- | --- | --- |
+| 头部 | `.tl-head` | 标题 + 口径说明 + `#tl-scope`（库内事件数/可回溯范围/本轮窗口） | `/api/timeline`.stats / db_range |
+| **即将到来** | `#tl-upcoming` | 未来 `future_days`（默认 30）天的排定日程；**未来事件不显示「事件后」窗口** | `past` 之外的 `upcoming[]` |
+| **已发生** | `#tl-past` | 日期倒序；每天 = 事件行 + 当日涨跌 + 事件后 +1/3/5/10 交易日 + 叙事层；底部「加载更早」`#tl-more`（90 天 → 1 年 → 3.3 年 → 10 年，到库内最早事件自动隐藏） | `past[]` |
+| 口径与来源 | `#tl-meta` | 三个源的说明（`#tl-src`）+ 五条诚实边界（`.tl-honest`）+ 同步失败提示（`#tl-fail`） | `sources[]` / `failed[]` |
+
+**每日一行**：`.tl-day`（`data-date`）→ 日期列（`.tl-date` + `.tl-week` + `.tl-rel` 今天/N 天后/已过 N 天）
++ 主列（`.tl-events` → `.tl-ev[data-kind]` / `.tl-metrics` 当日 / `.tl-metrics.tl-fwd` 事件后 / `.tl-news`）。
+
+> ⚠️ 本页**没有图表**（不引 Chart.js / chart-crosshair.js）：两分区都是文字卡片，
+> 唯一"图形"是日期列的对齐；主题按钮点击后只 `render()` 重渲染（颜色全走 token）。
+
+---
+
 ## 4. API 契约（前端消费视角）
 
 | 端点 | 消费方 | 缓存 TTL | 失败语义 | 关键字段 |
@@ -119,6 +139,7 @@
 | `GET /api/econ` | `macro.js` | **6 h** | `as_of` 为空则不缓存 | BLS 四序列 + `inflation_axis` / `growth_axis` / `quadrant` |
 | `GET /api/econ/cn?group=` | `macro_cn.js` | **6 h/组** | 单序列失败进 `failed`；**全部失败才不缓存** | 13 序列 + 中国版四象限；`group ∈ price\|growth\|money\|rate\|labor\|estate` |
 | `GET /api/cn/quotes` | `macro_cn.js` | **90 s** | 失败降级 + `failed[]` | `cny`、`bond10y`、`credit_spread`(bp)、`as_of` |
+| `GET /api/timeline?days=90&future_days=30` | `timeline.js` | **6 h**（按 `(days,future_days)` 分键） | 读 db，**不联网**；全空不写缓存 | `as_of`、`window`、`db_range`、`stats`、`sources`、`past[]` / `upcoming[]`（每个 day：`events[]` + `market{gspc,ixic,sh,vix_chg}` + `forward{"1"|"3"|"5"|"10"}`） |
 
 > 所有端点**恒定 HTTP 200**，降级用空结构表达 → 前端必须自行判空显示「数据暂缺」，不能靠 `r.ok`。
 
@@ -170,7 +191,18 @@
 
 ---
 
-## 6. CSS 结构（`style.css`，996 行 / 单文件）
+### 5.4 `timeline.js`（单 IIFE，本页无图表）
+
+1. **外壳**：与 `app.js` / `macro.js` / `macro_cn.js` **同构的第 4 份副本**（`getTheme` / `applyTheme` / `MARKET_SESSIONS` / `marketSessionOf` / `updateMarketStatus` / `bindShell`）—— 改一处必须**四页同改**。
+2. **取数**：`getJSON(url)`（AbortController 20 s）→ `/api/timeline?days&future_days`；`load(force)` 传 `_=<ts>` 绕过浏览器缓存。
+3. **渲染**：`render()` → `fillList()` → `dayHtml()`；`metric()` 统一"标签 + 带向值的 `<b>`"；
+   `fmtPct()` / `cls()` **按四舍五入后的方向判色**（`|v| < 0.005` 不写符号、不染方向色）。
+   `weekdayZh()` 用 `Date.UTC` 纯函数取星期（**不用 `new Date("YYYY-MM-DD")`**，见 §7-12）。
+4. **不做**：任何因果措辞、任何"利好/利空"标签、任何对 `forward` 为 `null` 的"补 0"。
+
+---
+
+## 6. CSS 结构（`style.css`，1074 行 / 单文件）
 
 **Token 层**
 
@@ -205,7 +237,8 @@
 | 622 | 小屏手机（单列 + 显隐低价值列） |
 | 675 | 骨架屏 `.skeleton` |
 | 721 | **宏观页 `.mac-*`**（research terminal 风格，721-951；**2026-09-18 新增四象限矩阵 `.regime-matrix` / `.rm-axis` / `.rm-cell` / `.rm-skel` 于 838-853** —— 新类名，`.mac-*` 未动） |
-| 952 | **中国宏观 `.cn-*`**（仅 8 条规则，952-996） |
+| 952 | **中国宏观 `.cn-*`**（仅 8 条规则，952-997） |
+| 998 | **事件时间线 `.tl-*`**（2026-09-18，998-1074；含 `.tl .up/.down` 涨跌色与 ≤768/≤480 两档响应式） |
 
 **断点全景**（14 处 `@media`）：`768`(×4 处) / `1499` / `1399` / `1299` / `1024` / `480`(×4) / `1440 min-width` / `prefers-reduced-motion`。
 
@@ -228,6 +261,8 @@
 11. **验收脚本是唯一真源**：`venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，5 视口 1920/1600/1280/900/375，自动挑空闲端口）。**不要以 `curl 200` 或肉眼看代替。**
 12. **不要用 `new Date("YYYY-MM-DD")`**：会有本地时区偏移，日期/星期一律走 `app.js:142` 的日期工具。
 13. **四象限矩阵的排布与契约（2026-09-18）**：排列固定为教材口径（横轴通胀 左低右高 / 纵轴增长 上高下低），**不许为"好看"改排列**；象限**无褒贬**，只做中性高亮（`--bg-elevated` + `--blue` 边框），**禁止染红绿**（会被读成涨跌）。`#regime-quadrant`（文字行）与 `#cn-regime[data-quadrant]` 是既有验收契约，矩阵是**新增兄弟元素**、不得替换它们；骨架节点必须标在**容器内部**（`clearSkel` 是 removeChild 自身，标在容器上会把容器删掉）。
+
+14. **事件时间线的三条契约（2026-09-18）**：① `forward` 为 `null` = **未走满** ⇒ 必须渲染「待走满」，**绝不允许显示 0.00%**（`TL-6` 逐格与 API 对打）；② 事件与行情**并列展示**，事件区不得出现因果措辞、不得打「利好/利空」标签（`TL-7`）；③ 事件类型只能是 `src/econ_calendar.KINDS` 的枚举（`TL-3`），**归一化漏配会让同一事件在页面上出现三四次**。另：侧栏 nav 由 11 项变 12 项，`verify_ui` 的 `F-5` / `CN-7` 两处 `navCount` 已同步。
 
 ---
 
