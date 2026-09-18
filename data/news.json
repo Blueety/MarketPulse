@@ -16,25 +16,11 @@
       "summary": "Anthropic与OpenAI正在将部分算力需求转向20至30兆瓦（MW）级别的数据中心，以更快获得可用容量"
     },
     {
-      "title": "Anthropic悄悄建起生物实验室！Claude指挥机器人做实验，AI制药再进一步",
-      "url": "https://wallstreetcn.com/articles/3782086",
+      "title": "美债收益率飙破5%后，资金开始“抢债”！",
+      "url": "https://wallstreetcn.com/articles/3782088",
       "source": "华尔街见闻",
       "published": "2026-09-18",
-      "summary": "Anthropic正将人工智能的野心进一步延伸至现实生物学领域"
-    },
-    {
-      "title": "美联储重启加息对市场影响几何",
-      "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBfaGpQRFJCMmVvUkd2SUpvWjhUbjNIUm9JUGhSTzNsNEJGM1hYUHU0TzdGQ094cjd0dWNZa3VmdXIwZHk2ZDBXZzZGSVJJYm1vSnBDaVFZcWlBUVpkLVNBNzhQSjhZbWt4VkVz?oc=5",
-      "source": "中国经济网",
-      "published": "2026-09-18",
-      "summary": "美联储重启加息对市场影响几何"
-    },
-    {
-      "title": "用魔法打败魔法，OpenAI被Claude“黑了”......",
-      "url": "https://wallstreetcn.com/articles/3782081",
-      "source": "华尔街见闻",
-      "published": "2026-09-18",
-      "summary": "一场颇具讽刺意味的安全事件正在引发关注： 研究人员借助Anthropic最新的Claude Opus 5，将一个图像处理漏洞逐步扩展为完整攻击链，最终获取了一名OpenAI员工的ChatGPT账户访问权限，并进一步触及OpenAI内部Gi…"
+      "summary": "美国国债市场的持续抛售，正在催生一个罕见的买入机会"
     },
     {
       "title": "日本央行行长：不排除连续加息选项，要先发制人地遏制通胀，中东、AI、汇率是关键变量",
@@ -44,11 +30,11 @@
       "summary": "日本央行行长：不排除连续加息选项，要先发制人地遏制通胀，中东、AI、汇率是关键变量"
     },
     {
-      "title": "报道：SK海力士旗下Solidigm考虑在美国建设首座NAND工厂",
-      "url": "https://wallstreetcn.com/articles/3782074",
+      "title": "Anthropic悄悄建起生物实验室！Claude指挥机器人做实验，AI制药再进一步",
+      "url": "https://wallstreetcn.com/articles/3782086",
       "source": "华尔街见闻",
       "published": "2026-09-18",
-      "summary": "美国NAND存储制造布局或迎来新的扩张"
+      "summary": "Anthropic正将人工智能的野心进一步延伸至现实生物学领域"
     },
     {
       "title": "日本央行货币政策会议进入第二天 预计加息至1.25%",
@@ -56,6 +42,20 @@
       "source": "共同网",
       "published": "2026-09-18",
       "summary": "日本央行货币政策会议进入第二天 预计加息至1.25%"
+    },
+    {
+      "title": "用魔法打败魔法，OpenAI被Claude“黑了”......",
+      "url": "https://wallstreetcn.com/articles/3782081",
+      "source": "华尔街见闻",
+      "published": "2026-09-18",
+      "summary": "一场颇具讽刺意味的安全事件正在引发关注： 研究人员借助Anthropic最新的Claude Opus 5，将一个图像处理漏洞逐步扩展为完整攻击链，最终获取了一名OpenAI员工的ChatGPT账户访问权限，并进一步触及OpenAI内部Gi…"
+    },
+    {
+      "title": "报道：SK海力士旗下Solidigm考虑在美国建设首座NAND工厂",
+      "url": "https://wallstreetcn.com/articles/3782074",
+      "source": "华尔街见闻",
+      "published": "2026-09-18",
+      "summary": "美国NAND存储制造布局或迎来新的扩张"
     }
   ]
 }
