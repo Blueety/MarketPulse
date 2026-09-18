@@ -199,7 +199,9 @@ body {
   border-left-color: var(--blue);
   color: var(--blue); font-weight: 600;
 }
-/* V5 导航占位（宏观数据/市场日历/设置）：无区块的项渲染为不可点占位，禁 href="#" 防跳页顶 */
+/* V5 导航占位：无区块的项渲染为不可点占位，禁 href="#" 防跳页顶。
+   2026-09-19 更新：原「宏观数据 / 市场日历 / 设置」三个占位里，前两个已分别被 /macro 与
+   /timeline（现名「市场日历」）接手 ⇒ **只剩「设置」一个占位**（navDisabled == 1）。 */
 .nav-item.is-disabled { opacity: .45; cursor: not-allowed; }
 .nav-item.is-disabled:hover { background: transparent; color: var(--text-secondary); }
 .nav-divider { height: 1px; background: var(--border); margin: 8px 14px; flex-shrink: 0; }

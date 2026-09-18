@@ -290,7 +290,8 @@ def build_timeline(events: list[dict], history, news: dict | None = None,
             continue
         item = {
             "kind": ev["kind"],
-            "title": ev.get("title") or "",
+            "title": ev.get("title") or "",                 # 源站原文（英文）——**不丢**，页面挂在悬停里
+            "title_zh": ec.zh_title(ev),                    # 中文事件名（模板生成，见 econ_calendar.zh_title）
             "agency": ev.get("agency"),
             "source": ev.get("source"),
             "time_et": ev.get("time_et"),

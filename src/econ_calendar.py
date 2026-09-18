@@ -114,6 +114,139 @@ def clean_summary(summary: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+# ---------------------------------------------------------------- 中文事件名（2026-09-19）
+
+#: 类型 → 中文**短名**（前缀「美国」由 `zh_title` 统一加；括号里是给不熟悉缩写的读者加的全称）
+KIND_ZH: dict[str, str] = {
+    "FOMC": "美联储议息会议",
+    "非农": "非农就业报告",
+    "CPI": "CPI（消费者物价指数）",
+    "PPI": "PPI（生产者物价指数）",
+    "GDP": "GDP",
+    "PCE": "PCE（个人消费支出物价指数）",
+    "零售": "零售销售",
+    "工业产出": "工业产出与产能利用率",
+}
+#: 需要「美国」前缀的类型（FOMC 本身已说明是美联储）
+_ZH_NO_US = {"FOMC"}
+_MONTH_ZH = ("1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月")
+#: 估计阶段（GDP 三阶段 / 零售初值）—— **只翻译结构，不翻译内容**
+_STAGE_RULES: tuple[tuple[str, str], ...] = (
+    (r"Advance|First Estimate|1st Estimate", "初值"),
+    (r"Second Estimate|2nd Estimate", "第二次估计"),
+    (r"Third Estimate|3rd Estimate|Final Estimate", "终值"),
+)
+
+
+def _month_en(token: str) -> int | None:
+    """英文月份（全名或缩写 `Sep`/`Sept`）→ 月份数字；认不出返回 None。
+
+    ⚠️ 必须同时认缩写：源站日期段写 `Sep 15-16`、`Jan 31-Feb 1`（**只有缩写**），
+    初版只查全名表 ⇒ 57 场 FOMC 里只有 3 场解析出日期段（其余中文标题丢了会期）。
+    """
+    t = (token or "").strip().rstrip(".").lower()
+    if not t:
+        return None
+    for i, name in enumerate(_MONTH_NAMES, start=1):
+        if name.lower() == t or (len(t) >= 3 and name.lower().startswith(t)):
+            return i
+    return None
+
+
+def zh_title(ev: dict) -> str:
+    """事件 → **中文标题**（用户 2026-09-19：「英文看不懂」）。
+
+    **只翻译"结构"，不翻译"内容"**：类型名（`KIND_ZH`）+ 数据期（月份 / 季度）+ 估计阶段
+    （初值 / 第二次估计 / 终值）全部**从源站英文标题里解析**，不做机器翻译、不编造信息。
+    解析不到的部分就不写（例如 `US Industrial Production and Capacity Utilization - G.1`
+    只有报告名、没有数据期 ⇒ 中文标题也不带月份），**不用发布日期顶替数据期**（那是错的口径）。
+
+    - `其他` 类（未归一化）**不猜中文名**，原样返回英文，避免误译。
+    - 数据年份与本事件年份不同（跨年发布，如 2026-01 发布 2025-12 数据）时**带年份**，否则只写月份。
+    - 语序：`美国 8 月 CPI（消费者物价指数）` / `美国 2026 年 Q2 GDP 终值` / `美联储议息会议（9 月 15-16 日）`。
+    """
+    raw = ev.get("title") or ""
+    kind = ev.get("kind") or KIND_OTHER
+    base = KIND_ZH.get(kind)
+    if not base:
+        return raw                     # `其他`：宁可不译，也不猜
+    if kind == "FOMC":
+        span = _fomc_span_zh(raw)
+        return base + ("（%s）" % span if span else "")
+    year = str(ev.get("date") or "")[:4]
+    period = _period_zh(raw, year)
+    stage = _stage_zh(raw)
+    # ⚠️ 两个空格规则（中文排版，u"空格"只加在"下半截是拉丁/数字"的那一侧）：
+    #    ① 「美国」后面接的若是拉丁名（CPI…）或数字（`8 月`）→ 加空格；接中文名（非农就业报告…）→ 不加；
+    #    ② 数据期后接拉丁名（CPI/PPI/GDP/PCE）→ 加空格；接中文名 → 不加。
+    #    否则会渲染成「美国 工业产出…」或「美国8 月非农就业报告」。
+    sep_pd = " " if base[:1].isascii() else ""
+    sep_us = " " if (period or base)[:1].isascii() else ""
+    prefix = "" if kind in _ZH_NO_US else ("美国" + sep_us)
+    # ⚠️ 只有名字以拉丁字母开头（CPI/PPI/GDP/PCE）才在数据期后加空格；
+    #    中文名（非农就业报告/零售销售…）不加 —— 否则会渲染成「美国 9 月 非农就业报告」。
+    sep = " " if base[:1].isascii() else ""
+    head = "%s%s" % (prefix, period + sep if period else "")
+    text = head + base
+    if kind == "GDP" and stage:
+        text += " " + stage
+    if kind == "零售" and stage == "初值":
+        text += "（初值）"
+    return text
+
+
+def _stage_zh(raw: str) -> str | None:
+    for pat, zh in _STAGE_RULES:
+        if re.search(pat, raw, re.I):
+            return zh
+    return None
+
+
+def _period_zh(raw: str, event_year: str = "") -> str:
+    """从英文标题解析**数据期** → `8 月` / `2025 年 12 月` / `2026 年 Q2`；解析不到返回 ""。
+
+    本模块曾被「经 shell heredoc 打补丁」写入过一次，**B 边界的反斜杠转义在传递中退化成了不可见的退格符**，
+    导致季度/月份解析**静默失效**（中文标题里数据期全丢，而表观上完全看不出来）。
+    教训见 docs/pitfalls.md「补丁经 shell 传递会吃掉反斜杠转义」。
+    """
+    NS = "[ ]"
+    m = re.search(r"(?:^|[^A-Za-z])Q([1-4])" + NS + r"*([0-9]{4})(?![0-9])", raw)
+    if not m:
+        m = re.search(r"(?:^|[^A-Za-z])([1-4])(?:st|nd|rd|th)" + NS + r"+Quarter" + NS + r"+([0-9]{4})(?![0-9])", raw, re.I)
+    if m:
+        return "%s 年 Q%s" % (m.group(2), m.group(1))
+    m = re.search(r"(?:^|[^A-Za-z])([A-Za-z]{3,9})[.]?" + NS + r"+([0-9]{4})(?![0-9])", raw)
+    if m:
+        num = _month_en(m.group(1))
+        if num:
+            yr = m.group(2)
+            return ("%s 年 %s" % (yr, _MONTH_ZH[num - 1])) if (event_year and yr != event_year) else _MONTH_ZH[num - 1]
+    return ""
+
+
+def _fomc_span_zh(raw: str) -> str:
+    """`FOMC Meeting - Sep 15-16, 2026` / `Jan 31-Feb 1, 2023` / `Aug 22, 2025` → 会期中文。
+
+    覆盖两种形态：**两日会议**（`Sep 15-16` / 跨月 `Jan 31-Feb 1`）与**单日会议**（`Aug 22`，实测 2021~2027 有 1 场）。
+    """
+    NS = "[ ]"
+    m = re.search(r"([A-Za-z]{3,9})[.]?" + NS + r"*([0-9]{1,2})" + NS + r"*-" + NS + r"*(?:([A-Za-z]{3,9})[.]?" + NS + r"*)?([0-9]{1,2})", raw)
+    if m:
+        m1, m2 = _month_en(m.group(1)), _month_en(m.group(3) or m.group(1))
+        d1, d2 = int(m.group(2)), int(m.group(4))
+        if m1 and m2:
+            if m1 == m2:
+                return "%s %d-%d 日" % (_MONTH_ZH[m1 - 1], d1, d2)
+            return "%s %d 日-%s %d 日" % (_MONTH_ZH[m1 - 1], d1, _MONTH_ZH[m2 - 1], d2)
+    m = re.search(r"([A-Za-z]{3,9})[.]?" + NS + r"*([0-9]{1,2})" + NS + r"*,", raw)
+    if m:
+        mm, dd = _month_en(m.group(1)), int(m.group(2))
+        if mm:
+            return "%s %d 日" % (_MONTH_ZH[mm - 1], dd)
+    return ""
+
+
+
 # ---------------------------------------------------------------- 源 1：Fed FOMC（HTML）
 
 def parse_fed_calendar(html: str) -> list[dict]:

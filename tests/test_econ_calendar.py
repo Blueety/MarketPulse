@@ -325,3 +325,62 @@ def test_storage_econ_events_roundtrip(tmp_db):
     news = st.query_event_news()
     assert news[("2026-09-11", "CPI")]["count"] == 34
     assert st.query_event_news(dates=["2026-01-01"]) == {}
+
+
+# ------------------------------------------------------------------ 中文事件名（2026-09-19）
+
+def test_zh_title_all_kinds():
+    """8 类事件的中文标题：**只翻译结构**（类型 + 数据期 + 估计阶段），语序与空格都锁住。"""
+    cases = [
+        ("CPI", "CPI Release — August 2026 Data", "2026-09-11", "美国 8 月 CPI（消费者物价指数）"),
+        ("PPI", "PPI Release — July 2026 Data", "2026-08-15", "美国 7 月 PPI（生产者物价指数）"),
+        ("非农", "US Employment Situation Report — August 2026 Data", "2026-09-04", "美国 8 月非农就业报告"),
+        ("非农", "NFP Jobs Report — September 2026 Data", "2026-10-02", "美国 9 月非农就业报告"),
+        ("PCE", "Personal Income and Outlays - August 2026 Data", "2026-09-30", "美国 8 月 PCE（个人消费支出物价指数）"),
+        ("零售", "Advance Monthly Retail Trade Report: August 2026 Data", "2026-09-16", "美国 8 月零售销售（初值）"),
+        ("工业产出", "US Industrial Production and Capacity Utilization - G.1", "2026-09-18",
+         "美国工业产出与产能利用率"),
+        ("GDP", "GDP Third Estimate — Q2 2026", "2026-09-30", "美国 2026 年 Q2 GDP 终值"),
+        ("GDP", "GDP Advance Estimate — Q3 2026", "2026-10-29", "美国 2026 年 Q3 GDP 初值"),
+        ("GDP", "GDP (Second Estimate) and Corporate Profits, 2nd Quarter 2026", "2026-08-26",
+         "美国 2026 年 Q2 GDP 第二次估计"),
+        ("FOMC", "FOMC Meeting - Sep 15-16, 2026", "2026-09-16", "美联储议息会议（9 月 15-16 日）"),
+        ("FOMC", "FOMC Meeting - Jan 31-Feb 1, 2023", "2023-02-01", "美联储议息会议（1 月 31 日-2 月 1 日）"),
+        ("FOMC", "FOMC Meeting - Aug 22, 2025", "2025-08-22", "美联储议息会议（8 月 22 日）"),
+    ]
+    for kind, raw, date, want in cases:
+        got = ec.zh_title({"kind": kind, "title": raw, "date": date})
+        assert got == want, f"{kind} {raw!r} → {got!r}（期望 {want!r}）"
+
+
+def test_zh_title_no_period_when_source_has_none():
+    """源标题里没有数据期时**不猜**（不拿发布日期顶替）——`US CPI Release` 就没有月份。"""
+    assert ec.zh_title({"kind": "CPI", "title": "US CPI Release", "date": "2026-06-10"}) == "美国 CPI（消费者物价指数）"
+    assert ec.zh_title({"kind": "非农", "title": "US Employment Situation Release", "date": "2026-07-02"}) == "美国非农就业报告"
+
+
+def test_zh_title_cross_year_keeps_year():
+    """数据年份 ≠ 事件年份（跨年发布）时必须带年份，否则会有歧义。"""
+    got = ec.zh_title({"kind": "CPI", "title": "CPI Release — December 2025 Data", "date": "2026-01-13"})
+    assert got == "美国 2025 年 12 月 CPI（消费者物价指数）"
+
+
+def test_zh_title_other_kind_not_translated():
+    """`其他` 类**不猜中文名**（避免误译），原样返回英文。"""
+    assert ec.zh_title({"kind": ec.KIND_OTHER, "title": "Some Unmapped Event", "date": "2026-01-01"}) == "Some Unmapped Event"
+
+
+def test_zh_title_no_control_chars_and_no_backslash_escapes():
+    """回归：中文标题不得含控制字符（曾因补丁经 shell 传递把 B 边界转义退化成退格符）。"""
+    got = ec.zh_title({"kind": "GDP", "title": "GDP Third Estimate — Q2 2026", "date": "2026-09-30"})
+    assert all(ord(c) >= 32 for c in got), repr(got)
+
+
+def test_timeline_payload_carries_title_zh_and_original():
+    """payload 同时给 `title_zh`（中文，页面主显）与 `title`（英文原文，悬停用）——原文不丢。"""
+    events = [{"date": "2026-09-11", "kind": "CPI", "title": "CPI Release — August 2026 Data",
+               "source": "mirror", "agency": "BLS", "status": "ok", "note": "", "time_et": "08:30"}]
+    p = tl.build_timeline(events, _history_with_carried_rows(), today="2026-09-18")
+    ev = p["past"][0]["events"][0]
+    assert ev["title_zh"] == "美国 8 月 CPI（消费者物价指数）"
+    assert ev["title"] == "CPI Release — August 2026 Data"

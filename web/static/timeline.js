@@ -245,10 +245,15 @@
   }
 
   function eventHtml(ev) {
+    // 事件名：优先用**中文**（`title_zh`，服务端按"类型 + 数据期 + 估计阶段"模板生成）；
+    // 英文原文（`title`）挂到 `data-title-en` 与 `title=`（悬停可见）——**中文化不丢原文**。
+    var zh = ev.title_zh || ev.title || "";
+    var en = ev.title || "";
     var bits = ['<li class="tl-ev" data-kind="' + escapeHtml(ev.kind) + '">'];
     bits.push('<span class="tl-kind">' + escapeHtml(ev.kind) + "</span>");
     if (ev.time_et) bits.push('<span class="tl-time">' + escapeHtml(ev.time_et) + " ET</span>");
-    bits.push('<span class="tl-title">' + escapeHtml(ev.title) + "</span>");
+    bits.push('<span class="tl-title" data-title-en="' + escapeHtml(en) + '" title="' +
+              escapeHtml(en) + '">' + escapeHtml(zh) + "</span>");
     if (ev.status === "tentative") bits.push('<span class="tl-status">暂定</span>');
     if (ev.note) bits.push('<span class="tl-ev-note">' + escapeHtml(ev.note) + "</span>");
     if (ev.agency) bits.push('<span class="tl-agency">' + escapeHtml(ev.agency) + "</span>");

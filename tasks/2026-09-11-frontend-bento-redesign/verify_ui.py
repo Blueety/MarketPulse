@@ -908,14 +908,17 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
           "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
           (f["flagUs"], f["flagCn"], f["flagImgs"]))
-    # F-5 nav=12 项：7 个页内锚点 + 3 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 事件时间线，
-    #     后者 2026-09-18 新增）+ 2 个占位（市场日历 / 设置）。
+    # F-5 nav=11 项：7 个页内锚点 + 3 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 市场日历）
+    #     + 1 个占位（设置）。
+    # ⚠️ 2026-09-19：`/timeline` 这一项**接手了 2026-09-12 起空着的同名占位项「市场日历」**
+    #    （原占位来历见 tasks/2026-09-12-visual-fidelity/plan.md §12 Q1）⇒ 占位删除、位置原地保留，
+    #    navCount 12 → 11、navDisabled 2 → 1。**内部命名仍是 timeline**（路由/JS/断言前缀都不变）。
     # ⚠️ 判别（pitfalls「抽 include 后失败先分清方案不可行 vs 断言脆弱」）：include/渲染路径
     #    未变，只是产品决定多了一个合法跨页链接 → 属**断言脆弱**（navCount 写死），
     #    处置是**补强**而非删除/放松：单值 macroHref 升级为数组，逐个链接都纳入判据。
-    check(f["navCount"] == 12 and f["navDisabled"] == 2 and not f["navBad"]
+    check(f["navCount"] == 11 and f["navDisabled"] == 1 and not f["navBad"]
           and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline"]),
-          "F-5 nav=12（7 锚点 + 3 跨页 /macro·/macro/cn·/timeline + 2 占位）且 data-target/href 全命中", f)
+          "F-5 nav=11（7 锚点 + 3 跨页 /macro·/macro/cn·/timeline + 1 占位 设置）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
@@ -1905,8 +1908,8 @@ def assert_macro_cn_page(browser, url: str) -> None:
         check("最新" not in d["econText"] and "实时" not in d["econText"],
               "CN-6b 不得标注「最新 / 实时」（月度数据有发布滞后）")
         # F-5 联动：本页高亮「中国宏观」且「宏观数据」不再 active
-        check(d["navCount"] == 12 and d["cnActive"] and not d["macroActive"],
-              "CN-7 侧栏 12 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
+        check(d["navCount"] == 11 and d["cnActive"] and not d["macroActive"],
+              "CN-7 侧栏 11 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
         # R9 主题分叉：带 dark 偏好进入本页，data-theme 必须仍是 dark
         check(d["theme"] == "dark", "CN-8 带 dark 偏好进入本页仍为 dark（主题初始化同源）", d["theme"])
         check(len(d["pills"]) == 6 and d["pointCount"] > 0,
@@ -3685,7 +3688,7 @@ def assert_walkthrough(browser, url: str) -> None:
         ctx.close()
 
 
-# ==================== TL 事件时间线（/timeline，2026-09-18）====================
+# ============ TL 市场日历（/timeline，内部名 timeline / 事件时间线，2026-09-18）============
 # 任务档 tasks/2026-09-18-event-timeline-page（plan v3 定稿）。
 # 页面 = 官方发布日历（骨架）× 行情（影响）× 新闻（叙事）；事件与行情**并列展示**、不构成因果。
 TL_KINDS = ("FOMC", "非农", "CPI", "PPI", "GDP", "PCE", "零售", "工业产出", "其他")
@@ -3702,6 +3705,8 @@ TL_JS = r"""
     kinds: [...d.querySelectorAll('.tl-ev')].map((e) => e.dataset.kind),
     fwd: (d.querySelector('.tl-fwd') || {}).innerText || '',
     causal: (d.innerText.match(/因为|导致|利好|利空|由于/g) || []),
+    // 每条事件的**英文原文**（挂在 data-title-en 上；TL-10b 逐日对账，防中文化丢原文）
+    titlesEn: [...d.querySelectorAll('.tl-ev .tl-title')].map((e) => e.getAttribute('data-title-en') || ''),
   }));
   return {
     modules: ['tl-upcoming', 'tl-past', 'tl-meta'].filter((id) => document.getElementById(id)).length,
@@ -3709,6 +3714,8 @@ TL_JS = r"""
     days: days,
     evCount: q('.tl-ev').length,
     allKinds: [...new Set(q('.tl-kind').map((k) => k.textContent.trim()))],
+    titles: q('.tl-ev .tl-title').map((e) => e.textContent.trim()),
+    titlesEn: q('.tl-ev .tl-title').map((e) => e.getAttribute('data-title-en') || ''),
     cancelled: (txt.match(/CANCELLED/gi) || []).length,
     causalOutside: days.reduce((n, d) => n + d.causal.length, 0),
     honest: ['不构成因果', '第三方镜像', '至少'].filter((k) => txt.includes(k)).length,
@@ -3733,7 +3740,8 @@ def _tl_fmt(v):
 
 
 def assert_timeline(browser, url: str) -> None:
-    """TL-1~TL-9 事件时间线（/timeline）。
+    """TL-1~TL-9 市场日历（/timeline；2026-09-19 起用户可见名字为「市场日历」，
+    接手 2026-09-12 起空着的同名占位项；内部命名仍是 timeline）。
 
     TL-1 页面 200 + 三块骨架齐全 + 至少有事件行
     TL-2 **独立口径**核对事件数：sqlite3 直查 db 的 distinct (date,kind) 窗口计数 == API stats == 页面 DOM
@@ -3745,7 +3753,7 @@ def assert_timeline(browser, url: str) -> None:
     TL-8 375/768/1280/1920 四视口无横向溢出
     TL-9 侧栏 12 项且本页 active
     """
-    print("\n--- TL 事件时间线（/timeline）---")
+    print("\n--- TL 市场日历（/timeline）---")
     import sqlite3
 
     # 前置容错：改动前的基线里 `/api/timeline` 与 `econ_events` 表都不存在 ——
@@ -3850,9 +3858,34 @@ def assert_timeline(browser, url: str) -> None:
               "TL-7 事件区无因果措辞（仅在诚实边界声明里出现「不构成因果」），且三条边界齐全",
               (d["causalOutside"], d["honest"]))
 
+        # ---------- TL-10：事件名必须中文化（用户 2026-09-19：「英文看不懂」）----------
+        # 口径：**只翻译"结构"（类型 + 数据期 + 估计阶段），不翻译"内容"** —— 事件名由模板生成，
+        #       原文（源站英文）保留在 payload 的 `title` 与 DOM 的 `data-title-en`（悬停可见）。
+        # ⚠️ 新闻标题**不在此列**（那是检索原文，翻译即二次加工）。
+        EN_SKELETON = re.compile(r"Release|Data\b|Estimate|Monthly|Report|Quarter|Outlays", re.I)
+        CJK = re.compile(r"[\u4e00-\u9fff]")
+        bad_api = [(d["date"], e.get("title_zh")) for d in (api["past"] + api["upcoming"])
+                   for e in d["events"] if not (e.get("title_zh") or "") or not CJK.search(e["title_zh"])]
+        bad_dom = [t for t in d["titles"] if not CJK.search(t) or EN_SKELETON.search(t)]
+        check(not bad_api and not bad_dom,
+              "TL-10 事件名已中文化（API 的 title_zh 非空且含中文；页面标题无英文骨架词）",
+              (bad_api[:3], bad_dom[:3]))
+        # TL-10b：DOM 的 data-title-en 必须等于 API 的 title（**原文不能丢**）
+        api_title_by_date: dict = {}
+        for day in list(api["past"]) + list(api["upcoming"]):
+            api_title_by_date.setdefault(day["date"], []).extend(
+                e["title"] for e in sorted(day["events"], key=lambda e: (e.get("time_et") or "99:99", e["kind"])))
+        dom_title_by_date = {x["date"]: x["titlesEn"] for x in d["days"]}
+        en_mismatch = [(dt, api_title_by_date.get(dt), dom) for dt, dom in dom_title_by_date.items()
+                       if sorted(api_title_by_date.get(dt, [])) != sorted(dom)]
+        check(not en_mismatch,
+              "TL-10b 页面保留英文原文（DOM data-title-en == API title，未因中文化丢失原文）",
+              en_mismatch[:2])
+
         # ---------- TL-9 ----------
-        check(d["navCount"] == 12 and d["active"] == "事件时间线",
-              "TL-9 侧栏 12 项且本页 active = 事件时间线", (d["navCount"], d["active"]))
+        # ⚠️ 用户可见名字是「市场日历」（2026-09-19 接手同名占位项）；内部命名仍是 timeline
+        check(d["navCount"] == 11 and d["active"] == "市场日历",
+              "TL-9 侧栏 11 项且本页 active = 市场日历", (d["navCount"], d["active"]))
         check(resp is not None and resp.status == 200 and not perrs,
               "TL-9b /timeline 200 且无 pageerror（前置 200：404 页面上无报错不算过）",
               (resp.status if resp else None, perrs[:2]))
@@ -3945,6 +3978,13 @@ def wrap_js(cfg: dict) -> str:
     周期取 `items[n].offsetTop - items[0].offsetTop`（克隆半首条相对第一半首条的偏移）：
     对 border 分隔（`.news-item`）与 flex gap（`.alert-list`）两种布局都精确 ——
     用「前一半 offsetHeight 之和」在 gap 布局下会差 n×gap。
+
+    ⚠️ **预置位必须"验证生效 + 可重试"（2026-09-19 实测）**：页面自身的 TTL 刷新会重建 ticker DOM，
+    而 `renderAlerts/renderNews` 里都有 `body.scrollTop = 0` ⇒ 若这一次重建正好落在预置与采样之间，
+    预置位被冲成 0 → 采样窗口内看不到回绕 → `{p}-6b` **假红**（实测记录：`first=777 → 0/1`，
+    同一个页面把加载后静默从 1.5s 拉到 5s 就 3/3 通过，而"被冲掉"与否只取决于那次刷新的落点）。
+    故：起始帧若发现位置没落到位，**重新预置**（最多 20 帧），并把重试次数带回结果里
+    （`armTries`）—— 红的时候能一眼分辨「真的是循环停住了」还是「一次都没预置上」。
     """
     return _tpl(r"""
 () => new Promise((resolve) => {
@@ -3956,19 +3996,26 @@ def wrap_js(cfg: dict) -> str:
   const start = Math.max(0, period - 2);
   // ★ 必须同时重置**浮点累加器**，否则下一帧会把 scrollTop 写回旧位置
   const sc = window.__scroll && window.__scroll['__KEY__'];
-  if (sc) sc.state.pos = start;
-  el.scrollTop = start;
+  const arm = () => { if (sc) sc.state.pos = start; el.scrollTop = start; };
   const out = [];
   let wrapIdx = -1;
+  let armTries = 0;
   const tick = () => {
-    out.push(Math.round(el.scrollTop * 100) / 100);
+    const cur = Math.round(el.scrollTop * 100) / 100;
+    if (out.length === 0 && start > 0 && cur < start - 1 && armTries < 20) {
+      armTries += 1;
+      arm();
+      return requestAnimationFrame(tick);      // 尚未开始采样 → 只重试预置，不计入样本
+    }
+    out.push(cur);
     if (wrapIdx < 0 && out.length > 1 && out[out.length - 1] < out[out.length - 2]) {
       wrapIdx = out.length - 1;
     }
     if ((wrapIdx >= 0 && out.length - wrapIdx >= 10) || out.length >= 200) {
-      resolve({ samples: out, period: period, wrapIdx: wrapIdx });
+      resolve({ samples: out, period: period, wrapIdx: wrapIdx, armTries: armTries });
     } else requestAnimationFrame(tick);
   };
+  arm();
   requestAnimationFrame(tick);
 })
 """, cfg)
@@ -4107,7 +4154,8 @@ def assert_autoscroll(page, base_url: str, cfg: dict) -> None:
     wrap_idx = w.get("wrapIdx", -1)
     drops = [round(ss[i - 1] - ss[i], 2) for i in range(1, len(ss)) if ss[i] < ss[i - 1]]
     post = ss[wrap_idx:] if wrap_idx >= 0 else ss
-    print(f"  回绕采样 period={period} first={ss[0] if ss else None} last={ss[-1] if ss else None} drops={drops}")
+    print(f"  回绕采样 period={period} first={ss[0] if ss else None} last={ss[-1] if ss else None} "
+          f"drops={drops} armTries={w.get('armTries', 0)}")
     check(all(x >= 0 for x in ss), f"{p}-6a scrollTop 全程无负值", (min(ss) if ss else None))
     check(wrap_idx >= 0 and len(post) >= 3 and post[-1] > post[0] + 0.5,
           f"{p}-6b 回绕后继续前进（循环未停住）",
@@ -4544,7 +4592,7 @@ def main() -> int:
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
             assert_quadrant_matrix(browser, url)     # QM-* 四象限矩阵（macro-quadrant-matrix，2026-09-18）
-            assert_timeline(browser, url)            # TL-* 事件时间线（event-timeline-page，2026-09-18）
+            assert_timeline(browser, url)            # TL-* 市场日历（event-timeline-page，2026-09-18；09-19 改名）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])

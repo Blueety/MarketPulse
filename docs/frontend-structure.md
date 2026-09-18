@@ -10,7 +10,7 @@
 
 | 维度 | 现状 |
 | --- | --- |
-| 页面 | **4 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观）、**`/timeline`（事件时间线，2026-09-18）** |
+| 页面 | **4 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观）、**`/timeline`（市场日历，2026-09-18 上线；用户可见名与「市场日历」占位项合并，2026-09-19）** |
 | JSON API | **10 个**：`/api/history` `/api/latest` `/api/alerts` `/api/news` `/api/watchlist` `/api/macro` `/api/econ` `/api/econ/cn` `/api/cn/quotes` **`/api/timeline`** |
 | 模板 | 6 个 web 模板（4 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
 | 静态资产 | `style.css` 1 份 + 业务 JS **4 份**（`app.js` / `macro.js` / `macro_cn.js` / **`timeline.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
@@ -38,7 +38,7 @@
 | `web/templates/index.html` | 200 | 10.6 K | 看板页（bento 四行） | `/` 路由 |
 | `web/templates/macro.html` | 125 | 6.5 K | 全球宏观页（五级块） | `/macro` 路由 |
 | `web/templates/macro_cn.html` | 129 | 7.0 K | 中国宏观页（五级块） | `/macro/cn` 路由 |
-| `web/templates/timeline.html` | 83 | 4.0 K | **事件时间线页**（即将到来 / 已发生 / 口径与来源三块） | `/timeline` 路由 |
+| `web/templates/timeline.html` | 84 | 4.0 K | **市场日历页**（即将到来 / 已发生 / 口径与来源三块；内部名 timeline） | `/timeline` 路由 |
 | `web/templates/_topbar.html` | 18 | 1.5 K | 顶栏（品牌 / 搜索 / 数据日 / 通知 / 头像 / 刷新） | **4 页** include，**无参数** |
 | `web/templates/_sidebar.html` | 39 | 8.0 K | 侧栏（**12 项**导航 + 主题按钮 + 市场状态） | **4 页** include，吃 `base_prefix` / `active_page` |
 | `web/templates/report_card.html` | 160 | 4.6 K | **非 web**：`src/image_renderer.py:202` 长图 HTML 模板 | 图片渲染链路 |
@@ -46,7 +46,7 @@
 | `web/static/app.js` | 1229 | 56.3 K | 看板页业务脚本（21 个区块） | `index.html` |
 | `web/static/macro.js` | 722 | 35.1 K | 全球宏观页业务脚本（单 IIFE） | `macro.html` |
 | `web/static/macro_cn.js` | 805 | 36.1 K | 中国宏观页业务脚本（单 IIFE） | `macro_cn.html` |
-| `web/static/timeline.js` | 380 | 20 K | **事件时间线页**业务脚本（单 IIFE；本页无图表 ⇒ **不引入** Chart.js） | `timeline.html` |
+| `web/static/timeline.js` | 380 | 20 K | **市场日历页**业务脚本（单 IIFE；本页无图表 ⇒ **不引入** Chart.js） | `timeline.html` |
 | `web/static/chart-crosshair.js` | 262 | 14.8 K | **跨页共享**：crosshair 插件 + `cssVar`/`themeColors`/`withAlpha` | 3 页（**必须在业务脚本前**；`/timeline` 无图表故不引） |
 | `web/static/flags/{cn,us}.svg` | — | — | 国旗图形素材（图标级简化） | `app.js:iconFlagHtml` |
 | `web/static/icons/{dollar,bond,gold,oil}.svg` | — | — | 品种类圆形素材 | `app.js:iconAssetHtml` |
@@ -105,17 +105,25 @@
 | `base_prefix` | 侧栏锚点前缀 | 首页 `""`（→ `#overview`）；宏观页 `"/"`（→ `/#overview` 回首页） |
 | `active_page` | 侧栏高亮项 | `dashboard` / `macro` / `macro-cn` |
 
-**侧栏 11 项**：市场概览·市场趋势·市场情绪·板块表现·自选列表·新闻资讯·告警记录（页内锚点，`data-target`）/ 宏观数据·中国宏观（跨页链接，`href="/..."`，**不写 `data-target`**）/ 市场日历·设置（`is-disabled` 占位）。验收断言 `navCount == 11 && navDisabled == 2 && !navBad`。
+**侧栏 11 项**：市场概览·市场趋势·市场情绪·板块表现·自选列表·新闻资讯·告警记录（页内锚点，`data-target`）/ 宏观数据·中国宏观·**市场日历**（跨页链接，`href="/..."`，**不写 `data-target`**）/ 设置（`is-disabled` 占位）。验收断言 `navCount == 11 && navDisabled == 1 && !navBad`。
+
+> 2026-09-19：「市场日历」原本是 2026-09-12 效果图遗留的**占位项**，现由真实页面 `/timeline` 接手（占位删除、位置原地保留）⇒ `navCount` 12→11、`navDisabled` 2→1。
 
 ---
 
-### 3.5 `timeline.html`（`/timeline`）—— 事件时间线（2026-09-18）
+### 3.5 `timeline.html`（`/timeline`）—— 市场日历（2026-09-18 上线；2026-09-19 接手同名占位项）
+
+> 「市场日历」这个名字与位置**继承自 2026-09-12 效果图遗留的占位项**（来历见 `tasks/2026-09-12-visual-fidelity/plan.md` §12 Q1）。**内部命名一律保持 `timeline`**：路由 `/timeline`、`timeline.js`、`#tl-*` 类名、`TL-*` 断言、`econ_events` 表 —— 只有用户可见的名字是「市场日历」。
 
 | 区块 | id | 内容 | 数据源 |
 | --- | --- | --- | --- |
 | 头部 | `.tl-head` | 标题 + 口径说明 + `#tl-scope`（库内事件数/可回溯范围/本轮窗口） | `/api/timeline`.stats / db_range |
 | **即将到来** | `#tl-upcoming` | 未来 `future_days`（默认 30）天的排定日程；**未来事件不显示「事件后」窗口** | `past` 之外的 `upcoming[]` |
 | **已发生** | `#tl-past` | 日期倒序；每天 = 事件行 + 当日涨跌 + 事件后 +1/3/5/10 交易日 + 叙事层；底部「加载更早」`#tl-more`（90 天 → 1 年 → 3.3 年 → 10 年，到库内最早事件自动隐藏） | `past[]` |
+
+> **事件名中文化（2026-09-19，用户「英文看不懂」）**：服务端 `econ_calendar.zh_title()` 按「类型 + 数据期 + 估计阶段」**模板生成**中文名（如 `美国 8 月 CPI（消费者物价指数）`、`美联储议息会议（9 月 15-16 日）`、`美国 2026 年 Q2 GDP 终值`），**只翻译结构、不翻译内容**；源站**英文原文不丢** —— 挂在 payload 的 `title` 与 DOM 的 `data-title-en` / `title=`（悬停可见），由 `TL-10`/`TL-10b` 双向对账（中文必须出现、原文必须一致）。
+> 源标题没有数据期时（如 `US CPI Release`）**不带月份**——不用发布日期顶替（那是错口径）。
+> ⚠️ **新闻标题不在此列**：那是检索原文，翻译即二次加工。
 | 口径与来源 | `#tl-meta` | 三个源的说明（`#tl-src`）+ 五条诚实边界（`.tl-honest`）+ 同步失败提示（`#tl-fail`） | `sources[]` / `failed[]` |
 
 **每日一行**：`.tl-day`（`data-date`）→ 日期列（`.tl-date` + `.tl-week` + `.tl-rel` 今天/N 天后/已过 N 天）
@@ -273,7 +281,7 @@
 | `#fund-flow`（资金流向） | **唯一** `data-placeholder="1"` 模块 | 验收断言全站计数 = 1、文案 = "数据未接入" |
 | `#promo-global`（全球市场动态） | 静态 promo 卡 | 文案"数据未接入"，无数据源 |
 | 顶栏搜索 / 通知 / 头像 | `.is-placeholder` + `disabled` | 纯视觉 |
-| 侧栏「市场日历」「设置」 | `.nav-item.is-disabled` | `navDisabled == 2` |
+| 侧栏「设置」 | `.nav-item.is-disabled` | `navDisabled == 1`（「市场日历」占位已于 2026-09-19 被同名真实页面接手） |
 | `#us-sectors` 的「查看全部 →」 | `.link-btn` + `disabled` | — |
 | `#watchlist-section` | 默认 `hidden`，`/api/watchlist` 返回 `hidden:true` 时保持隐藏 | 无配置不闪现 |
 

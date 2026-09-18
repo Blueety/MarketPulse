@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>事件时间线 · MarketPulse</title>
+  <title>市场日历 · MarketPulse</title>
   <script>
     // ⚠️ 与 macro.html / macro_cn.html 的 head 内联脚本**同源**（D1 修复版：显式应用存储到的主题值，
     //    而不是只处理 "light"）。主题初始化共 4 处：三个模板的 head + 各 JS 的 applyTheme()，
@@ -20,7 +20,9 @@
       } catch (e) {}
     })();
   </script>
-  <!-- 与其它页同一份 style.css（本页样式追加在同一文件尾部的 .tl-* 段） -->
+  <!-- 与其它页同一份 style.css（本页样式追加在同一文件尾部 .tl-* 段）。
+       ⚠️ 用户可见名字是「市场日历」（2026-09-19 接手 2026-09-12 起空着的同名占位项），
+       但**内部命名仍是 timeline**：路由 /timeline、timeline.js、#tl-*、断言 TL-*。 -->
   <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
 </head>
 <body>
@@ -30,7 +32,7 @@
     <main class="main" id="main">
       <div class="tl">
         <header class="tl-head">
-          <h1>事件时间线</h1>
+          <h1>市场日历</h1>
           <p class="tl-sub">
             官方发布日程（FOMC / 非农 / CPI / PPI / GDP / PCE / 零售 / 工业产出）
             <span class="mac-sep">·</span>日历为<b>排定值</b>，与行情<b>并列展示</b>、不构成因果
