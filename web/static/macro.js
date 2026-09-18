@@ -554,6 +554,47 @@
   // N4：level → 语义色 class 的**唯一映射**（渲染与断言共用同一事实来源）
   var LEVEL_CLASS = { risk_on: "up", risk_off: "down", neutral: "flat" };
 
+  // ---- 四象限矩阵（2026-09-18）----
+  // 数据只有两个**二元离散量**（inflation_axis / growth_axis）⇒ 2×2 矩阵 + 当前格高亮，
+  // 位置本身就是信息（散点图会假装连续、雷达图表达不了"两轴交叉"）。
+  // 排列固定为教材口径：**横轴 = 通胀（左低右高）、纵轴 = 增长（上高下低）**。
+  // 渲染顺序 = 视觉顺序（行优先：左上 / 右上 / 左下 / 右下），改顺序前先看这里。
+  var QUAD_CELLS = [
+    { key: "goldilocks",  label: "复苏" },      // 左上：通胀↓ + 增长↑
+    { key: "reflation",   label: "再通胀" },    // 右上：通胀↑ + 增长↑
+    { key: "deflation",   label: "通缩衰退" },  // 左下：通胀↓ + 增长↓
+    { key: "stagflation", label: "滞胀" }       // 右下：通胀↑ + 增长↓
+  ];
+
+  // 格名以服务端 `QUADRANTS`（src/econ_fetcher.py:192，两页共享同一字典）为准：
+  //   **当前格恒用服务端下发的 `quadrant_label`**，本地 label 只是"另外三格"的兜底文案
+  //   —— 这样后端改文案时当前格永不漂移，另三格若漂移会在验收的 QM-2 上暴露。
+  // ax 由调用方按页传入（口径不同：本页用 ↑/↓，中国页用 上行/回落 + 扩张/收缩）。
+  function quadrantMatrixHtml(curKey, curLabel, ax) {
+    var rows = [
+      { axis: ax.growUp,   cells: ["goldilocks", "reflation"] },
+      { axis: ax.growDown, cells: ["deflation", "stagflation"] }
+    ];
+    var html = '<span class="rm-axis"></span>' +
+               '<span class="rm-axis rm-hd">' + escapeHtml(ax.infLow) + "</span>" +
+               '<span class="rm-axis rm-hd">' + escapeHtml(ax.infHigh) + "</span>";
+    rows.forEach(function (row) {
+      html += '<span class="rm-axis">' + escapeHtml(row.axis) + "</span>";
+      row.cells.forEach(function (key) {
+        var cell = null;
+        for (var i = 0; i < QUAD_CELLS.length; i++) {
+          if (QUAD_CELLS[i].key === key) cell = QUAD_CELLS[i];
+        }
+        if (!cell) return;
+        var isNow = curKey === key;
+        // ⚠️ 象限**没有褒贬**（"滞胀"不是"跌"）⇒ 只做中性高亮，**禁止**染红绿（会被读成涨跌）
+        html += '<span class="rm-cell' + (isNow ? " is-now" : "") + '">' +
+                escapeHtml(isNow && curLabel ? curLabel : cell.label) + "</span>";
+      });
+    });
+    return html;
+  }
+
   function renderRegime() {
     var m = state.macro || {};
     var r = m.regime || {};
@@ -569,6 +610,17 @@
         ? "四象限：" + econ.quadrant_label + "（通胀" + (econ.inflation_axis === "up" ? "↑" : "↓") +
           " · 增长" + (econ.growth_axis === "expanding" ? "↑" : "↓") + "）"
         : "四象限：数据暂缺（/api/econ 不可用）";
+    }
+    // 矩阵：有 quadrant → 对应格高亮；无（econ 不可用）→ **四格照常渲染、一个都不高亮**
+    //   ⇒ 高度恒定不跳变（既有惯例：宁可显示"不知道"也不让布局抖）。
+    //   ⚠️ #regime-quadrant 那行文字一个字都没动（verify_ui 的「数据暂缺」断言挂在它上面）。
+    var mx = el("regime-matrix");
+    if (mx) {
+      var cur = econ.quadrant || null;
+      mx.className = "regime-matrix" + (cur ? "" : " is-unknown");
+      mx.innerHTML = quadrantMatrixHtml(cur, econ.quadrant_label, {
+        infLow: "通胀 ↓", infHigh: "通胀 ↑", growUp: "增长 ↑", growDown: "增长 ↓"
+      });
     }
     var sc = el("regime-score");
     if (sc) {

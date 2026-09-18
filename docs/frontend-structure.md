@@ -74,7 +74,7 @@
 
 | 级别 | id | 内容 | 数据源 |
 | --- | --- | --- | --- |
-| 一级（无边框 `.mac-flat`） | `#mac-regime` | 当前宏观环境：`#regime-level` / `#regime-quadrant` / `#regime-score` / `#regime-factors` | `/api/macro`.regime |
+| 一级（无边框 `.mac-flat`） | `#mac-regime` | 当前宏观环境：`#regime-level` / `#regime-quadrant` / **`#regime-matrix`（2×2 四象限矩阵，2026-09-18）** / `#regime-score` / `#regime-factors` | `/api/macro`.regime + `/api/econ`.quadrant |
 | 二级（唯一重卡 `.mac-card-hero`） | `#mac-market` | 主图 + 品种胶囊 `#macro-pills` + 范围 `#macro-range` | `/api/macro`.trend |
 | 三级 | `#mac-metrics` | 两栏：`#macro-vars`（核心变量 3 个）+ `#macro-factors`（四维度打分） | `/api/macro` |
 | 四级（`.mac-card-quiet`） | `#mac-signals` | 两栏：`#macro-rel`（相关性，默认 2~3 条 + `#macro-rel-more`）+ `#macro-history`（历史环境分布） | `/api/macro`.correlation / history_regime |
@@ -84,7 +84,7 @@
 
 | 级别 | id | 与 `/macro` 的差异 |
 | --- | --- | --- |
-| 一级 | `#cn-regime` | 加 `data-quadrant` 供验收断言；右卡是 **PMI 3M**（非 Macro Score）；`#cn-axis` 两轴 |
+| 一级 | `#cn-regime` | 加 `data-quadrant` 供验收断言；右卡是 **PMI 3M**（非 Macro Score）；`#cn-axis` 两轴；**`#cn-matrix`（2×2 四象限矩阵，2026-09-18）** |
 | 二级 | `#cn-market` | `#cn-pills` / `#cn-range` / `#cn-chart` |
 | 三级 | `#cn-metrics` | `#cn-vars`（13 序列切片）+ `#cn-factors` |
 | 四级 | `#cn-rates` | **利率与流动性** `#cn-rate-list`（Δ 单位 bp）+ **地产·北京/上海** `#cn-estate`（`.cn-dual`） |
@@ -159,6 +159,7 @@
    - `macro_cn.js`：`loadEcon()`（**按组串行**：先 `price`+`growth` 出四象限，再其余组）+ `loadQuotes()` + `loadHistory()`
 3. **派生**：`allSeries` / `byKey` / `asOfMonth` / `basis` / `failedKeys` / `regime`
 4. **渲染**：`renderRegime` / `renderPills` / `bindPills` / `renderChart` / `renderChartFoot` / `renderVars` / `renderFactors` / `renderRelation` / `renderHistory` / `renderEcon` / `renderAll`
+   - 四象限矩阵（2026-09-18）：`QUAD_CELLS`（四格 key → 兜底中文名，**渲染顺序 = 视觉顺序**：左上 goldilocks / 右上 reflation / 左下 deflation / 右下 stagflation）+ `quadrantMatrixHtml(curKey, curLabel, ax)` —— 两页**同源复制**（与 shell 的刻意复制同一决策，改一处必须同步改另一处）。当前格恒用服务端 `quadrant_label`，`ax` 由调用方按页传入（`/macro` 用 `↑/↓`；`/macro/cn` 用 `上行/回落` + `扩张/收缩`，因增长轴是 **PMI 与 50 的水平口径**）
    - `macro_cn.js` 另有 `fmtPeriod` / `yoyTitle` / `chgCell` / `varRow` / `renderRates` / `spreadRow` / `renderEstate`
 5. **crosshair**：`macroCrosshairFormatter` / `cnCrosshairFormatter` → `window.makeHoverCrosshair({ formatter })`
 
@@ -169,7 +170,7 @@
 
 ---
 
-## 6. CSS 结构（`style.css`，881 行 / 单文件）
+## 6. CSS 结构（`style.css`，996 行 / 单文件）
 
 **Token 层**
 
@@ -203,8 +204,8 @@
 | 595 | 平板·移动抽屉 `#sidebar` |
 | 622 | 小屏手机（单列 + 显隐低价值列） |
 | 675 | 骨架屏 `.skeleton` |
-| 689 | **宏观页 `.mac-*`**（research terminal 风格，689-836） |
-| 837 | **中国宏观 `.cn-*`**（仅 8 条规则，837-881） |
+| 721 | **宏观页 `.mac-*`**（research terminal 风格，721-951；**2026-09-18 新增四象限矩阵 `.regime-matrix` / `.rm-axis` / `.rm-cell` / `.rm-skel` 于 838-853** —— 新类名，`.mac-*` 未动） |
+| 952 | **中国宏观 `.cn-*`**（仅 8 条规则，952-996） |
 
 **断点全景**（14 处 `@media`）：`768`(×4 处) / `1499` / `1399` / `1299` / `1024` / `480`(×4) / `1440 min-width` / `prefers-reduced-motion`。
 
@@ -226,6 +227,7 @@
 10. **`renderSectorAsOf()` 必须在两个板块都渲染完后调用**（越权提前读 `_sectorAsOf` 会拿到半成品）。
 11. **验收脚本是唯一真源**：`venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，5 视口 1920/1600/1280/900/375，自动挑空闲端口）。**不要以 `curl 200` 或肉眼看代替。**
 12. **不要用 `new Date("YYYY-MM-DD")`**：会有本地时区偏移，日期/星期一律走 `app.js:142` 的日期工具。
+13. **四象限矩阵的排布与契约（2026-09-18）**：排列固定为教材口径（横轴通胀 左低右高 / 纵轴增长 上高下低），**不许为"好看"改排列**；象限**无褒贬**，只做中性高亮（`--bg-elevated` + `--blue` 边框），**禁止染红绿**（会被读成涨跌）。`#regime-quadrant`（文字行）与 `#cn-regime[data-quadrant]` 是既有验收契约，矩阵是**新增兄弟元素**、不得替换它们；骨架节点必须标在**容器内部**（`clearSkel` 是 removeChild 自身，标在容器上会把容器删掉）。
 
 ---
 

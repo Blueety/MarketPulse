@@ -335,6 +335,45 @@
   }
 
   // ---- 模块 1：当前宏观环境 ----
+  // ---- 四象限矩阵（2026-09-18）----
+  // ⚠️ 与 `macro.js` 的 `QUAD_CELLS` / `quadrantMatrixHtml` **同源复制**（两页各自一份 JS，
+  //    与顶栏/侧栏 shell 的"刻意复制"同一决策）——**改一处必须同步改另一处**。
+  // 排列固定为教材口径：横轴 = 通胀（左低右高）、纵轴 = 增长（上高下低）；渲染顺序 = 视觉顺序。
+  var QUAD_CELLS = [
+    { key: "goldilocks",  label: "复苏" },      // 左上：通胀↓ + 增长↑
+    { key: "reflation",   label: "再通胀" },    // 右上：通胀↑ + 增长↑
+    { key: "deflation",   label: "通缩衰退" },  // 左下：通胀↓ + 增长↓
+    { key: "stagflation", label: "滞胀" }       // 右下：通胀↑ + 增长↓
+  ];
+
+  // 格名以服务端 `QUADRANTS`（src/econ_fetcher.py:192，两页共享）为准：当前格用服务端
+  //   `quadrant_label`，本地 label 只兜底另外三格。ax 由调用方传入 —— 中国页口径与 /macro
+  //   **不同**：增长轴是 **PMI 与 50 比较的水平口径**（不是同比方向）⇒ 必须写 扩张/收缩。
+  function quadrantMatrixHtml(curKey, curLabel, ax) {
+    var rows = [
+      { axis: ax.growUp,   cells: ["goldilocks", "reflation"] },
+      { axis: ax.growDown, cells: ["deflation", "stagflation"] }
+    ];
+    var html = '<span class="rm-axis"></span>' +
+               '<span class="rm-axis rm-hd">' + escapeHtml(ax.infLow) + "</span>" +
+               '<span class="rm-axis rm-hd">' + escapeHtml(ax.infHigh) + "</span>";
+    rows.forEach(function (row) {
+      html += '<span class="rm-axis">' + escapeHtml(row.axis) + "</span>";
+      row.cells.forEach(function (key) {
+        var cell = null;
+        for (var i = 0; i < QUAD_CELLS.length; i++) {
+          if (QUAD_CELLS[i].key === key) cell = QUAD_CELLS[i];
+        }
+        if (!cell) return;
+        var isNow = curKey === key;
+        // 象限无褒贬 ⇒ 只做中性高亮，禁止染红绿
+        html += '<span class="rm-cell' + (isNow ? " is-now" : "") + '">' +
+                escapeHtml(isNow && curLabel ? curLabel : cell.label) + "</span>";
+      });
+    });
+    return html;
+  }
+
   function renderRegime() {
     var d = regime();
     var lv = el("cn-level"), q = el("cn-quadrant"), box = el("cn-regime");
@@ -349,6 +388,16 @@
            (d.growth_axis === "expanding" ? "扩张" : "收缩") +
            (inp.conflict ? "（GDP 交叉校验不一致）" : ""))
         : "";
+    }
+    // 矩阵（2026-09-18）：无 quadrant 时四格照常渲染、都不高亮（高度恒定，不跳变）。
+    // ⚠️ `#cn-regime` 的 data-quadrant 属性与 `#cn-quadrant` 文案**都没动**（CN-4a 契约）。
+    var mx = el("cn-matrix");
+    if (mx) {
+      var qk = (d && d.quadrant) || null;
+      mx.className = "regime-matrix" + (qk ? "" : " is-unknown");
+      mx.innerHTML = quadrantMatrixHtml(qk, d && d.quadrant_label, {
+        infLow: "通胀 回落", infHigh: "通胀 上行", growUp: "增长 扩张", growDown: "增长 收缩"
+      });
     }
     if (box) box.setAttribute("data-quadrant", (d && d.quadrant) || "");
 

@@ -58,6 +58,11 @@
             <div class="regime-hero">
               <div class="regime-level" id="regime-level"><span class="skeleton" data-skel="level"></span></div>
               <div class="regime-quadrant" id="regime-quadrant"><span class="skeleton" data-skel="quadrant"></span></div>
+              {# 四象限矩阵（2026-09-18）：**新增兄弟元素**，上面那行文字一行都没动
+                 （verify_ui 的「数据暂缺」断言挂在 #regime-quadrant 上）。
+                 骨架标 data-skel="quadrant" → 复用 SKEL_OF_SOURCE.macro 的卸载逻辑（macro.js:79）。
+                 ⚠️ 容器本身**不能**标 data-skel：clearSkel 是 removeChild 自身，会把容器整个删掉。 #}
+              <div class="regime-matrix" id="regime-matrix"><span class="skeleton rm-skel" data-skel="quadrant"></span></div>
             </div>
             <div class="regime-score">
               <div class="score-num" id="regime-score"><span class="skeleton" data-skel="score"></span></div>

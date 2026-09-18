@@ -835,6 +835,24 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .regime-level.risk_off { color: var(--red); }
 .regime-level.neutral, .regime-level.none { color: var(--text-secondary); }
 .regime-quadrant { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+/* 四象限矩阵（2026-09-18）：2×2 + 当前格高亮。类名 `.rm-*` / `.regime-matrix` 为新增（全仓已 grep 无占用）。
+   ⚠️ 只加新类，**绝不改 `.mac-*`**（`/macro` 与 `/macro/cn` 共享，改了会同时改到另一页）。
+   ⚠️ 颜色一律用 token（双主题自动跟随；写死色值会漏切主题）。min-height 让加载骨架与渲染后等高。 */
+.regime-matrix { display: grid; grid-template-columns: auto repeat(2, minmax(0, 1fr)); gap: 3px;
+  margin-top: 10px; width: max-content; min-height: 89px; }
+.rm-axis { display: flex; align-items: center; justify-content: flex-end; padding-right: 6px;
+  font-size: 11px; color: var(--text-muted); }
+/* 列头（通胀 ↓ / ↑）：居中于所在列 —— 行标签靠右、列头居中是两种对齐语义，故分开（2026-09-18 特写复核） */
+.rm-axis.rm-hd { justify-content: center; padding-right: 0; }
+/* padding 左右各 6：4 字文案（通缩衰退）在 0 padding 下会顶满格子（特写实测） */
+.rm-cell { border: 1px solid var(--border); border-radius: 6px; padding: 7px 6px; text-align: center;
+  font-size: 12px; color: var(--text-muted); }
+/* 当前格：中性高亮（象限无褒贬 —— 不染红绿，否则会被读成涨跌） */
+.rm-cell.is-now { background: var(--bg-elevated); border-color: var(--blue);
+  color: var(--text-primary); font-weight: 600; }
+.regime-matrix.is-unknown .rm-cell { opacity: .55; }
+/* 加载骨架：宽高对齐渲染后实测值（166x89 @1440/375 一致）⇒ 数据到达时零高度跳变 */
+.rm-skel { grid-column: 1 / -1; height: 89px; width: 166px; }
 /* 左对齐（中列是 auto = 紧贴内容，左对齐让数字紧接左列而不是再往右推） */
 .regime-score { text-align: left; padding-right: 6px; }
 .score-num { font-family: var(--mono); font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-primary); }

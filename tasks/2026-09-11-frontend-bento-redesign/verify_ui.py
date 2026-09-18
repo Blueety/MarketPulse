@@ -2683,6 +2683,257 @@ NA_ASSET_CASES = [
 ]
 
 
+# ==================== QM 四象限矩阵（2026-09-18）====================
+# 任务档 tasks/2026-09-18-macro-quadrant-matrix。数据只有两个二元离散量
+# （inflation_axis / growth_axis）⇒ 2x2 矩阵 + 当前格高亮，位置本身就是信息。
+# 排列固定为教材口径（横轴通胀 左低右高 / 纵轴增长 上高下低），**渲染顺序 = 视觉顺序**：
+#   cells[0]=左上 复苏(goldilocks) / cells[1]=右上 再通胀(reflation)
+#   cells[2]=左下 通缩衰退(deflation) / cells[3]=右下 滞胀(stagflation)
+QM_CELL_ORDER = ["goldilocks", "reflation", "deflation", "stagflation"]  # 与 macro.js QUAD_CELLS 同序
+QM_CELL_LABELS = {"goldilocks": "复苏", "reflation": "再通胀",
+                  "deflation": "通缩衰退", "stagflation": "滞胀"}
+# /macro 的轴标签（口径 A）：通胀 ↓/↑ + 增长 ↑/↓
+QM_AXES_MACRO = ["通胀 ↓", "通胀 ↑", "增长 ↑", "增长 ↓"]
+
+QM_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const pick = (sel) => [...document.querySelectorAll(sel)];
+  const cells = pick('#regime-matrix .rm-cell');
+  const cn = pick('#cn-matrix .rm-cell');
+  const now = cells.filter((c) => c.classList.contains('is-now'));
+  const cnNow = cn.filter((c) => c.classList.contains('is-now'));
+  const mx = q('#regime-matrix'), cmx = q('#cn-matrix');
+  return {
+    exists: !!mx,
+    cellCount: cells.length,
+    texts: cells.map((c) => c.textContent.trim()),
+    nowCount: now.length,
+    nowText: now.length ? now[0].textContent.trim() : null,
+    unknown: mx ? mx.classList.contains('is-unknown') : null,
+    axes: pick('#regime-matrix .rm-axis').map((a) => a.textContent.trim()),
+    quadText: (q('#regime-quadrant') || {}).textContent || null,
+    matrixW: mx ? Math.round(mx.getBoundingClientRect().height > 0 ? mx.getBoundingClientRect().width : 0) : null,
+    matrixH: mx ? Math.round(mx.getBoundingClientRect().height) : null,
+    skelH: (() => { const s = q('#regime-matrix .rm-skel');
+        return s ? Math.round(s.getBoundingClientRect().height) : null; })(),
+    cnExists: !!cmx,
+    cnCells: cn.length,
+    cnTexts: cn.map((c) => c.textContent.trim()),
+    cnNowCount: cnNow.length,
+    cnNowText: cnNow.length ? cnNow[0].textContent.trim() : null,
+    cnAxes: pick('#cn-matrix .rm-axis').map((a) => a.textContent.trim()),
+    cnUnknown: cmx ? cmx.classList.contains('is-unknown') : null,
+    cnMatrixW: cmx ? Math.round(cmx.getBoundingClientRect().width) : null,
+    cnQuadrant: (() => { const e = q('#cn-regime');
+        return e ? (e.getAttribute('data-quadrant') || '') : null; })(),
+    cnLevelText: (q('#cn-level') || {}).textContent || null,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  };
+}
+"""
+
+
+def assert_quadrant_matrix(browser, url: str) -> None:
+    """QM-1~QM-5 四象限矩阵（/macro + /macro/cn）。
+
+    QM-1 两页容器存在且各 4 格（防漏格/重复格）
+    QM-2 四格文案集合 == {复苏, 再通胀, 通缩衰退, 滞胀}（防改名漂移；名字以服务端 QUADRANTS 为准）
+    QM-2b /macro 轴标签口径（通胀 ↓/↑ + 增长 ↑/↓）
+    QM-2d /macro/cn 轴标签**必须**用 上行/回落 + 扩张/收缩，**不得**出现 ↑/↓
+          （中国页增长轴是 PMI 与 50 比较的水平口径，写成箭头会误导）
+    QM-3 有 quadrant 时**恰好 1 格**高亮、文案 == 服务端 quadrant_label、且**位置映射**正确
+          （三组不同 key 各跑一遍 —— 单个用例可能是"蒙对"）
+    QM-4 /api/econ 断供：四格照常渲染、0 高亮 + is-unknown，且既有「数据暂缺」文案契约不破
+    QM-5 375 档矩阵不横向溢出、且不改变容器外的横向溢出
+    """
+    print("\n--- QM 四象限矩阵（/macro + /macro/cn）---")
+
+    # ---------- QM-1 / QM-2 / QM-3：三组不同 quadrant 的 mock ----------
+    for key in ("reflation", "goldilocks", "stagflation"):
+        label = QM_CELL_LABELS[key]
+        econ = json.loads(json.dumps(NA_ECON))
+        econ["quadrant"] = key
+        econ["quadrant_label"] = label
+        econ["inflation_axis"] = "up" if key in ("reflation", "stagflation") else "down"
+        econ["growth_axis"] = "contracting" if key in ("deflation", "stagflation") else "expanding"
+
+        def ok(which, route, econ=econ):
+            body = NA_OK_PAYLOAD if which == "macro" else econ
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps(body, ensure_ascii=False))
+
+        ctx, page, _msgs, perrs = _na_open(browser, url, ok)
+        try:
+            page.goto(url + "macro", wait_until="load")
+            page.wait_for_timeout(1200)
+            d = page.evaluate(QM_JS)
+            print(f"  [{key}] cells={d['cellCount']} texts={d['texts']} now={d['nowCount']}:"
+                  f"{d['nowText']!r} axes={d['axes']} w={d['matrixW']}x{d['matrixH']}")
+            check(d["exists"] and d["cellCount"] == 4,
+                  f"QM-1 [{key}] #regime-matrix 存在且恰好 4 格", (d["exists"], d["cellCount"]))
+            check(sorted(d["texts"]) == sorted(QM_CELL_LABELS.values()),
+                  f"QM-2 [{key}] 四格文案 == 复苏/再通胀/通缩衰退/滞胀（防改名漏格）", d["texts"])
+            check([a for a in d["axes"] if a] == QM_AXES_MACRO,
+                  f"QM-2b [{key}] 轴标签口径（通胀 ↓/↑ + 增长 ↑/↓）", d["axes"])
+            # 位置映射：投三组不同 key，逐组验"高亮格在数组里的下标"== 教材口径下标
+            exp_idx = QM_CELL_ORDER.index(key)
+            check(d["nowCount"] == 1 and d["nowText"] == label
+                  and d["texts"][exp_idx] == label and d["unknown"] is False,
+                  f"QM-3 [{key}] 恰好 1 格高亮、文案取自服务端、且位于教材口径位置（下标 {exp_idx}）",
+                  (d["nowCount"], d["nowText"], d["texts"], d["unknown"]))
+            check(d["nowCount"] == 1 and isinstance(d["quadText"], str)
+                  and d["nowText"] in d["quadText"],
+                  f"QM-3c [{key}] 高亮格与 #regime-quadrant 文字行**同源**（同一 label；"
+                  "前置 nowCount==1 —— 否则无高亮时该断言平凡成立）",
+                  (d["nowCount"], d["nowText"], d["quadText"]))
+            check(not perrs, f"QM-3d [{key}] 无 pageerror", perrs[:2])
+        finally:
+            ctx.close()
+
+    # ---------- QM-4：/api/econ 断供 ----------
+    def no_econ(which, route):
+        if which == "macro":
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps(NA_OK_PAYLOAD, ensure_ascii=False))
+        else:
+            route.abort()
+
+    ctx, page, _msgs, perrs = _na_open(browser, url, no_econ)
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(1500)
+        d = page.evaluate(QM_JS)
+        print(f"  [econ 断供] cells={d['cellCount']} now={d['nowCount']} unknown={d['unknown']} "
+              f"quadText={d['quadText']!r}")
+        check(d["cellCount"] == 4 and d["nowCount"] == 0 and d["unknown"] is True,
+              "QM-4 econ 断供时四格照常渲染、**0 高亮** + is-unknown（不假高亮、不跳变）",
+              (d["cellCount"], d["nowCount"], d["unknown"]))
+        check(isinstance(d["quadText"], str) and "数据暂缺" in d["quadText"],
+              "QM-4b 断供时既有「数据暂缺」文案契约不破（#regime-quadrant 一行未改）", d["quadText"])
+        check(not perrs, "QM-4c 断供路径无 pageerror", perrs[:2])
+    finally:
+        ctx.close()
+
+    # ---------- QM-5：375 档不横向溢出 ----------
+    econ375 = json.loads(json.dumps(NA_ECON))
+    ctx, page, _msgs, perrs = _na_open(browser, url, lambda w, r: r.fulfill(
+        status=200, content_type="application/json",
+        body=json.dumps(NA_OK_PAYLOAD if w == "macro" else econ375, ensure_ascii=False)),
+        viewport=(375, 812))
+    try:
+        page.goto(url + "macro", wait_until="load")
+        page.wait_for_timeout(1200)
+        d = page.evaluate(QM_JS)
+        print(f"  [375] matrixW={d['matrixW']} overflow={d['overflow']} cells={d['cellCount']}")
+        check(d["cellCount"] == 4 and d["overflow"] == 0
+              and d["matrixW"] is not None and d["matrixW"] <= 375,
+              "QM-5 375 档矩阵渲染完整且无横向溢出（MX-14a 同口径）",
+              (d["cellCount"], d["matrixW"], d["overflow"]))
+    finally:
+        ctx.close()
+
+    # ---------- QM-1c / QM-3g：`/macro/cn` **确定性 mock**（上游不可用时正向分支也能被验到）----------
+    #   ⚠️ 实数据那一段是**数据驱动**的：AkShare 取不到时只会走"0 高亮"分支 ⇒ 若不补这段，
+    #      "有 quadrant 时必须 1 格高亮"就永远没被真跑过（2026-09-18 实测：首轮绿跑正是这种情形）。
+    for key in ("reflation", "deflation"):
+        label = QM_CELL_LABELS[key]
+        cn_body = {
+            "as_of": "2026-08", "series": [], "groups": {}, "failed": [],
+            "quadrant": key, "quadrant_label": label,
+            "inflation_axis": "up" if key in ("reflation", "stagflation") else "down",
+            "growth_axis": "contracting" if key in ("deflation", "stagflation") else "expanding",
+            "basis": {"inflation": "mock", "growth": "mock"}, "growth_inputs": {},
+        }
+        ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+        try:
+            page = ctx.new_page()
+            cperrs: list[str] = []
+            page.on("pageerror", lambda e: cperrs.append(str(e)))
+
+            def _mk_route(body):
+                """⚠️ handler **必须只有 1 个形参**：Playwright Python 见到 2 个形参时会按
+                `(route, request)` 调用 —— 用 `lambda r, b=body:` 这种"默认参数捕获"写法，
+                `b` 会变成 Request 对象，`json.dumps` 抛 TypeError，且异常要到后续某个
+                API 调用处才重抛（2026-09-18 实测：表现为"mock 不生效、页面停在空态"）。"""
+                def _route(route):
+                    route.fulfill(status=200, content_type="application/json",
+                                  body=json.dumps(body, ensure_ascii=False))
+                return _route
+
+            page.route("**/api/econ/cn*", _mk_route(cn_body))
+            page.goto(url + "macro/cn", wait_until="load")
+            # ⚠️ 等**数据被应用**（#cn-level == mock 的 quadrant_label），不要等"4 格出现"——
+            #    四格在首帧（数据未到时）就已经渲染出来了，等它会立刻返回、拿到空态
+            #    （2026-09-18 实测踩到：报红其实是等待条件错）。
+            try:
+                page.wait_for_function(
+                    "() => (document.querySelector('#cn-level') || {}).textContent === " + json.dumps(label),
+                    timeout=20000)
+            except Exception:  # noqa: BLE001
+                pass
+            page.wait_for_timeout(600)
+            d = page.evaluate(QM_JS)
+            exp_idx = QM_CELL_ORDER.index(key)
+            print(f"  [cn mock {key}] cells={d['cnCells']} now={d['cnNowCount']}:{d['cnNowText']!r} "
+                  f"level={d['cnLevelText']!r} axes={d['cnAxes']}")
+            check(d["cnCells"] == 4 and d["cnNowCount"] == 1 and d["cnNowText"] == label
+                  and d["cnTexts"][exp_idx] == label and d["cnUnknown"] is False,
+                  f"QM-3g [cn mock {key}] 恰好 1 格高亮、位于教材口径位置（下标 {exp_idx}）、"
+                  "文案取自服务端 quadrant_label",
+                  (d["cnCells"], d["cnNowCount"], d["cnNowText"], d["cnTexts"], d["cnUnknown"]))
+            check(d["cnNowText"] == d["cnLevelText"],
+                  f"QM-3h [cn mock {key}] 高亮格与 #cn-level 同源（同一 quadrant_label）",
+                  (d["cnNowText"], d["cnLevelText"]))
+            check(not cperrs, f"QM-3i [cn mock {key}] 无 pageerror", cperrs[:2])
+        finally:
+            ctx.close()
+
+    # ---------- QM-1b / QM-2c / QM-2d / QM-3e：`/macro/cn` 实数据（数据驱动）----------
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        perrs: list[str] = []
+        page.on("pageerror", lambda e: perrs.append(str(e)))
+        page.goto(url + "macro/cn", wait_until="load")
+        try:
+            page.wait_for_function(
+                "() => document.querySelectorAll('#cn-matrix .rm-cell').length >= 4", timeout=40000)
+        except Exception:  # noqa: BLE001
+            pass
+        page.wait_for_timeout(800)
+        d = page.evaluate(QM_JS)
+        print(f"  [cn] cells={d['cnCells']} texts={d['cnTexts']} quadrant={d['cnQuadrant']!r} "
+              f"now={d['cnNowCount']}:{d['cnNowText']!r} axes={d['cnAxes']}")
+        check(d["cnExists"] and d["cnCells"] == 4,
+              "QM-1b /macro/cn #cn-matrix 存在且恰好 4 格", (d["cnExists"], d["cnCells"]))
+        check(sorted(d["cnTexts"]) == sorted(QM_CELL_LABELS.values()),
+              "QM-2c /macro/cn 四格文案与服务端 QUADRANTS 一致（两页共享同一字典）", d["cnTexts"])
+        cn_axes = [a for a in d["cnAxes"] if a]
+        joined = "".join(cn_axes)
+        check(len(cn_axes) == 4
+              and not any(("↑" in a or "↓" in a) for a in cn_axes)
+              and "上行" in joined and "回落" in joined
+              and "扩张" in joined and "收缩" in joined,
+              "QM-2d /macro/cn 轴标签为 上行/回落 + 扩张/收缩（**不用** ↑/↓：增长轴是 PMI 水平口径）",
+              cn_axes)
+        # 数据驱动（不假设上游一定可用）：有 quadrant 就必须 1 格且与 #cn-level **同源**；
+        # 无 quadrant 就必须 0 高亮 + is-unknown —— 两个分支都各有要求，不是真空绿。
+        if d["cnQuadrant"]:
+            exp_idx = QM_CELL_ORDER.index(d["cnQuadrant"])
+            check(d["cnNowCount"] == 1 and d["cnTexts"][exp_idx] == d["cnNowText"]
+                  and d["cnNowText"] == d["cnLevelText"] and d["cnUnknown"] is False,
+                  "QM-3e 有 quadrant 时恰好 1 格高亮、位置正确且与 #cn-level 同源（数据驱动）",
+                  (d["cnQuadrant"], d["cnNowCount"], d["cnNowText"], d["cnLevelText"], d["cnTexts"]))
+        else:
+            check(d["cnNowCount"] == 0 and d["cnUnknown"] is True,
+                  "QM-3f 无 quadrant（上游不可用）时 0 高亮 + is-unknown（不假高亮）",
+                  (d["cnNowCount"], d["cnUnknown"]))
+        check(not perrs, "QM-4d /macro/cn 无 pageerror", perrs[:2])
+    finally:
+        ctx.close()
+
+
 def _na_open(browser, url: str, handler, *, timeout_ms=None, viewport=(1440, 900)):
     """开一个 /macro 独立 context 并挂 mock。返回 (ctx, page, console_msgs, pageerrors)。
 
@@ -4098,6 +4349,7 @@ def main() -> int:
             assert_kpi_no_truncation(browser, url)   # KY-* KPI 无静默截断（kpi-responsive-fix）
             assert_market_session(browser, url)      # MS-* 侧栏市场状态两行两市场（market-session-status，2026-09-16）
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
+            assert_quadrant_matrix(browser, url)     # QM-* 四象限矩阵（macro-quadrant-matrix，2026-09-18）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])

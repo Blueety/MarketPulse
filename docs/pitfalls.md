@@ -589,3 +589,24 @@
 - **跨层引用的数字必须注明来源**：前端文案里出现"0.5"（相关性显著阈值）时，注明它**引用**
   `src/analyzer.py:77 CORRELATION_SIGNIFICANT`（"颜色编码与 context 写入共用"），而不是第二个阈值 ——
   否则就是 D2 同款的"标注写 X、行为做 Y"。**判据**：文案里出现任何魔法数字，先问"它在服务端/配置里的出处是哪一行"。
+
+## 通用（Playwright mock 的三类"假红/假绿"，2026-09-18）
+
+- **`page.route(pattern, handler)` 的 handler 必须只有 1 个形参 —— 2 个形参会被按 `(route, request)` 调用**：
+  写 `lambda r, b=body: r.fulfill(body=json.dumps(b))` 这种"默认参数捕获"看起来能固定 body，实际 `b` 收到的是
+  **Request 对象** → `json.dumps` 抛 `TypeError`，**且异常不在 route 回调里当场报**，要到之后某个 Playwright API
+  调用处才重抛（本次表现为 `wait_for_function` 抛 `TypeError`，完全不像自己的代码）。症状会被误读成
+  "mock 不生效 / 页面数据缺失"（实测：`#cn-level` 停在「数据暂缺」、0 高亮）。**修法**：用工厂返回单参函数
+  （`def _mk(body): def _route(route): route.fulfill(...json.dumps(body)); return _route`）。
+  同一坑族：pitfalls 里"route handler 抛错会在后续 API 处重抛"那条 —— 排查时先查**回调签名**与同名覆盖。
+- **等待条件要等"值被应用"，不要等"壳出现"**：本次新增的四象限矩阵**首帧（数据未到）就已渲染出 4 个格子**，
+  于是 `wait_for_function("cells >= 4")` 立刻返回，拿到的是"空态矩阵" → 断言全红，而根因只是等待条件错。
+  **判据**：等你要断言的那个**值**（如 `#cn-level === 期望 label`），不要等容器/元素存在。
+- **"数据驱动"的断言必须用确定性 mock 把正向分支跑一遍**：矩阵断言写成"有 quadrant 就恰好 1 格高亮、
+  没有就 0 高亮 + is-unknown"是对的，但上游那一刻没数据 ⇒ 正向分支**从没执行过**（首轮绿跑实测即此，
+  33 条里有 6 条"绿得没有任何意义"）。**做法**：给 API 挂 mock 造出数据，把正向分支也真跑一次
+  （本次补 `QM-3g/3h/3i` 两个 CN mock 用例，并**再投一个不同 key** 验证位置映射不是蒙对）。
+- **判"元素有没有被裁"要量几何，不要看缩略截图**：元素截图在小尺寸阅读下，相邻的 1px 边框极易被看成一
+  条"裁剪线"，我据此误判"底行被截"，随后用 `bottom` 差（matrix.bottom - container.bottom == 0）、
+  `scrollHeight/clientHeight`、以及 **DPR=2 特写**才确证未裁。**判据**：裁剪类问题用几何量判定；
+  视觉质量类问题（对齐、留白、可读性）才看图，且要看 **DPR=2 特写**。
