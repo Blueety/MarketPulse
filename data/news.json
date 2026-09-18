@@ -2,60 +2,60 @@
   "date": "2026-09-18",
   "items": [
     {
-      "title": "欧央行副行长出手“降温”：能源涨价不能成为继续加息的唯一理由",
-      "url": "https://wallstreetcn.com/articles/3782087",
+      "title": "美国制造业复苏突然“踩刹车”：8月产值意外下降0.3%，产能利用率降至五个月低点",
+      "url": "https://wallstreetcn.com/articles/3782101",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "受企业设备生产降温以及制造业企业面临更高投入成本的影响，美国工厂产值今年以来首次意外下降"
+    },
+    {
+      "title": "欧洲柴油零售价突破300美元，马克龙要召集G7谈协同释放战略油储",
+      "url": "https://wallstreetcn.com/articles/3782102",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "法国总统马克龙不再满足于单边应对能源价格飙升，宣布将在数周内召集七国集团（G7）会议，讨论释放战略石油产品储备的可能性"
+    },
+    {
+      "title": "美联储按兵不动但释放鹰派信号 年内利率变化预期由降息变加息",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE1Xck1rVVBQNVpBcWxUbVNWREstX1NDSEpEMkpXTkJ1R0wtdEJjR0tYRW5IUEc1a0hrZnpmSnZwbHdNZ2tIcUpUUQ?oc=5",
+      "source": "cls.cn",
+      "published": "2026-09-18",
+      "summary": "美联储按兵不动但释放鹰派信号 年内利率变化预期由降息变加息"
+    },
+    {
+      "title": "摩根大通：定制芯片2027年出货占比将超GPU，博通TPU“供应链隐身”不代表订单存疑",
+      "url": "https://wallstreetcn.com/articles/3782070",
       "source": "华尔街见闻",
       "published": "2026-09-18",
-      "summary": "欧洲央行副行长Boris Vujcic淡化能源价格上涨对进一步加息预期的推动作用，强调货币政策不能单纯围绕油气价格变化作出判断，而应综合评估通胀、经济增长和居民消费等更广泛数据"
+      "summary": "AI算力需求正在推动芯片产业从“GPU一家独大”走向GPU与定制芯片并行扩张"
     },
     {
-      "title": "OpenAI、Anthropic开始“抢小单”！AI算力争夺转向20–30MW小型数据中心",
-      "url": "https://wallstreetcn.com/articles/3782082",
+      "title": "日本央行如期加息25个基点",
+      "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9yb0RSMlhGS0NmY3drek5LWlVBMEkzUDVkcnQzQ19nbmpXMUV2RXFFZE5QQTEzUUFVaGk1QUhTWlZTV3pFME5NYnhIU2U5SU5PbjkyM3VSSFRKaTFzbm85Qw?oc=5",
+      "source": "东方财富",
+      "published": "2026-09-18",
+      "summary": "日本央行如期加息25个基点"
+    },
+    {
+      "title": "美国柴油价格创历史新高，中西部炼油厂停产雪上加霜",
+      "url": "https://wallstreetcn.com/articles/3782095",
       "source": "华尔街见闻",
       "published": "2026-09-18",
-      "summary": "Anthropic与OpenAI正在将部分算力需求转向20至30兆瓦（MW）级别的数据中心，以更快获得可用容量"
+      "summary": "美国柴油价格已经升至历史新高之际，美国中西部一座大型炼油厂突然停产，进一步加剧了区域燃料供应收紧的风险"
     },
     {
-      "title": "美债收益率飙破5%后，资金开始“抢债”！",
-      "url": "https://wallstreetcn.com/articles/3782088",
+      "title": "通用汽车进军军工：首批“爱国者”导弹部件交付洛克希德，民用产线重归战时逻辑",
+      "url": "https://wallstreetcn.com/articles/3782099",
       "source": "华尔街见闻",
       "published": "2026-09-18",
-      "summary": "美国国债市场的持续抛售，正在催生一个罕见的买入机会"
+      "summary": "美国军工产能扩张正从传统国防承包商向民用制造业加速蔓延"
     },
     {
-      "title": "日本央行行长：不排除连续加息选项，要先发制人地遏制通胀，中东、AI、汇率是关键变量",
-      "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE5Eb0MyV09YdzRDNHI1bDA0aTdMeTktamdXMThPeGFleWtvb1dRTmVkblQwYmJ5eGc3UVlfZTdSb2phVjlWOExUQlFJckk3THFDTThZ?oc=5",
-      "source": "wallstreetcn.com",
+      "title": "21评论｜日本央行加息进一步证实了美国对日本的政策干预 - 21财经",
+      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOdFp1VktpbVAzcHZXb1NIOUVNajEzR1ZhX0JBak1lR0ZickE3UnJYRFJ5cDBmY2Z5SEM0dFhyWjhCdEVMZ0ZpRVNJZUdaaHoweGU2cnB1N0U3WTg4Vl9Zbi1sa2xzUTVKQkRqWi1mLXJ2ZFJWTWotUDJSSG1TenNkT0xSS1lxYTk5TjRQbnI2OA?oc=5",
+      "source": "Google News",
       "published": "2026-09-18",
-      "summary": "日本央行行长：不排除连续加息选项，要先发制人地遏制通胀，中东、AI、汇率是关键变量"
-    },
-    {
-      "title": "Anthropic悄悄建起生物实验室！Claude指挥机器人做实验，AI制药再进一步",
-      "url": "https://wallstreetcn.com/articles/3782086",
-      "source": "华尔街见闻",
-      "published": "2026-09-18",
-      "summary": "Anthropic正将人工智能的野心进一步延伸至现实生物学领域"
-    },
-    {
-      "title": "用魔法打败魔法，OpenAI被Claude“黑了”......",
-      "url": "https://wallstreetcn.com/articles/3782081",
-      "source": "华尔街见闻",
-      "published": "2026-09-18",
-      "summary": "一场颇具讽刺意味的安全事件正在引发关注： 研究人员借助Anthropic最新的Claude Opus 5，将一个图像处理漏洞逐步扩展为完整攻击链，最终获取了一名OpenAI员工的ChatGPT账户访问权限，并进一步触及OpenAI内部Gi…"
-    },
-    {
-      "title": "美联储重启加息对市场影响几何",
-      "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE5FX1RiVkR1T2hCR0Fockc0WnF0emFFaXpVbHB0Z1A0U3VwTVNFcVkwWXd5TS1hQURHRFB2Z2R1b2lkMWlRaXlrUGVhbVk2b2s5d0p2emZmRDU5ZmhVZ3N0RnlRNzhKVkw2bGNvUw?oc=5",
-      "source": "中国经济网",
-      "published": "2026-09-18",
-      "summary": "美联储重启加息对市场影响几何"
-    },
-    {
-      "title": "报道：SK海力士旗下Solidigm考虑在美国建设首座NAND工厂",
-      "url": "https://wallstreetcn.com/articles/3782074",
-      "source": "华尔街见闻",
-      "published": "2026-09-18",
-      "summary": "美国NAND存储制造布局或迎来新的扩张"
+      "summary": "21评论｜日本央行加息进一步证实了美国对日本的政策干预 21财经"
     }
   ]
 }
