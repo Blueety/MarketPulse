@@ -95,6 +95,41 @@ https://marketpulse-blue.up.railway.app
 - 📊 相关性分析（5 组关键对）
 - 🔔 告警记录
 
+### 🔒 访问控制（HTTP Basic Auth）
+
+全站（页面 + API + 静态资源）默认要求 **HTTP Basic Auth**。浏览器首次访问会弹出原生登录框，
+登录一次后自动对同域后续请求带凭据。
+
+| 环境变量 | 说明 |
+| --- | --- |
+| `MP_AUTH_USER` | 用户名（**公网部署必配**，否则不鉴权） |
+| `MP_AUTH_PASS` | 密码。**关键不是长度，是"不可猜"**：12 位以上**真随机**即可（生成命令见下）；❌ 字典词 / 项目相关词 / 与其它站点复用 |
+| `MP_AUTH_DISABLED` | `1` = 关闭鉴权（**仅**本地开发与自动化验收，勿用于公网） |
+
+⚠️ **未配置 `MP_AUTH_USER`/`MP_AUTH_PASS` 时放行（fail-open）并在启动日志打 WARNING**
+—— 公网部署务必配好后用 `curl -o /dev/null -w "%{http_code}" https://...` 验证返回 **401**。
+⚠️ 只允许 HTTPS 暴露（Basic Auth 的凭据只是 base64 编码，明文传输等同泄露）。
+
+**口令强度的真实判据**（⚠️ 不强制 ≥16 位 —— 长度只是"随机性"的代理指标）：
+
+- ✅ **真随机**（用生成器，不要自己想）
+- ✅ 与其它任何站点**不复用**
+- ❌ 字典词、常见口令、`marketpulse` / 邮箱前缀等项目相关词
+
+```bash
+venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(12))"   # → 16 位随机串
+```
+
+> ⚠️ 已知的边界：鉴权中间件**没有失败次数限制 / 锁定**（代码里无频控）。
+> 所以口令若**可猜**（字典词、短数字），理论上可被在线反复尝试；
+> 而 **12 位以上真随机**会让在线爆破失去实际可行性（量级远超可行尝试次数）。
+> 若你只能用短口令，可以再补一层按 IP 的简单频控（不属于当前实现）。
+> 顺带：浏览器会记住凭据（Basic Auth 无"登出"），关标签页 / 清站点数据即可清除。
+
+- `GET /healthz` 是无鉴权的健康检查端点（Railway 的 `healthcheckPath` 指向它；
+  **不要**把 healthcheck 指到 `/`，会因 401 触发部署重启循环）。
+- 本地 / 验收免鉴权：`MP_AUTH_DISABLED=1 venv/Scripts/python -m uvicorn web.app:app --port 8000`
+
 ---
 
 ## 📁 项目结构

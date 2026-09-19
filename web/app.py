@@ -10,6 +10,8 @@ analyzer），因此解析函数**不调用** analyzer.load_history / alerter �
 """
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import logging
 import os
@@ -18,8 +20,8 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -110,6 +112,99 @@ class _RevalidateStatic(StaticFiles):
 
 
 app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static")
+
+# ------------------------------------------------------------------ 访问控制（HTTP Basic Auth，2026-09-19）
+# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A）。零新依赖（stdlib `base64` + `hmac`）、
+# 零前端改动：Basic Auth 是**唯一**浏览器原生支持、且能一次性覆盖「页面导航 + 静态资源 + XHR」
+# 三类请求的方案 —— header 型 Token 在 `<a href="/macro">` 跳转时会直接失败。
+#
+# ⚠️ R9：**env 一律现读，绝不求值成模块级常量**。常量在 import 时定型 ⇒ 单测 monkeypatch env 不生效。
+#    `os.environ.get` 的开销相对一次 HTTP 请求可忽略，换来的是可测性。
+#
+# ⚠️ D-1（已裁定）：未配置凭据时**fail-open**（放行 + 启动 WARNING），不是 fail-closed。
+#    理由：与项目既有纪律一致（失败降级不中断，git_ops 失败仅记日志）；且 fail-closed 会锁死
+#    本地开发与验收。**代价**：忘了配 env = 回到未鉴权状态 ⇒ 靠启动 WARNING + 部署清单兜住。
+def _auth_user() -> str:
+    return (os.environ.get("MP_AUTH_USER") or "").strip()
+
+
+def _auth_pass() -> str:
+    # ⚠️ 密码不做 strip：空格可能是合法字符（随机口令一般不含，但改了会让"配了却登不上"）
+    return os.environ.get("MP_AUTH_PASS") or ""
+
+
+def _auth_disabled() -> bool:
+    return os.environ.get("MP_AUTH_DISABLED") == "1"
+
+
+def auth_enabled() -> bool:
+    """鉴权是否启用（现读 env；见上面 R9 注释）。"""
+    return bool(_auth_user()) and bool(_auth_pass()) and not _auth_disabled()
+
+
+def _authorized(header: str) -> bool:
+    """`Authorization` 头校验：**任何异常形态都返回 False（401），绝不抛给 FastAPI 变成 500**。
+
+    - `Basic ` 前缀按 RFC 大小写不敏感 ⇒ 统一小写比较（plan §5 Step 2 要点①）。
+    - `hmac.compare_digest` **用户名与密码都要**（防时序侧信道；只比一个等于没防）。
+    """
+    if len(header) < 6 or header[:6].lower() != "basic ":
+        return False
+    try:
+        raw = base64.b64decode(header[6:], validate=True).decode("utf-8")
+    except Exception:                   # noqa: BLE001 —— 非 base64 / 坏填充 / 非 UTF-8 一律 401
+        return False
+    if ":" not in raw:
+        return False
+    u, p = raw.split(":", 1)
+    return hmac.compare_digest(u, _auth_user()) and hmac.compare_digest(p, _auth_pass())
+
+
+def _unauthorized() -> JSONResponse:
+    """401。⚠️ **必须带 `WWW-Authenticate`**（D-7）：缺该头浏览器**不弹窗**，
+    表现为"反复失败且没有任何提示"，极难自查。"""
+    return JSONResponse({"detail": "Unauthorized"}, status_code=401,
+                        headers={"WWW-Authenticate": 'Basic realm="MarketPulse"'})
+
+
+@app.middleware("http")
+async def _basic_auth(request: Request, call_next):
+    """全站 Basic Auth（页面 + 10 个 API + `/static/*`）。
+
+    - **不豁免静态资源**（D-3）：Basic Auth 下浏览器会自动带上凭据；而豁免会制造
+      "页面能开、数据全 401"的半开状态，反而更难排查。
+    - `/healthz` 用**精确相等**放行（不做前缀匹配，防 `/healthz/../` 类绕过）。
+    """
+    if not auth_enabled():
+        return await call_next(request)
+    if request.url.path == "/healthz":
+        return await call_next(request)
+    if not _authorized(request.headers.get("authorization", "")):
+        return _unauthorized()
+    return await call_next(request)
+
+
+@app.get("/healthz")
+def healthz() -> dict:
+    """Railway healthcheck（**无鉴权、不查 DB**）。
+
+    🔴 R1：`railway.toml` 的 `healthcheckPath` 已从 `/` 改到本端点 —— 若给 `/` 返 401，
+    配合 `restartPolicyType=ON_FAILURE` + `MaxRetries=10` 会让部署**陷入重启循环直到失败**。
+    ⚠️ 刻意**不查 DB**：DB 挂了重启也修不好，不该让健康检查背锅（D-2）。
+    """
+    return {"status": "ok"}
+
+
+@app.on_event("startup")
+def _log_auth_state() -> None:
+    """启动即告知鉴权状态（R3：忘了配 env 等同没做 ⇒ 必须醒目）。"""
+    if auth_enabled():
+        log.info("web 鉴权已启用（HTTP Basic Auth，用户 %s）", _auth_user())
+    elif _auth_disabled():
+        log.warning("web 鉴权已由 MP_AUTH_DISABLED=1 关闭 —— **仅限本地开发与自动化验收，勿用于公网**")
+    else:
+        log.warning("web 鉴权未启用（MP_AUTH_USER / MP_AUTH_PASS 未配置）⇒ 全站裸奔；"
+                    "公网部署前请在 Railway Variables 设置这两个 env")
 
 # 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——

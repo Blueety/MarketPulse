@@ -73,13 +73,22 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
 - 模块：4 张 KPI 卡（含 sparkline）· 趋势**四图合一 + 4 类别 tab**（单 `canvas#chart-main`，7D/30D/90D/1Y）· 自选列表 · 市场概览 6 小卡 · A股板块 Top5 · 美股行业板块（双 tab）· 告警记录 · 最新资讯 · 市场情绪/资金流向/风险偏好 · 3 个静态占位卡
 - 双主题：Light `#F7F8FA` / Dark `#0B0F14`，玻璃化（`backdrop-filter` + 氛围层）
 
-**3 个页面路由 / 9 个 JSON API**：
+**4 个页面路由 / 11 个 JSON 端点**（10 个业务 API + `/healthz` 健康检查）
+⚠️ 2026-09-19 实测订正：此前写「3 页 9 API」（`architecture.md` 也是），且漏了 `/timeline` 一页
+与 `/api/timeline` 一个 API。`frontend-structure.md` §1/§2 一直是准的。
+
+🔒 **全站 HTTP Basic Auth**（2026-09-19，见 §9 G9）：除 `/healthz` 外全部端点需凭据
+（`MP_AUTH_USER` / `MP_AUTH_PASS`）；未配置 ⇒ **fail-open**（放行 + 启动 WARNING）；
+`MP_AUTH_DISABLED=1` ⇒ 本地开发/自动化验收免鉴权。
 
 | 端点 | 说明 |
 |---|---|
 | `GET /` | 看板页面 |
 | `GET /macro` | 全球（美国）宏观数据独立页（research terminal 风格，7 模块） |
 | `GET /macro/cn` | **中国宏观独立页**（2026-09-14 新增，与 `/macro` 平行：四象限 + 13 序列 + 行情） |
+| `GET /timeline` | **市场日历**（2026-09-18 上线；用户可见名「市场日历」，内部名 timeline） |
+| `GET /healthz` | **无鉴权**健康检查 → `{"status":"ok"}`；`railway.toml` 的 `healthcheckPath` 指向它（🔴 指到 `/` 会因 401 触发部署重启循环） |
+| `GET /api/timeline` | 事件时间线（日历 × 行情影响 × 新闻叙事 + **结果值层** actual/forecast/previous）；TTL 6h，**不联网** |
 | `GET /api/history` | 历史序列；`days` 上限 365，另支持 `start_date`/`end_date` |
 | `GET /api/latest` | 最新日 10 指数概览 + `sector_heat` + `us_sector_heat` + `risk_appetite` + `correlation` |
 | `GET /api/alerts` | 最近告警（10 条） |
@@ -258,6 +267,13 @@ venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
 # Web
 venv/Scripts/python -m uvicorn web.app:app --port 8000 # 启动看板（改前端后必须换新端口验证）
 
+# 鉴权（2026-09-19 起全站 HTTP Basic Auth；未配 env 时 fail-open 并打 WARNING）
+MP_AUTH_USER=demo MP_AUTH_PASS=demo123 venv/Scripts/python -m uvicorn web.app:app --port 8011
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8011/                  # 401
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8011/healthz           # 200
+curl -s -o /dev/null -w "%{http_code}\n" -u demo:demo123 localhost:8011/  # 200
+venv/Scripts/python -m pytest tests/test_web.py -v -k auth                # 鉴权单测
+
 # 维护脚本
 venv/Scripts/python scripts/backfill_history.py [--dry-run]
 venv/Scripts/python scripts/backtest.py
@@ -279,6 +295,7 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | **G5** | 板块热度偶发取数失败（`us_sector_heat` 更脆弱） | 前端「数据暂缺」，静默降级不中断日报 | 已在任务队列中（见 §10） |
 | **G6** | 仓库根目录有开发残留：`_dbg_hist.json`、`_phase5_run.log`、`web_uvicorn.log`、`task brief.md`、`依赖初始化.md`、`初始prd.md` | 噪声；且外部 cron 的 `git add -A` 会把临时文件提交进仓库 | 清理并确认 `.gitignore` 覆盖 |
 | **G7** | **（2026-09-14 已解决）** 仓库外提交链的全量 `git add -A`：Hermes cron「MarketPulse 自动推送GitHub」（`*/5`，`source=builtin`，id `6f6e40a6f8b4`）原不受仓库代码约束（三十四期只收窄了 Python 侧三入口） | 原会把工作区里的源码/测试/文档半成品扫进仓库；`git status` 失真、"改动像丢了" | **已解决**：该 cron 的 prompt 已改为只提交 `data context alerts`（**频率保持 `*/5` 不变**）；实测源码 WIP 不再被提交、白名单内改动照常提交（过程见 `tasks/2026-09-14-autopush-scope/journal.md` §6）。**残余风险**：今后若再新增一条"全量兜底提交"链，会重现同类问题 |
+| **G9** | **（2026-09-19 已解决）** web 层**零鉴权**：`web/app.py` 无任何 auth（grep `auth|login|token|password|API_KEY|Secret` 零命中），线上 `marketpulse-blue.up.railway.app` 的 `/`、`/api/timeline`、`/api/watchlist` 全部 200 可读 ⇒ 任何人拿到 URL 即可读全部数据，`/api/watchlist` 实质暴露自选股方向 | **P0**：数据全网可读（含自选配置） | **已解决**：全站 **HTTP Basic Auth**（`web/app.py` 中间件；零新依赖 `base64` + `hmac.compare_digest`）+ 无鉴权的 `/healthz` + `railway.toml` 的 `healthcheckPath` 改为 `/healthz`（🔴 不改会让部署因 healthcheck 401 陷入重启循环）。env：`MP_AUTH_USER` / `MP_AUTH_PASS` / `MP_AUTH_DISABLED`；**未配置 ⇒ fail-open**（与项目"失败降级不中断"纪律一致，已裁定）⇒ 公网部署**必须**配并 curl 验 401。验收 `AUTH-*` 7 条 + 单测 9 条（见 `tasks/2026-09-19-web-basic-auth/journal.md`） |
 | **G8** | **UI 验收的 12 条常红断言**（2026-09-16 21:44 独立重跑 `verify_ui.py`：`EXIT=1`，`FAILED: 12 条`）。其中 **10 条是上游取数被拒导致的"数据层红"**：`/api/macro` 4 个品种 `value` 全 `null`、`trend.dates=[]`（→ `MX-6` / `MX-7` / `MX-8` / `MX-9` / `MX-13` / `M-4` / `M-5` / `XC-0` 红）；`/api/econ` `as_of=null`（→ `MX-11` / `MX-11b` 红，页面显示「数据暂缺」）。**自测到的上游状态（2026-09-16 21:5x）**：Yahoo chart 直打 `query1` 与 `query2` **均 `HTTP 403`** —— 三十四期的「双主机轮换」已**无法自愈**（两台同时被拒，轮换没有逃生口）；同一时刻 BLS 亦取不到 `as_of`；`/api/cn/quotes` 的 `cny` 同样 `failed`（同一个 Yahoo 403）。另 **2 条与数据无关**：`N-12a` / `N-12b`（Firefox `scrollbar-*` CSSOM 门控专项） | 验收脚本**常年 `EXIT=1`** ⇒ 真回归会被"红色背景"淹没（本项目已有"红色被当噪声"的先例，见 G5）；`/macro` 与 `/macro/cn` 上报价与宏观数据大面积显示「数据暂缺」，功能实际不可用 | ① **上游**（优先）：给 Yahoo 链路走代理（项目已有 Clash `127.0.0.1:7890` 先例，见 `src/git_ops.py` 的 push 代理注入）或换源（A 股侧 AkShare 链路已成熟）；② **判据分层**：给 `verify_ui.py` 增加"上游不可用时该组标记 `SKIPPED` 而非 `FAIL`"的逃生门 —— **不放松判据**，只把「外部依赖失败」与「代码回归」区分开，否则这个脚本会彻底失去信号价值；③ Firefox 2 条：要么补 FF 门控实现，要么在断言里显式标注为已知偏差。**基线证据**：2026-09-16 用 `git archive HEAD` 建隔离副本做 A/B，HEAD 基线失败 **15 条 ⊇ 本轮 12 条** ⇒ `2026-09-16-market-session-status` 改动**新增失败 0 条** |
 
 ---

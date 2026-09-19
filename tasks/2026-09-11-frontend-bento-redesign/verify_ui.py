@@ -3966,6 +3966,109 @@ def _ev_mk_route(payload):
     return _route
 
 
+# ============ AUTH 访问控制（HTTP Basic Auth，2026-09-19）============
+# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A）。
+#
+# ⚠️ 分层：**本组另起一个带鉴权的服务实例**跑（D-4b），不去动 `main()` 起的那台 ——
+#    `main()` 在起服前已注入 `MP_AUTH_DISABLED=1`（D-4a）⇒ 既有 700+ 条断言零改动、零新增失败，
+#    （G8 教训：红色背景会淹没真回归）。鉴权行为本身由本组独立覆盖。
+# ⚠️ 新建实例必须**显式清掉** `MP_AUTH_DISABLED`（父进程已注入，子进程会继承）。
+AUTH_USER, AUTH_PASS = "mpdemo", "s3cret-pass-16"
+
+
+def _http_status(url: str, user: str | None = None, pwd: str | None = None) -> tuple:
+    """带/不带 Basic 凭据请求，返回 `(status, headers)`；4xx/5xx 也按正常返回（不抛）。"""
+    import base64
+    import urllib.error
+    req = urllib.request.Request(url)
+    if user is not None:
+        raw = ("%s:%s" % (user, pwd or "")).encode("utf-8")
+        req.add_header("Authorization", "Basic " + base64.b64encode(raw).decode())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, dict(resp.headers)
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers or {})
+
+
+def assert_auth(browser) -> None:
+    """AUTH-1~AUTH-5 访问控制。
+
+    AUTH-1 无凭据 `GET /` → 401 且带 `WWW-Authenticate: Basic realm="MarketPulse"`
+    AUTH-2 无凭据 `GET /api/watchlist` → 401（**直接验 P0 那个暴露自选股的端点**）
+    AUTH-3 无凭据 `GET /healthz` → 200（🔴 R1：给 `/` 返 401 且 healthcheck 打 `/` = 部署重启循环）
+    AUTH-4 错凭据 401 / 正确凭据 200
+    AUTH-5 Playwright `new_context(http_credentials=...)` 打开 `/` → 渲染成功、console error 0
+           （⚠️ 必须：这是 D-3「静态资源不豁免」唯一能被证伪的地方 —— 单测覆盖不到
+             浏览器自动为同域后续请求带凭据的行为）
+    """
+    print("\n--- AUTH 访问控制（HTTP Basic Auth）---")
+    port = free_port()
+    url = "http://127.0.0.1:%d/" % port
+    env = dict(os.environ)
+    env["MP_AUTH_USER"] = AUTH_USER
+    env["MP_AUTH_PASS"] = AUTH_PASS
+    env.pop("MP_AUTH_DISABLED", None)       # 关键：父进程已注入 1，这里必须清掉
+    proc = subprocess.Popen([str(PY), "-m", "uvicorn", "web.app:app", "--port", str(port)],
+                            cwd=str(ROOT), env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        wait_ready(url + "healthz")
+        print(f"  带鉴权实例就绪: {url}")
+
+        code, hdrs = _http_status(url)
+        check(code == 401 and (hdrs.get("www-authenticate") or "") == 'Basic realm="MarketPulse"',
+              "AUTH-1 无凭据 GET / → 401 且带 WWW-Authenticate（缺该头浏览器不弹窗）",
+              (code, hdrs.get("www-authenticate")))
+
+        code2, _ = _http_status(url + "api/watchlist")
+        check(code2 == 401, "AUTH-2 无凭据 GET /api/watchlist → 401（P0 端点本身）", code2)
+
+        code3, _ = _http_status(url + "healthz")
+        check(code3 == 200, "AUTH-3 无凭据 GET /healthz → 200（Railway healthcheck 必须通）", code3)
+
+        code4, _ = _http_status(url, AUTH_USER, "wrong-pass")
+        code5, _ = _http_status(url, AUTH_USER, AUTH_PASS)
+        check(code4 == 401 and code5 == 200, "AUTH-4 错凭据 401 / 正确凭据 200", (code4, code5))
+
+        # AUTH-5：浏览器带凭据（http_credentials 等价于原生 Basic 弹窗后浏览器记住的凭据）
+        ctx = browser.new_context(viewport={"width": 1280, "height": 900}, device_scale_factor=1,
+                                  http_credentials={"username": AUTH_USER, "password": AUTH_PASS})
+        try:
+            page = ctx.new_page()
+            perrs: list[str] = []
+            page.on("pageerror", lambda e: perrs.append(str(e)))
+            cerrs: list[str] = []
+            page.on("console", lambda m: cerrs.append(m.text) if m.type == "error" else None)
+            resp = page.goto(url, wait_until="load")
+            page.wait_for_timeout(1500)
+            d = page.evaluate("""() => ({
+              dash: !!document.querySelector('.dash'),
+              cards: document.querySelectorAll('.card').length,
+              nav: document.querySelectorAll('#sidebar .nav-item').length,
+              overflow: document.documentElement.scrollWidth - window.innerWidth,
+            })""")
+            print(f"  [page] dash={d['dash']} cards={d['cards']} nav={d['nav']} overflow={d['overflow']}")
+            check(resp is not None and resp.status == 200 and d["dash"] and d["cards"] >= 4
+                  and d["nav"] == 11 and not perrs,
+                  "AUTH-5 浏览器带凭据打开 / → 200 且渲染成功（页面 + 静态资源 + 后续请求都过了鉴权）",
+                  (resp.status if resp else None, d, perrs[:2]))
+            check(d["overflow"] == 0, "AUTH-5b 带凭据页面无横向溢出", d["overflow"])
+            # 「静态资源不豁免」（D-3）能被证伪的关键：CSS 真的加载到了（否则页面会裸奔成无样式）
+            bg = page.evaluate(
+                "() => getComputedStyle(document.body).backgroundColor")
+            check(bool(bg) and bg != "rgba(0, 0, 0, 0)" and bg != "",
+                  "AUTH-5c 静态 CSS 已加载（body 有背景色 ⇒ /static 在鉴权下正常送达）", bg)
+        finally:
+            ctx.close()
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+
+
 def assert_timeline_values(browser, url: str) -> None:
     """EV-1~EV-11 结果值层。
 
@@ -4670,6 +4773,11 @@ def main() -> int:
     if not PY.exists():
         print(f"找不到 venv python: {PY}")
         return 1
+    # D-4a（2026-09-19）：鉴权上线后，验收脚本必须用 `MP_AUTH_DISABLED=1` 关掉鉴权起服。
+    # 子进程**继承父进程 env**（Popen 未传 env）⇒ 这一行让既有 700+ 条断言**零改动、零新增失败**；
+    # 鉴权行为本身由 `assert_auth()` 另起带鉴权实例独立覆盖（D-4b）。
+    # ⚠️ 不要改成"给 28 个 new_context 都加 http_credentials"：改动面过大、把鉴权与既有信号耦合。
+    os.environ["MP_AUTH_DISABLED"] = "1"
     proc = subprocess.Popen(
         [str(PY), "-m", "uvicorn", "web.app:app", "--port", str(port)],
         cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -4889,6 +4997,7 @@ def main() -> int:
             assert_quadrant_matrix(browser, url)     # QM-* 四象限矩阵（macro-quadrant-matrix，2026-09-18）
             assert_timeline(browser, url)            # TL-* 市场日历（event-timeline-page，2026-09-18；09-19 改名）
             assert_timeline_values(browser, url)     # EV-* 结果值层 实际/预期/前值（timeline-event-values，2026-09-19）
+            assert_auth(browser)                     # AUTH-* 访问控制 Basic Auth（web-basic-auth，2026-09-19；自带实例）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])

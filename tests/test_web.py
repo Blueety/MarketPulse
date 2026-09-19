@@ -4,6 +4,7 @@ monkeypatch 落点严格打在使用方模块 web.app（与项目既有纪律一
 绑定，打在定义方 analyzer 不生效）。web 为独立模块，不触碰 src/* 与既有测试。
 """
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -1614,3 +1615,117 @@ def test_api_cn_quotes_shape(monkeypatch):
 def test_cn_econ_ttl_is_hourly():
     """防回退：13 个 AkShare 接口，TTL 绝不能"对齐"成 90s（那是每日近千次）。"""
     assert web.app._CN_ECON_TTL == 6 * 3600
+
+
+# ---- 访问控制（HTTP Basic Auth，2026-09-19）----
+# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A；D-1「未配置 → fail-open」已裁定）。
+#
+# ⚠️ R9：鉴权是**现读 env**（`web.app.auth_enabled()`），不是 import 时定型的模块级常量
+#    ⇒ monkeypatch env 直接生效，**不需要** `importlib.reload`（reload 会污染其它用例）。
+# ⚠️ 401 用例一律用**裸 TestClient** 且不套 `client` 夹具：中间件在路由处理器**之前**短路，
+#    既不需要数据夹具，也不会被本机真实 `data/` 影响（更快也更稳）。
+AUTH_USER, AUTH_PASS = "mpdemo", "s3cret-pass-16"
+
+# 覆盖口径：**4 页 + 10 API + 静态资源**全部要 401（plan §2 取证；`/healthz` 除外，单独验）
+AUTH_PROTECTED = ("/", "/macro", "/macro/cn", "/timeline",
+                  "/api/history", "/api/latest", "/api/alerts", "/api/news", "/api/timeline",
+                  "/api/watchlist", "/api/macro", "/api/econ", "/api/econ/cn", "/api/cn/quotes",
+                  "/static/app.js")
+
+
+def _auth_env(monkeypatch, user=AUTH_USER, pwd=AUTH_PASS, disabled=None):
+    """设好 env 后返回 TestClient；`disabled="1"` 时额外开 `MP_AUTH_DISABLED`。"""
+    monkeypatch.setenv("MP_AUTH_USER", user)
+    monkeypatch.setenv("MP_AUTH_PASS", pwd)
+    if disabled:
+        monkeypatch.setenv("MP_AUTH_DISABLED", disabled)
+    else:
+        monkeypatch.delenv("MP_AUTH_DISABLED", raising=False)
+    from fastapi.testclient import TestClient
+    return TestClient(web.app.app)
+
+
+def test_auth_requires_credentials_with_www_authenticate(monkeypatch):
+    """无凭据 → 401 **且**带 `WWW-Authenticate`（D-7：缺该头浏览器不弹窗，表现为反复失败无提示）。"""
+    c = _auth_env(monkeypatch)
+    r = c.get("/")
+    assert r.status_code == 401
+    assert r.headers.get("www-authenticate") == 'Basic realm="MarketPulse"'
+
+
+def test_auth_covers_every_page_api_and_static(monkeypatch):
+    """P0 缺口的覆盖口径：4 页 + 10 API + 静态资源**全部** 401，不允许有漏网的端点。"""
+    c = _auth_env(monkeypatch)
+    bad = [p for p in AUTH_PROTECTED if c.get(p).status_code != 401]
+    assert not bad, bad
+
+
+def test_auth_wrong_password_is_401(monkeypatch):
+    c = _auth_env(monkeypatch)
+    assert c.get("/", auth=(AUTH_USER, "wrong-pass")).status_code == 401
+    assert c.get("/", auth=("wrong-user", AUTH_PASS)).status_code == 401
+
+
+def test_auth_correct_credentials_is_200(monkeypatch):
+    c = _auth_env(monkeypatch)
+    r = c.get("/", auth=(AUTH_USER, AUTH_PASS))
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+
+
+def test_auth_healthz_is_public(monkeypatch):
+    """🔴 R1：`/healthz` 无凭据必须 200（Railway healthcheck；给 `/` 返 401 会重启循环）。"""
+    c = _auth_env(monkeypatch)
+    r = c.get("/healthz")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+    # 带凭据同样 200（白名单不是"只允许匿名"）
+    assert c.get("/healthz", auth=(AUTH_USER, AUTH_PASS)).status_code == 200
+
+
+def test_auth_disabled_env_opens_everything(monkeypatch):
+    """`MP_AUTH_DISABLED=1`（本地开发 / 自动化验收用）→ 全站放行。"""
+    c = _auth_env(monkeypatch, disabled="1")
+    assert web.app.auth_enabled() is False
+    assert c.get("/").status_code == 200
+    assert c.get("/healthz").status_code == 200
+
+
+def test_auth_not_configured_fails_open_and_warns(monkeypatch, caplog):
+    """D-1（已裁定）：**未配置**凭据 → 放行 + 启动 WARNING（fail-open，不是 fail-closed）。
+
+    ⚠️ 忘了配 env 就等同没鉴权 ⇒ 这条 WARNING 是唯一兜底信号（R3），必须锁住。
+    """
+    monkeypatch.delenv("MP_AUTH_USER", raising=False)
+    monkeypatch.delenv("MP_AUTH_PASS", raising=False)
+    monkeypatch.delenv("MP_AUTH_DISABLED", raising=False)
+    assert web.app.auth_enabled() is False
+    from fastapi.testclient import TestClient
+    c = TestClient(web.app.app)
+    assert c.get("/").status_code == 200
+    with caplog.at_level(logging.WARNING, logger="marketpulse"):
+        web.app._log_auth_state()
+    assert "鉴权未启用" in caplog.text and "裸奔" in caplog.text
+
+
+def test_auth_malformed_headers_are_401_not_500(monkeypatch):
+    """畸形 `Authorization` 一律 401，**绝不 500**（坏输入不得变成服务端错误）。"""
+    import base64
+    c = _auth_env(monkeypatch)
+    cases = {
+        "无 Basic 前缀": "xyz",
+        "非 base64": "Basic @@@@",
+        "base64 但无冒号": "Basic " + base64.b64encode(AUTH_USER.encode()).decode(),
+        "空凭据串": "Basic ",
+    }
+    for label, hdr in cases.items():
+        r = c.get("/", headers={"Authorization": hdr})
+        assert r.status_code == 401, (label, r.status_code)
+
+
+def test_auth_basic_prefix_is_case_insensitive(monkeypatch):
+    """RFC 7235：`Basic ` 方案名大小写不敏感 ⇒ 小写前缀也必须认。"""
+    import base64
+    c = _auth_env(monkeypatch)
+    raw = base64.b64encode(("%s:%s" % (AUTH_USER, AUTH_PASS)).encode()).decode()
+    assert c.get("/", headers={"Authorization": "basic " + raw}).status_code == 200

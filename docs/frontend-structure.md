@@ -151,6 +151,13 @@
 
 > 所有端点**恒定 HTTP 200**，降级用空结构表达 → 前端必须自行判空显示「数据暂缺」，不能靠 `r.ok`。
 
+> 🔒 **鉴权（2026-09-19 起）**：上表全部端点（含页面与 `/static/*`）都要求 **HTTP Basic Auth**
+> （`MP_AUTH_USER` / `MP_AUTH_PASS`）。前端零改动 —— Basic Auth 是浏览器原生机制，
+> 一次弹窗后浏览器会**自动**对同域的后续请求（页面跳转、静态资源、XHR/fetch）带 `Authorization`。
+> 这也是选它而不用 Bearer Token 的原因：`<a href="/macro">` 这类导航无法带自定义 header。
+> 本地开发与自动化验收用 `MP_AUTH_DISABLED=1` 关闭鉴权。
+
+
 ---
 
 ## 5. JS 结构
