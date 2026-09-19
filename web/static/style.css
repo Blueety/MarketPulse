@@ -483,6 +483,21 @@ body {
 /* P-3 零增高对冲：badge 高 ≈19px > 该表 12px 文字行高(≈17.4px) → 该表行高会长 ~2px/行（5 行 +10px）。
    把涨跌幅列的上下 padding 4→3 抵消（4+4+17.4 = 3+3+19.4），保住 scrollHeight ≤1240 余量。 */
 #us-sectors .data-table td.chg { padding: 3px 8px; }
+/* ⚠️ 2026-09-19（用户反馈"A股/美股两个 tab 列位置不整齐"）：
+   根因是 `.data-table` 用 `table-layout: auto`（style.css:366）→ **列宽按各自内容自动分配**，
+   于是两个 panel 的每一列都对不上（实测 1440 档 A股 54/135/113/124/107 vs 美股 56/165/117/108/88）
+   ⇒ 切 tab 时整张表左右跳。
+   改为 fixed + 显式列宽：两个 panel 在**同一张卡内**（容器宽逐像素相同）⇒ 百分比列宽即绝对位置相同。
+   ⚠️ 第 5 列（领涨股）**故意不写宽度** = 自动吃剩余空间，保留最后一列的弹性。
+   ⚠️ fixed 布局下 `white-space: nowrap`（style.css:372）的内容一旦超列宽会**压到相邻列**，
+   故补 `overflow:hidden + text-overflow:ellipsis` 兜底；下列列宽已按**两表内容较宽者**取值
+   （板块取「公用事业 (XLU)」量级、成交额取「21490.4亿」量级），正常不触发截断。 */
+#us-sectors .data-table { table-layout: fixed; }
+#us-sectors .data-table th:nth-child(1) { width: 50px; }   /* 图标 */
+#us-sectors .data-table th:nth-child(2) { width: 27%; }    /* 板块 */
+#us-sectors .data-table th:nth-child(3) { width: 19%; }    /* 涨跌幅 */
+#us-sectors .data-table th:nth-child(4) { width: 22%; }    /* 成交额 */
+#us-sectors .data-table td { overflow: hidden; text-overflow: ellipsis; }
 .pill {
   background: transparent;
   border: 1px solid var(--glass-border);

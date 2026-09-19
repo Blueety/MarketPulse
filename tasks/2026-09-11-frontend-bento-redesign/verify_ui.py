@@ -1395,7 +1395,10 @@ def api_latest(url: str) -> dict:
 
 
 def assert_sector_asof(page, url: str) -> None:
-    """V-1~V-6 板块陈旧回填标注：tab-aware 文案 + 零增高 + 标注在 h2 内。"""
+    """V-1~V-6 板块数据日标注：tab-aware 文案（**总是**标注该 tab 的 as_of）+ 零增高 + 标注在 h2 内。
+
+    ⚠️ 2026-09-19：语义由「仅陈旧时标注」改为「总是标注」——见 V-2/V-3 处的说明。
+    """
     print("\n--- V 板块「数据截至」标注（陈旧回填）---")
     try:
         payload = api_latest(url)
@@ -1417,9 +1420,13 @@ def assert_sector_asof(page, url: str) -> None:
     #    （实测 09-14 周一：date=2026-09-14 而 cn.as_of=2026-09-13 → 页面**正确地**标注了"截至 09-13"）。
     #    改为与 V-3 同款的**数据驱动期望值**：只断言"标注内容 == 陈旧与否对应的文案"，
     #    不变量（标注跟着数据走）保持不变，去掉环境耦合（原来换一天必红）。
-    exp_cn = ("· 数据截至 " + cn_as_of) if (cn_as_of and cur and cn_as_of != cur) else ""
+    # ⚠️ 2026-09-19（用户反馈"A股/美股两个 tab 结构不一致"）：实现由「**仅陈旧时**标注」改为
+    #    「**总是**标注该 tab 的数据日」→ 期望值随之去掉 `!= cur` 条件。
+    #    **判据是变严不是放松**：原期望在"数据新鲜"时退化成空串（弱），现在恒为具体日期，
+    #    只有在 `as_of` 真正缺失时才为空 —— 比原判据更难通过。
+    exp_cn = ("· 数据截至 " + cn_as_of) if cn_as_of else ""
     check(d["cnText"] == exp_cn,
-          "V-2 A股 tab 标注与 as_of/date 是否陈旧自洽（期望值取自 API）", (d["cnText"], exp_cn))
+          "V-2 A股 tab 标注 == 该 tab 的 as_of（期望值取自 API）", (d["cnText"], exp_cn))
     # 美股 tab：标注必须**跟着数据走**（陈旧才显示）—— 期望值直接取自 API，避免写死日期。
     # ⚠️ 2026-09-17 修：原为 `d["usText"] == expected and (us_as_of is None or d["usText"] != "")`，
     #    第二个合取项与第一个**逻辑冲突**：当 `as_of == date`（数据新鲜）时 `expected` 恒为 `""`，
@@ -1428,10 +1435,13 @@ def assert_sector_asof(page, url: str) -> None:
     #    与 V-2 输入完全相同、输出完全相同，却一个绿一个红 ⇒ 差异只在断言。
     #    改为与 V-2 同款的**数据驱动期望值**（判据是"与数据推导出的文案逐字相等"，不比"非空"弱）。
     #    原第二合取项想防的是"期望值退化成空 ⇒ 真空通过"，改用**输入前置**（V-3a）表达更准确。
-    check(bool(cur), "V-3a /api/latest 提供 date（陈旧判定基准；缺失会让 V-3 真空通过）", cur)
-    expected = ("· 数据截至 " + us_as_of) if (us_as_of and cur and us_as_of != cur) else ""
+    # ⚠️ 2026-09-19：同 V-2，期望值去掉 `!= cur`。
+    #    V-3a 保留 —— 它现在的意义是「页面数据日本身要有值」（顶栏数据日等以它为基准），
+    #    不再兼作 V-3 的真空保护（V-3 现已恒有具体期望值，不会因期望为空而真空通过）。
+    check(bool(cur), "V-3a /api/latest 提供 date（页面数据日基准）", cur)
+    expected = ("· 数据截至 " + us_as_of) if us_as_of else ""
     check(d["usText"] == expected,
-          "V-3 美股 tab 标注与 as_of/date 是否陈旧自洽（期望值取自 API）",
+          "V-3 美股 tab 标注 == 该 tab 的 as_of（期望值取自 API）",
           (d["usText"], expected, us_as_of, cur))
     check(d["resetToCn"] == exp_cn,
           "V-4 切回 A股 tab 后标注与 A股 状态一致（radio change 监听生效）", (d["resetToCn"], exp_cn))
@@ -3983,8 +3993,21 @@ def wrap_js(cfg: dict) -> str:
     而 `renderAlerts/renderNews` 里都有 `body.scrollTop = 0` ⇒ 若这一次重建正好落在预置与采样之间，
     预置位被冲成 0 → 采样窗口内看不到回绕 → `{p}-6b` **假红**（实测记录：`first=777 → 0/1`，
     同一个页面把加载后静默从 1.5s 拉到 5s 就 3/3 通过，而"被冲掉"与否只取决于那次刷新的落点）。
-    故：起始帧若发现位置没落到位，**重新预置**（最多 20 帧），并把重试次数带回结果里
-    （`armTries`）—— 红的时候能一眼分辨「真的是循环停住了」还是「一次都没预置上」。
+    故：起始帧若发现位置没落到位，**重新预置**，并把重试次数带回结果里（`armTries`）——
+    红的时候能一眼分辨「真的是循环停住了」还是「一次都没预置上」。
+    ⚠️ 重试的**触发条件**在下方二次修正里被改写过（原为"尚未采样 + 20 帧"，现为"尚未观测到回绕 + ≤3 轮重采"）。
+
+    ⚠️⚠️ **2026-09-19 二次修正：首样本必须"同步"取，重试判据不能是"还没采样"**（逐帧诊断实证）。
+    预置点 `start = period - 2` 距回绕点**只有 2px**，而 scroller 是持续运行的
+    （16px/s ÷ 60fps ≈ 0.27px/帧 ⇒ **约 8 帧后它自己就会回绕**）。旧实现把首样本留给第一次
+    `requestAnimationFrame`，于是 arm → 首帧之间只要有 >2px 的延迟（布局 / GC / TTL 重建 / 低帧率），
+    scroller 就**抢先正常回绕**，`cur` 变成 0 附近，被旧判据 `out.length === 0 && cur < start-1`
+    判成「预置没生效」→ 重新 arm → 再被抢先 → **20 帧耗尽，采样窗口里一个回绕都没记到** → 假红。
+    实测签名：`period=777 first=0 last=503 drops=[] armTries=20`（而同一页面 8 帧后的回绕是**正常行为**）。
+    逐帧证据（2026-09-19）：`after-arm 931 → f7 933 → f8 0`（`st.pos >= st.period` 减周期）。
+    修法：① `arm()` 后**同步**读一次作首样本（同帧读回必等于 start，不可能被抢先）；
+    ② 重试判据改为「**尚未观测到回绕** + 位置掉回起点附近」，正常回绕不再被误判成预置失败，
+    而 TTL 重建把位置冲掉时仍会重试。**判据本身未放松**：始终没见过回绕依然判红。
     """
     return _tpl(r"""
 () => new Promise((resolve) => {
@@ -4000,22 +4023,30 @@ def wrap_js(cfg: dict) -> str:
   const out = [];
   let wrapIdx = -1;
   let armTries = 0;
+  const sn = () => Math.round(el.scrollTop * 100) / 100;
   const tick = () => {
-    const cur = Math.round(el.scrollTop * 100) / 100;
-    if (out.length === 0 && start > 0 && cur < start - 1 && armTries < 20) {
-      armTries += 1;
-      arm();
-      return requestAnimationFrame(tick);      // 尚未开始采样 → 只重试预置，不计入样本
-    }
+    const cur = sn();
     out.push(cur);
     if (wrapIdx < 0 && out.length > 1 && out[out.length - 1] < out[out.length - 2]) {
       wrapIdx = out.length - 1;
+    }
+    // 兜底重试：**还没见到回绕**且位置掉回起点附近（页面 TTL 重建把预置位冲了）→
+    // 重新预置并**丢弃这批样本**重来。正常回绕不会走到这里（那时 wrapIdx 已置位）。
+    if (wrapIdx < 0 && start > 0 && armTries < 3 && out.length >= 30 && cur < 5) {
+      armTries += 1;
+      out.length = 0;
+      arm();
+      return requestAnimationFrame(tick);
     }
     if ((wrapIdx >= 0 && out.length - wrapIdx >= 10) || out.length >= 200) {
       resolve({ samples: out, period: period, wrapIdx: wrapIdx, armTries: armTries });
     } else requestAnimationFrame(tick);
   };
   arm();
+  // ★ 同步首样本：与 arm 同帧读回（必等于 start），不会被 scroller 的抢先回绕吃掉。
+  //   旧实现把首样本留给第一次 raf —— 而 start 距回绕点仅 2px（≈8 帧），任何 >2px 的延迟
+  //   都让 scroller 先回绕，随即被旧判据当成「预置失败」重试到耗尽（见 docstring 二次修正）。
+  out.push(sn());
   requestAnimationFrame(tick);
 })
 """, cfg)

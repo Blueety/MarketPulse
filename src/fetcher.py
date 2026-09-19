@@ -495,14 +495,15 @@ def fetch_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:
 
 
 def _fmt_us_volume(dollars: float) -> str:
-    """美股 ETF 美元成交额格式化：$X.XB / $X.XM / $X.XK。"""
-    if dollars >= 1e9:
-        return f"${dollars / 1e9:.1f}B"
-    if dollars >= 1e6:
-        return f"${dollars / 1e6:.1f}M"
-    if dollars >= 1e3:
-        return f"${dollars / 1e3:.1f}K"
-    return f"${dollars:.0f}"
+    """美股 ETF 美元成交额格式化：`$X.X亿`（**与 A股侧逐字同款**：无条件「亿」+ 1 位小数）。
+
+    ⚠️ 2026-09-19（用户反馈"A股/美股两个 tab 结构不一致"）：原实现为 `$X.XB / $X.XM / $X.XK`，
+    与 A股侧 `f"{turnover/1e8:.1f}亿"`（fetcher.py:466）**是两套量级体系** —— 同一个表格切 tab
+    会看到 `$1.4B` 对 `4467.7亿`，观感割裂。改为与 A股**同一句式**「数字 + 亿」。
+    **货币符号保留**：美元与人民币不是同一个东西，不能混（只统一量级与句式，不统一币种）。
+    不做 `万`/`K` 的分支：分档会让小值换单位、句式又变回不齐（A股侧也是无条件「亿」）。
+    """
+    return f"${dollars / 1e8:.1f}亿"
 
 
 def fetch_us_sector_heat(top_n: int = 5) -> tuple[list[dict], list[dict]]:

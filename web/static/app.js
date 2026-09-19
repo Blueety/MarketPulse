@@ -297,8 +297,9 @@ function renderUsSectors(latest) {
 // === 板块数据新鲜度标注（读取端陈旧回填的配套显示）===
 // 两个板块在同一天**独立取数**（A股 1 个请求 / 美股 11 个请求）→ 可各自回看到**不同**日期，
 // 所以各自的 as_of 分开缓存、按当前 tab 决定显示哪个。
-// ⚠️ 纯 CSS tab（:checked + 兄弟选择器）**没有切换事件** → 不挂 radio change 监听，
-//    切 tab 时标注不会更新（现象是"A股 tab 显示着美股的快照日期"）。
+// ⚠️ 纯 CSS tab（:checked + 兄弟选择器）**本身没有切换事件** → change 监听由初始化段手动挂
+//    （DOMContentLoaded 里的 `['sector-tab-cn','sector-tab-us']`，F2 走查整改补），
+//    行为护栏见 verify_ui 的 V-4「切回 A股 tab 后标注与 A股 状态一致」。
 var _sectorAsOf = { cn: null, us: null };
 
 function renderSectorAsOf() {
@@ -307,9 +308,14 @@ function renderSectorAsOf() {
   var usRadio = document.getElementById('sector-tab-us');
   var which = (usRadio && usRadio.checked) ? 'us' : 'cn';
   var asOf = _sectorAsOf[which];
-  var cur = state.latestDate;
-  // as_of === date（数据就是当天的）或 as_of 为 null（无数据，表格自己显示「数据暂缺」）→ 不标注
-  el.textContent = (asOf && cur && asOf !== cur) ? '· 数据截至 ' + asOf : '';
+  // ⚠️ 2026-09-19（用户反馈"A股/美股两个 tab 结构不一致"）：由「**仅陈旧时**标注」改为
+  //    「**总是**标注该 tab 的数据日」。原逻辑下 A股 新鲜时标题只有「行业板块表现」、
+  //    美股陈旧时是「行业板块表现 · 数据截至 …」→ **切 tab 标题长度跳变**，观感不一致。
+  //    新逻辑两侧形态恒定，且信息更完整（A股 侧原先不告诉你数据是哪天的）。
+  //    ⚠️ 不变量随之改变：从"标注跟着陈旧与否走"变成"标注 == 该 tab 的 as_of"。
+  //    断言同步改在 verify_ui 的 V-2/V-3/V-4（判据**变严**：期望值由可能为空的文案变成具体日期）。
+  //    as_of 为 null（无数据，表格自己显示「数据暂缺」）→ 仍留空，不写半个标签。
+  el.textContent = asOf ? '· 数据截至 ' + asOf : '';
 }
 
 // === 告警记录 ===
