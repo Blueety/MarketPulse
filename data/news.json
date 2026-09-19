@@ -1,6 +1,13 @@
 {
-  "date": "2026-09-18",
+  "date": "2026-09-19",
   "items": [
+    {
+      "title": "闪迪暴涨11%，存储和芯片股“短期期权”爆巨量，“AI股神”又出手了？",
+      "url": "https://wallstreetcn.com/articles/3782123",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "周五，约9600万美元短期看涨期权集中涌入闪迪（SanDisk）、美光（Micron）、英特尔（Intel）和Marvell四只AI芯片股"
+    },
     {
       "title": "姆巴佩告别耐克加盟昂跑，跑鞋新贵挑战足球市场",
       "url": "https://wallstreetcn.com/articles/3782121",
@@ -16,18 +23,18 @@
       "summary": "昨天加息后的新闻发布会上，美联储主席沃什用三个字撤回\"dose of accommodation\"（一剂宽松）定义了本次加息的性质，被追问利率相对于中性利率的位置时，他的回应同样耐人寻味：这一概念\"在学术上有用\"，但\"对我们今天的决策没有…"
     },
     {
-      "title": "OpenAI预计2030年前累计烧钱逾2780亿美元，同期营收目标达3500亿",
-      "url": "https://wallstreetcn.com/articles/3782117",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "OpenAI正寻求以更高估值完成新一轮融资，同时披露未来五年自由现金流将深度为负，长期资金压力不容小觑"
-    },
-    {
       "title": "日本央行召开货币政策会议 预计将加息至1.25%",
       "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE01cmg5UmJDTm5UbGdNWmVsVllKbm93VjIzVDJwbHEyQ2ZHbW4xQmVrS0JqUkY2VzNVc3VGTnoxY0V1ejJuTURPN29uc1FnTDNpVkI1ZGtpaw?oc=5",
       "source": "共同网",
       "published": "2026-09-19",
       "summary": "日本央行召开货币政策会议 预计将加息至1.25%"
+    },
+    {
+      "title": "OpenAI预计2030年前累计烧钱逾2780亿美元，同期营收目标达3500亿",
+      "url": "https://wallstreetcn.com/articles/3782117",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "OpenAI正寻求以更高估值完成新一轮融资，同时披露未来五年自由现金流将深度为负，长期资金压力不容小觑"
     },
     {
       "title": "AI数据中心公司Nscale公开递交美股IPO申请，英伟达持股超5%",
@@ -49,13 +56,6 @@
       "source": "华尔街见闻",
       "published": "2026-09-19",
       "summary": "美股在高债券收益率与“三巫日”大规模期权到期的双重压力下表现分化，标普和纳指艰难收涨、芯片股领涨提振整体指数，道指微跌0.2%"
-    },
-    {
-      "title": "报道称Anthropic IPO延期至11月，华尔街审视日益严苛：从\"稳赚不赔\"到\"不再确定\"",
-      "url": "https://wallstreetcn.com/articles/3782109",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "AI独角兽Anthropic的IPO时间表再度调整，上市预期从10月推后至11月，公司希望以三季度财报为估值背书"
     }
   ]
 }
