@@ -1048,6 +1048,17 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
 .tl-agency { border-left: 1px solid var(--border); padding-left: 6px; }
 .tl-status { border: 1px dashed var(--border); border-radius: 999px; padding: 0 6px; }
 
+/* 结果值层（2026-09-19）：跟在事件名后的「实际 / 预期 / 前值 / 变动 / 偏离预期」。
+   ⚠️ 只新增 .tl-val* 类，不改既有 .tl-* 规则。
+   ⚠️ 颜色一律走 token（双主题自动跟随）；**不打红绿** —— 涨跌色只用于行情数字，
+      「高于 / 低于预期」是客观比较、不是利好利空（plan D-3a / TL-7）。
+   ⚠️ 必须 `white-space: nowrap`：`.tl-title` 是 `white-space: normal`，而 `.tl-ev` 是
+      `flex-wrap: wrap` 容器 —— 不 nowrap 会被同一套折行逻辑静默折成两行（pitfall 有同类记录）。
+   ⚠️ 不要给 `.tl-ev` 设 height/max-height 来"限一行"：它的高度是内容撑开的（实测 clientHeight=20
+      来自 line-height，不是显式 height），设高会裁掉折行内容而不是撑高；加值后卡片整体变高才是预期。 */
+.tl-val { font-size: 11px; color: var(--text-secondary); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+
 /* 影响层：当日 / 事件后（数字才用涨跌色，且与全站同口径：up=绿 down=红，见 style.css 的 .mac .up） */
 .tl-metrics { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
   font-size: 12px; color: var(--text-secondary); }

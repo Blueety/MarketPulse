@@ -27,6 +27,7 @@ import urllib.request
 from datetime import date as _date, datetime, timedelta
 
 from . import econ_calendar as ec
+from . import econ_values as econv      # 别名避开 build_timeline 里的循环变量 `ev`
 
 log = logging.getLogger("marketpulse")
 
@@ -61,6 +62,10 @@ SOURCE_NOTES: tuple[dict, ...] = (
     {"source": "mirror", "label": "第三方经济日历镜像",
      "url": ec.MIRROR_PAGE,
      "note": "BLS / BEA / Census / 工业产出经此镜像获得；原始来源 bls.gov / bea.gov / census.gov"},
+    {"source": "values", "label": "TradingView 经济日历（结果值层）",
+     "url": econv.TV_PAGE,
+     "note": "事件行的「实际 / 预期 / 前值」数值来源（第三方源，非官方发布页）；"
+             "美国 CPI 显示为指数水平（非同比）；源未提供单位的指标按原始数值显示"},
     {"source": "news", "label": "Google News 检索",
      "url": "https://news.google.com/",
      "note": "热度为检索口径，受每次 100 条上限影响，只能读作「至少这么多篇」"},
@@ -298,6 +303,12 @@ def build_timeline(events: list[dict], history, news: dict | None = None,
             "status": ev.get("status") or "ok",
             "note": ev.get("note") or "",
         }
+        # ---- 结果值层（2026-09-19）：**必须逐键显式加**，否则表里加了列也不透传 ----
+        # 值可能全为 None（骨架行没被 enrich 到 / 窗口外 / 值侧失败）=> 键必须在，值可为 null。
+        # `importance` 只透传、不上色（plan D-3a）；`value_fetched_at` 供排查时点。
+        for _k in ("actual", "forecast", "previous", "unit", "importance",
+                   "value_source", "value_title", "value_fetched_at"):
+            item[_k] = ev.get(_k)
         nw = news_map.get((d, ev["kind"]))
         item["news_count"] = (nw or {}).get("count")
         item["news_title"] = (nw or {}).get("title")

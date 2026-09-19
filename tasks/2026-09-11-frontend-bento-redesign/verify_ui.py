@@ -3916,6 +3916,270 @@ def assert_timeline(browser, url: str) -> None:
             ctx.close()
 
 
+# ============ EV 结果值层（/timeline 的 实际/预期/前值，2026-09-19）============
+# 任务档 tasks/2026-09-19-timeline-event-values（plan 定稿，方案 A「骨架不动 + 值层 join」）。
+#
+# ⚠️ 断言分层（plan §7.2 把两层的判据写在一起了，实测只能这样落地）：
+#    本组（浏览器侧）只能验**页面能看见的**：键透传、三方计数、真实数据、无 0/None 混淆、
+#    未来文案、`unit` 缺失不加后缀、两态断点、失败降级后页面不崩。
+#    "既有值不被清空（preserve）" 与 "failed 含 tradingview" 发生在**同步脚本侧**
+#    （浏览器看不到 TV 请求）=> 由 pytest 锁：tests/test_econ_values.py（preserve / 只 UPDATE 不 INSERT /
+#    全源失败返回空 / 同日多期次择优）。
+# ⚠️ 断言标签**禁用 GBK 外字符**（`⇒` / `→` 会让本脚本在 cp936 控制台 UnicodeEncodeError 中途死掉）。
+EV_KEYS = ("actual", "forecast", "previous", "unit", "importance",
+           "value_source", "value_title", "value_fetched_at")
+
+EV_JS = r"""
+() => {
+  const q = (s) => [...document.querySelectorAll(s)];
+  const rows = q('.tl-ev').map((e) => {
+    const day = e.closest('.tl-day');
+    const v = e.querySelector('.tl-val');
+    return {
+      date: day ? day.dataset.date : '',
+      kind: e.dataset.kind,
+      val: v ? v.innerText : '',
+      mode: v ? (v.dataset.valMode || '') : '',
+      valCount: e.querySelectorAll('.tl-val').length,
+    };
+  });
+  return {
+    rows: rows,
+    valCount: q('.tl-val').length,
+    evCount: q('.tl-ev').length,
+    modes: [...new Set(q('.tl-val').map((v) => v.dataset.valMode || ''))],
+    withValue: rows.filter((r) => r.val).length,
+    honest: q('.tl-honest li').map((li) => li.innerText),
+    src: q('.tl-src li').map((li) => li.innerText),
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    bodyTxt: document.body.innerText,
+  };
+}
+"""
+
+
+def _ev_mk_route(payload):
+    """构造单参 route handler（pitfalls：handler 多于 1 个形参会被按 (route, request) 调用，静默出错）。"""
+    def _route(route):
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps(payload, ensure_ascii=False))
+    return _route
+
+
+def assert_timeline_values(browser, url: str) -> None:
+    """EV-1~EV-11 结果值层。
+
+    EV-1  每个事件含 actual/forecast/previous/unit/value_source 等 8 键（值可 null，键必须在）
+    EV-2  **三方对账**（沿用 TL-2 的独立口径手法）：sqlite3 直查 db == API 计数 == 页面 DOM 渲染数
+    EV-3  真实数据锁死：2026-09-16 FOMC（actual=4 / previous=3.75，页面含 25bp）、2026-09-11 CPI（334.98 / 334.85）
+    EV-4  无 0/None 混淆：`actual` 为 null 的行**不得**出现「实际」项（绝不渲染成 0）
+    EV-5  同一行**至多一个值片段**（同日同 kind 不出现两份值；真实双非农的择优由 pytest 的 fixture 锁）
+    EV-6  失败降级：mock `/api/timeline` 全空值 -> 事件行仍在、页面不崩、仍不渲染 0
+    EV-7  preserve 语义在同步脚本侧 -> 由 tests/test_econ_values.py 锁（本组只确认库里值在页面上可见）
+    EV-8  TL-7 复跑仍绿（无因果措辞）+ 新增口径文案存在 + 四视口无横向溢出
+    EV-9  `unit` 缺失不加单位后缀（CPI 行无 `%`/`点`/`千人`），而 FOMC 行必须带 `%`
+    EV-10 未来事件文案：无 actual 的未来行必须含「待公布」，且不得留空白
+    EV-11 两态断点：768 含「实际/预期/前值」三项，375 只含「实际/变动」两项，且两份文案不同时在 DOM 里
+    """
+    print("\n--- EV 结果值层（/timeline 实际/预期/前值）---")
+    import sqlite3
+
+    api = json.loads(urllib.request.urlopen(url + "api/timeline?days=90&future_days=30",
+                                            timeout=30).read().decode("utf-8"))
+    as_of = api.get("as_of") or ""
+    api_ev = [(d["date"], e) for d in (api.get("past") or []) + (api.get("upcoming") or [])
+              for e in d["events"]]
+
+    # ---------- EV-1：键必须全在（值可为 null）----------
+    missing = [(dt, e.get("kind"), k) for dt, e in api_ev for k in EV_KEYS if k not in e]
+    check(bool(api_ev) and not missing, "EV-1 /api/timeline 每个事件含 8 个值层键（值可 null，键必须在）",
+          missing[:3])
+
+    # ---------- EV-2：三方对账（sqlite 直查 vs API vs DOM）----------
+    d0 = _date_from_iso(as_of) if as_of else None
+    past_from = (d0 - timedelta(days=90)).isoformat() if d0 else ""
+    fut_to = (d0 + timedelta(days=30)).isoformat() if d0 else ""
+    db = ROOT / "data" / "marketpulse.db"
+    db_err = None
+    db_hits = 0
+    try:
+        conn = sqlite3.connect(str(db))
+        # ⚠️ 必须**限制到与页面同一窗口**：值层只 enrich 窗口内的骨架行（VALUE_PAST_DAYS/ FUTURE_DAYS
+        #    与页面默认窗口取齐），全库计数会大于页面计数。
+        db_hits = conn.execute(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT date, kind FROM econ_events "
+            "WHERE actual IS NOT NULL AND date >= ? AND date <= ?)", (past_from, fut_to)).fetchone()[0]
+        conn.close()
+    except Exception as exc:            # noqa: BLE001
+        db_err = "{}: {}".format(type(exc).__name__, exc)
+    check(db_err is None, "EV-2c econ_events 的 actual 列可查（独立核算前提）", db_err)
+    api_hits = sum(1 for _dt, e in api_ev if e.get("actual") is not None)
+
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        perrs: list[str] = []
+        page.on("pageerror", lambda e: perrs.append(str(e)))
+        page.goto(url + "timeline", wait_until="load")
+        page.wait_for_timeout(1200)
+        d = page.evaluate(EV_JS)
+        print("  [page] events={} withValue={} valSpans={} modes={}".format(
+            d["evCount"], d["withValue"], d["valCount"], d["modes"]))
+        dom_hits = sum(1 for r in d["rows"] if "实际" in r["val"])
+        print("  [db 独立核算] 窗口 {} ~ {} 带 actual 的 (date,kind) = {}；API = {}；DOM = {}".format(
+            past_from, fut_to, db_hits, api_hits, dom_hits))
+        check(db_hits > 0 and db_hits == api_hits == dom_hits,
+              "EV-2 三方对账一致（sqlite 直查 == API 计数 == 页面渲染数；前置 >0，空集相等不算过）",
+              (db_hits, api_hits, dom_hits))
+
+        by_key = {(r["date"], r["kind"]): r for r in d["rows"]}
+        api_by_key = {(dt, e["kind"]): e for dt, e in api_ev}
+
+        # ---------- EV-3：真实数据锁死 ----------
+        fomc = by_key.get(("2026-09-16", "FOMC"))
+        cpi = by_key.get(("2026-09-11", "CPI"))
+        fomc_api = api_by_key.get(("2026-09-16", "FOMC")) or {}
+        cpi_api = api_by_key.get(("2026-09-11", "CPI")) or {}
+        check(fomc is not None and cpi is not None
+              and fomc_api.get("actual") == 4 and fomc_api.get("previous") == 3.75
+              and "25bp" in (fomc or {}).get("val", "")
+              and cpi_api.get("actual") == 334.98 and cpi_api.get("forecast") == 334.85
+              and "334.98" in (cpi or {}).get("val", ""),
+              "EV-3 真实数据锁死（FOMC act=4/prev=3.75 且页面含 25bp；CPI act=334.98/fc=334.85）",
+              ((fomc or {}).get("val"), (cpi or {}).get("val")))
+
+        # ---------- EV-4：actual 为 null 的行不得出现「实际」项（绝不渲染成 0）----------
+        bad_zero = [(r["date"], r["kind"], r["val"]) for r in d["rows"]
+                    if (api_by_key.get((r["date"], r["kind"])) or {}).get("actual") is None
+                    and "实际" in r["val"]]
+        check(d["evCount"] >= 1 and not bad_zero,
+              "EV-4 actual 为 null 时不得渲染「实际」项（防 None 被显示成 0）", bad_zero[:3])
+
+        # ---------- EV-5：同一行至多一个值片段 ----------
+        multi = [(r["date"], r["kind"], r["valCount"]) for r in d["rows"] if r["valCount"] > 1]
+        check(d["evCount"] >= 1 and not multi,
+              "EV-5 每行至多一个值片段（(date,kind) 已去重，不出现两份值）", multi[:3])
+
+        # ---------- EV-9：unit 缺失不加单位后缀 ----------
+        cpi_val = (cpi or {}).get("val", "")
+        cpi_bad = [u for u in ("%", "点", "千人") if u in cpi_val]
+        fomc_val = (fomc or {}).get("val", "")
+        check(cpi is not None and "实际 334.98" in cpi_val and not cpi_bad
+              and fomc is not None and "4.00%" in fomc_val,
+              "EV-9 unit 缺失时不给数字补单位（CPI 行无 %/点/千人），unit=% 时带 %（FOMC 4.00%）",
+              (cpi_val, cpi_bad, fomc_val))
+
+        # ---------- EV-10：未来事件的「待公布」----------
+        pending = [(dt, e["kind"]) for dt, e in api_ev
+                   if e.get("actual") is None and dt >= as_of]
+        no_pending_text = []
+        for dt, kind in pending:
+            r = by_key.get((dt, kind))
+            txt = (r or {}).get("val", "")
+            if not txt or "待公布" not in txt or "实际" in txt:
+                no_pending_text.append((dt, kind, txt))
+        check(bool(pending) and not no_pending_text,
+              "EV-10 未公布事件的值区必含「待公布」、且不得留空白或渲染 0（前置 pending>0）",
+              (len(pending), no_pending_text[:3]))
+
+        # ---------- EV-8：口径文案 + 无因果措辞 ----------
+        honest = "\n".join(d["honest"] + d["src"])
+        causal = len(re.findall("因为|导致|利好|利空|由于", "\n".join(
+            x["val"] + " " + x["kind"] for x in d["rows"])))
+        check("指数水平" in honest and "原始数值" in honest and "TradingView" in honest,
+              "EV-8 口径区新增三条（CPI 指数水平 / 源未提供单位按原始数值 / 值来源 TradingView）",
+              [k for k in ("指数水平", "原始数值", "TradingView") if k not in honest])
+        check(causal == 0, "EV-8b 值片段无因果措辞（高于/低于/符合预期是客观比较，非利好利空）", causal)
+        check(d["overflow"] == 0, "EV-8c 1440 档无横向溢出（加值后 TL-8 复跑）", d["overflow"])
+        check(not perrs, "EV-8d /timeline 无 pageerror", perrs[:2])
+    finally:
+        ctx.close()
+
+    # ---------- EV-6：失败降级（mock 全空值 -> 行还在、不渲染 0）----------
+    blank = json.loads(json.dumps(api))
+    for _day in (blank.get("past") or []) + (blank.get("upcoming") or []):
+        for _e in _day["events"]:
+            for _k in ("actual", "forecast", "previous", "unit", "importance",
+                       "value_source", "value_title", "value_fetched_at"):
+                _e[_k] = None
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        page = ctx.new_page()
+        perrs6: list[str] = []
+        page.on("pageerror", lambda e: perrs6.append(str(e)))
+        page.route("**/api/timeline*", _ev_mk_route(blank))
+        page.goto(url + "timeline", wait_until="load")
+        page.wait_for_timeout(1200)
+        d6 = page.evaluate(EV_JS)
+        bad6 = [r for r in d6["rows"] if "实际" in r["val"] or "0.00%" in r["val"]]
+        check(d6["evCount"] >= 1 and not bad6 and not perrs6,
+              "EV-6 值侧全空时页面仍有事件行、不渲染 0、无 pageerror（降级成「只有事件名」）",
+              (d6["evCount"], bad6[:2], perrs6[:2]))
+    finally:
+        ctx.close()
+
+    # ---------- EV-11：两态断点（768 = 完整三项 / 375 = 精简两项）----------
+    # ⚠️ 「变动项」在 FOMC 上按 D2.1④ 走的是 `加息 25bp` / `降息 25bp` / `维持不变` 文案，
+    #    不是字面「变动」=> 断言必须按**文案族**判，不能只找字面「变动」（初版就因此假红）。
+    DELTA_WORDS = ("变动", "加息", "降息", "维持不变")
+    # 参照行取「三个操作数都非空」的事件（自有实际值 + 有预期 + 有前值），否则"三项 vs 两项"无从谈起。
+    ref_key = None
+    for _dt, _e in api_ev:
+        if _e.get("actual") is not None and _e.get("forecast") is not None and _e.get("previous") is not None:
+            ref_key = (_dt, _e["kind"])
+            if _dt == "2026-09-11" and _e["kind"] == "CPI":
+                break                       # 优先用断言里已锁死的那条真实数据
+    for vw, vh in ((768, 1024), (375, 812)):
+        ctx = browser.new_context(viewport={"width": vw, "height": vh}, device_scale_factor=1)
+        try:
+            page = ctx.new_page()
+            page.goto(url + "timeline", wait_until="load")
+            page.wait_for_timeout(1000)
+            d11 = page.evaluate(EV_JS)
+            rows11 = {(r["date"], r["kind"]): r for r in d11["rows"]}
+            ref = rows11.get(ref_key) or {}
+            published = [r for r in d11["rows"] if r["val"]]
+            modes = d11["modes"]
+            full = vw >= 768
+            if full:
+                ok_ref = ("实际" in ref.get("val", "") and "预期" in ref.get("val", "")
+                          and "前值" in ref.get("val", ""))
+                # 逐行按 API 字段算应有项（独立期望值：不从页面反推）
+                bad = []
+                for r in d11["rows"]:
+                    e = api_by_key.get((r["date"], r["kind"])) or {}
+                    if e.get("actual") is None:
+                        continue
+                    need = ["实际"]
+                    if e.get("forecast") is not None:
+                        need.append("预期")
+                    if e.get("previous") is not None:
+                        need.append("前值")
+                    miss = [k for k in need if k not in r["val"]]
+                    if miss:
+                        bad.append((r["date"], r["kind"], miss, r["val"]))
+            else:
+                ok_ref = ("实际" in ref.get("val", "")
+                          and any(w in ref.get("val", "") for w in DELTA_WORDS)
+                          and not any(k in ref.get("val", "") for k in ("预期", "前值")))
+                # ⚠️ 只对**有实际值的行**生效：未公布行走「待公布」分支（那里必须有 预期/前值 才算
+                #    不留空白，见 EV-10）=> 把范围收宽到全页会把正确的待公布行判成红。
+                bad = [(r["date"], r["kind"], r["val"]) for r in d11["rows"]
+                       if "实际" in r["val"] and ("预期" in r["val"] or "前值" in r["val"])]
+            dup11 = [r for r in d11["rows"] if r["valCount"] > 1]
+            print("  [{}px] 值行={} modes={} 参照行 {}={}".format(
+                vw, len(published), modes, ref_key, (ref.get("val") or "-")[:80]))
+            check(ref_key is not None and bool(ref.get("val")) and ok_ref and not bad and not dup11
+                  and len(modes) == 1 and modes[0] == ("full" if full else "lite"),
+                  "EV-11 {}px 值为{}态（{}），且 DOM 里只有一份文案".format(
+                      vw, "完整三项 实际/预期/前值" if full else "精简两项 实际/变动",
+                      "参照行三词齐全" if full else "参照行只剩实际+变动族，且全页无 预期/前值"),
+                  (ref.get("val"), bad[:1], dup11[:1], modes))
+            check(d11["overflow"] == 0, "EV-11b {}px 无横向溢出".format(vw), d11["overflow"])
+        finally:
+            ctx.close()
+
+
 def _date_from_iso(s: str):
     from datetime import date as _d
     return _d.fromisoformat(s)
@@ -4624,6 +4888,7 @@ def main() -> int:
             assert_macro_states(browser, url)        # NA-* 宏观页四态/chip/Score 语义色（macro-page-frontend-refactor，2026-09-16）
             assert_quadrant_matrix(browser, url)     # QM-* 四象限矩阵（macro-quadrant-matrix，2026-09-18）
             assert_timeline(browser, url)            # TL-* 市场日历（event-timeline-page，2026-09-18；09-19 改名）
+            assert_timeline_values(browser, url)     # EV-* 结果值层 实际/预期/前值（timeline-event-values，2026-09-19）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])

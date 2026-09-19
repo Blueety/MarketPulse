@@ -51,6 +51,88 @@
     return (v > 0 ? "+" : "-") + s;
   }
 
+  // ---------------------------------------------------------------- 结果值层（2026-09-19）
+  // 事件行的「实际 / 预期 / 前值 / 变动 / 偏离预期」。三条硬约束（plan D2.1 / D2a / D4a）：
+  //   ① **`unit` 为 null 时不加任何单位后缀**（不写 `%` / `点` / `千人`）——源数据如此（实测
+  //      美国 CPI 的 actual 是指数水平 334.98、非农是 162 千人，两者 `unit` 连键都没有）；
+  //      `unit == "%"` 时固定两位小数 + `%`（与 plan §8.1 的目标文案 `实际 4.00%` 一致）。
+  //   ② **`null` 与 `0` 必须区分**：`0` 是真实值（实测 2026-07-15 PPI 的 forecast=0），
+  //      只有 `null` 才算"没有这一项"⇒ 整项不渲染，**绝不把 null 当 0 参与减法**。
+  //   ③ 两个派生数字都是**纯减法**、不引入模型；措辞只准「高于 / 低于 / 符合预期」这类客观比较，
+  //      **禁止**「利好 / 利空 / 超预期将推动」类因果措辞（TL-7 复跑必须仍绿）。
+  var MQ_LITE = (typeof window !== "undefined" && window.matchMedia)
+    ? window.matchMedia("(max-width: 767px)") : null;   // D-4a 断点：767px 内侧（768 仍走完整三项）
+  function valLite() { return !!(MQ_LITE && MQ_LITE.matches); }
+
+  // 数值：最多两位小数、去掉多余尾零（不做位数补零；`unit == "%"` 走固定两位）
+  function trim2(v) { return String(Math.round(Number(v) * 100) / 100); }
+  function signedTrim(v) { return (v > 0 ? "+" : v < 0 ? "-" : "") + trim2(Math.abs(v)); }
+  function fmtNum(v, unit) {
+    if (v == null) return "";
+    return unit === "%" ? Number(v).toFixed(2) + "%" : trim2(v);
+  }
+
+  // 变动 = actual − previous。FOMC 专项按百分点折 bp（plan D2.1④）；
+  // ⚠️ `pp` 后缀**只在 `unit == "%"` 时加**：unit 缺失的指标（CPI 指数 / 非农）其差值是水平差、
+  //    不是百分点，加 `pp` 就是"猜单位"（违反硬约束 ①）。
+  function deltaText(kind, d, unit) {
+    if (kind === "FOMC") {
+      var bp = Math.round(d * 100);
+      if (bp === 0) return "维持不变";
+      return (bp > 0 ? "加息 " : "降息 ") + Math.abs(bp) + "bp";
+    }
+    return "变动 " + signedTrim(d) + (unit === "%" ? "pp" : "");
+  }
+
+  // 偏离预期 = actual − forecast（纯减法；措辞只用客观比较）
+  function missText(d) {
+    var r = Math.round(d * 100) / 100;
+    if (r === 0) return "符合预期";
+    return (r > 0 ? "高于预期 " : "低于预期 ") + signedTrim(r);
+  }
+
+  // 值区条目（有序）。`pending` = 该行属「未来 / 今天」段；`lite` = 移动端精简态（D-4a）。
+  function valueItems(ev, pending, lite) {
+    var unit = (ev.unit == null ? null : String(ev.unit));
+    var a = ev.actual, f = ev.forecast, p = ev.previous;
+    var items = [];
+    if (a == null) {
+      // 未公布 / 无实际值：只可能显示 预期 与 前值（逐项裁剪，缺操作数就整项不出）
+      if (pending) {
+        // ⚠️ 未来段**不得留空白行为**（plan 硬约束 ②）：必有「待公布」或「预期 X（待公布）」
+        items.push(f != null ? "预期 " + fmtNum(f, unit) + "（待公布）" : "待公布");
+        if (p != null) items.push("前值 " + fmtNum(p, unit));
+        return items;
+      }
+      if (f != null) items.push("预期 " + fmtNum(f, unit));
+      if (p != null) items.push("前值 " + fmtNum(p, unit));
+      return items;
+    }
+    items.push("实际 " + fmtNum(a, unit));
+    if (!lite) {
+      if (f != null) items.push("预期 " + fmtNum(f, unit));
+      if (p != null) items.push("前值 " + fmtNum(p, unit));
+      if (p != null) items.push(deltaText(ev.kind, a - p, unit));
+      if (f != null) items.push(missText(a - f));
+      return items;
+    }
+    // D-4a 两态：≤767px 只留「实际 X · 变动 Y」（375 档行尾仅剩 66px，完整三项必然折行）
+    if (p != null) items.push(deltaText(ev.kind, a - p, unit));
+    return items;
+  }
+
+  // 值区 HTML：**单份 DOM**（按断点只渲染一组文案）——不用"两份 + CSS 隐藏"，
+  // 否则 DOM 里会出现两份「实际」值，让三方对账（EV-2）与「同日不重复」类断言数出双份。
+  function valueHtml(ev, pending) {
+    var items = valueItems(ev, pending, valLite());
+    if (!items.length) return "";
+    var src = ev.value_source
+      ? ' title="结果值来源：' + escapeHtml(ev.value_source) + "（" + escapeHtml(ev.value_title || "") + '）"'
+      : "";
+    return '<span class="tl-val" data-val-mode="' + (valLite() ? "lite" : "full") + '"' + src + ">" +
+           escapeHtml(items.join(" ｜ ")) + "</span>";
+  }
+
   // ⚠️ 不用 `new Date("YYYY-MM-DD")`（本地时区偏移，pitfall 专条）：用 Date.UTC 纯函数拿星期
   function weekdayZh(dateStr) {
     var p = String(dateStr).split("-");
@@ -197,6 +279,13 @@
         load(false);
       });
     }
+    // D-4a 两态断点：跨过 767px 时**重渲染**（本页无 canvas，与主题切换同一模式）。
+    // 不要用"两份 DOM + CSS 隐藏"实现两态 —— 会让 DOM 里出现两份「实际」值（EV-2 三方对账数出双份）。
+    if (MQ_LITE) {
+      var onMq = function () { render(); };
+      if (MQ_LITE.addEventListener) MQ_LITE.addEventListener("change", onMq);
+      else if (MQ_LITE.addListener) MQ_LITE.addListener(onMq);      // 旧内核兜底
+    }
     updateMarketStatus();
     setInterval(updateMarketStatus, 60000);
   }
@@ -244,7 +333,7 @@
            '<b class="' + cls(value) + '">' + escapeHtml(v) + "</b></span>";
   }
 
-  function eventHtml(ev) {
+  function eventHtml(ev, pending) {
     // 事件名：优先用**中文**（`title_zh`，服务端按"类型 + 数据期 + 估计阶段"模板生成）；
     // 英文原文（`title`）挂到 `data-title-en` 与 `title=`（悬停可见）——**中文化不丢原文**。
     var zh = ev.title_zh || ev.title || "";
@@ -254,6 +343,9 @@
     if (ev.time_et) bits.push('<span class="tl-time">' + escapeHtml(ev.time_et) + " ET</span>");
     bits.push('<span class="tl-title" data-title-en="' + escapeHtml(en) + '" title="' +
               escapeHtml(en) + '">' + escapeHtml(zh) + "</span>");
+    // 结果值层（2026-09-19）：接在事件名之后、机构标签之前（行内追加 —— 实测 1920/1440/1280/768
+    // 四档行高保持 19.94 不变；仅 375 档会折行 +21.94，那里本就走精简态）
+    bits.push(valueHtml(ev, pending));
     if (ev.status === "tentative") bits.push('<span class="tl-status">暂定</span>');
     if (ev.note) bits.push('<span class="tl-ev-note">' + escapeHtml(ev.note) + "</span>");
     if (ev.agency) bits.push('<span class="tl-agency">' + escapeHtml(ev.agency) + "</span>");
@@ -268,7 +360,8 @@
              '<span class="tl-week">' + escapeHtml(weekdayZh(day.date)) + "</span>" +
              '<span class="tl-rel">' + escapeHtml(relLabel(day.date, asOf)) + "</span></div>");
     out.push('<div class="tl-day-main">');
-    out.push('<ul class="tl-events">' + day.events.map(eventHtml).join("") + "</ul>");
+    out.push('<ul class="tl-events">' +
+             day.events.map(function (e) { return eventHtml(e, isFuture); }).join("") + "</ul>");
 
     var mk = day.market || {};
     var mparts = ["gspc", "ixic", "sh", "vix_chg"]

@@ -46,6 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_symbol_date ON history(symbol, date);
 -- 经济事件日历（2026-09-18，任务档 tasks/2026-09-18-event-timeline-page）
 -- 主键 (date, kind, source)：同一 `(日期, 类型)` 允许来自不同源（fed 官方 / 镜像），
 -- 页面上再按 (date, kind) 去重（官方优先）—— 库里保留两源便于对账与排障。
+-- 末 8 列为**结果值层**（2026-09-19，任务档 tasks/2026-09-19-timeline-event-values）：
+-- 由 TradingView 经济日历 enrich 既有行（**只 UPDATE 不 INSERT**，见 update_econ_event_values）。
+-- ⚠️ `CREATE TABLE IF NOT EXISTS` 对**既有库不加列** ⇒ 既有库靠 `_migrate_econ_events` 的幂等
+--    `ALTER TABLE ADD COLUMN` 补（两处列清单必须同步，见 ECON_VALUE_COLS）。
 CREATE TABLE IF NOT EXISTS econ_events (
     date       TEXT NOT NULL,
     kind       TEXT NOT NULL,
@@ -56,6 +60,14 @@ CREATE TABLE IF NOT EXISTS econ_events (
     status     TEXT,
     note       TEXT,
     fetched_at TEXT,
+    actual           REAL,
+    forecast         REAL,
+    previous         REAL,
+    unit             TEXT,
+    importance       INTEGER,
+    value_source     TEXT,
+    value_title      TEXT,
+    value_fetched_at TEXT,
     PRIMARY KEY (date, kind, source)
 );
 CREATE INDEX IF NOT EXISTS idx_econ_events_date ON econ_events(date);
@@ -82,14 +94,56 @@ def _connect(db_path=None) -> sqlite3.Connection:
 
 
 def init_db(db_path=None) -> None:
-    """建表（幂等，不清数据）+ WAL。重复调用安全。"""
+    """建表（幂等，不清数据）+ 结果值层列迁移 + WAL。重复调用安全。
+
+    ⚠️ **调用方纪律（列先行、代码后行）**：`econ_events` 的结果值层列由本函数补齐，
+    而 `web/app.py` 的启动恢复链在「库非空」时**提前 return（不调 init_db）** ⇒
+    读侧（`query_econ_events`）在未迁移的库上会静默降级成 `[]`（DatabaseError 被吞）。
+    因此**写入方（`scripts/sync_econ_calendar.py`）必须先跑 init_db**（它已经这么做了）。
+    """
     conn = _connect(db_path)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(_SCHEMA)
+        added = _migrate_econ_events(conn)
+        if added:
+            log.info("econ_events 迁移：新增列 %s", added)
         conn.commit()
     finally:
         conn.close()
+
+
+#: 结果值层列（2026-09-19）：`(列名, SQLite 声明)`。
+#: ⚠️ 与 `_SCHEMA` 里 `econ_events` 的末 8 列**必须同源** —— 一处加列两处都要加，
+#: 否则「新建库有列、既有库没列」会分叉成两种表结构。
+ECON_VALUE_COLS: tuple[tuple[str, str], ...] = (
+    ("actual", "REAL"),
+    ("forecast", "REAL"),
+    ("previous", "REAL"),
+    ("unit", "TEXT"),
+    ("importance", "INTEGER"),
+    ("value_source", "TEXT"),
+    ("value_title", "TEXT"),
+    ("value_fetched_at", "TEXT"),
+)
+
+
+def _migrate_econ_events(conn) -> list[str]:
+    """给既有 `econ_events` 补结果值层列（**幂等**：缺哪列补哪列），返回本次新增的列名。
+
+    本项目无 migration 框架，而 `_SCHEMA` 是 `CREATE TABLE IF NOT EXISTS`
+    ⇒ 对已存在的库**一列也不会加**（plan D6）。故必须显式 `ALTER TABLE ADD COLUMN` + 列存在性检查，
+    可重复跑；`PRAGMA table_info` 与 `ALTER` 都在同一连接内，中途失败不提交（由 init_db 的 conn 生命周期兜底）。
+    """
+    have = {r[1] for r in conn.execute("PRAGMA table_info(econ_events)")}
+    if not have:
+        return []                       # 表不存在（上面 executescript 已建全列），无需迁移
+    added: list[str] = []
+    for name, decl in ECON_VALUE_COLS:
+        if name not in have:
+            conn.execute("ALTER TABLE econ_events ADD COLUMN %s %s" % (name, decl))
+            added.append(name)
+    return added
 
 
 def wal_checkpoint(db_path=None) -> None:
@@ -311,7 +365,15 @@ def restore_if_empty(db_path=None, backup_dir=None) -> str:
 
 # ------------------------------------------------------------------ 经济事件日历（2026-09-18）
 
-_ECON_COLS = ("date", "kind", "title", "agency", "source", "time_et", "status", "note", "fetched_at")
+#: `econ_events` 的读取投影。**顺序 = 建表顺序**（`dict(zip(_ECON_COLS, row))` 依赖它）。
+#: 末 8 项是结果值层（2026-09-19）——加列必须同时改这里，否则值进了库也读不出来
+#: （`src/timeline.py` 侧同理：payload 的 item 是逐键显式构造，缺键同样不透传）。
+_ECON_COLS = ("date", "kind", "title", "agency", "source", "time_et", "status", "note", "fetched_at",
+              "actual", "forecast", "previous", "unit", "importance",
+              "value_source", "value_title", "value_fetched_at")
+
+#: 值层里"有内容"的列（用于判断一条值是否值得写：全空不写，免得只把 `value_fetched_at` 刷成"有值层"）
+_VALUE_COLS = ("actual", "forecast", "previous", "unit", "importance", "value_source", "value_title")
 
 
 def upsert_econ_events(events, db_path=None) -> int:
@@ -346,6 +408,60 @@ def upsert_econ_events(events, db_path=None) -> int:
     finally:
         conn.close()
     return len(clean)
+
+
+def update_econ_event_values(values, db_path=None) -> int:
+    """把结果值层写进**既有**事件行，返回写入的 `(date, kind)` 组数。
+
+    **只 UPDATE、绝不 INSERT** ⇒ 天然满足「只 enrich 骨架已有行、不做历史回填」（plan D-5a）：
+    值侧有、骨架里没有的事件不会凭空进库。匹配键是 `(date, kind)`（与页面去重口径同键），
+    一行 SQL 覆盖该键下的**全部 source 行**（fed / mirror 都写）—— 这样无论页面按哪种源优先去重，
+    胜出的那行都带着值。
+
+    **preserve 语义（plan D5，与 `upsert_history_rows(preserve_existing=True)` 同一纪律）**：
+    每个值列都是 `COALESCE(新值, 既有值)` ⇒ 新值为 `None` 时**保留已落库的值**，
+    绝不用 `null` 抹掉上次抓到的实际值（TradingView 对老事件的 `actual` 偶发为 `null`，
+    而"公布当天那次没抓到"是常态）。整源失败时调用方**直接不调用本函数**（失败不覆盖）。
+
+    `values` 元素形状：`{date, kind, actual, forecast, previous, unit, importance,
+    value_source, value_title}`；`date`/`kind` 为必填匹配键，其余可空。
+    """
+    groups = []
+    for v in values or []:
+        date = str(v.get("date") or "")
+        kind = str(v.get("kind") or "").strip()
+        if not _DATE_RE.match(date) or not kind:
+            log.warning("econ 值层行匹配键缺失/日期非法，跳过: %r",
+                        {k: v.get(k) for k in ("date", "kind")})
+            continue
+        if all(v.get(k) is None for k in _VALUE_COLS):
+            continue                    # 全空不写：否则只会把 value_fetched_at 刷成"有值层"
+        groups.append((date, kind, v))
+    if not groups:
+        return 0
+    sql = ("UPDATE econ_events SET "
+           "actual = COALESCE(?, actual), forecast = COALESCE(?, forecast), "
+           "previous = COALESCE(?, previous), unit = COALESCE(?, unit), "
+           "importance = COALESCE(?, importance), "
+           "value_source = COALESCE(?, value_source), "
+           "value_title = COALESCE(?, value_title), "
+           "value_fetched_at = COALESCE(?, value_fetched_at) "
+           "WHERE date = ? AND kind = ?")
+    stamp = datetime.now().isoformat(timespec="seconds")
+    conn = _connect(db_path)
+    written = 0
+    try:
+        with conn:
+            for date, kind, v in groups:
+                cur = conn.execute(sql, (v.get("actual"), v.get("forecast"), v.get("previous"),
+                                         v.get("unit"), v.get("importance"),
+                                         v.get("value_source"), v.get("value_title"),
+                                         stamp, date, kind))
+                if cur.rowcount > 0:
+                    written += 1        # 骨架里没这一行 ⇒ rowcount 0 ⇒ 不计入（"只 enrich 已有行"）
+    finally:
+        conn.close()
+    return written
 
 
 def query_econ_events(start_date=None, end_date=None, kinds=None, db_path=None) -> list[dict]:

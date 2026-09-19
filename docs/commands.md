@@ -23,6 +23,8 @@
 | `venv/Scripts/python -m pytest tests/test_cn_econ.py -v` | 中国宏观单测（14 条，不联网）：`_parse_ym` / 缺列守卫 / 失业率长表 / 房价双城 / credit 主列 / **增长轴取 PMI 水平** / GDP 冲突上报 / 同比按键找去年同月 / 部分失败缓存 / 全失败不缓存 / bond 空结果 / 零写盘 | 改了 `src/cn_econ_fetcher.py` 或 `/api/econ/cn` 后 |
 | `curl -s "localhost:<port>/api/econ/cn?group=price"` | 中国宏观分组端点（group ∈ price/growth/money/rate/labor/estate；省略 = 全量 ≈10s）；非法组名 → 422。**利率三条序列（lpr/shibor/bond_10y）带 `chg_6m_bp`**（与 6 个月前比的 bp，基准点按日期/月份定位），其余序列该键为 `null` | 改了 `/api/econ/cn` / 前端分组加载后 |
 | `curl -s localhost:<port>/api/cn/quotes` | 中国行情（CNY=X + 中债 10Y 国债 + 信用利差 bp）；失败降级 200 + `failed` 列出三项 | 改了 `/api/cn/quotes` 后 |
+| `venv/Scripts/python -m pytest tests/test_econ_values.py -v` | 事件结果值层单测（**25 条，不联网**，固定 JSON fixture）：ET 转换（含跨日与夏令时两侧）/ 按月分段 / 标题精确匹配（同族兄弟不得被收编）/ GDP 按期次锁 / `forecast:0` 与 `None` 不可混 / 同日双非农择优与歧义告警 / PCE 首选标题优先 / 只 enrich 既有行 / unit 键缺失不补单位 / 整源失败降级 / preserve 语义 / 只 UPDATE 不 INSERT / 8 列迁移 | 改了 `src/econ_values.py`、`src/storage.py` 的值层或 `/api/timeline` 后 |
+| `venv/Scripts/python -c "import sqlite3;c=sqlite3.connect('file:data/marketpulse.db?mode=ro',uri=True);print(c.execute('select count(*) from econ_events where actual is not null').fetchone())"` | 值层落库**独立核算**（绕过 API 与 storage 代码路径；窗口内计数）+ `curl -s "localhost:<port>/api/timeline?days=90&future_days=30"` 里事件对象须含 `actual` 键（值可 null） | sync 真跑后核对落库结果 |
 
 ## 完整检查
 
@@ -43,7 +45,8 @@
 | 错误处理/离线容错 | 主脚本（断网场景） |
 | 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
 | 中国宏观页 `/macro/cn`（2026-09-14） | `scripts/probe_cn_macro.py`（数据源回归，退出码非 0 即停更）+ `pytest tests/test_cn_econ.py` + `pytest tests/test_web.py`（新增 6 条）+ `curl` 两个新端点（含空态）+ **`verify_ui.py`（新增 `assert_macro_cn_page` 与 F-5 补强，改了模板/静态/侧栏必跑）** |
-| 事件日历同步 cron（2026-09-19 交接，**待接入**） | 每天一次 `venv\Scripts\python -m scripts.sync_econ_calendar`（落盘后自动 commit+push，消息 `auto: {date} econ-calendar`）。判据：stdout 的 `[1/3]` 事件条数、`[news]` 写入条数、`[git] 自动提交推送` 三行；退出码 0/1/2 分别=正常/有源失败/两源全失败。提示词全文见 `tasks/2026-09-18-event-timeline-page/journal.md` §14.4 |
+| 事件日历同步 cron（2026-09-19 交接，**待接入**） | 每天一次 `venv\Scripts\python -m scripts.sync_econ_calendar`（落盘后自动 commit+push，消息 `auto: {date} econ-calendar`）。判据：stdout 的 `[1/3]` 事件条数、`[values]` 值层命中数、`[news]` 写入条数、`[git] 自动提交推送` 四行；退出码 0/1/2 分别=正常/有源失败/两源全失败。`--skip-values` 可只跳过结果值层。提示词全文见 `tasks/2026-09-18-event-timeline-page/journal.md` §14.4 |
+| 事件结果值层（2026-09-19） | ① 单测 `pytest tests/test_econ_values.py`；② sync `--dry-run`（看命中率且**不写库**）→ 真跑 `AUTO_PUSH=0 ... --skip-news`（**限一次**；`--skip-news` 只为缩范围，值层照样跑）⇒ 判据 `[values] 值层：命中 N/M 条，写入库 K 组`（**N==K**，差即"骨架里没该行"）+ 独立核算 `actual is not null` 计数；③ **`verify_ui.py`（必跑）**：新增 `EV-*` 组（键透传 / 三方对账 sqlite vs API vs DOM / 真实数据锁死 / 无 0-None 混淆 / unit 缺失不加后缀 / 待公布 / 768-375 两态断点），既有 `TL-*` 16 条复跑仍绿。前置：`storage.init_db()` 的 8 列迁移必须已跑（`PRAGMA table_info(econ_events)` 含 `actual`），否则 UPDATE 会 `no such column` |
 | cron 自动提交推送（二十六期） | 无需手动；daily_report / snapshot_report / opening_analyzer 末尾自动 commit+push；本地验证用 `AUTO_PUSH=0` 关闭（如 `AUTO_PUSH=0 venv/Scripts/python daily_report.py`）；真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交） |
 
 ## 验证要点（对应任务 prd 的 Verification Plan）
