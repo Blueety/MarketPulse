@@ -3,12 +3,18 @@
 任务档：`tasks/2026-09-18-event-timeline-page/`（plan §6.3）。
 
 ```bash
-python -m scripts.sync_econ_calendar                       # 抓两源 + 落盘 + 抓近期叙事层
-python -m scripts.sync_econ_calendar --dry-run             # 只看抓到什么，不写库
+python -m scripts.sync_econ_calendar                       # 抓两源 + 落盘 + 抓近期叙事层 + **自动 commit/push**
+python -m scripts.sync_econ_calendar --dry-run             # 只看抓到什么，不写库、不推送
 python -m scripts.sync_econ_calendar --from 2026-01-01 --to 2027-12-31
 python -m scripts.sync_econ_calendar --skip-news           # 只更新日历
 python -m scripts.sync_econ_calendar --news-window 30      # 叙事层只抓最近 30 天的事件
+python -m scripts.sync_econ_calendar --no-push             # 落盘但不提交（本地调试）
 ```
+
+**cron 用法**：Hermes cron 每天调一次 `venv\\Scripts\\python -m scripts.sync_econ_calendar` 即可 ——
+落盘后会自动走 `src/git_ops.auto_commit_push(date, "econ-calendar")`（路径白名单 `data/context/alerts`、
+消息 `auto: {date} econ-calendar`、经 Clash 代理 push）。**这一步必须做**：线上 Railway 读的是仓库里的
+`data/marketpulse.db`，不 push 则页面看不到新事件。env `AUTO_PUSH=0` 可全局关闭（本地验证用）。
 
 **容错纪律（plan §6.3）**：单个源失败 → 该源记 `failed` 并**保留库内既有数据**（"失败不覆盖"，
 与 `/api/econ` 的"失败不缓存"是相反方向的对策，原因不同：这里是历史事件不能因一次网络抖动被抹掉）。
@@ -26,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import econ_calendar as ec      # noqa: E402
+from src import git_ops                  # noqa: E402
 from src import storage as st            # noqa: E402
 from src import timeline as tl           # noqa: E402
 
@@ -41,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--news-window", type=int, default=45,
                     help="叙事层只抓最近 N 天已发生的事件（默认 45）")
     ap.add_argument("--timeout", type=int, default=30, help="单请求超时秒数（默认 30）")
+    ap.add_argument("--no-push", action="store_true",
+                    help="落盘后不自动 commit+push（默认自动，与 daily_report/snapshot_report 同口径；"
+                         "env AUTO_PUSH=0 亦可全局关闭）")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -84,6 +94,16 @@ def main(argv: list[str] | None = None) -> int:
         if rows:
             st.upsert_event_news(rows)
         print(f"[news] 写入 {len(rows)} 条，失败 {len(nfail)} 条" + (f"：{nfail[:6]}" if nfail else ""))
+
+    # 落盘后提交推送（与 daily_report / snapshot_report / opening_analyzer 三个入口同口径）：
+    # `git_ops.auto_commit_push` 走**路径白名单**（data / context / alerts，不用 `-A`）+
+    # `auto: {date} {type}` 消息 + 经 Clash 代理 push；无改动则幂等跳过；失败只记日志不抛（退出码仍 0）。
+    # ⚠️ **必须提交**：线上（Railway）读的是仓库里的 `data/marketpulse.db`，不 push 则页面看不到新事件。
+    if not args.no_push:
+        pushed = git_ops.auto_commit_push(_date.today().isoformat(), "econ-calendar")
+        # 返回值语义：True = 已提交并推送；False = 关闭 / **无改动** / 失败（三者靠上一行 [auto-push] 日志区分）
+        print("[git] 自动提交推送：" + ("已提交并推送" if pushed
+              else "未提交（无改动 / AUTO_PUSH=0 / 失败，见上一行 [auto-push] 日志）"))
 
     if failed:
         print(f"⚠️ 部分源失败（已保留既有数据）：{failed}")

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -74,18 +75,67 @@ def _commit(root: Path, date_str: str, report_type: str, paths: tuple[str, ...] 
     subprocess.run(["git", "commit", "-m", msg], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
 
 
+def _gh_helper_args() -> list[str]:
+    """`gh` 凭据助手参数：`-c credential.helper= -c credential.helper=!<gh> auth git-credential`。
+
+    ⚠️ **为什么需要它（2026-09-19 实测）**：本机默认凭据助手是 PortableGit 的 `helper-selector`
+    → 走 GCM（.NET），在**非交互**环境（cron / 子进程）里取不到凭据，push 直接失败：
+    `fatal: could not read Username for 'https://github.com': terminal prompts disabled`
+    —— 结果是**四个 cron 的自动提交全部只落到本地、没推上去**（远端之所以是最新的，
+    只是因为人工推送把本地提交顺带带上去了）。
+    本机 `gh` CLI 已登录（keyring），用它的凭据助手可在非交互下静默取到凭据。
+
+    - 取**绝对路径并加引号**：cron 的 PATH 可能没有 `C:\\Program Files\\GitHub CLI`，
+      而路径含空格 ⇒ 不加引号会被 sh 在空格处切断（实测报 `/c/Program: No such file`）。
+    - 找不到 `gh` → 返回 `[]`（不改变原有行为，只放弃兜底）。
+    """
+    exe = shutil.which("gh")
+    if not exe:
+        return []
+    quoted = '"%s"' % str(exe).replace("\\", "/")
+    return ["-c", "credential.helper=", "-c", "credential.helper=!%s auth git-credential" % quoted]
+
+
 def _push(root: Path) -> None:
-    """git push origin master，经 Clash 代理（仅作用于本子进程 env 副本）。"""
+    """git push origin master，经 Clash 代理（仅作用于本子进程 env 副本）。
+
+    **两级尝试**（2026-09-19 加）：① 现有姿势（代理 + 默认凭据助手）；
+    ② 失败则用 `gh` 凭据助手重试（`credential.helper=` 先清空再设，避免两个助手串联）。
+    ② 能覆盖"GCM 在非交互环境取不到凭据"这一类**静默失败**（表现为提交在本地越堆越多）。
+    """
     env = os.environ.copy()
     env["http_proxy"] = _PROXY
     env["https_proxy"] = _PROXY
-    subprocess.run(
-        ["git", "push", "origin", "master"],
-        cwd=str(root),
-        check=True,
-        timeout=_PUSH_TIMEOUT,
-        env=env,
-    )
+    # ⚠️ **必须显式关掉交互式凭据**（2026-09-19 实测）：cron / wrapper 环境里没有这两个变量时，
+    #    默认凭据助手取不到凭据会**转去等终端输入** ⇒ `git push` 一直挂着（实测 `_push` 卡 14 分钟），
+    #    提交只落本地、推送永远不完成。设上之后首选姿势**秒级失败**，立刻走下面 gh 助手的兜底。
+    env["GIT_TERMINAL_PROMPT"] = "0"        # 不许 git 问终端要用户名/密码
+    env["GCM_INTERACTIVE"] = "never"        # 不许 GCM 弹交互（含 GUI）
+    # ⚠️ **绝不要给这里的 subprocess 加 `capture_output=True`**（同日实测）：凭据助手阻塞时，
+    #    git 的**孙进程**会一直持有管道，`subprocess.run` 的 `timeout` 只杀直接子进程、
+    #    仍要等管道关闭 ⇒ 整个调用挂死（超时形同虚设）。让 stderr 直接落到调用方控制台。
+    #
+    # 尝试顺序（2026-09-19 定）：**gh 助手优先**，老姿势（默认助手）作兜底。
+    #   理由：老姿势当前**必然卡满 120s 再超时**（实测：代理 + GCM 既不成功也不快速失败），
+    #   每天白等 2 分钟；gh 助手是实测可用的姿势（代理 + gh → 20~40s 成功）。
+    #   gh 不可用时自动退回老姿势（保持既有行为）。两种失败都要接住 `TimeoutExpired` ——
+    #   只接 `CalledProcessError` 会让超时直接冒泡、**兜底根本不会执行**（本轮踩过）。
+    helper = _gh_helper_args()
+    attempts: list[list[str]] = []
+    if helper:
+        attempts.append(["git", *helper, "push", "origin", "master"])
+    attempts.append(["git", "push", "origin", "master"])
+    last_exc: Exception | None = None
+    for idx, cmd in enumerate(attempts):
+        try:
+            subprocess.run(cmd, cwd=str(root), check=True, timeout=_PUSH_TIMEOUT, env=env)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_exc = exc
+            logger.warning("[auto-push] 第 %d 种姿势失败（%s）：%s", idx + 1, type(exc).__name__,
+                           "gh 凭据助手" if "credential.helper=!" in " ".join(cmd) else "默认凭据助手")
+    if last_exc is not None:
+        raise last_exc
 
 
 def auto_commit_push(date_str: str, report_type: str, root: Path = PROJECT_ROOT) -> bool:

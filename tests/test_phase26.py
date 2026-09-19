@@ -17,6 +17,20 @@ import pytest
 from src import git_ops
 
 
+def _git_sub(args) -> str | None:
+    """从 git 命令列表里取出**子命令**（跳过 `-c key=value` 与其它开关）。"""
+    i = 1
+    while i < len(args):
+        if args[i] == "-c":
+            i += 2
+            continue
+        if args[i].startswith("-"):
+            i += 1
+            continue
+        return args[i]
+    return None
+
+
 @pytest.fixture
 def fake_git(monkeypatch):
     """替换 git_ops.subprocess.run 为可控假实现，记录每次调用。"""
@@ -30,6 +44,9 @@ def fake_git(monkeypatch):
     def _run(args, *a, **kw):
         calls.append({
             "args": list(args),
+            # 规范化出「git 子命令」：`_push` 可能是 `git -c credential.helper=… push`，
+            # 按 args[1] 识别会认不出（2026-09-19 实测 3 条用例假红）。
+            "sub": _git_sub(list(args)),
             "cwd": kw.get("cwd"),
             "env": kw.get("env"),
             "timeout": kw.get("timeout"),
@@ -40,12 +57,21 @@ def fake_git(monkeypatch):
             if "--" in args and "status_stdout_paths" in state:
                 return _Completed(stdout=state["status_stdout_paths"])
             return _Completed(stdout=state["status_stdout"])
-        if args[:2] == ["git", "push"]:
+        # ⚠️ 用 `"push" in args` 而非 `args[:2] == ["git","push"]` 识别 push：
+        #    2026-09-19 起 `_push` 会在失败后用 `git -c credential.helper=… push` 重试（兜底姿势），
+        #    按前两位匹配会**漏掉兜底那次调用** → 假实现把它当成功 ⇒ "push 失败" 用例假绿。
+        if "push" in args:
             if state["push_fail"] == "called":
-                raise subprocess.CalledProcessError(1, list(args))
-            if state["push_fail"] == "timeout":
+                # `push_fail_once`：只让**第一次** push 失败（测兜底救回）。判据用"此前是否已 push 过"，
+                # 不能 pop 标志位 —— pop 掉之后兜底那次会再次走进 raise 分支（实测踩过）。
+                prior_push = any("push" in c["args"] for c in calls[:-1])
+                if state.get("push_fail_once") and prior_push:
+                    pass
+                else:
+                    raise subprocess.CalledProcessError(1, list(args))
+            elif state["push_fail"] == "timeout":
                 raise subprocess.TimeoutExpired(list(args), git_ops._PUSH_TIMEOUT)
-            if state["push_fail"] == "filenotfound":
+            elif state["push_fail"] == "filenotfound":
                 raise FileNotFoundError("git not found")
         return _Completed()
 
@@ -54,7 +80,7 @@ def fake_git(monkeypatch):
 
 
 def _has_call(calls, sub):
-    return any(c["args"][1:2] == [sub] for c in calls)
+    return any(c.get("sub") == sub for c in calls)
 
 
 # ---- env 门控 ----
@@ -109,7 +135,7 @@ def test_commit_message_format(monkeypatch, fake_git, tmp_path):
     monkeypatch.delenv("AUTO_PUSH", raising=False)
     state["status_stdout"] = " M data/history.json\n"
     git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
-    commit = next(c for c in calls if c["args"][1:2] == ["commit"])
+    commit = next(c for c in calls if c.get("sub") == "commit")
     assert commit["args"][1:4] == ["commit", "-m", "auto: 2026-09-02 daily report"]
 
 
@@ -119,7 +145,7 @@ def test_commit_message_format_snapshot(monkeypatch, fake_git, tmp_path):
     monkeypatch.delenv("AUTO_PUSH", raising=False)
     state["status_stdout"] = " M context/2026-09-02.json\n"
     git_ops.auto_commit_push("2026-09-02", "a-share midday snapshot", root=tmp_path)
-    commit = next(c for c in calls if c["args"][1:2] == ["commit"])
+    commit = next(c for c in calls if c.get("sub") == "commit")
     assert commit["args"][3] == "auto: 2026-09-02 a-share midday snapshot"
 
 
@@ -133,7 +159,7 @@ def test_push_injects_proxy_and_no_pollution(monkeypatch, fake_git, tmp_path):
     monkeypatch.delenv("https_proxy", raising=False)
     state["status_stdout"] = " M data/history.json\n"
     git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
-    push = next(c for c in calls if c["args"][1:2] == ["push"])
+    push = next(c for c in calls if c.get("sub") == "push")
     assert push["env"]["http_proxy"] == git_ops._PROXY
     assert push["env"]["https_proxy"] == git_ops._PROXY
     # 不污染全局环境
@@ -151,6 +177,25 @@ def test_push_failure_calledprocess(monkeypatch, fake_git, tmp_path, capsys):
     assert git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path) is False
     assert _has_call(calls, "push")  # push 已尝试
     assert "[auto-push] Failed" in capsys.readouterr().out
+
+
+def test_push_first_attempt_failure_still_lands(monkeypatch, fake_git, tmp_path, capsys):
+    """**新契约（2026-09-19）**：第一次 push 失败但第二次成功 ⇒ 整体算**成功**（返回 True）。
+
+    背景：非交互环境里默认凭据助手取不到凭据 ⇒ 四个 cron 的自动提交只落本地、没推上去（实测现场）。
+    现在 `_push` 是**两段尝试**（先 `gh` 凭据助手，再老姿势）⇒ 前一段失败、后一段成功属于正常路径。
+    """
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    monkeypatch.setattr(git_ops.shutil, "which", lambda name: "C:/Program Files/GitHub CLI/gh.exe")
+    state["status_stdout"] = " M data/marketpulse.db"
+    state["push_fail"] = "called"
+    state["push_fail_once"] = True
+    assert git_ops.auto_commit_push("2026-09-19", "econ-calendar", root=tmp_path) is True
+    pushed = [c["args"] for c in calls if "push" in c["args"]]
+    assert len(pushed) == 2, pushed                          # 两种姿势各一次
+    assert "credential.helper=!" in " ".join(pushed[0])      # 先 gh 凭据助手（实测可用）
+    assert pushed[1] == ["git", "push", "origin", "master"]  # 再老姿势兜底
 
 
 def test_push_failure_timeout(monkeypatch, fake_git, tmp_path, capsys):
@@ -193,7 +238,7 @@ def test_add_uses_path_whitelist(monkeypatch, fake_git, tmp_path):
     monkeypatch.delenv("AUTO_PUSH", raising=False)
     state["status_stdout"] = " M data/history.json\n"
     git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
-    add = next(c for c in calls if c["args"][1:2] == ["add"])
+    add = next(c for c in calls if c.get("sub") == "add")
     assert add["args"] == ["git", "add", *git_ops._DATA_PATHS]
     for c in calls:
         for bad in ("-A", "--all", "."):
@@ -206,7 +251,7 @@ def test_status_limited_to_paths(monkeypatch, fake_git, tmp_path):
     monkeypatch.delenv("AUTO_PUSH", raising=False)
     state["status_stdout"] = " M data/history.json\n"
     git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
-    status = next(c for c in calls if c["args"][1:2] == ["status"])
+    status = next(c for c in calls if c.get("sub") == "status")
     assert "--" in status["args"]
     assert status["args"][status["args"].index("--") + 1:] == list(git_ops._DATA_PATHS)
 

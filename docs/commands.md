@@ -43,6 +43,7 @@
 | 错误处理/离线容错 | 主脚本（断网场景） |
 | 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
 | 中国宏观页 `/macro/cn`（2026-09-14） | `scripts/probe_cn_macro.py`（数据源回归，退出码非 0 即停更）+ `pytest tests/test_cn_econ.py` + `pytest tests/test_web.py`（新增 6 条）+ `curl` 两个新端点（含空态）+ **`verify_ui.py`（新增 `assert_macro_cn_page` 与 F-5 补强，改了模板/静态/侧栏必跑）** |
+| 事件日历同步 cron（2026-09-19 交接，**待接入**） | 每天一次 `venv\Scripts\python -m scripts.sync_econ_calendar`（落盘后自动 commit+push，消息 `auto: {date} econ-calendar`）。判据：stdout 的 `[1/3]` 事件条数、`[news]` 写入条数、`[git] 自动提交推送` 三行；退出码 0/1/2 分别=正常/有源失败/两源全失败。提示词全文见 `tasks/2026-09-18-event-timeline-page/journal.md` §14.4 |
 | cron 自动提交推送（二十六期） | 无需手动；daily_report / snapshot_report / opening_analyzer 末尾自动 commit+push；本地验证用 `AUTO_PUSH=0` 关闭（如 `AUTO_PUSH=0 venv/Scripts/python daily_report.py`）；真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交） |
 
 ## 验证要点（对应任务 prd 的 Verification Plan）
