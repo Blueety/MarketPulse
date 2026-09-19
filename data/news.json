@@ -1,6 +1,41 @@
 {
-  "date": "2026-09-19",
+  "date": "2026-09-03",
   "items": [
+    {
+      "title": "甲骨文180亿AI贷款折价滞销，AI融资链压力浮现",
+      "url": "https://wallstreetcn.com/articles/3782134",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "甲骨文（Oracle）新墨西哥州Project Jupiter数据中心约180亿美元银团贷款的分销陷入停滞，银行报价已降至面值的89至91美分，对应贷款市值约160亿至164亿美元"
+    },
+    {
+      "title": "美联储按兵不动但释放鹰派信号 年内利率变化预期由降息变加息",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE1Xck1rVVBQNVpBcWxUbVNWREstX1NDSEpEMkpXTkJ1R0wtdEJjR0tYRW5IUEc1a0hrZnpmSnZwbHdNZ2tIcUpUUQ?oc=5",
+      "source": "财联社",
+      "published": "2026-09-19",
+      "summary": "美联储按兵不动但释放鹰派信号 年内利率变化预期由降息变加息"
+    },
+    {
+      "title": "沙特又找到一条“运油路线”，但代价高昂",
+      "url": "https://wallstreetcn.com/articles/3782136",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "东西输油管道遭无人机袭击被迫关闭，沙特阿拉伯不得不重新依赖霍尔木兹海峡\"接力运油\"方案，但高昂成本与日趋紧张的设备供应令这条退路充满挑战"
+    },
+    {
+      "title": "日本央行加息之际，对冲基金近一年多来首次看涨日元",
+      "url": "https://wallstreetcn.com/articles/3782135",
+      "source": "华尔街见闻",
+      "published": "2026-09-19",
+      "summary": "对冲基金对日元的立场出现重大转向，自2025年7月以来首次转为净多头，折射出美日两国当局市场干预后市场情绪的深层变化"
+    },
+    {
+      "title": "美联储加息落地，黄金为何不跌反涨？",
+      "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE5xUkZKaU1EZFlQeGc0d2tRWmQ3b0JoWUs3dkhUV0l6aHVwR1Z6Z1Nic1hYbzNaR3BCbGNGQnhPZkliOHJXbGtRLVJJTmhnRVVuZnQtZGpNc3djdTJBNnloVlpRdFF0Wkt6?oc=5",
+      "source": "chinanews.com.cn",
+      "published": "2026-09-19",
+      "summary": "美联储加息落地，黄金为何不跌反涨"
+    },
     {
       "title": "智谱ZCode偷传代码风波追踪：Agent的数据行为谁来审计？",
       "url": "https://wallstreetcn.com/articles/3782133",
@@ -21,41 +56,6 @@
       "source": "华尔街见闻",
       "published": "2026-09-19",
       "summary": "美元本周大幅走强，录得6月以来最佳单周涨幅，美联储释放的持续加息信号成为核心驱动力"
-    },
-    {
-      "title": "欧洲央行，年内或再加息 - 21财经",
-      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxNZ0lhVDMwNW1tZUpRNDNiSmlnQXV2Mi1YSFg1SFZmVkRjTS12bDBXVmJESzdGRjAzNVVTYUxhM05aa2JBU2lESVZuRzlId0FPd25VTjdHa1VJdjlUM0paejJpWHBZd2xKVjYxbnZ0RG1CcjdMNWp1N1NOc0NGOUdLZmtKSkZTM2s4M1BDdkRUOA?oc=5",
-      "source": "Google News",
-      "published": "2026-09-19",
-      "summary": "欧洲央行，年内或再加息 21财经"
-    },
-    {
-      "title": "2张反对票意味着什么？日本这次加息“最值得玩味的问题”",
-      "url": "https://wallstreetcn.com/articles/3782127",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "在2026年9月的议息会议上，日本央行如期将政策利率从1.00%上调至1.25%"
-    },
-    {
-      "title": "人形机器人的“三大争议”：何时大规模部署？算力需求暴增？“人形”是必要的吗？",
-      "url": "https://wallstreetcn.com/articles/3782125",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "巴克莱认为，通用人形机器人的大规模部署可能要等到2035年前后，而非2030年"
-    },
-    {
-      "title": "闪迪暴涨11%，存储和芯片股“短期期权”爆巨量，“AI股神”又出手了？",
-      "url": "https://wallstreetcn.com/articles/3782123",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "周五，约9600万美元短期看涨期权集中涌入闪迪（SanDisk）、美光（Micron）、英特尔（Intel）和Marvell四只AI芯片股"
-    },
-    {
-      "title": "姆巴佩告别耐克加盟昂跑，跑鞋新贵挑战足球市场",
-      "url": "https://wallstreetcn.com/articles/3782121",
-      "source": "华尔街见闻",
-      "published": "2026-09-19",
-      "summary": "以高端跑鞋起家的瑞士运动品牌On昂跑，正式把业务版图扩展至足球市场"
     }
   ]
 }
