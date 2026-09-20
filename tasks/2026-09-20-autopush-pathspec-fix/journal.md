@@ -159,3 +159,26 @@ $ hermes cron runs 6f6e40a6f8b4
 修前该提交会把那 8 个文件一起带走（正是 `6ec1562` 的形态）。
 另附：`scripts/auto_commit_data.py` 的 **commit+push 正向路径**也因此得到端到端验证
 （§3.3/§3.4 当时只覆盖了"无改动"分支）。
+
+---
+
+## 7. 架构师复核（2026-09-20 20:5x，plan 作者）
+
+### §4.2 的偏离 —— ✅ **批准，且定性为 plan 缺陷而非执行者越权**
+
+plan §5 Step 4 的伪代码只调 `_commit`（不 push）是我写漏了：`scripts/auto_commit_data.py`
+替代的是**原 prompt 的完整流程**（add + commit + **push**），只 commit 不 push 是功能回退。
+执行者的修正（改用 `git_ops.auto_commit_push()`）比我原稿更好——它自带
+`AUTO_PUSH` 门控 / Clash 代理注入 / gh 凭据助手兜底 / `GIT_TERMINAL_PROMPT=0` 防挂死，
+且**正向路径已获生产级 E2E 验证**（`57315d0` 推送成功，见本 journal 尾部）。
+退出码语义（0=成功含跳过 / 1=失败）合理。**无需回改。**
+
+### §4.1 的教训—— 已同步进 `skills/hermes-cron-script/SKILL.md`
+
+「direct 成功 ≠ builtin 成功，必须等一轮真实定时运行」这条比我原 skill 里写的
+"`hermes cron run` 实跑验证"**更强**，已更新该 skill（原判据不足）。
+
+### 验收状态
+
+P0-4 **闭环**。三处修复点（`git_ops` pathspec / `auto_commit_data.py` / cron script 化）
+全部落地且获生产环境验证。

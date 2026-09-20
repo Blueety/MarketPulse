@@ -1729,3 +1729,155 @@ def test_auth_basic_prefix_is_case_insensitive(monkeypatch):
     c = _auth_env(monkeypatch)
     raw = base64.b64encode(("%s:%s" % (AUTH_USER, AUTH_PASS)).encode()).decode()
     assert c.get("/", headers={"Authorization": "basic " + raw}).status_code == 200
+
+
+# ---- 阈值回测（2026-09-20，tasks/2026-09-20-backtest-ui/）-----------------------------------
+# 统计逻辑在 src/backtest.py（与 CLI **同一份实现**）；web 只组装响应。故这里的断言只覆盖
+# **契约与降级**，算法正确性由 tests/test_backtest.py 负责。
+
+def _fake_rows(days: int, jump_at: int = 20, symbol: str = "vix"):
+    """造 days 天单标的长行（第 jump_at 天 +25% ⇒ 必触发一次）。"""
+    rows, price = [], 100.0
+    for i in range(1, days + 1):
+        price = price * (1.25 if i == jump_at else 1.0)
+        date = "2026-01-%02d" % i if i <= 31 else "2026-02-%02d" % (i - 31)
+        rows.append((date, symbol, price, 0.0))
+    return rows
+
+
+def test_api_backtest_payload_contract(monkeypatch):
+    """`/api/backtest` 字段齐全，且标的与常量同源（`src.backtest.BACKTEST_SYMBOLS`）。"""
+    from fastapi.testclient import TestClient
+
+    from src import backtest as sb
+    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(40))
+    r = TestClient(web.app.app).get("/api/backtest")
+    assert r.status_code == 200
+    d = r.json()
+    assert set(d) >= {"as_of", "window", "stats", "threshold_config", "symbols",
+                      "methods", "elapsed_ms", "empty_reason"}
+    assert len(d["methods"]) == 7                    # 口径 7 条**原文**（与 md 报告同源）
+    assert len(d["threshold_config"]["fallback"]) == len(sb.BACKTEST_SYMBOLS)
+    assert [s["symbol"] for s in d["symbols"]] == sb.BACKTEST_SYMBOLS
+    assert d["stats"]["triggers"] >= 1               # 夹具里那一次跳变
+    assert d["empty_reason"] is None
+
+
+def test_api_backtest_does_not_cache(monkeypatch):
+    """🔴 **故意不缓存**（plan §3.4 / 硬约束 4）：改配置后必须立刻可见。
+
+    判据：连续两次调用各算一次（用调用计数证明没有走缓存）—— 若后人"顺手"加了 TTL，
+    本用例立刻红（这正是 plan R7 要防的）。
+    """
+    from fastapi.testclient import TestClient
+
+    calls = {"n": 0}
+
+    def _counted(*a, **k):
+        calls["n"] += 1
+        return _fake_rows(40)
+
+    monkeypatch.setattr(web.app.st, "query_history", _counted)
+    c = TestClient(web.app.app)
+    c.get("/api/backtest")
+    c.get("/api/backtest")
+    assert calls["n"] == 2, "第二次调用走了缓存 ⇒ 「改阈值立刻可见」的价值被破坏"
+
+
+def test_api_backtest_degrades_to_empty_state(monkeypatch):
+    """数据不足（有效交易日 < 30）⇒ **恒 200** + 空 symbols + empty_reason（不报错）。"""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(5))
+    r = TestClient(web.app.app).get("/api/backtest")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["symbols"] == []
+    assert "不足" in (d["empty_reason"] or "")
+    assert len(d["methods"]) == 7                    # 空态仍给口径，便于解读
+
+
+def test_backtest_page_renders():
+    """`/backtest` 页面可开且带页标题（模板渲染不为空）。"""
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/backtest")
+    assert r.status_code == 200
+    assert "阈值回测" in r.text
+    assert "backtest.js" in r.text
+
+
+# ---- 阈值回测（2026-09-20，tasks/2026-09-20-backtest-ui/）-----------------------------------
+# 统计逻辑在 src/backtest.py（与 CLI **同一份实现**）；web 只组装响应。故这里的断言只覆盖
+# **契约与降级**，算法正确性由 tests/test_backtest.py 负责。
+
+def _fake_rows(days: int, jump_at: int = 20, symbol: str = "vix"):
+    """造 days 天单标的长行（第 jump_at 天 +25% ⇒ 必触发一次）。"""
+    rows, price = [], 100.0
+    for i in range(1, days + 1):
+        price = price * (1.25 if i == jump_at else 1.0)
+        date = "2026-01-%02d" % i if i <= 31 else "2026-02-%02d" % (i - 31)
+        rows.append((date, symbol, price, 0.0))
+    return rows
+
+
+def test_api_backtest_payload_contract(monkeypatch):
+    """`/api/backtest` 字段齐全，且标的与常量同源（`src.backtest.BACKTEST_SYMBOLS`）。"""
+    from fastapi.testclient import TestClient
+
+    from src import backtest as sb
+    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(40))
+    r = TestClient(web.app.app).get("/api/backtest")
+    assert r.status_code == 200
+    d = r.json()
+    assert set(d) >= {"as_of", "window", "stats", "threshold_config", "symbols",
+                      "methods", "elapsed_ms", "empty_reason"}
+    assert len(d["methods"]) == 7                    # 口径 7 条**原文**（与 md 报告同源）
+    assert len(d["threshold_config"]["fallback"]) == len(sb.BACKTEST_SYMBOLS)
+    assert [s["symbol"] for s in d["symbols"]] == sb.BACKTEST_SYMBOLS
+    assert d["stats"]["triggers"] >= 1               # 夹具里那一次跳变
+    assert d["empty_reason"] is None
+
+
+def test_api_backtest_does_not_cache(monkeypatch):
+    """🔴 **故意不缓存**（plan §3.4 / 硬约束 4）：改配置后必须立刻可见。
+
+    判据：连续两次调用各算一次（用调用计数证明没有走缓存）—— 若后人"顺手"加了 TTL，
+    本用例立刻红（这正是 plan R7 要防的）。
+    """
+    from fastapi.testclient import TestClient
+
+    calls = {"n": 0}
+
+    def _counted(*a, **k):
+        calls["n"] += 1
+        return _fake_rows(40)
+
+    monkeypatch.setattr(web.app.st, "query_history", _counted)
+    c = TestClient(web.app.app)
+    c.get("/api/backtest")
+    c.get("/api/backtest")
+    assert calls["n"] == 2, "第二次调用走了缓存 ⇒ 「改阈值立刻可见」的价值被破坏"
+
+
+def test_api_backtest_degrades_to_empty_state(monkeypatch):
+    """数据不足（有效交易日 < 30）⇒ **恒 200** + 空 symbols + empty_reason（不报错）。"""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(5))
+    r = TestClient(web.app.app).get("/api/backtest")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["symbols"] == []
+    assert "不足" in (d["empty_reason"] or "")
+    assert len(d["methods"]) == 7                    # 空态仍给口径，便于解读
+
+
+def test_backtest_page_renders():
+    """`/backtest` 页面可开且带页标题（模板渲染不为空）。"""
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/backtest")
+    assert r.status_code == 200
+    assert "阈值回测" in r.text
+    assert "backtest.js" in r.text

@@ -26,6 +26,14 @@
            ⚠️ 内部命名仍是 `timeline`（路由 `/timeline`、`timeline.js`、`#tl-*`、断言 `TL-*`）——
            只有**用户可见的名字**是「市场日历」。 #}
         <a class="nav-item{% if active_page == 'timeline' %} active{% endif %}" href="/timeline"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5v11"/><circle cx="3" cy="5" r="1.2"/><circle cx="3" cy="9.5" r="1.2"/><path d="M6 5h7M6 9.5h5"/></svg><span>市场日历</span></a>
+        {# 2026-09-20「阈值回测」（/backtest）：**跨页链接**（`href` 以 / 开头，**不写 data-target**：
+           页内锚点处理器找不到会静默失效，verify_ui 的 F-5 把"无 data-target 又非 is-disabled"判为坏项），
+           位置放在「市场日历」之后 /「设置」之前（与 /timeline 同一段"分析工具"区）。
+           ⚠️ 内部命名一律 `backtest`（路由 `/backtest`、`backtest.js`、`#bt-*`、断言 `BT-*`）——
+           只有**用户可见的名字**是「阈值回测」。
+           ⚠️ 加此项 ⇒ navCount 11 → 12，**verify_ui.py 三处必须同改**
+           （`F-5` / `CN-7` / `TL-9`），漏一处该断言变红且看起来像"新页面改坏了侧栏"。 #}
+        <a class="nav-item{% if active_page == 'backtest' %} active{% endif %}" href="/backtest"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 13.5h11"/><path d="M4 13.5V9M7 13.5V5.5M10 13.5V8M13 13.5V3.5"/></svg><span>阈值回测</span></a>
         <span class="nav-item is-disabled" title="未开放"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4"/></svg><span>设置</span></span>
       </nav>
       <div class="sidebar-footer">

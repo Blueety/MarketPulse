@@ -1,210 +1,46 @@
 #!/usr/bin/env python
-"""独立回测脚本：验证告警阈值有效性。只读 history，仅写 reports/backtest_report.md。
+"""独立回测脚本（CLI 入口）：验证告警阈值有效性。只读 history，仅写 reports/backtest_report.md。
 
 复用生产同一套告警语义（src.analyzer.check_breach：严格大于阈值、env/config 实时阈值、
 缺口断开），回放历史触发事件并统计后效与有效触发率。无任何写回副作用。
+
+2026-09-20（`tasks/2026-09-20-backtest-ui/`）：**纯统计逻辑已搬到 `src/backtest.py`**，
+本文件只留「入口 + 呈现」——`render_report`（md）/ `print_summary`（终端）/ `main`（CLI）。
+搬迁理由：看板要呈现同一份回测结果（`GET /api/backtest`），而 web 层不该 import `scripts/`；
+这样 CLI 与 web **共用唯一实现**（避免同一算法两份实现）。
+本文件 re-export 被搬迁的名字 ⇒ `tests/test_backtest.py` / `tests/test_phase27.py`
+的 `bt.<name>` 用法**保持不变**。
 """
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from collections import Counter
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from time import perf_counter
 
 # 项目根入 path（支持 `python scripts/backtest.py` 与 `from scripts.backtest import ...`）。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.analyzer import (REPORTS_DIR, alert_threshold, check_breach, load_history,
+from src.analyzer import (REPORTS_DIR, alert_threshold,
                           ALERT_DYNAMIC, ALERT_LOOKBACK_DAYS, ALERT_K_FACTOR)
-
-# 回测标的：PRD 表 7 个（CYB 有阈值但 PRD 表未列，默认不纳入，决策 A）。
-BACKTEST_SYMBOLS = ["VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"]
-
-# 有效触发率判定：触发后 5 个交易日内出现任意单日 |变化率| ≥ 该百分比（决策 C）。
-MEANINGFUL_MOVE_PCT = 1.0
-# 后效窗口（交易日）。
-HORIZONS = (1, 3, 5, 10)
-# 样本门槛（决策 E）：全局有效交易日不足则优雅退出；单标的有效点不足仅输出计数。
-MIN_EFFECTIVE_DAYS = 30
-MIN_SYMBOL_POINTS = 30
-
-
-def _sign(x: float) -> int:
-    """数值符号：正 1 / 负 -1 / 零 0。"""
-    if x > 0:
-        return 1
-    if x < 0:
-        return -1
-    return 0
-
-
-def _sym_key(symbol: str) -> str:
-    """history 小写键（六期B 纪律：history 存 gspc/sh 等小写键）。"""
-    return symbol.lower()
-
-
-def load_backtest_history(history_path: str | None = None) -> list[dict]:
-    """加载历史并按 date 升序排序。history_path 提供则只读该文件，否则用 analyzer.HISTORY_FILE。"""
-    hist = _load_history_from_path(Path(history_path)) if history_path else load_history()
-    hist = [r for r in hist if r.get("date")]
-    hist.sort(key=lambda r: r["date"])
-    return hist
-
-
-def _load_history_from_path(path: Path) -> list[dict]:
-    """从指定路径读取 history（与 load_history 同 schema，仅换只读输入源）。"""
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
-    if not isinstance(data, list):
-        return []
-    keys = ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb", "gld", "btc")
-    return [
-        {"date": str(rec.get("date", "")), **{k: rec.get(k) for k in keys}}
-        for rec in data
-        if isinstance(rec, dict) and rec.get("date")
-    ]
-
-def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict]:
-    """回放触发事件，复用生产 check_breach 语义（严格大于、实时阈值、缺口断开）。
-
-    动态阈值：回放第 i 对 (rows[i-1], rows[i]) 时传 history[:i]（排除候选行 i，
-    窗口含到 prev 行为止的收益，等价于生产「昨日收益是分布最新成员」）。"""
-    triggers: list[dict] = []
-    for i in range(1, len(history)):
-        for sym in symbols:
-            key = _sym_key(sym)
-            cur = history[i].get(key)
-            prev = history[i - 1].get(key)
-            if cur is None or prev is None:
-                continue
-            breach = check_breach(sym, cur, prev, history[:i])
-            if breach is None:
-                continue
-            triggers.append(
-                {
-                    "date": history[i]["date"],
-                    "symbol": sym,
-                    "change": breach["change"],
-                    "threshold": breach["threshold"],
-                    "threshold_mode": breach["threshold_mode"],
-                    "level": breach["level"],
-                    "price": cur,
-                    "index": i,
-                }
-            )
-    return triggers
-
-
-def _effective_trading_days(history: list[dict], symbols=BACKTEST_SYMBOLS) -> int:
-    """至少一个回测标的有相邻可计算变化的行数。"""
-    cnt = 0
-    for i in range(1, len(history)):
-        for sym in symbols:
-            key = _sym_key(sym)
-            if history[i].get(key) is not None and history[i - 1].get(key) is not None:
-                cnt += 1
-                break
-    return cnt
-
-
-def _effective_points(history: list[dict], symbol: str) -> int:
-    """该标的有相邻可计算变化的行数。"""
-    key = _sym_key(symbol)
-    return sum(
-        1
-        for i in range(1, len(history))
-        if history[i].get(key) is not None and history[i - 1].get(key) is not None
-    )
-
-
-def forward_stats(triggers: list[dict], history: list[dict], horizons=HORIZONS) -> dict:
-    """每标的每窗口：平均前向收益 / 胜率（方向延续占比）/ 样本数 n。"""
-    by_sym: dict[str, list[dict]] = {}
-    for t in triggers:
-        by_sym.setdefault(t["symbol"], []).append(t)
-    out: dict[str, dict[int, dict]] = {}
-    for sym, ts in by_sym.items():
-        key = _sym_key(sym)
-        stats: dict[int, dict] = {}
-        for h in horizons:
-            rets: list[float] = []
-            wins = 0
-            for t in ts:
-                i = t["index"]
-                j = i + h
-                if j >= len(history):
-                    continue
-                base = history[i].get(key)
-                cur = history[j].get(key)
-                if base is None or cur is None:
-                    continue
-                fr = (cur - base) / base * 100.0
-                rets.append(fr)
-                if _sign(fr) == _sign(t["change"]):
-                    wins += 1
-            n = len(rets)
-            stats[h] = {
-                "avg": (sum(rets) / n) if n else None,
-                "win": (wins / n) if n else None,
-                "n": n,
-            }
-        out[sym] = stats
-    return out
-
-
-def effective_trigger_rate(
-    triggers: list[dict], history: list[dict], meaningful: float = MEANINGFUL_MOVE_PCT
-) -> float | None:
-    """触发后 5 个交易日内出现任意单日 |变化率| ≥ meaningful% 的触发占比。"""
-    if not triggers:
-        return None
-    eff = 0
-    for t in triggers:
-        sym = t["symbol"]
-        key = _sym_key(sym)
-        i = t["index"]
-        found = False
-        for j in range(i + 1, min(i + 6, len(history))):
-            cur = history[j].get(key)
-            prev = history[j - 1].get(key)
-            if cur is None or prev in (None, 0):
-                continue
-            if abs((cur - prev) / prev * 100.0) >= meaningful:
-                found = True
-                break
-        if found:
-            eff += 1
-    return eff / len(triggers)
-
-
-def annualized_frequency(triggers: list[dict], history: list[dict], symbol: str) -> float:
-    """年化触发频率 = 触发次数 / 有效数据跨度天数 × 365（跨度 = 首个到末个有效点日期）。"""
-    if not triggers:
-        return 0.0
-    key = _sym_key(symbol)
-    dates = [
-        history[i]["date"]
-        for i in range(1, len(history))
-        if history[i].get(key) is not None and history[i - 1].get(key) is not None
-    ]
-    if len(dates) < 2:
-        return 0.0
-    try:
-        d0 = datetime.strptime(dates[0], "%Y-%m-%d")
-        d1 = datetime.strptime(dates[-1], "%Y-%m-%d")
-    except ValueError:
-        return 0.0
-    span = (d1 - d0).days
-    if span < 1:
-        return 0.0
-    return len(triggers) / span * 365.0
+# 纯统计逻辑（唯一实现）在 src/backtest.py —— 此处 re-export，保持 `scripts.backtest` 既有用法。
+from src.backtest import (  # noqa: F401  re-export：测试与外部按 bt.<name> 使用
+    BACKTEST_SYMBOLS,
+    HORIZONS,
+    MEANINGFUL_MOVE_PCT,
+    MIN_EFFECTIVE_DAYS,
+    MIN_SYMBOL_POINTS,
+    _effective_points,
+    _effective_trading_days,
+    annualized_frequency,
+    collect_triggers,
+    effective_trigger_rate,
+    forward_stats,
+    load_backtest_history,
+    method_notes,
+)
 
 
 def render_report(history, triggers, fwd, run_date, eff_days) -> str:
@@ -303,13 +139,9 @@ def render_report(history, triggers, fwd, run_date, eff_days) -> str:
         "",
         "## 方法说明",
         "",
-        f"- 触发检测：对历史相邻交易日 (prev, cur) 调用生产 `check_breach(sym, cur, prev, history[:i])`，严格大于阈值才触发；阈值经 `alert_threshold(sym)` 实时读取 config/env，动态模式激活时按历史波动率（history[:i] 排除候选当日）计算生效阈值，样本不足/关闭时回退固定阈值。",
-        f"- 有效交易日：至少一个回测标的有相邻可计算变化的行；全局门槛 {MIN_EFFECTIVE_DAYS} 天，不足则跳过回测。",
-        f"- 单标的有效点：该标的有相邻可计算变化的行；门槛 {MIN_SYMBOL_POINTS} 点，不足仅输出计数与告警次数。",
-        "- 后效：触发日后第 h 个交易日点对点收益 (p[t+h]-p[t])/p[t]×100%，缺口不阻断；窗口不足的样本不计入该窗口（n 透明展示）。",
-        "- 胜率：前向收益与告警当日变化率同号（方向延续）的触发占比。",
-        f"- 有效触发率：触发后 5 个交易日内出现任意单日 |变化率| ≥ {MEANINGFUL_MOVE_PCT:.1f}% 的触发占比。",
-        "- 年化频率：告警次数 / 有效数据跨度天数 × 365。",
+        # 7 条口径原文取自 src/backtest.method_notes() —— 与看板 /api/backtest 的 methods[] **同一来源**，
+        # 避免同一段措辞两份副本漂移（plan R9：措辞不得改写）。
+        *method_notes(),
         "- 本脚本只读历史、仅写本报告文件，不写任何 data/alerts/context，不联网。",
         "",
     ]

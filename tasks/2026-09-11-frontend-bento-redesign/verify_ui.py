@@ -1016,17 +1016,21 @@ def assert_fidelity(page, m: dict) -> None:
     check(f["flagUs"] == 1 and f["flagCn"] == 1 and f["flagImgs"] == 6,
           "F-8 市场概览图标：旗 US×1 + 旗 CN×1 + 图形素材×4（img 全挂）",
           (f["flagUs"], f["flagCn"], f["flagImgs"]))
-    # F-5 nav=11 项：7 个页内锚点 + 3 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 市场日历）
-    #     + 1 个占位（设置）。
+    # F-5 nav=12 项：7 个页内锚点 + 4 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 市场日历
+    #     + /backtest 阈值回测）+ 1 个占位（设置）。
     # ⚠️ 2026-09-19：`/timeline` 这一项**接手了 2026-09-12 起空着的同名占位项「市场日历」**
     #    （原占位来历见 tasks/2026-09-12-visual-fidelity/plan.md §12 Q1）⇒ 占位删除、位置原地保留，
     #    navCount 12 → 11、navDisabled 2 → 1。**内部命名仍是 timeline**（路由/JS/断言前缀都不变）。
+    # ⚠️ 2026-09-20：新增「阈值回测」（`/backtest`）⇒ navCount 11 → **12**、跨页链接 3 → **4**。
+    #    🔴 **本断言有两处硬编码**：`navCount` 的值 **和** `macroHrefs` 的数组 —— 加 nav 项时**两处都要改**
+    #    （plan §2.3 只写了"navCount 三处"，实测漏改数组会让 F-5 变红而 navCount 明明是对的，
+    #     极易误判成"新页面改坏了侧栏"）。
     # ⚠️ 判别（pitfalls「抽 include 后失败先分清方案不可行 vs 断言脆弱」）：include/渲染路径
     #    未变，只是产品决定多了一个合法跨页链接 → 属**断言脆弱**（navCount 写死），
     #    处置是**补强**而非删除/放松：单值 macroHref 升级为数组，逐个链接都纳入判据。
-    check(f["navCount"] == 11 and f["navDisabled"] == 1 and not f["navBad"]
-          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline"]),
-          "F-5 nav=11（7 锚点 + 3 跨页 /macro·/macro/cn·/timeline + 1 占位 设置）且 data-target/href 全命中", f)
+    check(f["navCount"] == 12 and f["navDisabled"] == 1 and not f["navBad"]
+          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline", "/backtest"]),
+          "F-5 nav=12（7 锚点 + 4 跨页 /macro·/macro/cn·/timeline·/backtest + 1 占位 设置）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
@@ -2035,8 +2039,8 @@ def assert_macro_cn_page(browser, url: str) -> None:
         check("最新" not in d["econText"] and "实时" not in d["econText"],
               "CN-6b 不得标注「最新 / 实时」（月度数据有发布滞后）")
         # F-5 联动：本页高亮「中国宏观」且「宏观数据」不再 active
-        check(d["navCount"] == 11 and d["cnActive"] and not d["macroActive"],
-              "CN-7 侧栏 11 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
+        check(d["navCount"] == 12 and d["cnActive"] and not d["macroActive"],
+              "CN-7 侧栏 12 项且仅「中国宏观」active", (d["navCount"], d["cnActive"], d["macroActive"]))
         # R9 主题分叉：带 dark 偏好进入本页，data-theme 必须仍是 dark
         check(d["theme"] == "dark", "CN-8 带 dark 偏好进入本页仍为 dark（主题初始化同源）", d["theme"])
         check(len(d["pills"]) == 6 and d["pointCount"] > 0,
@@ -4013,8 +4017,8 @@ def assert_timeline(browser, url: str) -> None:
 
         # ---------- TL-9 ----------
         # ⚠️ 用户可见名字是「市场日历」（2026-09-19 接手同名占位项）；内部命名仍是 timeline
-        check(d["navCount"] == 11 and d["active"] == "市场日历",
-              "TL-9 侧栏 11 项且本页 active = 市场日历", (d["navCount"], d["active"]))
+        check(d["navCount"] == 12 and d["active"] == "市场日历",
+              "TL-9 侧栏 12 项且本页 active = 市场日历", (d["navCount"], d["active"]))
         check(resp is not None and resp.status == 200 and not perrs,
               "TL-9b /timeline 200 且无 pageerror（前置 200：404 页面上无报错不算过）",
               (resp.status if resp else None, perrs[:2]))
@@ -4169,7 +4173,7 @@ def assert_auth(browser) -> None:
             })""")
             print(f"  [page] dash={d['dash']} cards={d['cards']} nav={d['nav']} overflow={d['overflow']}")
             check(resp is not None and resp.status == 200 and d["dash"] and d["cards"] >= 4
-                  and d["nav"] == 11 and not perrs,
+                  and d["nav"] == 12 and not perrs,
                   "AUTH-5 浏览器带凭据打开 / → 200 且渲染成功（页面 + 静态资源 + 后续请求都过了鉴权）",
                   (resp.status if resp else None, d, perrs[:2]))
             check(d["overflow"] == 0, "AUTH-5b 带凭据页面无横向溢出", d["overflow"])
@@ -5167,6 +5171,7 @@ def main() -> int:
             assert_timeline(browser, url)            # TL-* 市场日历（event-timeline-page，2026-09-18；09-19 改名）
             assert_timeline_values(browser, url)     # EV-* 结果值层 实际/预期/前值（timeline-event-values，2026-09-19）
             assert_auth(browser)                     # AUTH-* 访问控制 Basic Auth（web-basic-auth，2026-09-19；自带实例）
+            assert_backtest(browser, url)            # BT-* 阈值回测页（backtest-ui，2026-09-20；本页不依赖上游）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])
@@ -5189,6 +5194,101 @@ def main() -> int:
 
     # ---- 三态汇总（2026-09-20 signal-layering）----
     return summarize_and_exit(STRICT)
+
+
+
+
+# ============ BT 阈值回测页（/backtest，2026-09-20）============
+# 任务档 tasks/2026-09-20-backtest-ui/。本页**不依赖上游**（只读本地 db）⇒ 断言一律 deps=()
+# ⇒ **不该出现 SKIP**（出现即说明依赖标记或探测有问题）。
+
+BT_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const txt = (s) => { const e = q(s); return e ? e.textContent.trim() : null; };
+  const rows = Array.from(document.querySelectorAll('#bt-table-wrap .bt-table tbody tr'));
+  const first = rows[0] ? Array.from(rows[0].children).map((td) => td.textContent.trim()) : null;
+  return {
+    h1: txt('.bt-head h1'),
+    stats: {
+      effdays: txt('#bt-effdays'), triggers: txt('#bt-triggers'),
+      nsymbols: txt('#bt-nsymbols'), elapsed: txt('#bt-elapsed'),
+    },
+    cfgMode: txt('#bt-cfg-mode'), cfgLine: txt('#bt-cfg-line'),
+    cfgChips: document.querySelectorAll('#bt-cfg-table .bt-cfg-chip').length,
+    rowCount: rows.length, firstRow: first,
+    detailsCount: document.querySelectorAll('#bt-details-body .bt-detail').length,
+    methods: document.querySelectorAll('#bt-methods li').length,
+    failHidden: !!q('#bt-fail') && q('#bt-fail').hidden,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    navCount: document.querySelectorAll('#sidebar .nav-item').length,
+    navActive: (q('#sidebar .nav-item.active') || {}).textContent || null,
+    theme: document.documentElement.getAttribute('data-theme'),
+  };
+}
+"""
+
+
+def assert_backtest(browser, url: str) -> None:
+    """BT-1~BT-7 阈值回测页。
+
+    BT-1 页面可开 + 概览条字段非空（含耗时）
+    BT-2 **总览表行数 == API `symbols` 长度**（DOM↔API 对账，空集不算过）
+    BT-3 值级对账：首页标的的「告警次数」DOM == API（**不由前端算**）
+    BT-4 阈值口径明示（动态/回看/k 因子 + 回退阈值 chip 数 == 标的数）
+    BT-5 口径 7 条**原文**在场（含「方向延续占比」这条，防被改成"预测准确率"）
+    BT-6 375 档无横向溢出（表靠内层 `overflow-x` 滚动，不得撑破 document）
+    BT-7 侧栏 12 项且本页 active =「阈值回测」
+    """
+    import urllib.request
+    print("\n--- BT 阈值回测页（/backtest）---")
+    page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    perrs: list[str] = []
+    page.on("pageerror", lambda e: perrs.append(str(e)))
+    try:
+        resp = page.goto(url + "backtest", wait_until="load")
+        page.wait_for_timeout(2500)
+        d = page.evaluate(BT_JS)
+        api = json.loads(urllib.request.urlopen(url + "api/backtest", timeout=30).read())
+
+        check(resp is not None and resp.status == 200 and d["h1"] == "阈值回测",
+              "BT-1 /backtest 可开且标题正确", (resp.status if resp else None, d["h1"]))
+        check(all(d["stats"].values()) and d["stats"]["elapsed"].endswith("s"),
+              "BT-1b 概览条四项均非空（含耗时）", d["stats"])
+        check(len(api["symbols"]) > 0 and d["rowCount"] == len(api["symbols"]),
+              "BT-2 总览表行数 == API symbols 长度", (d["rowCount"], len(api["symbols"])))
+        # BT-3：首行=API 首个标的，且「告警次数」数值一致（DOM 只做展示，值来自 API）
+        a0 = api["symbols"][0] if api["symbols"] else {}
+        row_sym = (d["firstRow"] or ["", ""])[0]
+        row_alerts = (d["firstRow"] or ["", "", "", ""])[2]
+        check(row_sym == a0.get("symbol") and row_alerts == str(a0.get("alerts")),
+              "BT-3 首页标的与告警次数 DOM == API（值级对账）",
+              (row_sym, row_alerts, a0.get("symbol"), a0.get("alerts")))
+        cfg = api.get("threshold_config") or {}
+        check(bool(d["cfgMode"]) and bool(d["cfgLine"])
+              and d["cfgChips"] == len(cfg.get("fallback") or []),
+              "BT-4 阈值口径明示（模式 + 回看/k + 回退阈值 chip 数 == 标的数）",
+              (d["cfgMode"], d["cfgChips"], len(cfg.get("fallback") or [])))
+        check(d["methods"] == 7, "BT-5 口径说明 7 条在场", d["methods"])
+        mtext = " ".join(api.get("methods") or [])
+        check("方向延续" in mtext and "预测准确率" not in mtext,
+              "BT-5b 「胜率 = 方向延续占比」原文在场，且未出现「预测准确率」误读", mtext[:60])
+        check(d["detailsCount"] == len(api["symbols"]),
+              "BT-5c 每标的详情块数 == 标的数", (d["detailsCount"], len(api["symbols"])))
+        # BT-6：375 档
+        page.set_viewport_size({"width": 375, "height": 812})
+        page.wait_for_timeout(400)
+        m375 = page.evaluate(BT_JS)
+        check(m375["overflow"] == 0, "BT-6 375 档无横向溢出（表内层滚动，不撑破 document）",
+              m375["overflow"])
+        check(m375["stats"]["triggers"] == d["stats"]["triggers"],
+              "BT-6b 375 档重排后关键数值不变（与桌面同源）",
+              (m375["stats"]["triggers"], d["stats"]["triggers"]))
+        check(d["navCount"] == 12 and (d["navActive"] or "").strip() == "阈值回测",
+              "BT-7 侧栏 12 项且本页 active = 阈值回测", (d["navCount"], d["navActive"]))
+        check(not perrs, "BT-8 /backtest console error = 0", perrs[:3])
+    finally:
+        page.close()
 
 
 if __name__ == "__main__":

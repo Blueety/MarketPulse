@@ -1100,3 +1100,89 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   background: var(--bg-hover); color: var(--text-secondary);
   border: 1px solid var(--border); border-radius: 8px; }
 .tl-more:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+/* ===== 阈值回测页（/backtest）—— 2026-09-20（任务档 tasks/2026-09-20-backtest-ui）=====
+   与宏观页 / 时间线页同一"纸面感"取向：极浅背景 / 1px 细边框 / 低饱和。
+   ⚠️ 只加 `.bt-*` 新类，**不改 `.mac-*` / `.cn-*` / `.tl-*` / `.dash-*` 任何既有声明**。
+   ⚠️ 颜色一律走 token（双主题自动跟随）。
+   ⚠️ **涨跌色沿用全站既有口径 `.up = var(--green)` / `.down = var(--red)`**（见上方 .mac/.tl 两段）。
+      本页 plan 写的「红涨绿跌」与既有代码冲突，为保持一致**未采纳**（详见 journal §4.1）。
+      若要改成中国习惯，那是**全站跨三页**的决定 —— 届时改下面 .bt 这两行 + .mac/.tl 对应四行，
+      并同步 `web/static/*.js` 里的 `cls()` 语义，不要只改本页。 */
+.bt { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.bt-head { padding: 6px 2px 2px; }
+.bt-head h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary); }
+.bt-sub { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); }
+.bt-note { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+
+/* 涨跌色（与 .mac .up/.down、.tl .up/.down 同口径） */
+.bt .up { color: var(--green); }
+.bt .down { color: var(--red); }
+.bt .flat { color: var(--text-secondary); }
+
+/* 概览条：4 个指标 */
+.bt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.bt-stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.bt-stat-k { font-size: 11px; color: var(--text-muted); }
+.bt-stat-v { font-size: 20px; font-weight: 600; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; }
+
+.bt-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.bt-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.bt-card-head h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.bt-hint { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* 阈值口径 */
+.bt-cfg-line { margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); }
+.bt-cfg-table { display: flex; flex-wrap: wrap; gap: 6px; }
+.bt-cfg-chip { font-size: 11px; font-family: var(--mono); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+
+/* 表（窄屏用内层横向滚动，**不让 document 溢出**） */
+.bt-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.bt-table { width: 100%; border-collapse: collapse; font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+.bt-table th, .bt-table td { padding: 7px 10px; text-align: right; white-space: nowrap;
+  border-bottom: 1px solid var(--border); }
+.bt-table th { font-size: 11px; font-weight: 500; color: var(--text-muted); text-align: right; }
+.bt-table th:first-child, .bt-table td:first-child { text-align: left; }
+.bt-table tbody tr:last-child td { border-bottom: 0; }
+.bt-table-sm { font-size: 11px; }
+.bt-sym { font-weight: 600; color: var(--text-primary); }
+/* 后效单元格里的样本数（n 必须与均值同时可见，不得藏起来） */
+.bt-n { display: block; font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.bt-fwd { min-width: 74px; }
+
+/* 每标的详情（逐条 <details>） */
+.bt-details { display: flex; flex-direction: column; }
+.bt-detail { border-top: 1px solid var(--border); }
+.bt-detail:first-child { border-top: 0; }
+.bt-detail summary { display: flex; align-items: baseline; gap: 12px; padding: 10px 2px;
+  cursor: pointer; list-style: none; }
+.bt-detail summary::-webkit-details-marker { display: none; }
+.bt-detail summary::before { content: "▸"; font-size: 10px; color: var(--text-muted); }
+.bt-detail[open] summary::before { content: "▾"; }
+.bt-sum { font-size: 11px; color: var(--text-muted); }
+.bt-detail-body { padding: 0 2px 12px; }
+.bt-kv { margin: 0 0 8px; font-size: 11px; color: var(--text-secondary); }
+.bt-kv b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* 口径与来源 + 失败/空态条 */
+.bt-meta .bt-honest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bt-honest li { font-size: 11px; line-height: 1.7; color: var(--text-muted); }
+.bt-honest code { font-family: var(--mono); font-size: 10.5px; color: var(--text-secondary);
+  background: var(--bg-hover); border-radius: 4px; padding: 0 4px; }
+.bt-empty { margin: 0; font-size: 12px; color: var(--text-muted); }
+.bt-fail { margin: 10px 0 0; font-size: 11px; color: var(--text-secondary);
+  border-left: 2px solid var(--border); padding-left: 8px; }
+
+/* 响应式：≤900 两列；≤600 单列 + 收紧内边距（表仍靠内层滚动） */
+@media (max-width: 900px) {
+  .bt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .bt-stats { grid-template-columns: minmax(0, 1fr); }
+  .bt-card { padding: 12px 12px; }
+  .bt-sub, .bt-cfg-line { font-size: 11px; }
+}

@@ -73,7 +73,7 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
 - 模块：4 张 KPI 卡（含 sparkline）· 趋势**四图合一 + 4 类别 tab**（单 `canvas#chart-main`，7D/30D/90D/1Y）· 自选列表 · 市场概览 6 小卡 · A股板块 Top5 · 美股行业板块（双 tab）· 告警记录 · 最新资讯 · 市场情绪/资金流向/风险偏好 · 3 个静态占位卡
 - 双主题：Light `#F7F8FA` / Dark `#0B0F14`，玻璃化（`backdrop-filter` + 氛围层）
 
-**4 个页面路由 / 11 个 JSON 端点**（10 个业务 API + `/healthz` 健康检查）
+**5 个页面路由 / 12 个 JSON 端点**（11 个业务 API + `/healthz` 健康检查）
 ⚠️ 2026-09-19 实测订正：此前写「3 页 9 API」（`architecture.md` 也是），且漏了 `/timeline` 一页
 与 `/api/timeline` 一个 API。`frontend-structure.md` §1/§2 一直是准的。
 
@@ -87,8 +87,10 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
 | `GET /macro` | 全球（美国）宏观数据独立页（research terminal 风格，7 模块） |
 | `GET /macro/cn` | **中国宏观独立页**（2026-09-14 新增，与 `/macro` 平行：四象限 + 13 序列 + 行情） |
 | `GET /timeline` | **市场日历**（2026-09-18 上线；用户可见名「市场日历」，内部名 timeline） |
+| `GET /backtest` | **阈值回测**（2026-09-20 上线；用户可见名「阈值回测」，内部命名 backtest） |
 | `GET /healthz` | **无鉴权**健康检查 → `{"status":"ok"}`；`railway.toml` 的 `healthcheckPath` 指向它（🔴 指到 `/` 会因 401 触发部署重启循环） |
 | `GET /api/timeline` | 事件时间线（日历 × 行情影响 × 新闻叙事 + **结果值层** actual/forecast/previous）；TTL 6h，**不联网** |
+| `GET /api/backtest` | 告警阈值回测（**不缓存**，见下）：`{as_of, window, stats, threshold_config, symbols[], methods[], elapsed_ms, empty_reason}`；只读本地 db，**不联网**；数据不足降级空态 |
 | `GET /api/history` | 历史序列；`days` 上限 365，另支持 `start_date`/`end_date` |
 | `GET /api/latest` | 最新日 10 指数概览 + `sector_heat` + `us_sector_heat` + `risk_appetite` + `correlation` |
 | `GET /api/alerts` | 最近告警（10 条） |

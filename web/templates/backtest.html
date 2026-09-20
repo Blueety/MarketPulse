@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>阈值回测 · MarketPulse</title>
+  <script>
+    // ⚠️ 主题初始化**第 5 处**（前四处：index.html / macro.html / macro_cn.html / timeline.html 的 head
+    //    + 各 JS 的 applyTheme()）。语义与 timeline.html **逐字一致**（显式应用存储到的主题值）。
+    //    改一处必须五处同改（docs/pitfalls.md「主题初始化分叉」）。
+    (function () {
+      try {
+        var t = localStorage.getItem("mp-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <!-- ⚠️ 用户可见名是「阈值回测」，**内部命名一律 backtest**：路由 /backtest、backtest.js、
+       #bt-*、断言 BT-*（同 /timeline 与「市场日历」的关系）。样式追加在同一 style.css 尾部的 .bt-* 段。 -->
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+</head>
+<body>
+  {% include "_topbar.html" %}
+  <div class="shell">
+    {% include "_sidebar.html" %}
+    <main class="main" id="main">
+      <div class="bt">
+        <header class="bt-head">
+          <h1>阈值回测</h1>
+          <p class="bt-sub">
+            用生产同一套告警语义（`check_breach`）回放历史，评估<b>当前阈值</b>的表现
+            <span class="mac-sep">·</span>只读历史，<b>不构成预测</b>
+            <span class="mac-sep">·</span>数据截至 <span id="bt-asof">—</span>
+          </p>
+          <p class="bt-note" id="bt-window">—</p>
+        </header>
+
+        <section class="bt-stats" id="bt-stats">
+          <div class="bt-stat"><span class="bt-stat-k">有效交易日</span><span class="bt-stat-v" id="bt-effdays">—</span></div>
+          <div class="bt-stat"><span class="bt-stat-k">触发事件</span><span class="bt-stat-v" id="bt-triggers">—</span></div>
+          <div class="bt-stat"><span class="bt-stat-k">回测标的</span><span class="bt-stat-v" id="bt-nsymbols">—</span></div>
+          <div class="bt-stat"><span class="bt-stat-k">计算耗时</span><span class="bt-stat-v" id="bt-elapsed">—</span></div>
+        </section>
+
+        <section class="bt-card" id="bt-cfg">
+          <div class="bt-card-head">
+            <h2>当前生效的阈值口径</h2>
+            <span class="bt-hint" id="bt-cfg-mode">—</span>
+          </div>
+          <p class="bt-cfg-line" id="bt-cfg-line">加载中…</p>
+          <div class="bt-cfg-table" id="bt-cfg-table"></div>
+        </section>
+
+        <section class="bt-card" id="bt-overview">
+          <div class="bt-card-head">
+            <h2>总览对比</h2>
+            <span class="bt-hint">各标的一行；后效 = 告警后第 N 个交易日点对点收益</span>
+          </div>
+          <div class="bt-table-wrap" id="bt-table-wrap">
+            <p class="bt-empty">加载中…</p>
+          </div>
+        </section>
+
+        <section class="bt-card" id="bt-details">
+          <div class="bt-card-head">
+            <h2>各标的明细</h2>
+            <span class="bt-hint">点开看后效表（平均收益 / 胜率 / 样本数 n）</span>
+          </div>
+          <div class="bt-details" id="bt-details-body">
+            <p class="bt-empty">加载中…</p>
+          </div>
+        </section>
+
+        <section class="bt-card bt-meta" id="bt-meta">
+          <div class="bt-card-head"><h2>口径与来源</h2></div>
+          <ul class="bt-honest" id="bt-methods"></ul>
+          <p class="bt-fail" id="bt-fail" hidden></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/static/backtest.js?v={{ asset_v }}"></script>
+</body>
+</html>

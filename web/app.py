@@ -49,6 +49,8 @@ from src.cn_econ_fetcher import (
 )
 # 事件时间线（2026-09-18）：日历（db）× 行情影响 × 新闻叙事 → 组装成页面 payload
 from src import timeline as _timeline
+# 回测（2026-09-20）：纯统计在 src/backtest.py（与 CLI **同一份实现**），web 只负责组装响应
+from src import backtest as _backtest
 
 log = logging.getLogger("marketpulse")
 
@@ -209,7 +211,8 @@ def _log_auth_state() -> None:
 # 参与 `?v=` 版本号计算的静态资源（新增前端文件记得加进来）
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
 #    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
-_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js", "timeline.js")
+_ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js", "timeline.js",
+                "backtest.js")
 
 
 def _asset_version() -> str:
@@ -1122,11 +1125,42 @@ def timeline_page() -> HTMLResponse:
     return resp
 
 
+@app.get("/api/backtest")
+def api_backtest() -> dict:
+    """阈值回测：`{as_of, window, stats, threshold_config, symbols[], methods[], empty_reason}`。
+
+    🔴 **刻意不缓存**（2026-09-20，与 `/api/econ` 等端点**相反**）：本功能的**核心价值**就是
+    「改 `config.json` 阈值 → 立刻看历史表现」。加 TTL 会让用户改完却看到旧结果 ⇒ **价值归零**。
+    若将来性能成为问题，要加的是「按 `config.json` mtime 失效」，**不是**定时 TTL。
+    实测 266 交易日 / 309 触发 / 7 标的 ≈ 0.5~0.9s，可接受（前端有 loading 态）。
+
+    统计走 `src/backtest.py`（与 `scripts/backtest.py` CLI **同一份实现**）；
+    历史与 CLI 同源（SQLite history，经 `st.query_history`）。
+    **恒定 HTTP 200**：数据不足 ⇒ `symbols: []` + `empty_reason` 文案（可读空态，不报错）。
+    """
+    history = st.rows_to_records(st.query_history())
+    started = time.perf_counter()
+    payload = _backtest.build_backtest_payload(history)
+    payload["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    return payload
+
+
+@app.get("/backtest", response_class=HTMLResponse)
+def backtest_page() -> HTMLResponse:
+    """阈值回测独立页（呈现现有回测结果）。
+
+    `active_page="backtest"` → 侧栏高亮「阈值回测」（用户可见名；内部命名一律 backtest）。
+    """
+    template = _TEMPLATES.get_template("backtest.html")
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="/", active_page="backtest"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
 def _watch_failed(payload: dict) -> bool:
     """fetch 视为失败：有配置(hidden=False) 但无 stocks 数据（取数失败降级）。"""
     return bool(payload) and not payload.get("hidden") and not payload.get("stocks")
-
-
 @app.get("/api/watchlist")
 def api_watchlist() -> dict:
     """自选股实时取数（TTL 缓存；取数失败且有旧缓存 → 回退旧缓存并标 stale）。"""
