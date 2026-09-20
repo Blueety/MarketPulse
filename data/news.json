@@ -1,12 +1,26 @@
 {
-  "date": "2026-09-20",
+  "date": "2026-09-03",
   "items": [
+    {
+      "title": "LPR“连续16个月持平”，央行主管媒体刊评“直接下调政策利率的必要性不高”",
+      "url": "https://wallstreetcn.com/articles/3782160",
+      "source": "华尔街见闻",
+      "published": "2026-09-20",
+      "summary": "中国贷款市场报价利率（LPR）9月再度按兵不动，自2025年6月以来已连续16个月维持不变"
+    },
     {
       "title": "Jev周末爆了：一个参与造出GPT的人，开始反思RLHF",
       "url": "https://wallstreetcn.com/articles/3782158",
       "source": "AI不该永远需要人盯着",
       "published": "2026-09-20",
       "summary": "这两天，一个有点反常的AI模型突然刷屏了"
+    },
+    {
+      "title": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 - 21jingji.com",
+      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQbmxCbFhUQ2tBSi02anp5UF9weTU3a0N3U1dCay1lX0tFWmp3V3A3SlpiQ0hKRXBPSGpPUTZxRmJSakJ1Ym9ZbEZuY0VuWW1MRGExUFJtdVg5SUktWlFzNUQ5Ymd4dnpXUEY1OFdqNjFWclFDLXJsR3NyVld2V2VXZHRWUHpWSnQ5Rnl4Z0RGSQ?oc=5",
+      "source": "Google News",
+      "published": "2026-09-20",
+      "summary": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 21jingji.com"
     },
     {
       "title": "胡塞新一轮袭击，美国警告“迅速升级”，沙特紧急向多国求援",
@@ -16,11 +30,11 @@
       "summary": "也门胡塞武装与沙特的军事冲突可能“迅速升级”，叠加霍尔木兹海峡持续封锁，全球能源运输正面临数十年来最严峻的双峡锁喉局面"
     },
     {
-      "title": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 - 21财经",
-      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQbmxCbFhUQ2tBSi02anp5UF9weTU3a0N3U1dCay1lX0tFWmp3V3A3SlpiQ0hKRXBPSGpPUTZxRmJSakJ1Ym9ZbEZuY0VuWW1MRGExUFJtdVg5SUktWlFzNUQ5Ymd4dnpXUEY1OFdqNjFWclFDLXJsR3NyVld2V2VXZHRWUHpWSnQ5Rnl4Z0RGSQ?oc=5",
-      "source": "Google News",
+      "title": "美联储重启加息：一个低利率时代的终结",
+      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE1LNzMxZ1gwZGY2Z0FJbkY5ekdtb3g3V2EzY0Y4SV8tY1FTTGVucFB0TERwY3lHNTdVVkJ5X1FyaHFUYzdQR25ISHlIeF9LZ2R0NE5XZ1U2UTFiYkJEWmFWb3pR?oc=5",
+      "source": "opinion.caixin.com",
       "published": "2026-09-20",
-      "summary": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 21财经"
+      "summary": "美联储重启加息：一个低利率时代的终结"
     },
     {
       "title": "OpenAI又要融资了：1.2万亿美元估值，谁还敢接下一棒？",
@@ -30,20 +44,6 @@
       "summary": "OpenAI正在就新一轮私募融资与投资者展开初步接触，潜在估值或达1.2万亿美元以上"
     },
     {
-      "title": "美联储重启加息：一个低利率时代的终结",
-      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE1LNzMxZ1gwZGY2Z0FJbkY5ekdtb3g3V2EzY0Y4SV8tY1FTTGVucFB0TERwY3lHNTdVVkJ5X1FyaHFUYzdQR25ISHlIeF9LZ2R0NE5XZ1U2UTFiYkJEWmFWb3pR?oc=5",
-      "source": "财新",
-      "published": "2026-09-20",
-      "summary": "美联储重启加息：一个低利率时代的终结"
-    },
-    {
-      "title": "英伟达副总裁Ian Buck：从 Vera Rubin 平台看 Agentic AI 时代的算力演进",
-      "url": "https://wallstreetcn.com/articles/3782151",
-      "source": "华尔街见闻",
-      "published": "2026-09-20",
-      "summary": "AI 时代的硬件降本逻辑重构 “降低词元成本最有效的方式，绝非降低 GPU 售价或使用低成本网络，而是每一代都交付大幅提升的算力性能"
-    },
-    {
       "title": "日本央行召开货币政策会议 预计将加息至1.25%",
       "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE01cmg5UmJDTm5UbGdNWmVsVllKbm93VjIzVDJwbHEyQ2ZHbW4xQmVrS0JqUkY2VzNVc3VGTnoxY0V1ejJuTURPN29uc1FnTDNpVkI1ZGtpaw?oc=5",
       "source": "china.kyodonews.net",
@@ -51,11 +51,11 @@
       "summary": "日本央行召开货币政策会议 预计将加息至1.25%"
     },
     {
-      "title": "京东再押餐饮：七鲜大厨进家庭，机器人继续争夺三餐场景",
-      "url": "https://wallstreetcn.com/articles/3782149",
+      "title": "英伟达副总裁Ian Buck：从 Vera Rubin 平台看 Agentic AI 时代的算力演进",
+      "url": "https://wallstreetcn.com/articles/3782151",
       "source": "华尔街见闻",
       "published": "2026-09-20",
-      "summary": "京东把炒菜机器人从外卖后厨搬进了家庭厨房"
+      "summary": "AI 时代的硬件降本逻辑重构 “降低词元成本最有效的方式，绝非降低 GPU 售价或使用低成本网络，而是每一代都交付大幅提升的算力性能"
     }
   ]
 }
