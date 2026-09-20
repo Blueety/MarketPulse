@@ -35,28 +35,62 @@ ALERTS_DIR = BASE_DIR / "alerts"
 ALERTS_LOG = DATA_DIR / "alerts.log"
 CONTEXT_DIR = BASE_DIR / "context"   # 四期：Hermes 上下文 JSON（generate_context 产出）
 
-# 五期：阈值来自 load_config()（import 时快照；env > config.json > 内置默认，设计 A）。
-_CFG = load_config()
+# 五期：阈值来自 load_config()（env > config.json > 内置默认，设计 A）。
+# 2026-09-20（settings-page）：**快照求值收敛为 `reload_config_snapshots()`** —— import 时调一次；
+# 设置页写盘成功后由 web 再调一次。🔴 不调它的话：`load_config()` 虽无缓存，但下列快照是
+# import 时求值的 ⇒ 改了 config.json，告警与回测行为**纹丝不动**（功能骗人，plan R1 头号风险）。
+# cron 三个入口无需调用：每次运行都是新进程，import 时自然拿到新 config。
+_CFG = load_config()   # 保留：HISTORY_MAX（deprecated，见下）仍从它取；**不随 reload 重建**
+
+# 变化率百分比阈值（调用时 env 复核；另类资产不设阈值）。**声明在前，由 reload_config_snapshots() 填充**
+# （原地 clear+update：别处可能持有该 dict 的引用，重赋值会让引用拿到旧数据）。
+ALERT_THRESHOLDS: dict[str, float] = {}
+
+
+def reload_config_snapshots() -> None:
+    """重建全部 import 时快照（设置页写盘成功后由 web 调用；cron 入口无需——每次新进程）。
+
+    - 求值表达式与原 import 段**逐字同源**：这就是"单源化"—— import 与 reload 走**同一份代码**，
+      消灭"两处表达式漂移"。
+    - 失败（config 损坏等意外）⇒ **保持旧快照不动** + 记日志：快照是内存态，坏 config 在下次
+      进程启动时由 `load_config` 的容错兜底；内存态宁可保守。
+    - `ALERT_THRESHOLDS` 用 clear+update（**原地**）而非重新赋值：别处可能持有该 dict 的引用。
+    - `HISTORY_MAX` **不重建**（三十一期 deprecated，动了会误导）。
+    """
+    global VIX_CALM, VIX_WARN, MOVE_CALM, MOVE_WARN, ALERT_THRESHOLDS, \
+        ALERT_DYNAMIC, ALERT_LOOKBACK_DAYS, ALERT_K_FACTOR, STREAK_DAYS
+    try:
+        cfg = load_config()
+        VIX_CALM = float(cfg["analysis"]["vix"]["peaceful"])
+        VIX_WARN = float(cfg["analysis"]["vix"]["panic"])
+        MOVE_CALM = float(cfg["analysis"]["move"]["normal"])
+        MOVE_WARN = float(cfg["analysis"]["move"]["tight"])
+        new_thresholds = {sym: float(cfg["alert"][sym.lower()])
+                          for sym in SYMBOLS if sym not in ALT_SYMBOLS}
+        ALERT_THRESHOLDS.clear()
+        ALERT_THRESHOLDS.update(new_thresholds)
+        ALERT_DYNAMIC = bool(cfg["alert"].get("dynamic", True))
+        ALERT_LOOKBACK_DAYS = int(cfg["alert"].get("lookback_days", 20))
+        ALERT_K_FACTOR = float(cfg["alert"].get("k_factor", 2.0))
+        STREAK_DAYS = int(cfg["trend"]["streak_days"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("重载配置快照失败，保持既有快照不变：%s", exc)
+
+
+reload_config_snapshots()
 
 # 状态阈值：VIX/VXN 共用 20/30；MOVE 量级不同，用 100/130。调用时经 STATUS_THRESHOLD_* env 复核。
-VIX_CALM = float(_CFG["analysis"]["vix"]["peaceful"])
-VIX_WARN = float(_CFG["analysis"]["vix"]["panic"])
-MOVE_CALM = float(_CFG["analysis"]["move"]["normal"])
-MOVE_WARN = float(_CFG["analysis"]["move"]["tight"])
+# （求值在上方 reload_config_snapshots() 内完成 —— 2026-09-20 单源化，原 import 段内联表达式已删。）
 
-ALERT_THRESHOLDS = {sym: float(_CFG["alert"][sym.lower()]) for sym in SYMBOLS if sym not in ALT_SYMBOLS}  # 变化率百分比，调用时 env 复核；另类资产不设阈值
 ALERT_SUGGESTIONS = {  # 告警建议按当前状态分档（确定性，可单测断言）
     "平静": "波动率仍处低位，建议保持现有策略，关注后续变化。",
     "警惕": "波动率明显抬升，建议控制仓位，留意短期回调风险。",
     "恐慌": "波动率处于高位，建议以避险为主，防范系统性风险。",
 }
-# 二十七期：动态告警阈值（基于历史波动率）。import 时快照，沿用 ALERT_THRESHOLDS 范式。
-ALERT_DYNAMIC = bool(_CFG["alert"].get("dynamic", True))
-ALERT_LOOKBACK_DAYS = int(_CFG["alert"].get("lookback_days", 20))
-ALERT_K_FACTOR = float(_CFG["alert"].get("k_factor", 2.0))
+# 二十七期：动态告警阈值（基于历史波动率）。快照由 reload_config_snapshots() 维护（2026-09-20 单源化）。
 
 # 六期A：大盘趋势连续涨跌天数阈值（N）；trend_label 调用时经 TREND_STREAK_DAYS env 复核。
-STREAK_DAYS = int(_CFG["trend"]["streak_days"])
+# （求值在上方 reload_config_snapshots() 内完成。）
 # 大盘告警（恒 WARN）建议文案：大盘无恐慌区间定义，不臆造分级。
 STOCK_SUGGESTION = "大盘指数当日波动显著，注意仓位与风险管理。"
 

@@ -1881,3 +1881,73 @@ def test_backtest_page_renders():
     assert r.status_code == 200
     assert "阈值回测" in r.text
     assert "backtest.js" in r.text
+
+
+# ---- 设置页（2026-09-20，tasks/2026-09-20-settings-page/）-----------------------------------
+# web 首次获得「有限写」（config.json 白名单键）。契约：恒 200 读 / 400 白名单外 / 403 Railway /
+# 保存成功必须 reload（否则告警与回测的 import 快照不动 = 功能骗人，plan R1）。
+
+@pytest.fixture
+def _settings_cfg(tmp_path, monkeypatch):
+    """临时 config.json（隔离真实文件）。"""
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"alert": {"vix": 20.0, "k_factor": 2.0, "dynamic": True,
+                                       "lookback_days": 20}}), encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(p))
+    return p
+
+
+def test_api_settings_get_contract(_settings_cfg):
+    from fastapi.testclient import TestClient
+
+    d = TestClient(web.app.app).get("/api/settings").json()
+    assert set(d) >= {"readonly", "readonly_reason", "values", "env_overrides", "schema"}
+    assert d["readonly"] is False
+    assert d["values"]["alert.vix"] == 20.0
+    assert len(d["methods"] if "methods" in d else d["schema"]) >= 1
+
+
+def test_api_settings_post_saves_and_reloads(_settings_cfg, monkeypatch):
+    """保存 → 文件变化 + **reload 被调用**（R1：不 reload = 功能骗人）。"""
+    from fastapi.testclient import TestClient
+
+    calls = {"n": 0}
+    real = web.app._reload_config
+
+    def _counted():
+        calls["n"] += 1
+        real()
+
+    monkeypatch.setattr(web.app, "_reload_config", _counted)
+    r = TestClient(web.app.app).post("/api/settings", json={"alert.k_factor": 2.5})
+    assert r.status_code == 200 and r.json()["saved"] is True
+    assert r.json()["values"]["alert.k_factor"] == 2.5
+    assert calls["n"] == 1, "保存成功后必须重载快照"
+    assert json.loads(_settings_cfg.read_text(encoding="utf-8"))["alert"]["k_factor"] == 2.5
+
+
+def test_api_settings_post_rejects_unknown_key(_settings_cfg):
+    """白名单外 ⇒ 400 且**文件未变**。"""
+    from fastapi.testclient import TestClient
+
+    before = _settings_cfg.read_text(encoding="utf-8")
+    r = TestClient(web.app.app).post("/api/settings", json={"trend.chart_days": 45})
+    assert r.status_code == 400
+    assert _settings_cfg.read_text(encoding="utf-8") == before
+
+
+def test_api_settings_post_403_on_railway(_settings_cfg, monkeypatch):
+    """Railway 检测 ⇒ POST 403（只读是默认安全侧）。"""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    r = TestClient(web.app.app).post("/api/settings", json={"alert.vix": 25})
+    assert r.status_code == 403
+
+
+def test_settings_page_renders():
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/settings")
+    assert r.status_code == 200
+    assert "设置" in r.text and "settings.js" in r.text

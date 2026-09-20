@@ -25,7 +25,7 @@
 - `src/storage.py`: SQLite 存储层（三十一期）：history 长表读写/upsert 双模式/按月备份/空库恢复；`DB_PATH` 为测试单点 patch（有意例外）。
 - `tests/`: 单元测试（test_analyzer.py / test_reporter.py / test_alerter.py / test_context.py / test_config.py / test_web.py / test_econ_fetcher.py / test_cn_econ.py / test_phase6a.py / test_phase6b.py / test_phase7.py / test_phase8.py / test_backtest.py）。
 - `alerts/`: 告警输出（`YYYY-MM-DD-{market}-{time}.md`（盘中快照复合名）/ `YYYY-MM-DD-close.md`（日报）；gitignore 排除）。
-- `data/news.json`: 资讯快照（三十三期；**Hermes 侧落盘**、web 只读；git 追踪随 auto-push 入库）。
+- `data/news.json`: 资讯快照（三十三期；**Hermes 侧落盘**、web 只读（2026-09-20 收窄：web 进程**只可写 `config.json`**，且必须经 `src/settings_store.py` 的白名单路径；`data/` `alerts/` `context/` 仍然**绝不写**；Railway 上连 config.json 也不写——只读展示）（2026-09-20 收窄：web 进程**只可写 `config.json`**，且必须经 `src/settings_store.py` 的白名单路径；`data/` `alerts/` `context/` 仍然**绝不写**；Railway 上连 config.json 也不写——只读展示）；git 追踪随 auto-push 入库）。
 - `data/marketpulse.db`（+ `-wal`/`-shm`）: SQLite 库（三十一期）：`history` 行情长表 + **`econ_events` / `econ_event_news` 事件表**（2026-09-18/19）。⚠️ **`.db` 虽写在 `.gitignore:42`，但它是 tracked 文件**（`git cat-file -e HEAD:data/marketpulse.db` 可验；`.gitignore` 对已跟踪文件无效）⇒ **随部署上线**，Railway 的 `data/backup/` 恢复链只恢复 `history`、造不出事件表；`-wal`/`-shm` 才是真排除，写库后 push 前请调 `storage.wal_checkpoint()`（防提交的副本漏掉新行）。
 - `data/backup/history_YYYY-MM.json`: 历史按月备份（**入库**，web 启动恢复链数据源；当月覆盖、历史月冻结）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过，gitignore 排除）。

@@ -1028,9 +1028,9 @@ def assert_fidelity(page, m: dict) -> None:
     # ⚠️ 判别（pitfalls「抽 include 后失败先分清方案不可行 vs 断言脆弱」）：include/渲染路径
     #    未变，只是产品决定多了一个合法跨页链接 → 属**断言脆弱**（navCount 写死），
     #    处置是**补强**而非删除/放松：单值 macroHref 升级为数组，逐个链接都纳入判据。
-    check(f["navCount"] == 12 and f["navDisabled"] == 1 and not f["navBad"]
-          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline", "/backtest"]),
-          "F-5 nav=12（7 锚点 + 4 跨页 /macro·/macro/cn·/timeline·/backtest + 1 占位 设置）且 data-target/href 全命中", f)
+    check(f["navCount"] == 12 and f["navDisabled"] == 0 and not f["navBad"]
+          and sorted(f["macroHrefs"]) == sorted(["/macro", "/macro/cn", "/timeline", "/backtest", "/settings"]),
+          "F-5 nav=12（7 锚点 + 5 跨页 /macro·/macro/cn·/timeline·/backtest·/settings + 设置已转正）且 data-target/href 全命中", f)
     # F-6 回归（1920 口径就地复核布局三件套；console error 由 main() 末尾既有断言覆盖）
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
@@ -5172,6 +5172,7 @@ def main() -> int:
             assert_timeline_values(browser, url)     # EV-* 结果值层 实际/预期/前值（timeline-event-values，2026-09-19）
             assert_auth(browser)                     # AUTH-* 访问控制 Basic Auth（web-basic-auth，2026-09-19；自带实例）
             assert_backtest(browser, url)            # BT-* 阈值回测页（backtest-ui，2026-09-20；本页不依赖上游）
+            assert_settings(browser, url)            # ST-* 设置页（settings-page，2026-09-20；只读断言，不 POST）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])
@@ -5287,6 +5288,72 @@ def assert_backtest(browser, url: str) -> None:
         check(d["navCount"] == 12 and (d["navActive"] or "").strip() == "阈值回测",
               "BT-7 侧栏 12 项且本页 active = 阈值回测", (d["navCount"], d["navActive"]))
         check(not perrs, "BT-8 /backtest console error = 0", perrs[:3])
+    finally:
+        page.close()
+
+
+
+
+# ============ ST 设置页（/settings，2026-09-20）============
+# 任务档 tasks/2026-09-20-settings-page/。**只读断言**：写路径（POST）由
+# tests/test_web.py（4 条契约）+ tasks/2026-09-20-settings-page/journal.md 的人工闭环脚本覆盖；
+# 验收脚本**绝不 POST 真实 config.json**。
+
+ST_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const txt = (s) => { const e = q(s); return e ? e.textContent.trim() : null; };
+  return {
+    h1: txt('.st-head h1'),
+    cfg: {
+      dynamic: (q('#st-alert-dynamic') || {}).value || null,
+      lookback: (q('#st-alert-lookback_days') || {}).value || null,
+      k: (q('#st-alert-k_factor') || {}).value || null,
+    },
+    alertRows: document.querySelectorAll('#st-alert-grid .st-row').length,
+    statusRows: document.querySelectorAll('#st-status-grid .st-row').length,
+    envMarks: document.querySelectorAll('#st-alert-grid .st-envmark').length,
+    saveDisabled: !!q('#st-save') && q('#st-save').disabled,
+    saveText: txt('#st-save'),
+    boundary: document.querySelectorAll('#st-boundary li').length,
+    failHidden: !!q('#st-fail') && q('#st-fail').hidden,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    navCount: document.querySelectorAll('#sidebar .nav-item').length,
+    navDisabled: document.querySelectorAll('#sidebar .nav-item.is-disabled').length,
+    navActive: (q('#sidebar .nav-item.active') || {}).textContent || null,
+  };
+}
+"""
+
+
+def assert_settings(browser, url: str) -> None:
+    """ST-1~ST-6 设置页（只读断言）。"""
+    print("\n--- ST 设置页（/settings）---")
+    page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    perrs: list[str] = []
+    page.on("pageerror", lambda e: perrs.append(str(e)))
+    try:
+        resp = page.goto(url + "settings", wait_until="load")
+        page.wait_for_timeout(2200)
+        d = page.evaluate(ST_JS)
+        check(resp is not None and resp.status == 200 and d["h1"] == "设置",
+              "ST-1 /settings 可开且标题正确", (resp.status if resp else None, d["h1"]))
+        check(d["cfg"]["dynamic"] in ("true", "false")
+              and d["cfg"]["lookback"] not in (None, "")
+              and d["cfg"]["k"] not in (None, ""),
+              "ST-2 动态三参数在场且有值（开关/回看窗口/k 因子）", d["cfg"])
+        check(d["alertRows"] == 8 and d["statusRows"] == 4,
+              "ST-3 阈值 8 行 + 状态区间 4 行（白名单键数）", (d["alertRows"], d["statusRows"]))
+        check(d["saveDisabled"] is False and "保存" in (d["saveText"] or ""),
+              "ST-4 本地保存按钮可用（Railway 只读态由单测覆盖）", d["saveText"])
+        check(d["boundary"] >= 5, "ST-5 口径与边界 ≥5 条（白名单拒绝/备份/env 优先/Railway 只读）",
+              d["boundary"])
+        check(d["navCount"] == 12 and d["navDisabled"] == 0
+              and (d["navActive"] or "").strip() == "设置",
+              "ST-6 侧栏 12 项、无占位项（navDisabled=0）且本页 active = 设置",
+              (d["navCount"], d["navDisabled"], d["navActive"]))
+        check(d["overflow"] == 0 and not perrs,
+              "ST-7 1440 档无横向溢出且无 pageerror", (d["overflow"], perrs[:3]))
     finally:
         page.close()
 

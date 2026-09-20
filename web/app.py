@@ -20,7 +20,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -31,12 +31,14 @@ from src.analyzer import _pearson, _returns      # 宏观相关性复用（2026-
 from src.analyzer import classify_move, classify_vix
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
 from src.analyzer import load_watchlist_snapshot
+from src.analyzer import reload_config_snapshots as _reload_config
 from src.config import load_config
 
 # 三十三期：资讯快照（Hermes 侧 tavily 搜索后落盘，契约见 docs/architecture.md 决策行；
 # 定义在使用方 web.app——monkeypatch 打这里，测试隔离不依赖真实 data/ 文件）
 NEWS_FILE = Path(__file__).resolve().parent.parent / "data" / "news.json"
 from src.fetcher import SYMBOLS, _fetch_yahoo_watch, fetch_watchlist
+from src import settings_store as _settings
 # 经济数据（BLS）：模块级导入，测试 monkeypatch 打使用方 web.app（与既有纪律一致）
 from src.econ_fetcher import build_econ_payload, fetch_econ_series
 # 中国宏观（AkShare）：与 BLS 版**平行**的独立模块（数据源/序列数/失败语义都不同）
@@ -212,7 +214,7 @@ def _log_auth_state() -> None:
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
 #    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
 _ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js", "timeline.js",
-                "backtest.js")
+                "backtest.js", "settings.js")
 
 
 def _asset_version() -> str:
@@ -1154,6 +1156,45 @@ def backtest_page() -> HTMLResponse:
     template = _TEMPLATES.get_template("backtest.html")
     resp = HTMLResponse(template.render(asset_v=_asset_version(),
                                         base_prefix="/", active_page="backtest"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.get("/api/settings")
+def api_settings() -> dict:
+    """设置页数据：当前生效值（三级链合并后）+ env 覆盖标注 + 白名单 schema。**恒 200**。"""
+    values, env_over = _settings.read_settings()
+    return {"readonly": _settings.is_readonly(),
+            "readonly_reason": _settings.readonly_reason(),
+            "values": values, "env_overrides": env_over, "schema": _settings.SCHEMA}
+
+
+@app.post("/api/settings")
+def api_settings_save(patch: dict = Body(default=None)) -> dict:
+    """保存白名单内的设置（部分更新）。
+
+    顺序（缺一不可）：校验（白名单+规则）→ 备份 → 原子写 → **`reload_config_snapshots()`**。
+    🔴 最后一步是本功能的价值所在：不 reload 的话告警/回测的 import 时快照纹丝不动（plan R1）。
+    Railway 上 403（只读是默认安全侧）；校验失败 400（逐键错误）；写盘失败 500（**不 reload**）。
+    """
+    if _settings.is_readonly():
+        raise HTTPException(status_code=403, detail=_settings.readonly_reason())
+    try:
+        values = _settings.apply_updates(patch or {})
+    except _settings.SettingsError as exc:
+        raise HTTPException(status_code=400, detail={"errors": exc.errors}) from None
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"写盘失败（未重载快照）: {exc}") from None
+    _reload_config()
+    return {"saved": True, "values": values}
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page() -> HTMLResponse:
+    """设置页（用户可见名「设置」，内部命名 settings；本地可写 / Railway 只读）。"""
+    template = _TEMPLATES.get_template("settings.html")
+    resp = HTMLResponse(template.render(asset_v=_asset_version(),
+                                        base_prefix="/", active_page="settings"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
 

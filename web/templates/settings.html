@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>设置 · MarketPulse</title>
+  <script>
+    // ⚠️ 主题初始化**第 6 处**（index/macro/macro_cn/timeline/backtest 的 head + 各 JS 的 applyTheme()）。
+    //    语义与其余五处逐字一致；改一处必须六处同改（docs/pitfalls.md「主题初始化分叉」）。
+    (function () {
+      try {
+        var t = localStorage.getItem("mp-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+</head>
+<body>
+  {% include "_topbar.html" %}
+  <div class="shell">
+    {% include "_sidebar.html" %}
+    <main class="main" id="main">
+      <div class="st">
+        <header class="st-head">
+          <h1>设置</h1>
+          <p class="st-sub">
+            阈值与自选的看板化管理 <span class="mac-sep">·</span><b>本地生效</b>（保存后看板内告警与回测计算立即更新）
+            <span class="mac-sep">·</span>线上（Railway）只读展示
+          </p>
+          <p class="st-note" id="st-readonly-note">—</p>
+        </header>
+
+        <section class="st-card" id="st-dynamic">
+          <div class="st-card-head"><h2>动态告警阈值</h2><span class="st-hint">触发判定主要走这里（实测当前 100% 动态）</span></div>
+          <div class="st-row">
+            <label class="st-label" for="st-alert-dynamic">启用动态阈值</label>
+            <select class="st-input" id="st-alert-dynamic"><option value="true">启用</option><option value="false">关闭（全部走固定阈值）</option></select>
+          </div>
+          <div class="st-row"><label class="st-label" for="st-alert-lookback_days">回看窗口（交易日）</label><input class="st-input" id="st-alert-lookback_days" type="number" min="5" max="250" step="1"></div>
+          <div class="st-row"><label class="st-label" for="st-alert-k_factor">k 因子</label><input class="st-input" id="st-alert-k_factor" type="number" min="0.1" step="0.1"></div>
+          <p class="st-note">改完保存后，打开 <a href="/backtest" class="st-link">阈值回测</a> 立刻看历史表现变化（该页不缓存）。</p>
+        </section>
+
+        <section class="st-card" id="st-alerts">
+          <div class="st-card-head"><h2>各标的告警阈值（%）</h2><span class="st-hint">动态模式下仅作回退基准；被 env 覆盖的行改了也不生效（会标注）</span></div>
+          <div class="st-grid" id="st-alert-grid"><p class="st-empty">加载中…</p></div>
+        </section>
+
+        <section class="st-card" id="st-status">
+          <div class="st-card-head"><h2>状态区间</h2><span class="st-hint">VIX/MOVE 的平静/恐慌分档（用于状态显示）</span></div>
+          <div class="st-grid" id="st-status-grid"><p class="st-empty">加载中…</p></div>
+        </section>
+
+        <section class="st-card" id="st-watchlist">
+          <div class="st-card-head">
+            <h2>自选列表</h2>
+            <button type="button" class="st-btn" id="st-wl-add">+ 加一行</button>
+          </div>
+          <div class="st-grid" id="st-wl-corr"></div>
+          <div id="st-wl-rows"><p class="st-empty">加载中…</p></div>
+          <p class="st-note">最多 20 条；symbol 与 label 均必填、按 symbol 去重。</p>
+        </section>
+
+        <div class="st-actions">
+          <button type="button" class="st-btn st-btn-primary" id="st-save">保存（写 config.json 并立即生效）</button>
+          <span class="st-msg" id="st-msg"></span>
+        </div>
+
+        <section class="st-card st-meta">
+          <div class="st-card-head"><h2>口径与边界</h2></div>
+          <ul class="st-honest" id="st-boundary">
+            <li>写入仅限本页白名单内的键；<b>白名单外一律拒绝</b>（400），且你的 config.json 里其它键原样保留。</li>
+            <li>每次保存前自动备份为 <code>config.json.bak-时间戳</code>（滚动保留 5 份）。</li>
+            <li><b>env 覆盖优先于本页</b>：若某键被 <code>ALERT_THRESHOLD_*</code> 等环境变量覆盖，页面会标注「被 env 覆盖」——此时改本页无效，需改环境变量。</li>
+            <li><b>线上（Railway）只读</b>：临时文件系统上写入重启即丢，故 POST 返回 403；线上持久化需迁移数据库（独立任务）。</li>
+            <li>「胜率 / 阈值」等口径的含义见 <a href="/backtest" class="st-link">阈值回测</a> 页的口径与来源。</li>
+          </ul>
+          <p class="st-fail" id="st-fail" hidden></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/static/settings.js?v={{ asset_v }}"></script>
+</body>
+</html>

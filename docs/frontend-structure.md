@@ -12,8 +12,8 @@
 | --- | --- |
 | 页面 | **4 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观）、**`/timeline`（市场日历，2026-09-18 上线；用户可见名与「市场日历」占位项合并，2026-09-19）** |
 | JSON API | **10 个**：`/api/history` `/api/latest` `/api/alerts` `/api/news` `/api/watchlist` `/api/macro` `/api/econ` `/api/econ/cn` `/api/cn/quotes` **`/api/timeline`** |
-| 模板 | 7 个 web 模板（5 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
-| 静态资产 | `style.css` 1 份 + 业务 JS **5 份**（`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / **`backtest.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
+| 模板 | 8 个 web 模板（6 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
+| 静态资产 | `style.css` 1 份 + 业务 JS **6 份**（`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / **`settings.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
 | JS 框架 | **无框架、无构建**：原生 ES5 风格 IIFE + Chart.js 4.4.1（CDN）+ chartjs-plugin-zoom |
 | 前端总规模 | ≈ **6,100 行**（`style.css` 1074 + `app.js` 1229 + `macro.js` 722 + `macro_cn.js` 805 + **`timeline.js` 380** + `chart-crosshair.js` 262 + 模板 ~572 + `web/app.py` 1254（含后端） |
 | 主题 | 双主题（light / dark），CSS 自定义属性 token 驱动，`localStorage["mp-theme"]` 持久化 |
@@ -50,7 +50,7 @@
 | `web/static/chart-crosshair.js` | 262 | 14.8 K | **跨页共享**：crosshair 插件 + `cssVar`/`themeColors`/`withAlpha` | 3 页（**必须在业务脚本前**；`/timeline` 无图表故不引） |
 | `web/static/flags/{cn,us}.svg` | — | — | 国旗图形素材（图标级简化） | `app.js:iconFlagHtml` |
 | `web/static/icons/{dollar,bond,gold,oil}.svg` | — | — | 品种类圆形素材 | `app.js:iconAssetHtml` |
-| `web/app.py` | 1254 | 60 K | FastAPI 应用：**5 页路由 + 11 API** + 静态挂载 + 资产版本号 | — |
+| `web/app.py` | 1254 | 60 K | FastAPI 应用：**6 页路由 + 12 API** + 静态挂载 + 资产版本号 | — |
 
 ---
 
@@ -267,7 +267,7 @@
 1. **主题初始化 4 处同源**：`index.html` head 内联脚本、`macro.html` head 内联脚本、`macro_cn.html` head 内联脚本、各 JS 的 `applyTheme()`。三页内联脚本语义**不一致**：`index.html` 只在值为 `light` 时写属性，两个宏观页是「显式应用任意存储值」。改一处必须四处同改。
 2. **`chart-crosshair.js` 必须在业务脚本之前**：顺序错 → `plugins:[undefined]` 被 Chart.js **静默忽略**（不报错、横线不出现）。
 3. **`_ASSET_FILES` 登记**（`app.py:115`）：新增/重命名静态文件必须加进去，否则改它不换 `?v=` → 验证吃到旧副本。
-4. **shell 行为五副本**（2026-09-20 起）：`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` 各有一份顶栏侧栏 shell 逻辑（主题、抽屉、市场状态、锚点、`__marketSession` 钩子），**刻意的复制**，**改必须五处同改**。⚠️ 第 5 份（`backtest.js`）是 2026-09-20 阈值回测页新增的 —— 抽取共享 `shell.js` 已单独立项（本轮不抽，见 `tasks/2026-09-20-backtest-ui/plan.md` §10 D-3）。
+4. **shell 行为六副本**（2026-09-20 起）：`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / `settings.js` 各有一份顶栏侧栏 shell 逻辑（主题、抽屉、市场状态、锚点、`__marketSession` 钩子），**刻意的复制**，**改必须六处同改**。⚠️ 第 5 份（`backtest.js`）、第 6 份（`settings.js`，2026-09-20 设置页）是 2026-09-20 阈值回测页新增的 —— 抽取共享 `shell.js` 已单独立项（本轮不抽，见 `tasks/2026-09-20-backtest-ui/plan.md` §10 D-3）。
 5. **canvas 位图 == 显示尺寸**：容器显式给高度 + `maintainAspectRatio:false` + **禁 `!important` 覆盖 canvas 尺寸**（DPR=2 时验收断言 `bitmapW == cssW×2 ± 1`）。
 6. **双 tab 的 radio 必须是 `.tab-panels` 的前置同级兄弟**，且**不能 `display:none`**（会让 label 点击与键盘焦点一起失效）。
 7. **骨架屏 `colspan` 必须等于实际列数**（板块表 5 列；自选表 5 列）——写少会错位。
@@ -277,7 +277,7 @@
 11. **验收脚本是唯一真源**：`venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，5 视口 1920/1600/1280/900/375，自动挑空闲端口）。**不要以 `curl 200` 或肉眼看代替。**
 11b. **验收三态语义（2026-09-20 起）**：`PASS` / `FAIL` / `SKIP`。**`SKIP` 只表示"该条无法判定，因为上游不可用（独立直连探测确认）"，它既不是通过、也不是回归** —— 看到 SKIP 先查那行 `上游探测: macro=? econ=?`，**别去改前端代码**。反过来：上游**可用**时同样的失败仍然是 `FAIL`（所以 SKIP 不会掩盖真回归）。新写断言时默认 `deps=()`（永不 SKIP）；只有**确证依赖上游数据**才标 `deps=("macro"|"econ",)`，且**"空态也该成立"的断言不许标**（会变成掩盖 bug 的开关）。
 12. **不要用 `new Date("YYYY-MM-DD")`**：会有本地时区偏移，日期/星期一律走 `app.js:142` 的日期工具。
-18. **侧栏 navCount 写死在四处**（2026-09-20 起，值 = **12**）：`verify_ui.py` 的 `F-5` / `CN-7` / `TL-9` / `AUTH-5`。加/删 nav 项必须**四处同改** —— 2026-09-20 加「阈值回测」时实测：plan 只列了三处，第四处 `AUTH-5`（同日鉴权任务里新加的 `d[nav] == 11`）**被漏掉**，若不同改会让该断言变红，且**看起来像「新页面改坏了侧栏」**、而不像「漏改断言」。
+18. **侧栏 navCount 写死在四处**（2026-09-20 起，值 = **12**；同日设置页把「设置」占位转正 ⇒ **navDisabled 断言 1 → 0**（`F-5`），跨页链接 5 → 6（`macroHrefs` 数组也要同改）：`verify_ui.py` 的 `F-5` / `CN-7` / `TL-9` / `AUTH-5`。加/删 nav 项必须**四处同改** —— 2026-09-20 加「阈值回测」时实测：plan 只列了三处，第四处 `AUTH-5`（同日鉴权任务里新加的 `d[nav] == 11`）**被漏掉**，若不同改会让该断言变红，且**看起来像「新页面改坏了侧栏」**、而不像「漏改断言」。
 
 13. **四象限矩阵的排布与契约（2026-09-18）**：排列固定为教材口径（横轴通胀 左低右高 / 纵轴增长 上高下低），**不许为"好看"改排列**；象限**无褒贬**，只做中性高亮（`--bg-elevated` + `--blue` 边框），**禁止染红绿**（会被读成涨跌）。`#regime-quadrant`（文字行）与 `#cn-regime[data-quadrant]` 是既有验收契约，矩阵是**新增兄弟元素**、不得替换它们；骨架节点必须标在**容器内部**（`clearSkel` 是 removeChild 自身，标在容器上会把容器删掉）。
 
