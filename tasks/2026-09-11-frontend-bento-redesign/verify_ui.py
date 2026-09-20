@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from datetime import timedelta
 from pathlib import Path
@@ -34,18 +35,125 @@ OUT_DIR = Path(os.environ.get("TEMP") or tempfile.gettempdir()) / "marketpulse-v
 VIEWPORTS = [(1920, 1080), (1600, 900), (1280, 720), (900, 800), (375, 812)]
 
 FAILURES: list[str] = []
+#: 未判定的断言（**SKIP 不等于通过**）：每条 `{label, reason, detail}`，与 stdout 同源写进 report.json。
+#: 引入它的目的见 plan §0：把「上游不可用」与「代码回归」分开，免得真回归被红色背景淹没。
+SKIPPED: list[dict] = []
+#: PASS 计数（只用于"SKIP 占比"护栏：SKIPPED > 总数 × 0.5 时提示环境不可信）
+N_PASS = 0
+
+#: 上游可用性快照（main() 在跑断言**之前**探测一次，避免运行中状态漂移）
+UPSTREAM: dict = {"macro": True, "econ": True, "detail": {}}
+
+#: `--strict`：有 SKIP 也判失败（供"我要全量验证"时用；plan §10.2）
+STRICT = "--strict" in sys.argv
+
+#: 直连探测用（**刻意独立于被测链路**：不 import `src.fetcher` / `web.app` 的任何函数）
+_PROBE_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+PROBE_YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=5d&interval=1d"
+PROBE_BLS = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 
 
-def check(cond: bool, label: str, actual=None, expect=None) -> None:
-    """记录一条断言结果（失败进 FAILURES，最后统一汇总）。"""
+def _probe_get(url: str, timeout: float) -> tuple[bool, str]:
+    """GET 探测：返回 `(是否可用, 说明)`。
+
+    🔴 plan §3.3 约束②（**主要安全性来源**）：**只有"明确知道上游挂了"才算不可用**；
+    超时、探测自身异常、响应无法解读一律**视为可用** ⇒ 那些失败继续报 FAIL。
+    这样 SKIP 永远不可能掩盖"我们自己的 bug"。
+    """
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _PROBE_UA,
+                                                  "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read(4096)
+        if resp.status != 200:
+            return False, f"HTTP {resp.status}"
+        try:                                  # 结果解读不了 ⇒ 不确定 ⇒ 视为可用
+            json.loads(body.decode("utf-8", errors="replace"))
+        except Exception:                     # noqa: BLE001
+            return True, "响应无法解读(视为可用)"
+        return True, "HTTP 200"
+    except urllib.error.HTTPError as exc:     # 明确拿到非 2xx ⇒ 上游不可用
+        return False, f"HTTP {exc.code}"
+    except urllib.error.URLError as exc:      # 连接错误 ⇒ 上游不可用（但超时另算）
+        if isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout)):
+            return True, "超时(视为可用)"
+        return False, f"URLError: {str(getattr(exc, 'reason', exc))[:60]}"
+    except (TimeoutError, socket.timeout):
+        return True, "超时(视为可用)"
+    except Exception as exc:                  # noqa: BLE001 —— 探测自身异常 ⇒ 视为可用
+        return True, f"{type(exc).__name__}(视为可用)"
+
+
+def _probe_bls(timeout: float) -> tuple[bool, str]:
+    """BLS 是 POST 接口，单独探一次（同样的"不确定即视为可用"）。"""
+    try:
+        payload = json.dumps({"seriesid": ["CUUR0000SA0"], "startyear": "2025",
+                              "endyear": "2025"}).encode("utf-8")
+        req = urllib.request.Request(PROBE_BLS, data=payload,
+                                     headers={"User-Agent": _PROBE_UA,
+                                              "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read(4096)
+        return (resp.status == 200), f"HTTP {resp.status}"
+    except urllib.error.HTTPError as exc:
+        return False, f"HTTP {exc.code}"
+    except urllib.error.URLError as exc:
+        if isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout)):
+            return True, "超时(视为可用)"
+        return False, f"URLError: {str(getattr(exc, 'reason', exc))[:60]}"
+    except (TimeoutError, socket.timeout):
+        return True, "超时(视为可用)"
+    except Exception as exc:                  # noqa: BLE001
+        return True, f"{type(exc).__name__}(视为可用)"
+
+
+def probe_upstream(timeout: float = 8.0) -> dict:
+    """直连上游判定可用性 → `{"macro": bool, "econ": bool, "detail": {}}`。
+
+    - `macro` = Yahoo chart（`/api/macro` 的源）；`econ` = BLS publicAPI（`/api/econ` 的源）。
+    - 🔴 **独立口径**（约束①）：**直连上游 URL**，不复用 `src/fetcher` / `web/app` 的任何函数 ——
+      否则"我们的代码坏了"会让探测也失败，于是 bug 被误判成"上游挂了"而被 SKIP。
+      URL 与 fetcher 有重复是**有意的**（本项目「独立期望值预言机」方法论同源）。
+    - `MP_VERIFY_UPSTREAM_DOWN=1`：仅供**验证分层机制本身**（强制判 DOWN，不联网）——
+      用它可以在上游正常时也复现"SKIP 而非 FAIL"。
+    """
+    if os.environ.get("MP_VERIFY_UPSTREAM_DOWN") == "1":
+        return {"macro": False, "econ": False,
+                "detail": {"macro": "强制 DOWN(MP_VERIFY_UPSTREAM_DOWN=1)",
+                           "econ": "强制 DOWN(MP_VERIFY_UPSTREAM_DOWN=1)"}}
+    macro_ok, macro_why = _probe_get(PROBE_YAHOO, timeout)
+    econ_ok, econ_why = _probe_bls(timeout)
+    return {"macro": macro_ok, "econ": econ_ok, "detail": {"macro": macro_why, "econ": econ_why}}
+
+
+def check(cond: bool, label: str, actual=None, expect=None, deps=()) -> None:
+    """记录一条断言结果：三态 `PASS` / `FAIL` / `SKIP`。
+
+    `deps=("macro", "econ")`：声明该断言**依赖哪个上游**。
+    **仅当**该 dep 被 `probe_upstream()` 独立确认"不可用"时，失败才降级为 `SKIP`；
+    否则（含探测不确定 / 上游可用但数据为空）**一律 FAIL** —— 后者恰恰说明是我们自己的 bug。
+
+    `deps=()`（默认）⇒ **永不 SKIP**，行为与改造前完全一致（保守默认）。
+    ⚠️ 逐条标记、**宁少勿多**：漏标只会让该红维持 FAIL（安全），多标才会掩盖回归。
+    """
+    global N_PASS
     if cond:
+        N_PASS += 1
         print(f"  PASS  {label}")
-    else:
-        detail = ""
-        if actual is not None or expect is not None:
-            detail = f" (actual={actual!r} expect={expect!r})"
-        FAILURES.append(f"{label}{detail}")
-        print(f"  FAIL  {label}{detail}")
+        return
+    down = [d for d in deps if not UPSTREAM.get(d, True)]
+    if down:
+        why = "上游 %s 不可用（已直连确认）" % "/".join(down)
+        SKIPPED.append({"label": label, "reason": why,
+                        "detail": {d: UPSTREAM.get("detail", {}).get(d) for d in down}})
+        print(f"  SKIP  {label}  ← {why}")
+        return
+    detail = ""
+    if actual is not None or expect is not None:
+        detail = f" (actual={actual!r} expect={expect!r})"
+    FAILURES.append(f"{label}{detail}")
+    print(f"  FAIL  {label}{detail}")
 
 
 def to_int(v, default: int = 0) -> int:
@@ -1571,27 +1679,33 @@ def assert_macro_page(browser, url: str) -> None:
         except ValueError:
             ten_val = None
         check(ten_val is not None and 0 < ten_val < 20,
-              "MX-6 10Y 显示为 ≈4.xx%（不是 42.5%，也不是 ÷10 后的 0.4985%）", ten_raw)
-        check(d["varCount"] == 4, "MX-6b 核心宏观变量 4 张", d["varCount"])
+              "MX-6 10Y 显示为 ≈4.xx%（不是 42.5%，也不是 ÷10 后的 0.4985%）", ten_raw,
+              deps=("macro",))
+        check(d["varCount"] == 4, "MX-6b 核心宏观变量 4 张", d["varCount"], deps=("macro",))
         # ⚠️ 2026-09-14（macro-page-refine 任务）**契约变更**：宏观关系默认只列「最重要的 2~3 条」，
         #    其余折叠进「查看全部」（PRD 要点 6）→ 不再要求一次列出 6 对，改为「默认 ≤3 + 展开后 6 对齐全」。
         #    原断言 `relRows == 6` 会随之失效（那不是回归，是刻意的信息层级调整）。
         check(2 <= d["relRows"] <= 3 and d["relMoreShown"],
-              "MX-9 宏观关系默认只列 2~3 条 + 「查看全部」可展开", (d["relRows"], d["relMoreShown"]))
+              "MX-9 宏观关系默认只列 2~3 条 + 「查看全部」可展开", (d["relRows"], d["relMoreShown"]),
+              deps=("macro",))
         page.evaluate("() => { const b = document.getElementById('macro-rel-more'); if (b) b.click(); }")
         page.wait_for_timeout(250)
         d_all = page.evaluate(MACRO_JS)
-        check(d_all["relRows"] == 6, "MX-9b 展开后 6 对齐全", d_all["relRows"])
+        check(d_all["relRows"] == 6, "MX-9b 展开后 6 对齐全", d_all["relRows"], deps=("macro",))
+        # MX-9c **不加 deps**：它的判据本身就把「样本不足」当合法结果 ⇒ 上游挂了它照样该过
+        # （与 MX-11c 同一类，plan §2.4① 的反例）。
         check(d_all["relBadR"] == 0,
               "MX-9c 每对都给出可读结果（数值或「样本不足」），不把 None 显示成 0.00",
               (d_all["relBadR"], d_all["relInsufficient"], d_all["relSignificant"]))
-        check(d["histRows"] == 3, "MX-10 历史宏观环境 3 行三态分布", d["histRows"])
+        check(d["histRows"] == 3, "MX-10 历史宏观环境 3 行三态分布", d["histRows"], deps=("macro",))
         # 经济数据：**必须显示数据月份**，不得出现「最新/实时」
         check(d["econAsOf"] and "年" in d["econAsOf"] and "月" in d["econAsOf"],
-              "MX-11 经济数据标注「YYYY年M月」（数据月份）", d["econAsOf"])
-        check(d["econItems"] == 4, "MX-11b 经济数据 4 项", d["econItems"])
+              "MX-11 经济数据标注「YYYY年M月」（数据月份）", d["econAsOf"], deps=("econ",))
+        check(d["econItems"] == 4, "MX-11b 经济数据 4 项", d["econItems"], deps=("econ",))
+        # MX-11c **不加 deps**：空态也必须满足（plan §2.4① 明确点名的反例）
         check("最新" not in d["econSectionText"] and "实时" not in d["econSectionText"],
               "MX-11c 经济数据区不含「最新/实时」字样")
+        # MX-15 **不加 deps**：console error 是我们的 bug，与上游无关
         check(not errors, "MX-15 /macro console error = 0", errors[:3])
 
         page.screenshot(path=str(OUT_DIR / "shot-macro-1920.png"), full_page=True)
@@ -1601,11 +1715,13 @@ def assert_macro_page(browser, url: str) -> None:
         page.wait_for_timeout(900)
         dm = page.evaluate(MACRO_JS)
         check(dm["dsCount"] == 4 and all(v is not None and abs(v - 100) < 0.01 for v in dm["dsFirst"]),
-              "MX-7 多变量对比：4 条线且起点归一化为 100", [round(v, 3) for v in dm["dsFirst"]])
+              "MX-7 多变量对比：4 条线且起点归一化为 100", [round(v, 3) for v in dm["dsFirst"]],
+              deps=("macro",))
         page.evaluate("() => document.querySelector('#macro-range .mac-pill[data-range=\"5y\"]').click()")
         page.wait_for_timeout(1200)
         d5 = page.evaluate(MACRO_JS)
-        check(d5["pointCount"] > 1000, "MX-8 5Y 档点数 > 1000", d5["pointCount"])
+        check(d5["pointCount"] > 1000, "MX-8 5Y 档点数 > 1000", d5["pointCount"], deps=("macro",))
+        # MX-8b **不加 deps**：胶囊高亮是纯 UI 状态，与上游无关
         check(d5["activeRange"] == "5Y", "MX-8b 5Y 档胶囊高亮", d5["activeRange"])
 
         # 双主题：切换后 data-theme 变化且图表实例存活
@@ -1614,7 +1730,8 @@ def assert_macro_page(browser, url: str) -> None:
         page.wait_for_timeout(700)
         dt = page.evaluate(MACRO_JS)
         check(dt["theme"] != before and dt["dsCount"] > 0,
-              "MX-13 宏观页主题切换生效且图表存活（R10）", (before, dt["theme"], dt["dsCount"]))
+              "MX-13 宏观页主题切换生效且图表存活（R10）", (before, dt["theme"], dt["dsCount"]),
+              deps=("macro",))
         page.screenshot(path=str(OUT_DIR / "shot-macro-dark.png"), full_page=True)
 
         # 375：自然降为单列 + 无横向溢出
@@ -2040,9 +2157,10 @@ def assert_macro_refine(browser, url: str) -> None:
         print(f"  multi: ds={dm['dsCount']} border={bw} labels={dm['dsLabels']}")
         print(f"  multi: y=[{dm['yMin']}, {dm['yMax']}] data=[{dm['dataMin']}, {dm['dataMax']}]")
         check(bool(bw) and len(set(bw)) > 1 and max(bw) >= 2.0 and min(bw) <= 1.4,
-              "M-4 全部对比：选中序列描边显著重于其他（有主次，D3）", bw)
+              "M-4 全部对比：选中序列描边显著重于其他（有主次，D3）", bw, deps=("macro",))
         check(rng is not None and drng is not None and drng <= rng <= drng * 1.25,
-              "M-5 全部对比 Y 轴贴合数据（≤ 数据范围 ×1.25 且不裁数据）", (rng, drng, dm["yMin"], dm["yMax"]))
+              "M-5 全部对比 Y 轴贴合数据（≤ 数据范围 ×1.25 且不裁数据）",
+              (rng, drng, dm["yMin"], dm["yMax"]), deps=("macro",))
 
         # M-8 / M-10：1280 保持两列（D10）/ 375 主图 ≥360px（D11）+ 无横向溢出
         for (w, h, label) in ((1280, 720, "1280"), (375, 812, "375")):
@@ -2131,7 +2249,8 @@ def assert_macro_crosshair(browser, url: str) -> None:
             return float(mo.group(0)) if mo else None
 
         d0 = page.evaluate(XC_JS)
-        check(bool(d0), "XC-0 #macro-chart 实例可达")
+        # XC-0 之后紧跟 `if not d0: return` ⇒ 本组其余断言都被它挡住（图表实例不存在就整组跳过）
+        check(bool(d0), "XC-0 #macro-chart 实例可达", deps=("macro",))
         if not d0:
             return
         print(f"  plugins={d0['plugins']} hasFormatter={d0['hasFormatter']} axisPos={d0['axisPos']}")
@@ -4661,6 +4780,12 @@ def assert_firefox_scrollbar(p, url: str) -> None:
     try:
         fb = p.firefox.launch()
     except Exception as exc:  # noqa: BLE001
+        # 2026-09-20：SKIP 从"只打一行日志"改为**进结构化记录**（否则汇总与 report.json 都看不到
+        # 「这次有几条没验」，读者会误以为跑全了 —— plan §0 第 4 条）。
+        # ⚠️ 但 **N-12a/12b 的判据保持原样**（`deps=()`，永不 SKIP）：它不是外部依赖，
+        #    实测在当前 Firefox 1538 下**已通过**，继续作「门控命中」的回归护栏（plan §3.4）。
+        why = "Firefox 内核不可用（需 `playwright install firefox`）: %s" % str(exc).splitlines()[0][:90]
+        SKIPPED.append({"label": "N-12 Firefox 滚动条门控（a/b 两条未判定）", "reason": why, "detail": {}})
         print(f"  SKIP Firefox 内核不可用（需 `playwright install firefox`）: {str(exc).splitlines()[0][:90]}")
         return
     try:
@@ -4765,6 +4890,41 @@ def assert_viewport(w: int, h: int, m: dict, expect_date: str = "") -> None:
     check(ok, f"{w} 顶栏显示数据日（期望值取自 /api/latest.date）", (td, expect_date))
 
 
+def summarize_and_exit(strict: bool | None = None) -> int:
+    """打印三态汇总并返回退出码（**抽成函数**：`--strict` 语义需要可被直接验证）。
+
+    ⚠️ SKIP **不代表通过**：它只表示"该条无法判定，且原因是上游不可用（独立探测确认）"。
+    所以汇总必须把三个数字都打出来，不能只打一个 `ALL PASSED` —— 否则读者会以为跑全了。
+    退出码：有 FAIL ⇒ 1；`--strict` 时有 SKIP ⇒ 1；否则 0。
+    """
+    n_total = N_PASS + len(FAILURES) + len(SKIPPED)
+    ups = " ".join("%s=%s" % (k, "OK" if UPSTREAM.get(k) else "DOWN") for k in ("macro", "econ"))
+    print("\n===== 结果 =====")
+    print(f"PASS:   {N_PASS}")
+    print(f"FAIL:   {len(FAILURES)}")
+    print(f"SKIP:   {len(SKIPPED)}")
+    print(f"上游探测: {ups}")
+    if SKIPPED:
+        print("\n未判定（SKIP）明细：")
+        for s in SKIPPED:
+            print(f"  - {s['label']}  ← {s['reason']}")
+        print("⚠️ 以上条目**未判定**（上游不可用），本次结果不代表它们通过；"
+              "查上游状态，不要先查代码。")
+        if n_total and len(SKIPPED) > n_total * 0.5:
+            print("🔴 警告：SKIP 占比 > 50% —— 当前环境不可信，本次结果不应作为验收依据。")
+    if FAILURES:
+        print(f"\nFAILED: {len(FAILURES)} 条")
+        for f in FAILURES:
+            print("  - " + f)
+        return 1
+    if SKIPPED:
+        print(f"ALL PASSED ({len(SKIPPED)} SKIPPED)" if not strict
+              else f"STRICT: {len(SKIPPED)} 条 SKIP 视为失败")
+        return 1 if strict else 0
+    print("ALL PASSED")
+    return 0
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     port = free_port()
@@ -4778,6 +4938,15 @@ def main() -> int:
     # 鉴权行为本身由 `assert_auth()` 另起带鉴权实例独立覆盖（D-4b）。
     # ⚠️ 不要改成"给 28 个 new_context 都加 http_credentials"：改动面过大、把鉴权与既有信号耦合。
     os.environ["MP_AUTH_DISABLED"] = "1"
+
+    # 上游探测（2026-09-20 signal-layering）：**跑断言之前**探一次快照，之后 `check()` 用它做归因。
+    # 独立口径（不 import src.fetcher / web.app）+ 不确定即视为可用，见 probe_upstream。
+    UPSTREAM.update(probe_upstream())
+    print("上游探测: macro=%s econ=%s  %s" % (
+        "OK" if UPSTREAM["macro"] else "DOWN", "OK" if UPSTREAM["econ"] else "DOWN",
+        UPSTREAM.get("detail")))
+    if STRICT:
+        print("模式: --strict（有 SKIP 即判失败）")
     proc = subprocess.Popen(
         [str(PY), "-m", "uvicorn", "web.app:app", "--port", str(port)],
         cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -5012,18 +5181,14 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             proc.kill()
         report["failures"] = FAILURES
+        report["skipped"] = SKIPPED
+        report["upstream"] = UPSTREAM
         out = OUT_DIR / "verify-report.json"
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\n报告: {out}")
 
-    print("\n===== 结果 =====")
-    if FAILURES:
-        print(f"FAILED: {len(FAILURES)} 条")
-        for f in FAILURES:
-            print("  - " + f)
-        return 1
-    print("ALL PASSED")
-    return 0
+    # ---- 三态汇总（2026-09-20 signal-layering）----
+    return summarize_and_exit(STRICT)
 
 
 if __name__ == "__main__":

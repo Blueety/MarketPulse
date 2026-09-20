@@ -187,6 +187,32 @@ ALERT_THRESHOLD_VIX=25    # 覆盖 VIX 阈值
 ALERT_THRESHOLD_GSPC=3.0  # 覆盖标普阈值
 ```
 
+### 🔒 凭据配置（**不要写进源码**）
+
+⚠️ 本仓库是 **PUBLIC**（`github.com/Blueety/MarketPulse`）。**任何** API key / token / secret
+都**只能**放在本机 `.env`，绝不要写回 `.py`。
+
+`.env` 已在 `.gitignore:14` ⇒ 不会被提交。读取统一走 `src/env_util.py`：
+
+```python
+from src.env_util import require_env
+BOT_ID = require_env("WECOM_BOT_ID")     # 缺失直接 raise（不静默退化成空串）
+```
+
+工具类 `src/wecom_sdk.py` / `wecom_channel.py` / `wecom_ws.py`（企业微信智能机器人）需要：
+
+```
+WECOM_BOT_ID=<企业微信机器人 bot_id>
+WECOM_SECRET=<企业微信机器人 secret>
+```
+
+- 这三个模块**未纳入部署依赖**（`wecom_aibot_sdk` / `websockets` 不在 `requirements.txt`），
+  仅本机手动运行（`scripts/wecom_service.bat`），与「Hermes → QQ」是两条并行路径。
+- **防再犯守卫**：`tests/test_wecom_env.py` 会扫描随仓库发布的 Python，出现硬编码凭据即红
+  （失败信息只报 `文件:行号:变量名`，**不打印值**）。
+- 若曾把凭据提交进仓库：**先到服务方后台吊销/轮换**（删代码挡不住别人继续用旧凭据），
+  再清源码。清理 git history 需 force push，单独立项。
+
 ---
 
 ## 🧪 测试

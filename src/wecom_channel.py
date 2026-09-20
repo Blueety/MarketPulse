@@ -13,8 +13,17 @@ import websockets
 log = logging.getLogger("wecom-channel")
 
 # 企业微信配置
-BOT_ID = "aibQlFgEwim7Ma40C3ZWee47Mbrpgg6uDCT"
-SECRET = "2kwT4xhbz0yRAmvMDLgjsA2VcBBie3e9GFc3fpgAI4d"
+# ⚠️ 双形态 import：本文件既可能被当包导入（`python -m src.wecom_sdk`），也可能被
+#    `scripts/wecom_service.bat` **以脚本方式直跑**（`python src\wecom_sdk.py`）——
+#    后者 `sys.path[0]` 是 `src\` 而不是项目根，`from src.env_util import ...` 会
+#    ModuleNotFoundError。两条路径都要能跑，故保留这个 try/except 兜底。
+try:
+    from src.env_util import require_env
+except ImportError:                     # 脚本方式直跑（scripts/wecom_service.bat）
+    from env_util import require_env
+
+BOT_ID = require_env("WECOM_BOT_ID")
+SECRET = require_env("WECOM_SECRET")
 WS_URL = "wss://openws.work.weixin.qq.com"
 PING_INTERVAL = 30
 
