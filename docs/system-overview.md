@@ -123,7 +123,6 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
 │ storage.py        SQLite 长表存储（31 期替换 history.json）        │
 │ image_renderer.py 日报图片化（Jinja2 + Playwright 截图）           │
 │ git_ops.py        cron 后自动 commit + push                        │
-│ wecom_channel / wecom_sdk / wecom_ws   企业微信通道 ⚠️见 §9       │
 └───────────────────────────┬──────────────────────────────────────┘
                             │
 ┌─ 持久化 ───────────────────┴──────────────────────────────────────┐
@@ -144,7 +143,6 @@ FastAPI 单页看板，**bento 栅格仪表盘**，**只读、零写盘**。
                             │
 ┌─ 通知层（仓库外）──────────┴──────────────────────────────────────┐
 │ Hermes → QQ 机器人（读 context/ 生成归因，读 reports/ 推送）      │
-│ src/wecom_* → 企业微信智能机器人  ⚠️ 见 §9                        │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -206,10 +204,7 @@ Web 看板（独立进程，只读）：
 | `rss_fetcher.py` | 240 | 新闻流 RSS 双源（华尔街见闻 + Google News 中文检索），HTML 清洗 + 去重 + 宏观白名单 |
 | `news_saver.py` | 209 | 资讯落盘：清洗（去平台噪声）→ 按句切分 → 原子写 |
 | `config.py` | 186 | 三级配置加载 + 白名单校验，零依赖 |
-| `wecom_ws.py` | 162 | 企业微信智能机器人 WebSocket 长连接客户端 ⚠️ |
-| `wecom_channel.py` | 140 | 企业微信通知渠道（后台守护进程）⚠️ |
 | `alerter.py` | 107 | 告警文件渲染、alerts.log 去重、`collect_breaches` 纯计算导出 |
-| `wecom_sdk.py` | 102 | 企业微信智能机器人（带上下文记忆）⚠️ |
 | `news_fetcher.py` | 99 | 个股归因搜索（Tavily 单源） |
 | `git_ops.py` | 90 | cron 后自动 commit + push |
 
@@ -288,13 +283,13 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 
 | # | 问题 | 影响 | 建议 |
 |---|---|---|---|
-| **G1** | **（2026-09-20 已处置）** 硬编码凭据：`src/wecom_channel.py` / `wecom_sdk.py` / `wecom_ws.py` 三处硬编码企业微信 `BOT_ID` + `SECRET`（同一组值抄了 3 遍，共 6 行） | 🔴 **实测比原描述严重一个量级**：原写「仓库会 push 到远端 → 凭据泄露」，实际仓库是 **PUBLIC**（`gh repo view --json visibility` → `PUBLIC`）⇒ 凭据**在公网可克隆的仓库里暴露 19 天**（首次提交 `9e414df`，2026-09-01；已确认远端 HEAD 含它） | **处置（先止损、后改码）**：① 🔴 **企业微信后台吊销/轮换旧凭据（用户侧，唯一真止损）** —— 删代码挡不住别人拿旧凭据调用；② 三处改为 `src/env_util.require_env("WECOM_BOT_ID" / "WECOM_SECRET")`，凭据只放本机 `.env`（`.gitignore:14` 已覆盖）；③ **新增防再犯守卫** `tests/test_wecom_env.py::test_no_hardcoded_credentials_in_source`（扫描随仓库发布的 Python，命中即红、**只报位置不报值**）；④ 缺 env 时**开局 raise 明确报错**（不静默空串）。⚠️ **平台不会替你兜底**：实测 GitHub Secret Scanning 对该凭据类型 **0 条告警**。⚠️ **未做**：清理 git history（公开 19 天大概率已被爬取，收益有限，且需 force push；单独立项）。详见 `tasks/2026-09-20-wecom-cred-revoke/journal.md` |
-| **G2** | **依赖清单缺口**：`wecom_sdk.py` 导入 `wecom_aibot_sdk`、`wecom_channel/ws.py` 导入 `websockets`，**两者都不在 `requirements.txt`** | 目前靠 `scripts/wecom_service.bat` 本地手动起所以未暴露；一旦被任何入口导入即 `ImportError` | 要么补进 requirements，要么在文档里明确「仅本地运行、不属部署依赖」 |
-| **G3** | **孤儿模块**：`wecom_*` 三模块在仓库内**无任何引用**，只能手动启动；与「Hermes → QQ」是两条并行推送路径 | 职责边界不清，架构文档未记载 | 明确二者分工并写进 `docs/architecture.md` 决策表 |
+| **G1** | **（2026-09-20 已处置）** 硬编码凭据：`src/wecom_channel.py` / `wecom_sdk.py` / `wecom_ws.py` 三处硬编码企业微信 `BOT_ID` + `SECRET`（同一组值抄了 3 遍，共 6 行） | 🔴 **实测比原描述严重一个量级**：原写「仓库会 push 到远端 → 凭据泄露」，实际仓库是 **PUBLIC**（`gh repo view --json visibility` → `PUBLIC`）⇒ 凭据**在公网可克隆的仓库里暴露 19 天**（首次提交 `9e414df`，2026-09-01；已确认远端 HEAD 含它） | **处置（先止损、后改码）**：① 🔴 **企业微信后台吊销/轮换旧凭据（用户侧，唯一真止损）** —— 删代码挡不住别人拿旧凭据调用；② 三处改为 `src/env_util.require_env("WECOM_BOT_ID" / "WECOM_SECRET")`，凭据只放本机 `.env`（`.gitignore:14` 已覆盖）；③ **新增防再犯守卫** `tests/test_wecom_env.py::test_no_hardcoded_credentials_in_source`（扫描随仓库发布的 Python，命中即红、**只报位置不报值**）；④ 缺 env 时**开局 raise 明确报错**（不静默空串）。⚠️ **平台不会替你兜底**：实测 GitHub Secret Scanning 对该凭据类型 **0 条告警**。⚠️ **未做**：清理 git history（公开 19 天大概率已被爬取，收益有限，且需 force push；单独立项）。**2026-09-20 后续**：用户决定**不再使用企业微信通道** ⇒ 三个模块与 `scripts/wecom_service.bat` **已删除**（`git rm`；顺带消掉下面的 G2/G3），`src/env_util.py` 与守卫保留（非 wecom 专属；守卫保护整个仓库）。详见 `tasks/2026-09-20-wecom-cred-revoke/journal.md` |
+| **G2** | **（2026-09-20 已解决）** 依赖清单缺口：`wecom_sdk.py` 导入 `wecom_aibot_sdk`、`wecom_channel/ws.py` 导入 `websockets`，两者都不在 `requirements.txt` | 三个模块已删除 ⇒ 缺口消失（实测本机 venv 其实早已装了这两个包，所以从未暴露） | ✅ 无需动作。⚠️ 若将来重新引入需要这两个包的模块，**必须**同时补进 `requirements.txt` |
+| **G3** | **（2026-09-20 已解决）** 孤儿模块：`wecom_*` 三模块在仓库内无任何引用，只能手动启动；与「Hermes → QQ」是两条并行推送路径 | 三个模块已删除 ⇒ 职责边界不再有歧义：**当前唯一的推送路径是「Hermes → QQ」** | ✅ 无需动作 |
 | **G4** | `src/image_renderer.py` 的 **15s 超时 / ≤800KB 尺寸守卫 / zoom 重试已在 `a536888` 删除，当前未实现** | 图片化推送缺乏超时与体积保护 | 按需恢复（见 `docs/architecture.md` §模块划分注） |
 | **G5** | 板块热度偶发取数失败（`us_sector_heat` 更脆弱） | 前端「数据暂缺」，静默降级不中断日报 | 已在任务队列中（见 §10） |
 | **G6** | 仓库根目录有开发残留：`_dbg_hist.json`、`_phase5_run.log`、`web_uvicorn.log`、`task brief.md`、`依赖初始化.md`、`初始prd.md` | 噪声；且外部 cron 的 `git add -A` 会把临时文件提交进仓库 | 清理并确认 `.gitignore` 覆盖 |
-| **G7** | **（2026-09-14 已解决）** 仓库外提交链的全量 `git add -A`：Hermes cron「MarketPulse 自动推送GitHub」（`*/5`，`source=builtin`，id `6f6e40a6f8b4`）原不受仓库代码约束（三十四期只收窄了 Python 侧三入口） | 原会把工作区里的源码/测试/文档半成品扫进仓库；`git status` 失真、"改动像丢了" | **已解决**：该 cron 的 prompt 已改为只提交 `data context alerts`（**频率保持 `*/5` 不变**）；实测源码 WIP 不再被提交、白名单内改动照常提交（过程见 `tasks/2026-09-14-autopush-scope/journal.md` §6）。**残余风险**：今后若再新增一条"全量兜底提交"链，会重现同类问题 |
+| **G7** | **（2026-09-14 曾标记已解决；2026-09-20 🔴 复发）** 仓库外提交链的全量 `git add -A`：Hermes cron「MarketPulse 自动推送GitHub」（`*/5`，`Deliver: local`，**prompt/agent 模式，无 `Script:` 字段**）不受仓库代码约束（三十四期只收窄了 Python 侧三入口） | 把工作区里的源码/测试/文档半成品扫进仓库；`git status` 失真、"改动像丢了" | ⚠️ **2026-09-14 的修复并未真正生效**。实测复发：2026-09-20 16:35，该 cron 提交 `6ec1562 auto: 每日数据更新`，**内含 4 个源码删除 + 1 个测试重命名**（`src/wecom_{channel,sdk,ws}.py`、`scripts/wecom_service.bat`、`tests/{test_wecom_env.py => test_env_util.py}`）—— 那是架构师当时**刚 staged、尚未 commit** 的改动，被它一并带走，而 commit message 完全没提这件事。**根因**：该 cron 是 **prompt（agent）模式**，提交姿势由 LLM 临场决定，**"只提交 data context alerts"只写在 prompt 里、没有机器约束** ⇒ 不可靠。**建议**：改成 **script 模式**（`--no-agent`，确定性，可像三入口一样用 `src/git_ops.py` 的路径白名单），否则每次手工 stage 都要与它抢时间。详见 `tasks/2026-09-20-wecom-cred-revoke/journal.md` |
 | **G9** | **（2026-09-19 已解决）** web 层**零鉴权**：`web/app.py` 无任何 auth（grep `auth|login|token|password|API_KEY|Secret` 零命中），线上 `marketpulse-blue.up.railway.app` 的 `/`、`/api/timeline`、`/api/watchlist` 全部 200 可读 ⇒ 任何人拿到 URL 即可读全部数据，`/api/watchlist` 实质暴露自选股方向 | **P0**：数据全网可读（含自选配置） | **已解决**：全站 **HTTP Basic Auth**（`web/app.py` 中间件；零新依赖 `base64` + `hmac.compare_digest`）+ 无鉴权的 `/healthz` + `railway.toml` 的 `healthcheckPath` 改为 `/healthz`（🔴 不改会让部署因 healthcheck 401 陷入重启循环）。env：`MP_AUTH_USER` / `MP_AUTH_PASS` / `MP_AUTH_DISABLED`；**未配置 ⇒ fail-open**（与项目"失败降级不中断"纪律一致，已裁定）⇒ 公网部署**必须**配并 curl 验 401。验收 `AUTH-*` 7 条 + 单测 9 条（见 `tasks/2026-09-19-web-basic-auth/journal.md`） |
 | **G8** | **（部分解决 2026-09-20 → 见下）** **UI 验收的 12 条常红断言**（2026-09-16 21:44 独立重跑 `verify_ui.py`：`EXIT=1`，`FAILED: 12 条`）。其中 **10 条是上游取数被拒导致的"数据层红"**：`/api/macro` 4 个品种 `value` 全 `null`、`trend.dates=[]`（→ `MX-6` / `MX-7` / `MX-8` / `MX-9` / `MX-13` / `M-4` / `M-5` / `XC-0` 红）；`/api/econ` `as_of=null`（→ `MX-11` / `MX-11b` 红，页面显示「数据暂缺」）。**自测到的上游状态（2026-09-16 21:5x）**：Yahoo chart 直打 `query1` 与 `query2` **均 `HTTP 403`** —— 三十四期的「双主机轮换」已**无法自愈**（两台同时被拒，轮换没有逃生口）；同一时刻 BLS 亦取不到 `as_of`；`/api/cn/quotes` 的 `cny` 同样 `failed`（同一个 Yahoo 403）。另 **2 条与数据无关**：`N-12a` / `N-12b`（Firefox `scrollbar-*` CSSOM 门控专项） | 验收脚本**常年 `EXIT=1`** ⇒ 真回归会被"红色背景"淹没（本项目已有"红色被当噪声"的先例，见 G5）；`/macro` 与 `/macro/cn` 上报价与宏观数据大面积显示「数据暂缺」，功能实际不可用 | ✅ **2026-09-20 已完成「判据分层」（`tasks/2026-09-20-verify-ui-signal-layering/`）**：`verify_ui.py` 改为三态 `PASS / FAIL / SKIP` —— **只有上游被独立直连探测确认不可用**时，带 `deps=` 的断言才记 `SKIP`（不计失败）；上游可用时同样的失败**仍是 `FAIL`**（保证 SKIP 不会掩盖代码回归，见该 plan §3.3 两条硬约束）；汇总同时给三计数 + `上游探测` 行 + `report.json` 的 `skipped`/`upstream` 键；`--strict` 让 SKIP 也判失败。上线当日实测：上游正常时 `PASS 679 / FAIL 0 / SKIP 0`；死代理模拟上游不可用时那 10 条**全部降级为 SKIP 且 `FAILURES` 为空**。**未做**（仍开放）：① 给 Yahoo 链路走代理或换源（数据源任务）；② 那 2 条 `N-12` **已不是红**（2026-09-20 实测通过，G8 原文是 09-16 快照），本任务保持其判据作回归护栏 |
 

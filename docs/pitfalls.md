@@ -687,10 +687,11 @@
   脚本**只打印 `文件:行号:变量名` 与新行内容，绝不打印值**；改动前后各跑一次脱敏扫描对账。
 - 🔴 **`python path/to/script.py` 的 `sys.path[0]` 是"脚本所在目录"，不是 cwd**：
   给"既会被当包 import、又会被 `.bat` 以脚本方式直跑"的模块加 import 时，
-  只写 `from src.x import y` 会让脚本方式 **`ModuleNotFoundError`**（本项目 `scripts/wecom_service.bat`
-  就是 `python src\wecom_sdk.py`）。**修法**：`try: from src.x import y / except ImportError: from x import y`
+  只写 `from src.x import y` 会让脚本方式 **`ModuleNotFoundError`**（历史案例：`scripts/wecom_service.bat`
+  是 `python src\wecom_sdk.py`，该 `.bat` 与三个 wecom 模块已于 2026-09-20 删除，此处仅存教训）。
+  **修法**：`try: from src.x import y / except ImportError: from x import y`
   双形态兜底（不要用 `sys.path.insert` 那种 hack —— 本项目刚在 `d9394a3` 移除过一次）。
-- 🟡 **防再犯守卫的四个坑**（`tests/test_wecom_env.py`，全部实测踩过）：
+- 🟡 **防再犯守卫的四个坑**（`tests/test_env_util.py`，全部实测踩过）：
   ① **别递归整棵仓库树** —— 本机根目录**同时有 `venv/` 与 `.venv/`**，第三方包里到处是
   `token = "..."`（akshare / curl_cffi）⇒ 初版 7 条假红。只扫**随仓库发布的代码**
   （根 `*.py` + `src/` + `scripts/` + `web/`）。

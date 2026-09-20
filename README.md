@@ -196,22 +196,18 @@ ALERT_THRESHOLD_GSPC=3.0  # 覆盖标普阈值
 
 ```python
 from src.env_util import require_env
-BOT_ID = require_env("WECOM_BOT_ID")     # 缺失直接 raise（不静默退化成空串）
+SOME_TOKEN = require_env("SOME_TOKEN")   # 缺失直接 raise（不静默退化成空串）
 ```
 
-工具类 `src/wecom_sdk.py` / `wecom_channel.py` / `wecom_ws.py`（企业微信智能机器人）需要：
-
-```
-WECOM_BOT_ID=<企业微信机器人 bot_id>
-WECOM_SECRET=<企业微信机器人 secret>
-```
-
-- 这三个模块**未纳入部署依赖**（`wecom_aibot_sdk` / `websockets` 不在 `requirements.txt`），
-  仅本机手动运行（`scripts/wecom_service.bat`），与「Hermes → QQ」是两条并行路径。
-- **防再犯守卫**：`tests/test_wecom_env.py` 会扫描随仓库发布的 Python，出现硬编码凭据即红
+- **防再犯守卫**：`tests/test_env_util.py` 会扫描随仓库发布的 Python，出现硬编码凭据即红
   （失败信息只报 `文件:行号:变量名`，**不打印值**）。
 - 若曾把凭据提交进仓库：**先到服务方后台吊销/轮换**（删代码挡不住别人继续用旧凭据），
   再清源码。清理 git history 需 force push，单独立项。
+
+> **企业微信通道已移除（2026-09-20）**：`src/wecom_sdk.py` / `wecom_channel.py` / `wecom_ws.py`
+> 与 `scripts/wecom_service.bat` 已删除（该通道从未接入任何入口，实际推送走「Hermes → QQ」）。
+> `src/env_util.py` 与上述守卫**保留** —— 它们不是企业微信专属：前者是读敏感配置的单点实现
+> （当前无消费者），后者保护整个仓库。顺带消掉了原 G2（依赖清单缺口）与 G3（孤儿模块）。
 
 ---
 
