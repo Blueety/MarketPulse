@@ -2,18 +2,18 @@
   "date": "2026-09-20",
   "items": [
     {
-      "title": "OpenAI又要融资了：1.2万亿美元估值，谁还敢接下一棒？",
-      "url": "https://wallstreetcn.com/articles/3782152",
-      "source": "华尔街见闻",
+      "title": "Jev周末爆了：一个参与造出GPT的人，开始反思RLHF",
+      "url": "https://wallstreetcn.com/articles/3782158",
+      "source": "AI不该永远需要人盯着",
       "published": "2026-09-20",
-      "summary": "OpenAI正在就新一轮私募融资与投资者展开初步接触，潜在估值或达1.2万亿美元以上"
+      "summary": "这两天，一个有点反常的AI模型突然刷屏了"
     },
     {
-      "title": "英伟达副总裁Ian Buck：从 Vera Rubin 平台看 Agentic AI 时代的算力演进",
-      "url": "https://wallstreetcn.com/articles/3782151",
+      "title": "胡塞新一轮袭击，美国警告“迅速升级”，沙特紧急向多国求援",
+      "url": "https://wallstreetcn.com/articles/3782155",
       "source": "华尔街见闻",
       "published": "2026-09-20",
-      "summary": "AI 时代的硬件降本逻辑重构 “降低词元成本最有效的方式，绝非降低 GPU 售价或使用低成本网络，而是每一代都交付大幅提升的算力性能"
+      "summary": "也门胡塞武装与沙特的军事冲突可能“迅速升级”，叠加霍尔木兹海峡持续封锁，全球能源运输正面临数十年来最严峻的双峡锁喉局面"
     },
     {
       "title": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 - 21财经",
@@ -23,11 +23,11 @@
       "summary": "欧美9月PMI考验经济韧性，多国央行是否跟进加息 21财经"
     },
     {
-      "title": "京东再押餐饮：七鲜大厨进家庭，机器人继续争夺三餐场景",
-      "url": "https://wallstreetcn.com/articles/3782149",
+      "title": "OpenAI又要融资了：1.2万亿美元估值，谁还敢接下一棒？",
+      "url": "https://wallstreetcn.com/articles/3782152",
       "source": "华尔街见闻",
       "published": "2026-09-20",
-      "summary": "京东把炒菜机器人从外卖后厨搬进了家庭厨房"
+      "summary": "OpenAI正在就新一轮私募融资与投资者展开初步接触，潜在估值或达1.2万亿美元以上"
     },
     {
       "title": "美联储重启加息：一个低利率时代的终结",
@@ -37,25 +37,25 @@
       "summary": "美联储重启加息：一个低利率时代的终结"
     },
     {
-      "title": "高盛：市场“定价4次加息”过于悲观，年底有“全资产上涨”交易窗口",
-      "url": "https://wallstreetcn.com/articles/3782148",
+      "title": "英伟达副总裁Ian Buck：从 Vera Rubin 平台看 Agentic AI 时代的算力演进",
+      "url": "https://wallstreetcn.com/articles/3782151",
       "source": "华尔街见闻",
       "published": "2026-09-20",
-      "summary": "高盛策略师认为，当前市场对加息路径的定价已过于悲观，随着通胀压力潜在缓解，年底前存在\"全资产上涨\"的交易窗口"
+      "summary": "AI 时代的硬件降本逻辑重构 “降低词元成本最有效的方式，绝非降低 GPU 售价或使用低成本网络，而是每一代都交付大幅提升的算力性能"
     },
     {
       "title": "日本央行召开货币政策会议 预计将加息至1.25%",
       "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE01cmg5UmJDTm5UbGdNWmVsVllKbm93VjIzVDJwbHEyQ2ZHbW4xQmVrS0JqUkY2VzNVc3VGTnoxY0V1ejJuTURPN29uc1FnTDNpVkI1ZGtpaw?oc=5",
-      "source": "共同网",
+      "source": "china.kyodonews.net",
       "published": "2026-09-20",
       "summary": "日本央行召开货币政策会议 预计将加息至1.25%"
     },
     {
-      "title": "超级油轮短缺！全球油运成本“从未如此之高”，“海事史上最大豪赌”赚翻了",
-      "url": "https://wallstreetcn.com/articles/3782146",
+      "title": "京东再押餐饮：七鲜大厨进家庭，机器人继续争夺三餐场景",
+      "url": "https://wallstreetcn.com/articles/3782149",
       "source": "华尔街见闻",
       "published": "2026-09-20",
-      "summary": "全球超级油轮市场正经历前所未有的供需紧张，运费飙升正令部分远洋原油贸易失去经济可行性，并深刻改变全球能源流向格局"
+      "summary": "京东把炒菜机器人从外卖后厨搬进了家庭厨房"
     }
   ]
 }
