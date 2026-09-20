@@ -56,7 +56,7 @@
 - 保持 diff 最小，不重构无关代码。
 - 不引入新依赖，除非先说明理由并等待确认。
 - 不修改 `.env`、生产配置、生成文件。
-- **自动提交范围白名单**：`src/git_ops.py` 的自动提交只允许 `data/` `context/` `alerts/`（`_DATA_PATHS`），**禁止** `git add -A` / `--all` / `.`；`_has_changes` 与 `_commit` 必须**同范围**（否则源码 WIP 时误报 `Failed`）。`reports/` 被 `.gitignore` 排除 → 不得入列（否则 `git add` 直接 fatal，三入口数据提交全挂）。⚠️ 仓库外 Hermes 5 分钟 cron 仍是全量 `git add -A`（见 `docs/system-overview.md` §9 G7）→ **不要把写了一半的源码/文档留在工作区**；收尾请显式 `git add <具体文件>` 再提交。
+- **自动提交范围白名单**：`src/git_ops.py` 的自动提交只允许 `data/` `context/` `alerts/`（`_DATA_PATHS`），**禁止** `git add -A` / `--all` / `.`；`_has_changes` 与 `_commit` 必须**同范围**（否则源码 WIP 时误报 `Failed`）。🔴 **`git commit` 也必须带 pathspec**（2026-09-20 补）：`git commit` 不带 `-- <paths>` 提交的是**整个暂存区**，`git add <白名单>` 只能添加、无法排除 index 里已有的内容 ⇒ 别处 `git rm` / `git mv` 造成的**已暂存删除/重命名会被无差别带走**（实测事故 `6ec1562`）。护栏：`tests/test_phase26.py::test_commit_pathspec_isolates_unrelated_staged_changes`。`reports/` 被 `.gitignore` 排除 → 不得入列（否则 `git add` 直接 fatal，三入口数据提交全挂）。⚠️ 仓库外 Hermes cron「MarketPulse 自动推送GitHub」（`*/5`）**已改为 script 模式**（wrapper `D:\hermes\scripts\marketpulse_autopush.py` → `scripts/auto_commit_data.py`），范围由代码强制；**临时文件/半成品仍建议尽快 `git add <具体文件>` 收尾**，别把写了一半的东西留在工作区。
 - 需求不清楚时先问，不要猜。
 - 每完成一个逻辑步骤后运行验证命令，不接受"应该可以"——必须实际运行验证命令。
 - 如有失败，先解释原因再修复，不要绕过问题。

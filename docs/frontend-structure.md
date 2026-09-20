@@ -147,7 +147,7 @@
 | `GET /api/econ` | `macro.js` | **6 h** | `as_of` 为空则不缓存 | BLS 四序列 + `inflation_axis` / `growth_axis` / `quadrant` |
 | `GET /api/econ/cn?group=` | `macro_cn.js` | **6 h/组** | 单序列失败进 `failed`；**全部失败才不缓存** | 13 序列 + 中国版四象限；`group ∈ price\|growth\|money\|rate\|labor\|estate` |
 | `GET /api/cn/quotes` | `macro_cn.js` | **90 s** | 失败降级 + `failed[]` | `cny`、`bond10y`、`credit_spread`(bp)、`as_of` |
-| `GET /api/timeline?days=90&future_days=30` | `timeline.js` | **6 h**（按 `(days,future_days)` 分键） | 读 db，**不联网**；全空不写缓存 | `as_of`、`window`、`db_range`、`stats`、`sources`、`past[]` / `upcoming[]`（每个 day：`events[]` + `market{gspc,ixic,sh,vix_chg}` + `forward{"1"|"3"|"5"|"10"}`） |
+| `GET /api/timeline?days=90&future_days=30` | `timeline.js` | **6 h**（按 `(days,future_days)` 分键） | 读 db，**不联网**；全空不写缓存 | `as_of`、`window`、`db_range`、`stats`、`sources`、`past[]` / `upcoming[]`（每个 day：`events[]` + `market{gspc,ixic,sh,vix_chg}` + `forward{"1"\|"3"\|"5"\|"10"}`） |
 
 > 所有端点**恒定 HTTP 200**，降级用空结构表达 → 前端必须自行判空显示「数据暂缺」，不能靠 `r.ok`。
 

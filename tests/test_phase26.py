@@ -1,12 +1,17 @@
 """二十六期：cron 执行后自动 commit + push 的单测（先测后码）。
 
-验证 src/git_ops.auto_commit_push 行为（纯 stdlib，零真实 git / 网络）：
+验证 src/git_ops.auto_commit_push 行为（纯 stdlib，零网络）：
 - env 门控（AUTO_PUSH == "0" 关闭且零子进程；缺省 / 非 "0" 启用）
 - 无改动跳过（git status --porcelain 空 → 不 commit/push）
 - commit message 格式 `auto: {date} {type}`
 - push 注入代理 env（http_proxy/https_proxy）且不污染 os.environ
 - push 失败（CalledProcessError / TimeoutExpired / FileNotFoundError）→ 返回 False 不抛异常
-- root 参数化用 tmp_path，全程 monkeypatch subprocess.run
+- root 参数化用 tmp_path，**绝大多数用例 monkeypatch subprocess.run**
+
+⚠️ **例外（2026-09-20，pathspec 修复）**：文件末尾的
+`test_commit_pathspec_isolates_unrelated_staged_changes` 用**真临时仓库**跑真 git ——
+因为"`git commit -- <paths>` 是否真的只提交这些路径"**只有 git 自己说了算**：
+mock 只能证明"我们传了正确实参"，证明不了"git 会照此隔离"。这是刻意的、唯一的一处真实 git。
 """
 import os
 import subprocess
@@ -245,6 +250,24 @@ def test_add_uses_path_whitelist(monkeypatch, fake_git, tmp_path):
             assert bad not in c["args"][2:], f"出现全量提交实参 {bad!r}: {c['args']}"
 
 
+def test_commit_uses_pathspec(monkeypatch, fake_git, tmp_path):
+    """commit 必须带 `-- <白名单>`（2026-09-20 pathspec 修复）。
+
+    不带 pathspec 的 `git commit` 提交的是**整个暂存区** ⇒ 别处的 `git rm` / `git mv`
+    造成的已暂存删除/重命名会被带走（实测事故）。本用例只钉"实参形状"，
+    "git 真的照此隔离"由文件末尾的真仓库行为用例证明。
+    """
+    calls, state = fake_git
+    monkeypatch.delenv("AUTO_PUSH", raising=False)
+    state["status_stdout"] = " M data/history.json\n"
+    git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path)
+    commit = next(c for c in calls if c.get("sub") == "commit")
+    assert "--" in commit["args"], "commit 缺 pathspec 分隔符 --"
+    assert commit["args"][commit["args"].index("--") + 1:] == list(git_ops._DATA_PATHS)
+    for bad in ("-A", "--all", "."):
+        assert bad not in commit["args"][2:], "commit 出现全量实参 %r" % bad
+
+
 def test_status_limited_to_paths(monkeypatch, fake_git, tmp_path):
     """status 必须与 add **同范围**（`--` 之后 == 白名单）—— 否则 R1 语义错标。"""
     calls, state = fake_git
@@ -291,3 +314,127 @@ def test_ignored_only_change_skips(monkeypatch, fake_git, tmp_path):
     assert git_ops.auto_commit_push("2026-09-02", "daily report", root=tmp_path) is False
     assert not _has_call(calls, "add")
     assert not _has_call(calls, "commit")
+
+
+# ---- 行为用例（唯一一处真 git）：pathspec 隔离 -----------------------------------------------
+# 背景（2026-09-20 事故）：`git commit`（**不带 pathspec**）提交的是**整个暂存区**，
+# 而不是"刚 `git add` 的那些"。`git add <白名单>` 只能**添加**、无法**排除** index 里已有的内容
+# ⇒ 别处 `git rm` / `git mv` 造成的**已暂存删除/重命名**会被无差别带走。实测复现见
+# tasks/2026-09-20-autopush-pathspec-fix/plan.md §2.2。
+
+def _real_git(root, *args) -> str:
+    """在临时仓库里跑真 git（仅本组用例使用；夹具的初始提交才用 `-A`）。"""
+    return subprocess.run(["git", *args], cwd=str(root), capture_output=True,
+                          text=True, check=True).stdout
+
+
+@pytest.fixture
+def real_repo(tmp_path):
+    """白名单三目录 + 一个源码文件的临时真仓库（初始提交已完成、工作区干净）。"""
+    root = tmp_path / "repo"
+    (root / "data").mkdir(parents=True)
+    (root / "context").mkdir()
+    (root / "alerts").mkdir()
+    (root / "srcfile.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "data" / "d.txt").write_text("1\n", encoding="utf-8")
+    (root / "context" / "c.json").write_text("{}\n", encoding="utf-8")
+    (root / "alerts" / "a.md").write_text("a\n", encoding="utf-8")
+    _real_git(root, "init", "-q", "-b", "main")
+    _real_git(root, "config", "user.email", "t@example.com")
+    _real_git(root, "config", "user.name", "t")
+    _real_git(root, "add", "-A")            # 仅夹具的初始快照用 -A（不是被测代码）
+    _real_git(root, "commit", "-q", "-m", "init")
+    return root
+
+
+def test_commit_pathspec_isolates_unrelated_staged_changes(real_repo):
+    """🔴 真根因护栏：`git commit -- <paths>` 必须**只**提交白名单路径，index 里其余的已暂存改动原样保留。
+
+    场景复刻 2026-09-20 事故：index 里已有**白名单外**的已暂存改动（`git rm` 直接进 index，
+    无需 `git add`），同时白名单内有正常改动 ⇒ 自动提交绝不能把那个删除带走。
+    """
+    root = real_repo
+    _real_git(root, "rm", "-q", "srcfile.py")                        # 白名单外的 staged 删除
+    (root / "data" / "d.txt").write_text("2\n", encoding="utf-8")    # 白名单内的改动
+    git_ops._commit(root, "2026-09-20", "data sync")
+
+    committed = _real_git(root, "show", "--name-only", "--pretty=format:", "HEAD").split()
+    assert committed == ["data/d.txt"], "提交内容应只含白名单内的路径，实际 %s" % committed
+    assert "D  srcfile.py" in _real_git(root, "status", "--porcelain"), \
+        "白名单外的已暂存删除被带走了 ⇒ pathspec 隔离失效"
+
+
+def test_commit_pathspec_also_carries_unstaged_whitelist_changes(real_repo):
+    """另一半语义（R3，**期望行为**）：白名单内**未暂存**的改动也应被提交。
+
+    `_commit` 仍是 `add <paths>` + `commit -- <paths>` 叠加 ⇒ 未暂存的 data 改动照样进提交，
+    这样 `_has_changes`（按 pathspec 看工作区）与 `_commit`（按 pathspec 提交）**同口径**。
+    """
+    root = real_repo
+    (root / "data" / "d.txt").write_text("3\n", encoding="utf-8")     # 只改工作区，**不 add**
+    git_ops._commit(root, "2026-09-20", "data sync")
+    committed = _real_git(root, "show", "--name-only", "--pretty=format:", "HEAD").split()
+    assert committed == ["data/d.txt"]
+    assert _real_git(root, "status", "--porcelain") == ""            # 工作区已干净
+
+
+# ---- 行为用例（唯一一处真 git）：pathspec 隔离 -----------------------------------------------
+# 背景（2026-09-20 事故）：`git commit`（**不带 pathspec**）提交的是**整个暂存区**，
+# 而不是"刚 `git add` 的那些"。`git add <白名单>` 只能**添加**、无法**排除** index 里已有的内容
+# ⇒ 别处 `git rm` / `git mv` 造成的**已暂存删除/重命名**会被无差别带走。实测复现见
+# tasks/2026-09-20-autopush-pathspec-fix/plan.md §2.2。
+
+def _real_git(root, *args) -> str:
+    """在临时仓库里跑真 git（仅本组用例使用；夹具的初始提交才用 `-A`）。"""
+    return subprocess.run(["git", *args], cwd=str(root), capture_output=True,
+                          text=True, check=True).stdout
+
+
+@pytest.fixture
+def real_repo(tmp_path):
+    """白名单三目录 + 一个源码文件的临时真仓库（初始提交已完成、工作区干净）。"""
+    root = tmp_path / "repo"
+    (root / "data").mkdir(parents=True)
+    (root / "context").mkdir()
+    (root / "alerts").mkdir()
+    (root / "srcfile.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "data" / "d.txt").write_text("1\n", encoding="utf-8")
+    (root / "context" / "c.json").write_text("{}\n", encoding="utf-8")
+    (root / "alerts" / "a.md").write_text("a\n", encoding="utf-8")
+    _real_git(root, "init", "-q", "-b", "main")
+    _real_git(root, "config", "user.email", "t@example.com")
+    _real_git(root, "config", "user.name", "t")
+    _real_git(root, "add", "-A")            # 仅夹具的初始快照用 -A（不是被测代码）
+    _real_git(root, "commit", "-q", "-m", "init")
+    return root
+
+
+def test_commit_pathspec_isolates_unrelated_staged_changes(real_repo):
+    """🔴 真根因护栏：`git commit -- <paths>` 必须**只**提交白名单路径，index 里其余的已暂存改动原样保留。
+
+    场景复刻 2026-09-20 事故：index 里已有**白名单外**的已暂存改动（`git rm` 直接进 index，
+    无需 `git add`），同时白名单内有正常改动 ⇒ 自动提交绝不能把那个删除带走。
+    """
+    root = real_repo
+    _real_git(root, "rm", "-q", "srcfile.py")                        # 白名单外的 staged 删除
+    (root / "data" / "d.txt").write_text("2\n", encoding="utf-8")    # 白名单内的改动
+    git_ops._commit(root, "2026-09-20", "data sync")
+
+    committed = _real_git(root, "show", "--name-only", "--pretty=format:", "HEAD").split()
+    assert committed == ["data/d.txt"], "提交内容应只含白名单内的路径，实际 %s" % committed
+    assert "D  srcfile.py" in _real_git(root, "status", "--porcelain"), \
+        "白名单外的已暂存删除被带走了 ⇒ pathspec 隔离失效"
+
+
+def test_commit_pathspec_also_carries_unstaged_whitelist_changes(real_repo):
+    """另一半语义（R3，**期望行为**）：白名单内**未暂存**的改动也应被提交。
+
+    `_commit` 仍是 `add <paths>` + `commit -- <paths>` 叠加 ⇒ 未暂存的 data 改动照样进提交，
+    这样 `_has_changes`（按 pathspec 看工作区）与 `_commit`（按 pathspec 提交）**同口径**。
+    """
+    root = real_repo
+    (root / "data" / "d.txt").write_text("3\n", encoding="utf-8")     # 只改工作区，**不 add**
+    git_ops._commit(root, "2026-09-20", "data sync")
+    committed = _real_git(root, "show", "--name-only", "--pretty=format:", "HEAD").split()
+    assert committed == ["data/d.txt"]
+    assert _real_git(root, "status", "--porcelain") == ""            # 工作区已干净

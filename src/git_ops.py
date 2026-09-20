@@ -65,14 +65,26 @@ def _has_changes(root: Path, paths: tuple[str, ...] = _DATA_PATHS) -> bool:
 
 
 def _commit(root: Path, date_str: str, report_type: str, paths: tuple[str, ...] = _DATA_PATHS) -> None:
-    """`git add <白名单路径>` + `git commit -m "auto: {date} {type}"`。
+    """`git add <白名单路径>` + `git commit -m "auto: {date} {type}" -- <白名单路径>`。
 
     **禁止** `-A` / `--all` / `.`（全量会把源码/测试/文档半成品一并入库）；
     范围由 tests/test_phase26.py::test_add_uses_path_whitelist 钉死。
+
+    🔴 **为什么 commit 也必须带 pathspec（2026-09-20 修复）**：
+    `git commit`（**不带 pathspec**）提交的是**整个暂存区（index）**，而不是"刚 `git add` 的那些"。
+    `git add <paths>` 只能**添加**，无法**排除** index 里已有的内容 ⇒ 别处 `git rm` / `git mv`
+    造成的**已暂存删除/重命名**会被无差别带走（实测事故：架构师的 `git rm` 4 文件被外部 cron
+    的自动提交一起提交了）。加上 `-- <paths>` 后，git 只提交这些路径，**index 里其余已暂存改动原样保留**。
+
+    另一半语义（有意保留）：`commit -- <paths>` 会把白名单内**未暂存**的改动也一并提交
+    ⇒ `add` 仍然需要，两者叠加才让 `_has_changes`（按 pathspec 看工作区）与 `_commit` 同口径。
+    行为护栏：test_phase26.py 的 `test_commit_pathspec_isolates_unrelated_staged_changes`
+    （真临时仓库，唯一一处真 git）。
     """
     msg = f"auto: {date_str} {report_type}"
     subprocess.run(["git", "add", *paths], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
-    subprocess.run(["git", "commit", "-m", msg], cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
+    subprocess.run(["git", "commit", "-m", msg, "--", *paths],
+                   cwd=str(root), check=True, timeout=_COMMIT_TIMEOUT)
 
 
 def _gh_helper_args() -> list[str]:

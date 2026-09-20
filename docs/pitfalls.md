@@ -670,7 +670,38 @@
   upsert 每次都会刷新 `fetched_at` ⇒ 直接逐行对比必然报"不同"（实测 103 行全不同、但**差异只有
   时间戳一列**），会被误读成"迁移改了数据"。**判据**：比对时显式剔除时间戳列，或按内容列比对。
 
+## 通用（git 提交范围 = 暂存区，不是"我刚 add 的那些"，2026-09-20）
+
+- 🔴 **`git add <白名单>` + 裸 `git commit` ≠ 范围白名单**：`git commit` **不带 pathspec 时提交的是
+  整个暂存区（index）**，而不是"刚 `git add` 的那些"。`git add` 是**加法** —— 它只能**添加**，
+  无法**排除** index 里已有的内容 ⇒ 别处 `git rm` / `git mv`（这两个命令**直接把改动写进 index**，
+  连 `git add` 都不需要）或 `git add` 过的源码改动，会被**无差别带走**。
+  **实测事故**：2026-09-20 16:35，架构师刚 `git rm` 4 文件 + `git mv` 1 文件（全部已 staged、
+  尚未 commit），外部 cron 的自动提交把这些一起提交成 `6ec1562 auto: 每日数据更新` ——
+  而该 cron 的 prompt **明确禁止了** `git add -A` 且被忠实执行。**范围只写在 `add` 上就是漏洞本身。**
+  **修法**：`git commit -m <msg> -- <paths>`。
+  **小型验证法**（不依赖被测代码）：临时仓库里 `git rm` 一个文件 + 改一个白名单文件 →
+  `git commit -m x -- <白名单>` → `git show --name-only HEAD` 应**只**含白名单路径，
+  且 `git status` 里那个删除仍为已暂存。
+  **判据**：任何"限定提交范围"的实现，都要问一句**"提交侧有没有 pathspec"**，
+  不能只看 add / status 侧（`_has_changes` 用了 `-- <paths>` 不代表 `_commit` 也限定了）。
+- 🔴 **Hermes cron 的 `script` 模式：本机（Windows）优先用 `.py`，不要用 `.sh`**：
+  实测**同一个 job**，`hermes cron run`（direct，手动触发）跑 `.sh` 包装器成功，
+  但 **ticker（builtin，定时）每 5 分钟稳定失败**：`Script exited with code 1` +
+  **11 个非 ASCII 字节的 stderr**（比例对应 Python 的
+  `FileNotFoundError: [WinError 2] 系统找不到指定的文件。`），而脚本正常时那行结果应为 `[data-commit] 改动=无…`。
+  更关键的是：**改动 `.sh` 的内容对 builtin 运行毫无影响** —— 我把包装器改成
+  `echo PROBE-77; exit 7` 的探针后，下一轮**仍报 exit 1**，且探针第一行的日志重定向也没落盘
+  ⇒ builtin 路径下 bash 的执行环境与 direct 不同（`shutil.which("bash")` 在 ticker 进程里解析到的
+  可能与我的 shell 不是同一个）。**修法**：改用 **`.py` 包装器**（Hermes 对 `.py` 走
+  `_windows_cron_python_invocation`），同目录既有 `marketpulse_daily.py` 长期正常运行即为先例；
+  切换后两轮定时运行立即 `completed`。
+  **判据**：script 模式**必须等一轮真实定时运行**再算验证通过 —— **只验 `hermes cron run` 会漏**
+  （direct 成功 ≠ builtin 成功）。排查时先看 `D:\hermes\cron\output\<job>\<时间>.md`（脚本 stdout/stderr
+  原文）与 `.../cron/executions.db` 的 `status`/`error`。
+
 ## 凭据管理（G1 处置，2026-09-20）
+
 
 - 🔴 **评估"凭据泄露"时，第一步是查仓库可见性，不要假设**：`docs/system-overview.md` 的 G1 原文
   写的是「仓库会 push 到远端 → 凭据泄露」，读起来像"小风险"；实测一句
