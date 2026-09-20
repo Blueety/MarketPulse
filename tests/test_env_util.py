@@ -1,8 +1,10 @@
-"""企业微信凭据 env 化 + **防再犯守卫**（2026-09-20，任务档 `tasks/2026-09-20-wecom-cred-revoke/`）。
+"""敏感配置读取（`src/env_util.py`）+ **防再犯守卫**（2026-09-20）。
 
 背景（G1）：`BOT_ID` / `SECRET` 曾以字面量写死在 `src/wecom_channel.py` / `wecom_sdk.py` /
 `wecom_ws.py` 三处，而仓库是 **PUBLIC** ⇒ 公开暴露 19 天。
-本文件的**核心产出是最后那条守卫用例** —— 没有它，下一次还会再写一次。
+> **2026-09-20 更新**：用户决定不再使用企业微信通道 ⇒ 那三个模块**已删除**。
+> 但本文件的**核心产出是最后那条全仓守卫用例** —— 它保护的是整个仓库，不随 wecom 消失，
+> 没有它，下一次还会再写一次硬编码凭据。
 
 两条纪律：
 - 守卫的失败信息**只含 `文件:行号:变量名`，绝不打印值**（否则等于把凭据又输出到 CI 日志）。
@@ -25,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(autouse=True)
 def _no_ambient_env(monkeypatch):
-    """隔离：清掉进程环境里的 WECOM_* / 指向真实 .env 的候选路径，避免本机配置劫持用例。"""
-    for k in ("WECOM_BOT_ID", "WECOM_SECRET", "MP_TEST_KEY"):
+    """隔离：清掉进程环境里可能存在的候选键，避免本机配置劫持用例。"""
+    for k in ("MP_TEST_KEY",):
         monkeypatch.delenv(k, raising=False)
 
 
@@ -78,14 +80,14 @@ def test_require_env_raises_clearly_and_never_prints_the_value(monkeypatch, tmp_
     """
     monkeypatch.setattr(env_util, "ENV_FILES", (tmp_path / "nope.env",))
     with pytest.raises(RuntimeError) as ei:
-        env_util.require_env("WECOM_BOT_ID")
+        env_util.require_env("MP_TEST_KEY")
     msg = str(ei.value)
-    assert "WECOM_BOT_ID" in msg and ".env" in msg
+    assert "MP_TEST_KEY" in msg and ".env" in msg
     assert "公开仓库" in msg                       # 提醒别写回源码
-    assert env_util.load_env("WECOM_BOT_ID") == ""  # 空值不被打印成 "None" 之类
+    assert env_util.load_env("MP_TEST_KEY") == ""   # 空值不被打印成 "None" 之类
 
-    monkeypatch.setenv("WECOM_BOT_ID", "present-value")
-    assert env_util.require_env("WECOM_BOT_ID") == "present-value"
+    monkeypatch.setenv("MP_TEST_KEY", "present-value")
+    assert env_util.require_env("MP_TEST_KEY") == "present-value"
 
 
 # ---------------------------------------------------------------- 防再犯守卫
@@ -139,7 +141,7 @@ def test_no_hardcoded_credentials_in_source():
     """🔴 防再犯守卫：运行代码里**不得再出现凭据字面量**（G1 的核心产出）。
 
     本用例是"下一次还会再写一次"的唯一拦截点。修法：把值挪到 `.env`，
-    代码侧用 `src/env_util.require_env("KEY")` 读取（`src/wecom_*.py` 已是范例）。
+    代码侧用 `src/env_util.require_env("KEY")` 读取。
     """
     hits, n_files = _scan_hardcoded()
     assert n_files >= 20, "扫描文件数异常少（%d）—— 守卫可能扫空了，空集不算过" % n_files
@@ -166,18 +168,3 @@ def test_guard_pattern_actually_matches(tmp_path):
     # 反例：空值与短占位符不该命中（否则会误伤 `key = ""`）
     for s in ('BOT_ID = ""', 'SECRET = "todo"', 'token = "${ENV}"', "# BOT_ID = 'x'"):
         assert not CRED_ASSIGN.match(s), "守卫正则误伤: %r" % s
-
-
-def test_wecom_modules_read_from_env_not_literals():
-    """三个 wecom 模块必须走 `require_env`，且**以脚本方式直跑**也要能 import 到它。
-
-    ⚠️ 兼容性硬约束：`scripts/wecom_service.bat` 是 `python src\\wecom_sdk.py`（脚本方式），
-    此时 `sys.path[0]` 是 `src\\` 而非项目根 ⇒ 模块里保留了 `try: from src.env_util ... /
-    except ImportError: from env_util ...` 的兜底。这条用例锁住"两个名字都还在"。
-    """
-    for name in ("wecom_sdk.py", "wecom_channel.py", "wecom_ws.py"):
-        text = (ROOT / "src" / name).read_text(encoding="utf-8")
-        assert "require_env" in text, "%s 未使用 require_env" % name
-        assert "from src.env_util import require_env" in text
-        assert "from env_util import require_env" in text      # 脚本方式兜底
-        assert 'require_env("WECOM_BOT_ID")' in text and 'require_env("WECOM_SECRET")' in text
