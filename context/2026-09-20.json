@@ -3,52 +3,52 @@
   "indices": {
     "GSPC": {
       "value": 7650.5,
-      "change_pct": 0.16680283224400586,
-      "status": "上升趋势"
+      "change_pct": 0.0,
+      "status": "连涨2日"
     },
     "IXIC": {
       "value": 26522.545,
-      "change_pct": 0.39459769911756687,
-      "status": "上升趋势"
+      "change_pct": 0.0,
+      "status": "连涨2日"
     },
     "SH": {
       "value": 3911.8714,
-      "change_pct": 0.9357766236409428,
-      "status": "连涨2日"
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "SZ": {
       "value": 13640.873,
-      "change_pct": 1.7223458952887682,
-      "status": "连涨2日"
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "CYB": {
       "value": 3372.676,
-      "change_pct": 2.254669815754128,
-      "status": "连涨2日"
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "VIX": {
       "value": 14.81,
-      "change_pct": -4.08031088082901,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "VXN": {
       "value": 19.29,
-      "change_pct": -3.3567134268537155,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "MOVE": {
       "value": 80.635,
-      "change_pct": 5.795496590035409,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "GLD": {
       "value": 401.17,
-      "change_pct": 0.70539210764133,
-      "status": "连涨2日"
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "BTC": {
-      "value": 80280.2,
-      "change_pct": 5.164496617269507,
+      "value": 81303.33,
+      "change_pct": 1.2744487432766793,
       "status": "上升趋势"
     }
   },
@@ -403,7 +403,7 @@
       76193.64,
       76337.74,
       null,
-      80280.2
+      81303.33
     ]
   },
   "breach": {
@@ -511,16 +511,16 @@
     ],
     "losers": [
       {
-        "name": "公用事业 (XLU)",
-        "change": -1.42,
-        "turnover": "$9.2亿",
-        "top_stock": "XLU"
-      },
-      {
         "name": "原材料 (XLB)",
         "change": -1.42,
         "turnover": "$4.8亿",
         "top_stock": "XLB"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": -1.42,
+        "turnover": "$9.2亿",
+        "top_stock": "XLU"
       },
       {
         "name": "通信服务 (XLC)",
@@ -574,8 +574,8 @@
         "change_pct": -0.23,
         "corr": {
           "benchmark": "SH",
-          "r": 0.04,
-          "n": 17
+          "r": -0.36,
+          "n": 23
         }
       },
       {
@@ -596,8 +596,8 @@
         "change_pct": 2.62,
         "corr": {
           "benchmark": "SH",
-          "r": -0.24,
-          "n": 17
+          "r": 0.81,
+          "n": 23
         }
       },
       {
@@ -607,8 +607,8 @@
         "change_pct": 0.27,
         "corr": {
           "benchmark": "SH",
-          "r": -0.3,
-          "n": 17
+          "r": 0.43,
+          "n": 23
         }
       },
       {
@@ -618,8 +618,8 @@
         "change_pct": 2.77,
         "corr": {
           "benchmark": "SH",
-          "r": -0.22,
-          "n": 17
+          "r": 0.89,
+          "n": 23
         }
       },
       {
@@ -629,8 +629,8 @@
         "change_pct": 3.8,
         "corr": {
           "benchmark": "SH",
-          "r": -0.16,
-          "n": 17
+          "r": 0.65,
+          "n": 23
         }
       },
       {
@@ -640,8 +640,8 @@
         "change_pct": 2.95,
         "corr": {
           "benchmark": "SZ",
-          "r": -0.12,
-          "n": 17
+          "r": 0.93,
+          "n": 23
         }
       },
       {
@@ -651,8 +651,8 @@
         "change_pct": 2.33,
         "corr": {
           "benchmark": "SZ",
-          "r": 0.04,
-          "n": 17
+          "r": 0.79,
+          "n": 23
         }
       },
       {
@@ -662,8 +662,8 @@
         "change_pct": 2.44,
         "corr": {
           "benchmark": "SH",
-          "r": -0.38,
-          "n": 17
+          "r": 0.52,
+          "n": 23
         }
       },
       {
@@ -673,8 +673,8 @@
         "change_pct": 4.0,
         "corr": {
           "benchmark": "SH",
-          "r": -0.15,
-          "n": 17
+          "r": 0.84,
+          "n": 23
         }
       },
       {
@@ -684,14 +684,14 @@
         "change_pct": 3.08,
         "corr": {
           "benchmark": "SZ",
-          "r": 0.03,
-          "n": 17
+          "r": 0.89,
+          "n": 23
         }
       }
     ],
     "portfolio_risk": {
       "high": false,
-      "avg_r": 0.49
+      "avg_r": 0.53
     }
   }
 }
