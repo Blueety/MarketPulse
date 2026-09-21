@@ -202,7 +202,18 @@ def _validate_stocks(value, dotted: str) -> list[dict]:
         if key in seen:
             raise ValueError("%s 第 %d 项 symbol 重复（%s）" % (dotted, i + 1, sym))
         seen.add(key)
-        out.append({"symbol": sym, "label": label})
+        entry: dict = {"symbol": sym, "label": label}
+        # cost（2026-09-20 组合盈亏）：**可选**；数字且 > 0；None/空串/缺省 = 清除（不写键）
+        cost = item.get("cost")
+        if cost is not None and str(cost).strip() != "":
+            try:
+                cost_f = float(cost)
+            except (TypeError, ValueError):
+                raise ValueError("%s 第 %d 项 cost 需为数字" % (dotted, i + 1)) from None
+            if not cost_f > 0:
+                raise ValueError("%s 第 %d 项 cost 需大于 0" % (dotted, i + 1))
+            entry["cost"] = cost_f
+        out.append(entry)
     return out
 
 

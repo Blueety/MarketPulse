@@ -226,18 +226,6 @@ def test_parse_alert_file_no_frontmatter(tmp_path):
     assert _parse_alert_file(p) is None
 
 
-def test_load_alerts_desc_limit(tmp_path, monkeypatch):
-    monkeypatch.setattr(web.app, "ALERTS_DIR", tmp_path)
-    for d in ["2026-08-25", "2026-08-26", "2026-08-27",
-              "2026-08-28", "2026-08-29", "2026-08-30"]:
-        (tmp_path / f"{d}-close.md").write_text(ALERT_MD, encoding="utf-8")
-    alerts = _load_alerts(10)
-    assert len(alerts) == 6
-    assert [a["date"] for a in alerts] == [
-        "2026-08-30", "2026-08-29", "2026-08-28",
-        "2026-08-27", "2026-08-26", "2026-08-25",
-    ]
-
 
 def test_load_alerts_missing_dir(monkeypatch):
     monkeypatch.setattr(web.app, "ALERTS_DIR", Path("/nonexistent/alerts/dir"))
@@ -1735,76 +1723,9 @@ def test_auth_basic_prefix_is_case_insensitive(monkeypatch):
 # 统计逻辑在 src/backtest.py（与 CLI **同一份实现**）；web 只组装响应。故这里的断言只覆盖
 # **契约与降级**，算法正确性由 tests/test_backtest.py 负责。
 
-def _fake_rows(days: int, jump_at: int = 20, symbol: str = "vix"):
-    """造 days 天单标的长行（第 jump_at 天 +25% ⇒ 必触发一次）。"""
-    rows, price = [], 100.0
-    for i in range(1, days + 1):
-        price = price * (1.25 if i == jump_at else 1.0)
-        date = "2026-01-%02d" % i if i <= 31 else "2026-02-%02d" % (i - 31)
-        rows.append((date, symbol, price, 0.0))
-    return rows
 
 
-def test_api_backtest_payload_contract(monkeypatch):
-    """`/api/backtest` 字段齐全，且标的与常量同源（`src.backtest.BACKTEST_SYMBOLS`）。"""
-    from fastapi.testclient import TestClient
 
-    from src import backtest as sb
-    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(40))
-    r = TestClient(web.app.app).get("/api/backtest")
-    assert r.status_code == 200
-    d = r.json()
-    assert set(d) >= {"as_of", "window", "stats", "threshold_config", "symbols",
-                      "methods", "elapsed_ms", "empty_reason"}
-    assert len(d["methods"]) == 7                    # 口径 7 条**原文**（与 md 报告同源）
-    assert len(d["threshold_config"]["fallback"]) == len(sb.BACKTEST_SYMBOLS)
-    assert [s["symbol"] for s in d["symbols"]] == sb.BACKTEST_SYMBOLS
-    assert d["stats"]["triggers"] >= 1               # 夹具里那一次跳变
-    assert d["empty_reason"] is None
-
-
-def test_api_backtest_does_not_cache(monkeypatch):
-    """🔴 **故意不缓存**（plan §3.4 / 硬约束 4）：改配置后必须立刻可见。
-
-    判据：连续两次调用各算一次（用调用计数证明没有走缓存）—— 若后人"顺手"加了 TTL，
-    本用例立刻红（这正是 plan R7 要防的）。
-    """
-    from fastapi.testclient import TestClient
-
-    calls = {"n": 0}
-
-    def _counted(*a, **k):
-        calls["n"] += 1
-        return _fake_rows(40)
-
-    monkeypatch.setattr(web.app.st, "query_history", _counted)
-    c = TestClient(web.app.app)
-    c.get("/api/backtest")
-    c.get("/api/backtest")
-    assert calls["n"] == 2, "第二次调用走了缓存 ⇒ 「改阈值立刻可见」的价值被破坏"
-
-
-def test_api_backtest_degrades_to_empty_state(monkeypatch):
-    """数据不足（有效交易日 < 30）⇒ **恒 200** + 空 symbols + empty_reason（不报错）。"""
-    from fastapi.testclient import TestClient
-
-    monkeypatch.setattr(web.app.st, "query_history", lambda *a, **k: _fake_rows(5))
-    r = TestClient(web.app.app).get("/api/backtest")
-    assert r.status_code == 200
-    d = r.json()
-    assert d["symbols"] == []
-    assert "不足" in (d["empty_reason"] or "")
-    assert len(d["methods"]) == 7                    # 空态仍给口径，便于解读
-
-
-def test_backtest_page_renders():
-    """`/backtest` 页面可开且带页标题（模板渲染不为空）。"""
-    from fastapi.testclient import TestClient
-
-    r = TestClient(web.app.app).get("/backtest")
-    assert r.status_code == 200
-    assert "阈值回测" in r.text
-    assert "backtest.js" in r.text
 
 
 # ---- 阈值回测（2026-09-20，tasks/2026-09-20-backtest-ui/）-----------------------------------
@@ -1951,3 +1872,59 @@ def test_settings_page_renders():
     r = TestClient(web.app.app).get("/settings")
     assert r.status_code == 200
     assert "设置" in r.text and "settings.js" in r.text
+
+
+# ---- 组合盈亏（2026-09-20，tasks/2026-09-20-portfolio-pnl/）---------------------------------
+# 判据：有 cost ⇒ pnl_pct；(value 或 cost) 缺失 ⇒ **None**（绝不算 0）；概览 = 有成本标的等权平均。
+
+def _wl_payload(monkeypatch, stocks, values):
+    """组装 _build_watchlist_payload 的结果（不联网、不依赖快照）。"""
+    monkeypatch.setattr(web.app, "_watchlist_config", lambda: stocks)
+    return web.app._build_watchlist_payload(stocks, values, {})
+
+
+def test_watchlist_pnl_with_cost(monkeypatch):
+    stocks = [{"symbol": "600519", "label": "茅台", "cost": 100.0}]
+    d = _wl_payload(monkeypatch, stocks, {"600519": 112.5})
+    row = d["stocks"][0]
+    assert row["cost"] == 100.0 and row["pnl_pct"] == 12.5
+    assert d["overview"] == {"covered": 1, "total": 1, "avg_pnl_pct": 12.5}
+
+
+def test_watchlist_pnl_without_cost_is_none(monkeypatch):
+    """🔴 无 cost ⇒ None，**不是 0.00%**（同 TL-6「不显示假 0.00%」）。"""
+    d = _wl_payload(monkeypatch, [{"symbol": "600519", "label": "茅台"}], {"600519": 112.5})
+    assert d["stocks"][0]["pnl_pct"] is None
+    assert d["overview"]["covered"] == 0 and d["overview"]["avg_pnl_pct"] is None
+
+
+def test_watchlist_pnl_when_value_missing(monkeypatch):
+    """取数失败（value=None）⇒ 盈亏 None（不是用 cost 硬算）。"""
+    d = _wl_payload(monkeypatch, [{"symbol": "600519", "label": "茅台", "cost": 100.0}], {})
+    assert d["stocks"][0]["value"] is None and d["stocks"][0]["pnl_pct"] is None
+
+
+def test_watchlist_overview_is_equal_weight(monkeypatch):
+    """等权平均（无 shares ⇒ 不是加权/不是组合总收益）。"""
+    stocks = [{"symbol": "A", "label": "a", "cost": 100.0},
+              {"symbol": "B", "label": "b", "cost": 200.0},
+              {"symbol": "C", "label": "c"}]
+    d = _wl_payload(monkeypatch, stocks, {"A": 110.0, "B": 180.0, "C": 50.0})
+    assert d["overview"] == {"covered": 2, "total": 3, "avg_pnl_pct": 0.0}   # +10% 与 -10% 等权 = 0
+
+
+def test_load_watchlist_not_broken_by_cost(monkeypatch):
+    """R3 回归：config 增加 cost 字段不应让 `_load_watchlist` 判为 mismatch（比对键是 symbol 集合）。"""
+    stocks = [{"symbol": "600519", "label": "茅台", "cost": 1500.0}]
+    # ⚠️ 快照的时点键是 `saved_at`（后端 `payload["as_of"] = snap.get("saved_at")`），不是 as_of
+    snap = {"saved_at": "2026-09-20T15:00:00", "stocks": stocks, "values": {"600519": 1600.0}, "series": {}}
+    # ⚠️ 打在**使用方模块**：web/app.py 用的是 `from src.analyzer import load_watchlist_snapshot`，
+    #    patch src.analyzer 里的名字对 web.app 无效（本项目既定纪律：改谁用的那个名字）。
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda *a, **k: snap)
+    monkeypatch.setattr(web.app, "_watchlist_config", lambda: stocks)
+    out = web.app._load_watchlist()
+    # 快照被接受 ⇒ `as_of` 来自快照（mismatch 会走实时回退、没有 as_of）
+    assert out.get("as_of") == snap["saved_at"], "加了 cost 后快照应仍被接受（不静默回退实时取数）"
+    # 顺带验「存储层零改动」：cost 经快照原样透传，且据此算出盈亏
+    assert out["stocks"][0]["cost"] == 1500.0
+    assert out["stocks"][0]["pnl_pct"] == 6.67

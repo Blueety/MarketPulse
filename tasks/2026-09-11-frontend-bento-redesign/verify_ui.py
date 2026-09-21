@@ -1301,9 +1301,17 @@ def assert_polish(page, base_url: str) -> None:
             html = r.read().decode("utf-8")
     except Exception as exc:  # noqa: BLE001
         print(f"  首页 HTML 读取失败: {exc}")
-    sk_colspans = re.findall(r'<tr class="sk-row"><td colspan="(\d+)"', html)
-    check(bool(sk_colspans) and all(c == "5" for c in sk_colspans),
-          "P-6 骨架行 colspan 全为 5（图标列已使表头变 5 列）", sk_colspans)
+    # ⚠️ 2026-09-20：自选卡加了「持仓盈亏」列 ⇒ **自选表**骨架 colspan 变 6，
+    #    而板块/美股等其它表仍是 5 ⇒ 必须**分表断言**：
+    #      - 自选 = 6（加列的护栏）
+    #      - 其余 ≥5 处仍为 5（**防误伤**：谁把 10 处 colspan 全局替换成 6，这条立刻红）
+    wl_block = html.split("watchlist-table", 1)[1].split("</table>", 1)[0] if "watchlist-table" in html else ""
+    wl_spans = re.findall(r'<td colspan="(\d+)"', wl_block)
+    check(bool(wl_spans) and all(c == "6" for c in wl_spans),
+          "P-6 自选卡骨架 colspan 全为 6（持仓盈亏列）", wl_spans)
+    all_spans = re.findall(r'<tr class="sk-row"><td colspan="(\d+)"', html)
+    check(all_spans.count("5") >= 5,
+          "P-6c 其它表骨架仍为 5 列（未被全局替换误伤）", sorted(set(all_spans)))
     check('class="skeleton sk-card"' in html and 'class="skeleton sk-item"' in html,
           "P-6b 首屏骨架屏已就位（概览卡 + 告警条）", html.count('class="skeleton'))
 
@@ -5173,6 +5181,7 @@ def main() -> int:
             assert_auth(browser)                     # AUTH-* 访问控制 Basic Auth（web-basic-auth，2026-09-19；自带实例）
             assert_backtest(browser, url)            # BT-* 阈值回测页（backtest-ui，2026-09-20；本页不依赖上游）
             assert_settings(browser, url)            # ST-* 设置页（settings-page，2026-09-20；只读断言，不 POST）
+            assert_portfolio(browser, url)            # PF-* 组合盈亏（portfolio-pnl，2026-09-20）
             assert_home_ux(browser, url)             # UX-* 首页体验走查整改（对比度/刷新反馈/主题初始化/抽屉，2026-09-17）
             assert_walkthrough(browser, url)         # PW-* 产线走查整改（告警锚点/相关性文案/表头语义/趋势三态，2026-09-17）
             check(not errors, "全流程 console error = 0", errors[:5])
@@ -5354,6 +5363,71 @@ def assert_settings(browser, url: str) -> None:
               (d["navCount"], d["navDisabled"], d["navActive"]))
         check(d["overflow"] == 0 and not perrs,
               "ST-7 1440 档无横向溢出且无 pageerror", (d["overflow"], perrs[:3]))
+    finally:
+        page.close()
+
+
+
+
+# ============ PF 组合盈亏（自选列表，2026-09-20）============
+# 任务档 tasks/2026-09-20-portfolio-pnl/。**只读断言**：不为验收伪造成本价
+# （真实 config 里没录 cost 时，页面必须显示"未录成本价"的空态）。
+
+PF_JS = r"""
+() => {
+  const q = (s) => document.querySelector(s);
+  const rows = Array.from(document.querySelectorAll('#watchlist-body tr'))
+    .filter((tr) => !tr.classList.contains('sk-row'));
+  const cells = Array.from(document.querySelectorAll('#watchlist-body td.pnl'));
+  return {
+    rowCount: rows.length,
+    headerCount: document.querySelectorAll('.watchlist-table thead th').length,
+    pnlCells: cells.map((td) => td.textContent.trim()),
+    pnlClasses: cells.map((td) => {
+      const s = td.querySelector('.chg-pill');
+      return s ? s.className.replace('chg-pill', '').trim() : '(none)';
+    }),
+    overviewText: (q('#watchlist-pnl') || {}).textContent || '',
+    overviewHidden: !!q('#watchlist-pnl') && q('#watchlist-pnl').hidden,
+    overviewClass: (q('#watchlist-pnl') || {}).className || '',
+    chgClasses: Array.from(document.querySelectorAll('#watchlist-body td.chg .chg-pill'))
+      .map((s) => s.className.replace('chg-pill', '').trim()),
+  };
+}
+"""
+
+
+def assert_portfolio(browser, url: str) -> None:
+    """PF-1~PF-5 组合盈亏（成本视角）。"""
+    print("\n--- PF 组合盈亏（自选列表）---")
+    api = {}
+    try:
+        with urllib.request.urlopen(url + "api/watchlist", timeout=30) as r:
+            api = json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        print(f"  /api/watchlist 读取失败: {exc}")
+    ov = api.get("overview") or {}
+    page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    try:
+        page.goto(url, wait_until="load")
+        page.wait_for_timeout(2600)
+        d = page.evaluate(PF_JS)
+        check(d["headerCount"] == 6, "PF-1 自选卡表头 6 列（含持仓盈亏）", d["headerCount"])
+        check(len(d["pnlCells"]) == d["rowCount"] and d["rowCount"] > 0,
+              "PF-2 每行都有盈亏单元格（列数一致，不错位）", (len(d["pnlCells"]), d["rowCount"]))
+        # 无成本 ⇒ 「—」且不染色；**绝不允许出现 0.00%**
+        bad_zero = [t for t in d["pnlCells"] if "0.00%" in t and t.strip() != "+0.00%"]
+        check(len(bad_zero) == 0, "PF-3 无成本行不渲染成 0.00%（不显示假收益）", bad_zero)
+        if ov.get("covered"):
+            check(str(ov["covered"]) in d["overviewText"],
+                  "PF-4 概览条数 == API covered（DOM↔API 对账）", (ov["covered"], d["overviewText"]))
+            check("未含份额" in d["overviewText"],
+                  "PF-4b 概览显式标注「未含份额」（防误读为组合总收益）", d["overviewText"])
+        else:
+            check("未录成本" in d["overviewText"] and not d["overviewHidden"],
+                  "PF-4 无成本时空态文案在场（不是空白/不是隐藏）", d["overviewText"])
+        same_ns = all((c == "(none)" or c in ("pos", "neg")) for c in d["pnlClasses"])
+        check(same_ns, "PF-5 盈亏色沿用涨跌幅列的 pos/neg 命名空间（同色系）", d["pnlClasses"])
     finally:
         page.close()
 

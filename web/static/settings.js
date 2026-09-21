@@ -234,7 +234,12 @@
     // watchlist.stocks：从行里收（空行剔除，交给后端校验报错）
     var rows = [];
     state.stocks.forEach(function (s) {
-      if (String(s.symbol || "").trim() || String(s.label || "").trim()) rows.push({ symbol: s.symbol, label: s.label });
+      if (String(s.symbol || "").trim() || String(s.label || "").trim()) {
+        var item = { symbol: s.symbol, label: s.label };
+        var c = (s.cost == null) ? "" : String(s.cost).trim();
+        if (c !== "") item.cost = Number(c);      // 空 ⇒ 不带 cost 键 = 清除
+        rows.push(item);
+      }
     });
     patch["watchlist.stocks"] = rows;
     return patch;
@@ -282,7 +287,7 @@
   el("st-save").addEventListener("click", save);
   el("st-wl-add").addEventListener("click", function () {
     if (state.stocks.length >= 20) return;      // 与 src/config.py 的上限一致
-    state.stocks.push({ symbol: "", label: "" });
+    state.stocks.push({ symbol: "", label: "", cost: null });
     renderStocks();
   });
   load();

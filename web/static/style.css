@@ -1237,3 +1237,12 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .st-row { grid-template-columns: minmax(0, 1fr); }
   .st-row .st-input { max-width: none; }
 }
+
+/* 组合盈亏（2026-09-20，tasks/2026-09-20-portfolio-pnl）：自选表第 6 列 + 卡头概览。
+   ⚠️ 只新增类，不改任何既有声明；颜色沿用本页既有 pos/neg（全站涨跌口径）。 */
+.watchlist-table .col-pnl { white-space: nowrap; }
+.watchlist-table td.pnl { font-variant-numeric: tabular-nums; }
+.pnl-avg { font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .watchlist-table th.col-pnl, .watchlist-table td.pnl { display: none; }   /* 极窄屏让位（表本身可横滚） */
+}

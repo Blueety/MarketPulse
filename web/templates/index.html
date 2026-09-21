@@ -92,14 +92,14 @@
           </section>
 
           <section class="card hidden" id="watchlist-section">
-            <h2>自选列表 <span class="h2-sub">· 按涨跌幅排序 · config.json 配置 · <span id="watchlist-asof">收盘快照</span></span></h2>
+            <h2>自选列表 <span class="h2-sub">· 按涨跌幅排序 · config.json 配置 · <span id="watchlist-asof">收盘快照</span> · <span id="watchlist-pnl" hidden></span></span></h2>
             <div class="table-scroll">
               <table class="data-table watchlist-table">
                 <!-- G3（2026-09-17 产线走查）：两个空表头补语义标注（"红字"其实是图标 fallback 的首字，
                      列本身不是错位）。只加 aria-label，**不改列结构/colspan**（P-4 骨架 colspan=5 断言依赖）。 -->
-                <thead><tr><th class="col-ico" aria-label="标记"></th><th>名称</th><th class="num">最新价</th><th class="num">涨跌幅</th><th class="col-bar" aria-label="涨跌幅分布"></th></tr></thead>
-                <!-- P-4 骨架屏：colspan 必须为 5（visual-fidelity 已加图标列，4 会错位） -->
-                <tbody id="watchlist-body"><tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr><tr class="sk-row"><td colspan="5"><span class="skeleton sk-line"></span></td></tr></tbody>
+                <thead><tr><th class="col-ico" aria-label="标记"></th><th>名称</th><th class="num">最新价</th><th class="num">涨跌幅</th><th class="num col-pnl">持仓盈亏</th><th class="col-bar" aria-label="涨跌幅分布"></th></tr></thead>
+                <!-- P-4 骨架屏：colspan 必须为 6（visual-fidelity 已加图标列，4 会错位） -->
+                <tbody id="watchlist-body"><tr class="sk-row"><td colspan="6"><span class="skeleton sk-line"></span></td></tr><tr class="sk-row"><td colspan="6"><span class="skeleton sk-line"></span></td></tr></tbody>
               </table>
             </div>
           </section>

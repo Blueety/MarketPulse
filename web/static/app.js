@@ -960,10 +960,26 @@ function renderWatchlist(payload) {
     const asOf = payload && payload.as_of ? String(payload.as_of) : '';
     asofEl.textContent = asOf.length >= 16 ? asOf.slice(5, 16).replace('T', ' ') : '收盘快照';
   }
+  // 组合概览（等权平均 + 已录成本条数；**无 shares ⇒ 不是组合总收益**，文案显式标注"未含份额"）
+  const pnlEl = document.getElementById('watchlist-pnl');
+  if (pnlEl) {
+    const ov = (payload && payload.overview) || {};
+    if (!ov.covered) {
+      pnlEl.hidden = false;
+      pnlEl.className = '';
+      pnlEl.textContent = '未录成本价（在设置页录入后显示盈亏）';
+    } else {
+      const avg = (ov.avg_pnl_pct == null) ? null : ov.avg_pnl_pct;
+      pnlEl.hidden = false;
+      pnlEl.className = 'pnl-avg ' + (avg == null ? '' : (avg >= 0 ? 'pos' : 'neg'));
+      pnlEl.textContent = '已录成本 ' + ov.covered + '/' + ov.total + ' 只 · 等权 ' +
+        (avg == null ? '—' : fmtPct(avg)) + ' · 未含份额';
+    }
+  }
   const stocks = (payload && payload.stocks) || [];
   body.innerHTML = '';
   if (!stocks.length) {
-    body.innerHTML = '<tr><td colspan="5" class="empty">数据暂缺</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty">数据暂缺</td></tr>';
     return;
   }
   let maxAbs = 0.01;
@@ -987,18 +1003,26 @@ function renderWatchlist(payload) {
       // 失败行：名称保留、其余列「数据暂缺」
       tr.innerHTML = '<td class="col-ico">' + ico + '</td>' +
         '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
-        '<td class="empty">数据暂缺</td><td class="empty">数据暂缺</td><td class="col-bar"></td>';
+        '<td class="empty">数据暂缺</td><td class="empty">数据暂缺</td>' +
+        '<td class="num pnl">—</td><td class="col-bar"></td>';
       body.appendChild(tr);
       return;
     }
     const chg = row.change_pct;
     const cls = chg == null ? '' : (chg >= 0 ? 'pos' : 'neg');
+    // 持仓盈亏（2026-09-20 portfolio-pnl）：后端已算好 pnl_pct（value/cost 任一缺失 = None）。
+    // ⚠️ None 显示「—」且**不染色** —— 「没录成本」≠「没亏没赚」（同 TL-6 不显示假 0.00%）。
+    const pnl = (row.pnl_pct == null || !isFinite(row.pnl_pct)) ? null : row.pnl_pct;
+    const pnlCls = pnl == null ? '' : (pnl >= 0 ? 'pos' : 'neg');
+    const pnlText = pnl == null ? '—' : fmtPct(pnl);
     const width = chg == null ? 0 : Math.min(100, Math.abs(chg) / maxAbs * 100).toFixed(1);
     tr.innerHTML =
       '<td class="col-ico">' + ico + '</td>' +
       '<td class="name">' + escapeHtml(row.label || '—') + '</td>' +
       '<td class="num">' + fmtNumSep(row.value, 2) + '</td>' +
       '<td class="num chg"><span class="chg-pill ' + cls + '">' + fmtPct(chg) + '</span></td>' +
+      '<td class="num pnl">' + (pnl == null ? '—'
+        : '<span class="chg-pill ' + pnlCls + '">' + pnlText + '</span>') + '</td>' +
       '<td class="col-bar"><span class="mini-bar"><i class="' + (chg >= 0 ? 'pos' : 'neg') +
       '" style="width:' + width + '%"></i></span></td>';
     body.appendChild(tr);

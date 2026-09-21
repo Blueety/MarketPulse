@@ -539,11 +539,21 @@ def _build_watchlist_payload(stocks_cfg, values, series, tail: int = 30) -> dict
         # 失败行（value 缺失）按决策 1：change_pct 亦为 None（前端其余列「数据暂缺」）
         if val is None:
             change_pct = None
+        # 持仓盈亏（2026-09-20 portfolio-pnl）：cost 可选；value/cost 任一缺失 ⇒ None（**不算 0**，
+        #   "没录成本"与"没亏没赚"是两回事，同 TL-6「不显示假 0.00%」纪律）。前端只渲染，不做除法。
+        cost = it.get("cost")
+        try:
+            cost_f = float(cost) if cost not in (None, "", 0) else None
+        except (TypeError, ValueError):
+            cost_f = None
+        pnl_pct = round((val - cost_f) / cost_f * 100, 2) if (val is not None and cost_f) else None
         stocks_out.append({
             "symbol": sym,
             "label": label,
             "value": val,
             "change_pct": change_pct,
+            "cost": cost_f,
+            "pnl_pct": pnl_pct,
         })
         # 趋势图：即便当日价缺失但历史在也入图（A 股盘中无收盘 ≠ 无历史）
         if pts:
@@ -564,7 +574,13 @@ def _build_watchlist_payload(stocks_cfg, values, series, tail: int = 30) -> dict
             "change_7d": change_7d,
             "raw": aligned_raw,
         })
-    return {"stocks": stocks_out, "trend": {"dates": dates, "series": trend_series}}
+    # 组合概览：**有成本标的的等权平均**（无 shares ⇒ 算不出金额/市值/加权收益，
+    #   plan §0-3：显式标注"未含份额"，不得让用户误读为组合总收益）。
+    pnls = [s["pnl_pct"] for s in stocks_out if s["pnl_pct"] is not None]
+    overview = {"covered": len(pnls), "total": len(stocks_out),
+                "avg_pnl_pct": (round(sum(pnls) / len(pnls), 2) if pnls else None)}
+    return {"stocks": stocks_out, "overview": overview,
+            "trend": {"dates": dates, "series": trend_series}}
 
 
 def _watchlist_config() -> list[dict]:

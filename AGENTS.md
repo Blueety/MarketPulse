@@ -70,3 +70,5 @@
 - 相关测试/checks 已运行或清楚标注未运行。
 - diff 已摘要。
 - 风险和后续工作已列出。
+
+- `config.json` 的 `watchlist.stocks[]`：每项 `{symbol(必填), label(必填), cost?(可选, >0)}`；`cost` 用于首页自选卡的「持仓盈亏%」（设置页录入，存储层透传、零改动）。
