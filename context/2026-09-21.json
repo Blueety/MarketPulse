@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3933.3676,
-      "change_pct": 0.5495119292520722,
+      "value": 3948.709,
+      "change_pct": 0.9416873980059732,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 13718.228,
-      "change_pct": 0.5670824733871473,
+      "value": 13728.862,
+      "change_pct": 0.6450393607505882,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3403.969,
-      "change_pct": 0.9278389029957257,
+      "value": 3400.507,
+      "change_pct": 0.8251904422482365,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3875.6044,
       3911.8714,
       3911.8714,
-      3933.3676
+      3948.709
     ],
     "sz": [
       14622.495,
@@ -307,7 +307,7 @@
       13409.908,
       13640.873,
       13640.873,
-      13718.228
+      13728.862
     ],
     "cyb": [
       3705.564,
@@ -339,7 +339,7 @@
       3298.31,
       3372.676,
       3372.676,
-      3403.969
+      3400.507
     ],
     "gld": [
       398.54998779296875,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 3.49,
-        "turnover": "1308.2亿",
-        "top_stock": "成都先导"
+        "change": 3.83,
+        "turnover": "1710.4亿",
+        "top_stock": "亚虹医药"
       },
       {
         "name": "农业",
-        "change": 1.95,
-        "turnover": "273.6亿",
+        "change": 2.54,
+        "turnover": "375.1亿",
         "top_stock": "金健米业"
       },
       {
         "name": "地产/基建",
-        "change": 1.49,
-        "turnover": "153.4亿",
+        "change": 2.04,
+        "turnover": "205.0亿",
         "top_stock": "中华企业"
       },
       {
         "name": "军工",
-        "change": 1.11,
-        "turnover": "1348.3亿",
+        "change": 1.51,
+        "turnover": "1876.7亿",
         "top_stock": "中孚信息"
       },
       {
-        "name": "金融",
-        "change": 0.96,
-        "turnover": "1313.3亿",
-        "top_stock": "科华生物"
+        "name": "消费",
+        "change": 1.36,
+        "turnover": "190.6亿",
+        "top_stock": "远东股份"
       }
     ],
     "losers": [
       {
-        "name": "通信/电子",
-        "change": 0.69,
-        "turnover": "2607.3亿",
-        "top_stock": "通宇通讯"
-      },
-      {
         "name": "资源/有色",
-        "change": 0.78,
-        "turnover": "302.2亿",
+        "change": 0.75,
+        "turnover": "439.6亿",
         "top_stock": "金瑞矿业"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.79,
-        "turnover": "3545.6亿",
+        "change": 0.78,
+        "turnover": "4912.4亿",
         "top_stock": "中材科技"
       },
       {
-        "name": "消费",
-        "change": 0.87,
-        "turnover": "134.7亿",
-        "top_stock": "远东股份"
+        "name": "通信/电子",
+        "change": 0.82,
+        "turnover": "3552.2亿",
+        "top_stock": "通宇通讯"
       },
       {
         "name": "其他",
-        "change": 0.89,
-        "turnover": "13476.0亿",
+        "change": 1.19,
+        "turnover": "19117.5亿",
         "top_stock": "万 科Ａ"
+      },
+      {
+        "name": "金融",
+        "change": 1.34,
+        "turnover": "1941.0亿",
+        "top_stock": "科华生物"
       }
     ]
   },
@@ -485,7 +485,7 @@
     "农业 surge 2026-09-21",
     "地产/基建 surge 2026-09-21",
     "军工 surge 2026-09-21",
-    "金融 surge 2026-09-21"
+    "消费 surge 2026-09-21"
   ],
   "correlation": [],
   "watchlist": {
