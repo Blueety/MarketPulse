@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3948.709,
-      "change_pct": 0.9416873980059732,
+      "value": 3949.9068,
+      "change_pct": 0.972307013978021,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 13728.862,
-      "change_pct": 0.6450393607505882,
+      "value": 13730.021,
+      "change_pct": 0.6535358843968495,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3400.507,
-      "change_pct": 0.8251904422482365,
+      "value": 3399.59,
+      "change_pct": 0.79800134967012,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3875.6044,
       3911.8714,
       3911.8714,
-      3948.709
+      3949.9068
     ],
     "sz": [
       14622.495,
@@ -307,7 +307,7 @@
       13409.908,
       13640.873,
       13640.873,
-      13728.862
+      13730.021
     ],
     "cyb": [
       3705.564,
@@ -339,7 +339,7 @@
       3298.31,
       3372.676,
       3372.676,
-      3400.507
+      3399.59
     ],
     "gld": [
       398.54998779296875,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 3.83,
-        "turnover": "1710.4亿",
+        "change": 3.88,
+        "turnover": "1865.4亿",
         "top_stock": "亚虹医药"
       },
       {
         "name": "农业",
-        "change": 2.54,
-        "turnover": "375.1亿",
+        "change": 2.44,
+        "turnover": "414.0亿",
         "top_stock": "金健米业"
       },
       {
         "name": "地产/基建",
-        "change": 2.04,
-        "turnover": "205.0亿",
+        "change": 2.08,
+        "turnover": "226.4亿",
         "top_stock": "中华企业"
       },
       {
         "name": "军工",
-        "change": 1.51,
-        "turnover": "1876.7亿",
-        "top_stock": "中孚信息"
+        "change": 1.59,
+        "turnover": "2076.8亿",
+        "top_stock": "ST信源"
       },
       {
         "name": "消费",
-        "change": 1.36,
-        "turnover": "190.6亿",
+        "change": 1.4,
+        "turnover": "210.5亿",
         "top_stock": "远东股份"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": 0.75,
-        "turnover": "439.6亿",
+        "change": 0.78,
+        "turnover": "486.5亿",
         "top_stock": "金瑞矿业"
       },
       {
-        "name": "光伏/新能源",
-        "change": 0.78,
-        "turnover": "4912.4亿",
-        "top_stock": "中材科技"
-      },
-      {
         "name": "通信/电子",
-        "change": 0.82,
-        "turnover": "3552.2亿",
+        "change": 0.8,
+        "turnover": "3907.2亿",
         "top_stock": "通宇通讯"
       },
       {
+        "name": "光伏/新能源",
+        "change": 0.88,
+        "turnover": "5419.5亿",
+        "top_stock": "中材科技"
+      },
+      {
         "name": "其他",
-        "change": 1.19,
-        "turnover": "19117.5亿",
+        "change": 1.21,
+        "turnover": "21111.0亿",
         "top_stock": "万 科Ａ"
       },
       {
         "name": "金融",
-        "change": 1.34,
-        "turnover": "1941.0亿",
+        "change": 1.37,
+        "turnover": "2145.9亿",
         "top_stock": "科华生物"
       }
     ]
