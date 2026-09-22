@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3958.6395,
-      "change_pct": 0.221086229173813,
+      "value": 3952.128,
+      "change_pct": 0.05623423823569592,
       "status": "连涨2日"
     },
     "SZ": {
-      "value": 13814.868,
-      "change_pct": 0.6179670082077788,
-      "status": "连涨2日"
+      "value": 13723.735,
+      "change_pct": -0.04578288700359641,
+      "status": "连跌1日"
     },
     "CYB": {
-      "value": 3431.114,
-      "change_pct": 0.92728829064681,
+      "value": 3399.93,
+      "change_pct": 0.010001206027776608,
       "status": "连涨2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3911.8714,
       3911.8714,
       3949.9068,
-      3958.6395
+      3952.128
     ],
     "sz": [
       13890.152,
@@ -307,7 +307,7 @@
       13640.873,
       13640.873,
       13730.021,
-      13814.868
+      13723.735
     ],
     "cyb": [
       3473.493,
@@ -339,7 +339,7 @@
       3372.676,
       3372.676,
       3399.59,
-      3431.114
+      3399.93
     ],
     "gld": [
       413.8399963378906,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "通信/电子",
-        "change": 1.05,
-        "turnover": "3133.4亿",
-        "top_stock": "歌尔股份"
-      },
-      {
         "name": "消费",
-        "change": 0.71,
-        "turnover": "145.9亿",
+        "change": 0.68,
+        "turnover": "215.1亿",
         "top_stock": "焦点科技"
       },
       {
-        "name": "资源/有色",
-        "change": 0.66,
-        "turnover": "365.2亿",
-        "top_stock": "北方铜业"
+        "name": "地产/基建",
+        "change": 0.56,
+        "turnover": "214.9亿",
+        "top_stock": "京基智农"
+      },
+      {
+        "name": "通信/电子",
+        "change": 0.29,
+        "turnover": "4483.5亿",
+        "top_stock": "歌尔股份"
       },
       {
         "name": "医药",
-        "change": 0.58,
-        "turnover": "1252.0亿",
+        "change": 0.15,
+        "turnover": "1736.8亿",
         "top_stock": "康希诺"
       },
       {
-        "name": "地产/基建",
-        "change": 0.37,
-        "turnover": "152.9亿",
-        "top_stock": "万通发展"
+        "name": "资源/有色",
+        "change": -0.03,
+        "turnover": "565.7亿",
+        "top_stock": "北方铜业"
       }
     ],
     "losers": [
       {
         "name": "农业",
-        "change": -0.77,
-        "turnover": "280.7亿",
+        "change": -1.0,
+        "turnover": "400.7亿",
         "top_stock": "统一股份"
       },
       {
-        "name": "军工",
-        "change": 0.0,
-        "turnover": "1389.2亿",
-        "top_stock": "旋极信息"
-      },
-      {
-        "name": "金融",
-        "change": 0.02,
-        "turnover": "1362.7亿",
-        "top_stock": "歌尔股份"
-      },
-      {
         "name": "光伏/新能源",
-        "change": 0.04,
-        "turnover": "3644.0亿",
+        "change": -0.61,
+        "turnover": "5493.7亿",
         "top_stock": "国轩高科"
       },
       {
+        "name": "军工",
+        "change": -0.57,
+        "turnover": "2045.0亿",
+        "top_stock": "天和防务"
+      },
+      {
+        "name": "金融",
+        "change": -0.18,
+        "turnover": "2112.0亿",
+        "top_stock": "江淮汽车"
+      },
+      {
         "name": "其他",
-        "change": 0.28,
-        "turnover": "14234.9亿",
-        "top_stock": "歌尔股份"
+        "change": -0.17,
+        "turnover": "21724.0亿",
+        "top_stock": "万 科Ａ"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "通信/电子 surge 2026-09-22",
     "消费 surge 2026-09-22",
-    "资源/有色 surge 2026-09-22",
+    "地产/基建 surge 2026-09-22",
+    "通信/电子 surge 2026-09-22",
     "医药 surge 2026-09-22",
-    "地产/基建 surge 2026-09-22"
+    "资源/有色 drop 2026-09-22"
   ],
   "correlation": [],
   "watchlist": {
