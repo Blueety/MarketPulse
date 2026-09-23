@@ -1494,7 +1494,9 @@ def test_macro_page_renders(client):
                 "mac-relation", "mac-history", "mac-econ"):
         assert 'id="%s"' % mid in html, mid
     # 共用 shell（_topbar.html / _sidebar.html）
-    assert 'class="topbar"' in html and 'id="sidebar"' in html
+    # ⚠️ 2026-09-23（液态玻璃皮肤）：顶栏 class 变为 `topbar skin-glass`（皮肤标记加在共用 include 上）
+    #    ⇒ 判据由全等 `class="topbar"` 放宽为前缀匹配（依然证明共用顶栏渲染出来了）。
+    assert 'class="topbar' in html and 'id="sidebar"' in html
     assert 'href="/macro"' in html                        # 侧栏「宏观数据」
     assert 'class="nav-item active" href="/macro"' in html   # active_page="macro" 高亮
     assert 'href="/#overview"' in html                    # base_prefix="/" → 回首页锚点

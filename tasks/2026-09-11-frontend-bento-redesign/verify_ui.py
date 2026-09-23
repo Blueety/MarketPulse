@@ -293,6 +293,11 @@ GLASS_JS = r"""
   const cs = (el) => (el ? getComputedStyle(el) : null);
   const alphaOf = (color) => {
     if (!color) return null;
+    // 2026-09-23（液态玻璃皮肤）：`color-mix()` 产出的计算值是 `color(srgb r g b / a)`，
+    // 旧的正则只认 rgb/rgba ⇒ 面板染色 alpha 会恒为 null（误判「没染色」）。
+    const cm = /^color\([^)]*\/\s*([\d.]+)\s*\)/.exec(color);
+    if (cm) return parseFloat(cm[1]);
+    if (/^color\(/.test(color)) return 1;
     const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/.exec(color);
     if (!m) return null;
     return m[4] === undefined ? 1 : parseFloat(m[4]);
@@ -336,8 +341,41 @@ GLASS_JS = r"""
   return {
     theme: document.documentElement.getAttribute('data-theme'),
     cardCount: cards.length,
-    coveredCount: cards.filter((el) => cs(el).backdropFilter !== 'none').length,
-    glassCovered: cards.length > 0 && cards.every((el) => cs(el).backdropFilter !== 'none'),
+    // ── 液态玻璃皮肤（2026-09-23）口径 ────────────────────────────────────────────
+    // 宿主不再自己当玻璃：材质在 `:scope > .lg-inner`（引擎注入），宿主必须
+    // `background: transparent` + `backdrop-filter: none`（否则玻璃采样到自家白底 ⇒ 折射归零）
+    hostBackdropNone: cards.length > 0 && cards.every((el) => cs(el).backdropFilter === 'none'),
+    hostBgTransparent: cards.length > 0 && cards.every(
+      (el) => (cs(el).backgroundColor || '').replace(/\s+/g, '') === 'rgba(0,0,0,0)'),
+    innerCount: cards.filter((el) => el.querySelectorAll(':scope > .lg-inner').length === 1).length,
+    innerCovered: cards.filter((el) => {
+      const i = el.querySelector(':scope > .lg-inner');
+      return i && cs(i).backdropFilter !== 'none';
+    }).length,
+    innerAlphas: cards.map((el) => {
+      const i = el.querySelector(':scope > .lg-inner');
+      return i ? alphaOf(cs(i).backgroundColor) : null;
+    }),
+    innerRadiusOk: cards.every((el) => {
+      const i = el.querySelector(':scope > .lg-inner');
+      return !i || cs(i).borderRadius === cs(el).borderRadius;
+    }),
+    innerMaterial: (() => {
+      const i = q('#overview') ? q('#overview').querySelector(':scope > .lg-inner') : null;
+      return i ? cs(i).backdropFilter : null;
+    })(),
+    innerBg: (() => {
+      const i = q('#overview') ? q('#overview').querySelector(':scope > .lg-inner') : null;
+      return i ? cs(i).backgroundColor : null;
+    })(),
+    coveredCount: cards.filter((el) => {
+      const i = el.querySelector(':scope > .lg-inner');
+      return i && cs(i).backdropFilter !== 'none';
+    }).length,
+    glassCovered: cards.length > 0 && cards.every((el) => {
+      const i = el.querySelector(':scope > .lg-inner');
+      return i && cs(i).backdropFilter !== 'none';
+    }),
     promoBackdrop: q('.card.promo') ? cs(q('.card.promo')).backdropFilter : null,
     kpiAlpha: (() => { const k = q('.kpi-card'); return k ? alphaOf(cs(k).backgroundColor) : null; })(),
     dataCardAlphas: (() => {
@@ -385,36 +423,59 @@ GLASS_JS = r"""
 # plan §6 G-1 给的是单一区间（highlight ≥0.08 / border 0.08~0.14），按 §4.2 早期建议值（.10）
 # 且只按 dark 写；§4.6.2「效果图校准值」把 dark 改成 highlight .07 / border .20，
 # 两者对不上（照原区间实现必然恒 FAIL）。按 plan §12.1「实施以 §4.6.2 为准」，此处按校准值
-# 给区间，并在 journal 记录该偏差。断言 2/3 同理：只在 dark 生效（light 的 .66/.88 天然超区间）。
+# 给区间，并在 journal 记录该偏差。
+# ⚠️ 2026-09-23（液态玻璃皮肤）：宿主卡片不再自己当玻璃（`--glass-bg*` 让位给引擎材质），
+#    因此原「kpiMax / dataLo / dataHi」三档 alpha 区间**作废**，换成 `.lg-inner` 的面板染色
+#    区间（plan D-7 = 46%）+ 宿主让位检查（见 assert_glass）。
 GLASS_RANGES = {
-    "dark": {"kpiMax": 0.2, "dataLo": 0.6, "dataHi": 0.8,
-             "highlight": (0.04, 0.15), "border": (0.15, 0.30)},
-    "light": {"kpiMax": 1.0, "dataLo": 0.5, "dataHi": 1.01,
-              "highlight": (0.85, 1.01), "border": (0.75, 1.01)},
+    "dark": {"highlight": (0.04, 0.15), "border": (0.15, 0.30)},
+    "light": {"highlight": (0.85, 1.01), "border": (0.75, 1.01)},
 }
+# `.lg-inner` 面板染色 alpha（`skin/mp-skin.css §3`：`color-mix(--bg-elevated 46%, transparent)`）。
+# 区间放到 [0.35, 0.60]：下界保证「不是全透」（与 verify_skin 的 LG-3b/3c 同向），上界保证
+# 「还能看见背景纹理」（留存比 ≥0.4 的实测约束，见 verify_skin --baseline 的 tint×blur 矩阵）。
+GLASS_TINT = (0.35, 0.60)
 
 
 def assert_glass(w: int, h: int, g: dict) -> None:
-    """G-1 玻璃判据断言（1~7）。数值区间随当前主题取（dark 为主验收口径）。"""
+    """G-1 玻璃判据（1~7）——**液态玻璃皮肤口径**：材质在 `.lg-inner`，宿主让位。
+
+    判据链（缺一环都会让折射静默失效，见 plan §8 R3）：
+      ① 宿主 `backdrop-filter: none`（否则玻璃套玻璃）
+      ② 宿主 `background: transparent`（否则玻璃采样到宿主自家白底 ⇒ 卡内纹理归零）
+      ③ 每宿主恰 1 个 `.lg-inner`，且都挂了材质（refract = `url("#lg-N")` / frost = `blur(...)`）
+      ④ `.lg-inner` 圆角 == 宿主圆角（引擎按 `border-radius` 造位移图）
+      ⑤ `.lg-inner` 面板染色 alpha ∈ GLASS_TINT（不是全透、也没糊成实色）
+    """
     theme = g.get("theme") or "dark"
     r = GLASS_RANGES.get(theme, GLASS_RANGES["dark"])
     print(f"\n--- 玻璃判据 {w}x{h}（theme={theme}）---")
-    print(f"  body 层={g['bodyLayers']} 覆盖={g['coveredCount']}/{g['cardCount']} "
-          f"kpiAlpha={g['kpiAlpha']} dataAlpha={g['dataCardAlphas']} "
+    print(f"  body 层={g['bodyLayers']} lg-inner 覆盖={g.get('innerCovered')}/{g['cardCount']} "
+          f"染色={g.get('innerAlphas')} 材质={g.get('innerMaterial')} "
           f"highlight={g['highlightAlpha']} border={g['borderAlpha']} blur={g['shadowBlur']}")
     if g.get("shadowRaw"):
         print(f"  shadow={g['shadowRaw'][:120]}")
 
-    check(g["glassCovered"], f"{w} 卡片 backdrop-filter 全覆盖（{g['coveredCount']}/{g['cardCount']}）",
-          g["coveredCount"], g["cardCount"])
+    check(g.get("hostBackdropNone") is True,
+          f"{w} 玻璃宿主自身 backdrop-filter 已让位（=none；材质在 .lg-inner）",
+          g.get("hostBackdropNone"))
+    check(g.get("hostBgTransparent") is True,
+          f"{w} 玻璃宿主自身底色透明（否则玻璃采样自家白底 ⇒ 卡内纹理归零）",
+          g.get("hostBgTransparent"))
+    check(g.get("innerCount") == g["cardCount"] and g["cardCount"] > 0,
+          f"{w} 每个玻璃宿主恰 1 个 .lg-inner（{g.get('innerCount')}/{g['cardCount']}）",
+          g.get("innerCount"), g["cardCount"])
+    check(g.get("innerCovered") == g["cardCount"] and g["cardCount"] > 0,
+          f"{w} 每个 .lg-inner 都挂了材质（refract=url(#lg-N) / frost=blur）",
+          g.get("innerCovered"), g["cardCount"])
+    check(g.get("innerRadiusOk") is True, f"{w} .lg-inner 圆角 == 宿主圆角", g.get("innerRadiusOk"))
+    lo, hi = GLASS_TINT
+    bad = [a for a in (g.get("innerAlphas") or []) if a is None or not (lo <= a <= hi)]
+    check(not bad and bool(g.get("innerAlphas")),
+          f"{w} .lg-inner 面板染色 alpha ∈ [{lo}, {hi}]（plan D-7 = 46%）", g.get("innerAlphas"))
     check((g["promoBackdrop"] or "none") == "none", f"{w} promo 卡显式 backdrop-filter=none（1b）",
           g["promoBackdrop"])
-    check(g["kpiAlpha"] is not None and g["kpiAlpha"] < r["kpiMax"],
-          f"{w} .kpi-card 背景 alpha < {r['kpiMax']}", g["kpiAlpha"])
-    for sel, a in (g["dataCardAlphas"] or {}).items():
-        check(a is not None and r["dataLo"] <= a <= r["dataHi"],
-              f"{w} 数据卡 {sel} alpha ∈ [{r['dataLo']}, {r['dataHi']}]", a)
-    check(g["bodyLayers"] >= 2, f"{w} body 氛围渐变层 ≥ 2", g["bodyLayers"])
+    check(g["bodyLayers"] >= 2, f"{w} body 背景层 ≥ 2（方格纹理 2 层 + 环境光）", g["bodyLayers"])
     lo, hi = r["highlight"]
     check(g["highlightAlpha"] is not None and lo <= g["highlightAlpha"] <= hi,
           f"{w} 顶边内高光白 alpha ∈ [{lo}, {hi}]", g["highlightAlpha"])
@@ -424,8 +485,9 @@ def assert_glass(w: int, h: int, g: dict) -> None:
     check(g["shadowBlur"] is not None and g["shadowBlur"] >= 24,
           f"{w} 卡片外阴影模糊半径 ≥ 24px", g["shadowBlur"])
     # G-6：顶栏做玻璃层、侧栏只透明（规避 R19 sticky + blur 残影）—— **仅桌面（>768）**。
-    check((g["topbarBackdrop"] or "none") != "none", f"{w} .topbar backdrop-filter 生效",
-          g["topbarBackdrop"])
+    # 2026-09-23：顶栏的材质同样搬到了它自己的 `.lg-inner` ⇒ 宿主必须是 none。
+    check((g["topbarBackdrop"] or "none") == "none",
+          f"{w} .topbar 宿主已让位（材质在 .topbar > .lg-inner）", g["topbarBackdrop"])
     #   ⚠️ 2026-09-17（drawer-opaque-fixes）按视口分语义：≤768 时侧栏是 **fixed 抽屉覆盖层**，
     #   沿用 transparent 会叠在遮罩上 ⇒ 内容透出、文字不可读（用户真机 + 浅色主题实测）。
     #   ⇒ 抽屉必须为实底 `--bg-elevated`（light #FFF / dark #111827），且同样**不加** backdrop-filter
@@ -1035,8 +1097,9 @@ def assert_fidelity(page, m: dict) -> None:
     check(m["scrollH"] <= 1240, "F-6a scrollHeight @1920 ≤ 1240", m["scrollH"])
     check(m["scrollW"] == m["innerW"], "F-6b 无横向溢出", (m["scrollW"], m["innerW"]))
     g = m.get("glass") or {}
-    check(g.get("glassCovered") is True, "F-6c backdrop 全覆盖",
-          (g.get("coveredCount"), g.get("cardCount")))
+    # 2026-09-23（液态玻璃皮肤）：覆盖率改判「每个宿主都有材质在 .lg-inner 上」。
+    check(g.get("glassCovered") is True, "F-6c 玻璃材质全覆盖（宿主让位 + .lg-inner 承担）",
+          (g.get("innerCovered"), g.get("cardCount")))
     # F-7a 跨任务：y 轴移右后 crosshair 读数仍产生（气泡贴右侧由 %TEMP% 像素探针另行取证）
     r = page.evaluate(
         """() => { const cv = document.getElementById('chart-main');
@@ -4880,7 +4943,8 @@ def assert_viewport(w: int, h: int, m: dict, expect_date: str = "") -> None:
     # 卡片 token
     card = m["card"] or {}
     check(card.get("boxSizing") == "border-box", f"{w} .card box-sizing=border-box", card.get("boxSizing"))
-    check(card.get("borderRadius") == "12px", f"{w} .card 圆角 12px", card.get("borderRadius"))
+    check(card.get("borderRadius") == "16px", f"{w} .card 圆角 16px（液态玻璃 D-8：套件档位）",
+          card.get("borderRadius"))
     check(bool(card.get("shadow")), f"{w} .card 有卡片阴影")
 
     # 模块渲染
@@ -5054,15 +5118,19 @@ def main() -> int:
                 assert_short_content(browser, url, _cfg)    # 内容不足一屏不滚（独立 context）
 
             # 主题切换（深浅双套 token）—— 含断言 12：卡片底色与边框色都要随主题变
-            bg_before = m["card"]["background"]
+            # 2026-09-23（液态玻璃皮肤）：卡片自身已 `background: transparent`（材质搬到了
+            # `.lg-inner`）⇒ 「底色随主题变」要量**材质层**，量宿主会恒等于 rgba(0,0,0,0)。
+            bg_before = (m.get("glass") or {}).get("innerBg") or m["card"]["background"]
             border_before = (m.get("glass") or {}).get("borderRaw")
             theme_after = page.evaluate(
                 """() => {
                     document.getElementById('sidebar-theme').click();
                     const c = document.getElementById('overview');
+                    const inner = c ? c.querySelector(':scope > .lg-inner') : null;
                     return { theme: document.documentElement.getAttribute('data-theme'),
                              ls: localStorage.getItem('mp-theme'),
-                             bg: getComputedStyle(c).backgroundColor,
+                             bg: inner ? getComputedStyle(inner).backgroundColor
+                                       : getComputedStyle(c).backgroundColor,
                              border: getComputedStyle(c).borderTopColor,
                              chartAlive: !!(window.Chart && window.Chart.getChart(document.getElementById('chart-main'))) };
                 }"""
@@ -5071,7 +5139,7 @@ def main() -> int:
             check(theme_after["theme"] != m["htmlTheme"], "切换后 data-theme 变化",
                   (m["htmlTheme"], theme_after["theme"]))
             check(theme_after["ls"] == theme_after["theme"], "localStorage 与主题一致", theme_after["ls"])
-            check(bg_before != theme_after["bg"], "切换后卡片底色变化", (bg_before, theme_after["bg"]))
+            check(bg_before != theme_after["bg"], "切换后卡片材质底色变化", (bg_before, theme_after["bg"]))
             check(border_before != theme_after["border"], "切换后卡片边框色变化（断言 12）",
                   (border_before, theme_after["border"]))
             check(theme_after["chartAlive"], "切主题后图表实例存活")

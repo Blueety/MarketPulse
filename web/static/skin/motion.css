@@ -1,0 +1,25 @@
+/* ============================================================================
+   液态玻璃皮肤 · 减动效守卫   skin-kit/css/motion.css
+   来源：由本项目 `src/skin.css` 末尾的 `@media (prefers-reduced-motion: reduce)` 兜底
+   **原样搬来**（选择器同步参数化：皮肤根 → `[data-liquid-skin]`）。字面规则未改。
+   ============================================================================
+   【用途】皮肤自身的过渡（玻璃面 hover、勾选绘制、主题/背景切换）在系统声明
+   `prefers-reduced-motion: reduce` 时必须整体关闭。上游引擎 CSS 里 **0 条 `@media`**
+   （全部无障碍兜底都由皮肤侧补），所以这一层不能省。
+   【加载顺序】引擎样式 → `css/tokens.css` → `css/liquid-skin.css` → **本文件** → 消费者 CSS。
+   放最后的理由：消费者若想让自己的某段动效豁免（或想换成更弱的动画），写在本文件之后即可覆盖。
+   【为什么还在用 `!important`】上游（及部分控件的内联 style）把 `animation/transition`
+   写在元素自身上，皮肤侧只能用作者 `!important` 才能保证减动效请求一定被尊重；
+   这里与 `liquid-skin.css` 的「暗色边界」并列，是套件里少数几个被论证过的 `!important` 位置。
+   【注意】另两条无障碍兜底（`prefers-reduced-transparency`、`forced-colors`）与焦点环
+   留在 `liquid-skin.css`：它们必须紧挨着 `.lg-inner` 的覆盖块，跟源顺序强相关，不要搬到这里。
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-liquid-skin] *,
+  [data-liquid-skin] *::before,
+  [data-liquid-skin] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

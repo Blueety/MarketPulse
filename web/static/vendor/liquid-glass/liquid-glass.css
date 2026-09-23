@@ -1,0 +1,740 @@
+/* ============================================================
+   @avenra/liquid-glass — base styles
+   ============================================================
+
+   CSS custom properties — override these to theme every
+   glass element without touching JS:
+
+     :root {
+       --lg-tint:       rgba(255, 255, 255, 0.05);
+       --lg-border:     rgba(255, 255, 255, 0.20);
+       --lg-shadow-out: 0 10px 30px rgba(0, 0, 0, 0.30);
+       --lg-shadow-hi:  inset 0  2px 5px rgba(255,255,255,.25);
+       --lg-shadow-lo:  inset 0 -2px 5px rgba(0,0,0,.15);
+       --lg-accent:     #3b82f6;
+     }
+   ============================================================ */
+
+:root {
+  --lg-tint: rgba(255, 255, 255, 0.05);
+  --lg-border: rgba(255, 255, 255, 0.2);
+  --lg-shadow-out: 0 10px 30px rgba(0, 0, 0, 0.3);
+  --lg-shadow-hi: inset 0 2px 5px rgba(255, 255, 255, 0.25);
+  --lg-shadow-lo: inset 0 -2px 5px rgba(0, 0, 0, 0.15);
+  --lg-accent: #3b82f6;
+  --lg-accent-2: #60a5fa;
+}
+
+/* ── Injected glass layers ──────────────────────────────────── */
+
+.lg-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  /* background: var(--lg-tint);
+  border: 1px solid var(--lg-border);
+  box-shadow: var(--lg-shadow-out), var(--lg-shadow-hi), var(--lg-shadow-lo); */
+}
+
+.lg-clone {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 1;
+  contain: strict;
+  will-change: filter, transform;
+}
+
+.lg-clone-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  transform-origin: top left;
+}
+
+/* ── Button ─────────────────────────────────────────────────── */
+
+.lg-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  will-change: transform;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  min-width: 160px;
+  min-height: 48px;
+  padding: 1.2rem 1.8rem;
+  background: none;
+  border: none;
+}
+
+.lg-button-text {
+  position: relative;
+  z-index: 5;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05em;
+  font-size: 1rem;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* ── Switch ─────────────────────────────────────────────────── */
+
+.lg-switch-track {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 67px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 100px;
+  cursor: pointer;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.25s ease;
+}
+
+.lg-switch-thumb {
+  position: absolute;
+  width: 146px;
+  height: 92px;
+  border-radius: 46px;
+  top: 33.5px;
+  transform: translateY(-50%) scale(0.65);
+  transform-origin: center center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  will-change: transform, left, background-color;
+  z-index: 10;
+}
+
+/* ── Slider ─────────────────────────────────────────────────── */
+
+.lg-slider {
+  position: relative;
+  width: 330px;
+  height: 60px;
+}
+
+.lg-slider-track {
+  position: absolute;
+  width: 330px;
+  height: 18px;
+  left: 0;
+  top: 21px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 100px;
+  cursor: pointer;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.lg-slider-fill {
+  height: 100%;
+  border-radius: 100px;
+  background: linear-gradient(90deg, var(--lg-accent), var(--lg-accent-2));
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  transition: width 0.05s linear;
+}
+
+.lg-slider-thumb {
+  position: absolute;
+  width: 90px;
+  height: 60px;
+  top: 0;
+  border-radius: 30px;
+  transform: scale(0.6);
+  transform-origin: center center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  will-change: transform, background-color;
+  z-index: 10;
+}
+
+/* ── Cursor ─────────────────────────────────────────────────── */
+
+.lg-cursor {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  transform-origin: center center;
+  overflow: hidden;
+}
+
+.lg-cursor.lg-cursor-visible {
+  opacity: 1;
+}
+
+/* ── Input ──────────────────────────────────────────────────── */
+
+.lg-input-wrapper {
+  position: relative;
+  width: 340px;
+  height: 60px;
+  will-change: transform;
+}
+
+.lg-input-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: none;
+  padding: 0 1.5rem;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  outline: none;
+  z-index: 5;
+  letter-spacing: 0.03em;
+  border-radius: 100px;
+}
+
+.lg-input-field::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Textarea ───────────────────────────────────────────────── */
+
+.lg-textarea-wrapper {
+  position: relative;
+  display: grid; /* grid trick: wrapper height follows content */
+  width: 340px;
+  will-change: transform;
+}
+
+/* Hidden ghost that mirrors textarea content and drives the wrapper height */
+.lg-textarea-wrapper::after {
+  content: attr(data-replicated-value) ' ';
+  white-space: pre-wrap;
+  word-break: break-word;
+  visibility: hidden;
+  pointer-events: none;
+  padding: 0.9rem 1.5rem;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  border-radius: 16px;
+  box-sizing: border-box;
+  grid-area: 1/1/2/2; /* same cell as the textarea */
+}
+
+.lg-textarea-field {
+  grid-area: 1/1/2/2; /* occupies same grid cell as ::after */
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0.9rem 1.5rem;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  outline: none;
+  z-index: 5;
+  letter-spacing: 0.03em;
+  border-radius: 16px;
+  resize: none;
+  line-height: 1.5;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.lg-textarea-field::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Select ─────────────────────────────────────────────────── */
+
+.lg-select-wrapper {
+  position: relative;
+  width: 340px;
+  height: 60px;
+  will-change: transform;
+  cursor: pointer;
+}
+
+.lg-select-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.lg-select-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.lg-select-label.lg-select-placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lg-select-chevron {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  will-change: transform;
+  flex-shrink: 0;
+}
+
+.lg-select-chevron svg {
+  width: 100%;
+  height: 100%;
+}
+
+.lg-select-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+  border: none;
+  background: none;
+  font-size: 1rem;
+}
+
+/* ── Checkbox ───────────────────────────────────────────────── */
+
+.lg-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lg-checkbox-box {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  will-change: transform;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lg-checkbox-check {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.lg-checkbox-check svg {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
+}
+
+.lg-checkbox-label-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.03em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Radio ──────────────────────────────────────────────────── */
+
+.lg-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.lg-radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lg-radio-circle {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  will-change: transform;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lg-radio-dot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.lg-radio-dot-inner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.9),
+    0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+.lg-radio-label-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.03em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ── File Upload ─────────────────────────────────────────────── */
+
+.lg-file-upload {
+  position: relative;
+  width: min(340px, 100%);
+  height: 160px;
+  border-radius: 16px;
+  will-change: transform;
+  cursor: pointer;
+}
+
+.lg-file-upload-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.lg-file-upload-icon {
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.2s ease;
+  line-height: 0;
+}
+
+.lg-file-upload-drag .lg-file-upload-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.lg-file-upload-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+}
+
+.lg-file-upload-drag .lg-file-upload-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.lg-file-upload-filename {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  word-break: break-all;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.lg-file-upload-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+  font-size: 0;
+}
+
+/* ── Date Picker ─────────────────────────────────────────────── */
+
+.lg-datepicker-wrapper {
+  position: relative;
+  width: min(340px, 100%);
+  height: 60px;
+  will-change: transform;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.lg-datepicker-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.lg-datepicker-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.lg-datepicker-placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lg-datepicker-icon {
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lg-datepicker-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 304px;
+  background: rgba(10, 10, 15, 0.72);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  padding: 16px;
+  z-index: 100;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform-origin: top left;
+  will-change: opacity, transform;
+}
+
+.lg-datepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.lg-datepicker-nav {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  line-height: 0;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.lg-datepicker-nav:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.lg-datepicker-month-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: default;
+}
+
+.lg-datepicker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+
+.lg-datepicker-weekdays span {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 4px 0;
+  letter-spacing: 0.05em;
+}
+
+.lg-datepicker-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.lg-datepicker-day {
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 2px;
+  border-radius: 8px;
+  text-align: center;
+  line-height: 1.6;
+  transition: background 0.12s ease;
+}
+
+.lg-datepicker-day:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lg-datepicker-day-today {
+  color: var(--lg-accent-2);
+  font-weight: 700;
+}
+
+.lg-datepicker-day-selected {
+  background: rgba(59, 130, 246, 0.45) !important;
+  color: #fff;
+  font-weight: 700;
+}
+
+.lg-datepicker-day-other {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.lg-datepicker-day-disabled {
+  color: rgba(255, 255, 255, 0.15);
+  cursor: not-allowed;
+}
+
+/* ── Dial ───────────────────────────────────────────────────── */
+
+.lg-dial {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lg-dial-knob {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.lg-dial-knob:active {
+  cursor: grabbing;
+}
+
+.lg-dial-indicator {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ── Tooltip ────────────────────────────────────────────────── */
+
+.lg-tooltip {
+  position: absolute;
+  pointer-events: none;
+  transform-origin: bottom center;
+  will-change: transform, opacity;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.lg-tooltip-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ── Progress ───────────────────────────────────────────────── */
+
+.lg-progress {
+  position: relative;
+  height: 36px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  will-change: transform;
+}
+
+.lg-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lg-accent), var(--lg-accent-2));
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+  pointer-events: none;
+  z-index: 2;
+  transition: none;
+}

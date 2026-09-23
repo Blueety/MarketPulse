@@ -1,0 +1,1381 @@
+/* ============================================================================
+   液态玻璃皮肤 · 皮肤本体   skin-kit/css/liquid-skin.css
+   生成方式：由本项目 `src/skin.css`（1292 行，2026-09-22 工作版）机械派生。
+   ============================================================================
+   【派生方式】只做两件事，其余**逐字保留**（包括源码里全部「为什么」的注释 —— 那些
+   踩坑记录就是这套皮肤的核心资产，请勿删除；注释里出现的特异性数字见下方口径说明）：
+
+   1) 作用域替换（纯文本、全局）：源码里以 id 选择器写的皮肤根 97 行 / 98 处
+      → 属性作用域 `[data-liquid-skin]`。覆盖了裸根选择器、`…[data-theme='dark']`、`…[data-bg='solid']`、
+      `… :where(…)`、`… > .skin-*`、`html:has(…)` 等全部形态。
+      · 暗色 = 同一元素上加 `[data-theme='dark']`；纯色背景 = `[data-bg='solid']`。
+      · `body` 的两条 overscroll 兜底（`background-color`）保留，只换内部选择器。
+      · `html:has(…)` 反查同步改写成 `html:has([data-liquid-skin][data-theme='dark'])`。
+   2) 外移（纯搬家，不改计算值）：
+      · 皮肤根块 / 暗色块里的 **23 条令牌声明**（12 浅 + 11 暗）→ `css/tokens.css`；
+      · `@media (prefers-reduced-motion: reduce)` 兜底 → `css/motion.css`。
+      布局、背景（含两条 `@media (min-width:900px)` 光晕块）、`prefers-reduced-transparency`、
+      `forced-colors`、焦点环全部**留在本文件**。
+
+   【加载顺序】硬契约，顺序错 = 变量全空 / 覆盖失效：
+     ① 引擎样式 `@avenra/liquid-glass/styles/liquid-glass.css`（第三方、未分层）
+     ② `css/tokens.css`        ← 令牌必须先于本文件
+     ③ `css/liquid-skin.css`   ← 本文件
+     ④ `css/motion.css`        ← 减动效兜底（放最后，便于消费者覆盖）
+     ⑤ 消费者自己的 CSS
+     类名契约不变：`.skin-*` / `.lg-*` 一律沿用，套件只改作用域前缀，不改类名。
+
+   【为什么不放进 `@layer`（实测结论，别改回去）】
+     未分层（unlayered）样式优先于**所有**分层样式；上游引擎 CSS 是未分层的第三方文件。
+     皮肤一旦进 `@layer`，皮肤对 `.lg-inner` / `.lg-button` 等上游类的覆盖会**全部失效**
+     （未分层的上游规则无条件胜出）→ 玻璃面退回引擎默认外观、导航/按钮全部走样。
+     要隔离只能把引擎 CSS 一起 import 进更靠前的 layer，配方写在 `skin-kit/README.md`。
+     副作用：作用域从 id（1,0,0）降为属性（0,1,0），但源码里每一处「覆盖上游」都至少带
+     一个 `.skin-*` / `.lg-*` 类，实际特异性 ≥ (0,2,0) > 上游单类 (0,1,0)，语义不变。
+
+   【特异性口径】源码注释里的 `(1,3,0)` / `(1,2,0)` 等数字是 id 作用域时代的口径；
+   换成属性作用域后每个选择器各降一档 id 分量（→ `(0,4,0)` / `(0,3,0)`），
+   被比较的两条同降一档 ⇒ **谁压过谁的结论全部保持成立**。
+   ============================================================================ */
+
+/* ============================================================
+   液态玻璃皮肤预览页 — 页内纯 CSS（不 import 主应用 index.css / Tailwind）
+   几何全部服从主应用 IA（见 plan §2.2），材质服从 @avenra/liquid-glass。
+   覆盖上游一律用 [data-liquid-skin] 前缀提优先级；唯一允许 !important 的位置是「暗色边界」
+   与无障碍兜底（见文件末）。
+   ============================================================ */
+
+/* 不 import index.css → 必须自己声明 box-sizing（M9） */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* 同理，UA 默认外边距也不会被 preflight 清掉：实测 `<p>` 的 1em 上下边距把任务行
+   从 66.1px 撑到 91.3px（主应用 li 是 66.1px）。
+
+   ⚠️ 这里用 `:is()` 而不是源码里的 `:where()` —— 套件自检实测的**唯一**差异来源（14 处
+   计算样式差异全部由它引起）：
+     源码作用域是 `#skin-root …`（id，特异性 (1,0,0)）⇒ 即使写作 `:where()`，它照样压过
+     任何类规则；套件作用域是 `[data-liquid-skin] …`（属性，(0,1,0)）⇒ 与同权重的类规则
+     变成「看源序」，于是后写的 `.skin-ov-h3 { margin: 0 0 12px }` / `.skin-toast-sub
+     { margin: 2px 0 0 }` 反而赢了 ⇒ 概览卡 +12px、提醒卡 +2px（真机同 DOM 双样式表比对：
+     14 处差异，全在此）。
+     `:is()` 取参数最大特异性（元素 = (0,0,1)）⇒ 本规则成为 (0,1,1)，与主应用移植层的
+     `html[data-skin='liquid']`（同为 (0,1,1)）**逐位相同**，于是套件与主应用今天渲染一致；
+     比它更强的 (0,2,0)+ 组件规则仍可正常覆盖（如 `.skin-window h3 { … }`）。
+     源码注释里「任何类选择器都能覆盖它」的意图，与 id 作用域下的事实不符 —— 那是源码侧的
+     遗留矛盾，本次**不改源码**（避免动到主应用），只在套件里对齐实际渲染。 */
+[data-liquid-skin] :is(p, h1, h2, h3, h4, h5, h6, ul, ol, figure, blockquote, dl) {
+  margin: 0;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* 页面画布底色（2026-09-21 发现 → 2026-09-22 彻底修好）：
+   原先主题变量只定义在 `[data-liquid-skin]` 上、而它又带 `max-width: 1400px; margin: 0 auto` →
+   视口宽于 1400 时两侧露出 <body> 的 UA 白底（1920 视口像素扫描：x<260 与 x>1660 =
+   rgb(255,255,255)，暗色画布只覆盖 260..1660，左右各 260px 白带）。
+   **主修法已改成把画布铺满**（`[data-liquid-skin]` 去掉 max-width，见文件上方「内容列约束」）；
+   body 这两条保留作 **overscroll / 橡皮筋区域的兜底**（移动端下拉时露出的画布）。
+   body 取不到 `--bg`（变量在 [data-liquid-skin] 上），故用 :has() 反查
+   （主应用 App.tsx:697 已在用 :has()，属既有基线能力）。 */
+body {
+  background-color: #f5f5f7;
+}
+html:has([data-liquid-skin][data-theme='dark']) body {
+  background-color: #191919;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+}
+
+/* ── 皮肤根：布局与背景 ──
+   主题令牌**不在这里**：23 条令牌声明已外移到 `css/tokens.css`（按加载顺序先于本文件加载）。
+   ⚠️ 令牌必须定义在**承载 data-theme 的那个元素**上，否则 var() 全空 → 整页白页。
+   ⚠️ 布局/背景保持在**同一个规则**里（不要为了「整齐」把它们也拆走）：本块的
+      position/min-height/padding/line-height/background-* 与下面的
+      `[data-theme='dark']`、`[data-bg='solid']`、`@media (min-width:900px)` 三条靠
+      源顺序 + 特异性竞争，拆散会改变谁压过谁。
+   ── */
+[data-liquid-skin] {
+
+  position: relative;
+  min-height: 100vh;
+  /* ⚠️ 这里**不能**再写 max-width：背景（细纹 + 光晕）是画在 [data-liquid-skin] 上的，
+     带 max-width 就会在宽屏两侧露出 body 的素色、并在边界留一条纹理接缝
+     （2026-09-22 用户反馈「两侧有空白不好看」）。
+     画布改为铺满视口，内容列的 1400px 约束下移到三个直属子元素，见下方
+     「内容列约束」一节。 */
+  padding: 40px 24px 120px;
+  color: var(--text);
+  /* 对齐 Tailwind preflight 的 `html { line-height: 1.5 }`：主应用正文行盒是 1.5 倍，
+     本页若不显式声明则是 `normal`（≈1.2），13px 的次要行实测 17.0px vs 主应用 19.5px */
+  line-height: 1.5;
+  /* 默认（<900px）：只有细纹。
+     ⚠️ 柔色光晕只在 ≥900px 出现（见下方 @media）：它们是大尺度「可折射内容」，但写的是
+     固定像素 + 相对 [data-liquid-skin] 的百分比，窄屏下会铺满整个可视区、又因为窗口面近乎全透
+     而直接贴在正文后面 —— 读起来像把渐变涂在任务列表上（2026-09-22 用户截图反馈）。
+     依据：tasks/2026-09-21-skin-polish/firefox-refraction.md §3。 */
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.05) 0,
+    rgba(0, 0, 0, 0.05) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+}
+
+/* 柔色光晕：**宽屏限定（≥900px）**，alpha 已按用户反馈下调一档（0.30→0.20 起）。
+   必须放在 `[data-liquid-skin][data-theme='dark']` 之后：dark 的规则特异性更高（0,2,0 vs 0,1,0），
+   深色下不会被这里的浅色写法盖掉；深色自己的光晕版写在本块内（源顺序更晚 → 生效）。 */
+@media (min-width: 900px) {
+  [data-liquid-skin] {
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05) 0,
+        rgba(0, 0, 0, 0.05) 1px,
+        transparent 1px,
+        transparent 7px
+      ),
+      radial-gradient(560px 460px at 16% 22%, rgba(89, 128, 192, 0.2), transparent 70%),
+      radial-gradient(620px 520px at 84% 74%, rgba(89, 192, 126, 0.17), transparent 70%),
+      radial-gradient(440px 400px at 64% 6%, rgba(192, 168, 89, 0.15), transparent 70%);
+  }
+  [data-liquid-skin][data-theme='dark'] {
+    background-image: radial-gradient(circle at 28% -10%, rgba(255, 255, 255, 0.07), transparent 55%),
+      repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.06) 0,
+        rgba(255, 255, 255, 0.06) 1px,
+        transparent 1px,
+        transparent 7px
+      ),
+      radial-gradient(560px 460px at 16% 22%, rgba(127, 164, 216, 0.15), transparent 70%),
+      radial-gradient(620px 520px at 84% 74%, rgba(127, 212, 160, 0.12), transparent 70%),
+      radial-gradient(440px 400px at 64% 6%, rgba(212, 180, 120, 0.11), transparent 70%);
+  }
+}
+
+/* 暗色：11 条令牌覆盖同样在 `css/tokens.css`（那里必须晚于浅色块、同样写在皮肤根元素上）；
+   本块只留暗色背景。 */
+[data-liquid-skin][data-theme='dark'] {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle at 28% -10%, rgba(255, 255, 255, 0.07), transparent 55%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.06) 0,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+}
+
+/* 纯色态（主应用原背景）：关掉条纹，深色保留径向光晕 */
+[data-liquid-skin][data-bg='solid'] {
+  background-image: none;
+}
+[data-liquid-skin][data-theme='dark'][data-bg='solid'] {
+  background-image: radial-gradient(circle at 28% -10%, rgba(255, 255, 255, 0.07), transparent 55%);
+}
+
+/* ── 内容列约束 ──
+   `[data-liquid-skin]` 现在是全宽画布（背景要铺满，见上），1400px 的内容宽度约束落到它的三个
+   在流子元素上（`.skin-toast` / `.skin-banner` / `.skin-previewbar` 是 fixed，不受影响）。
+   ⚠️ 用 `margin-inline` 而不是 `margin: … auto`：后者会把 `.skin-header` 的 `margin-bottom`
+   和 `[data-liquid-skin] .skin-nav` 的 `margin-bottom: 24px` 一起清零。 */
+[data-liquid-skin] > .skin-header,
+[data-liquid-skin] > .skin-nav,
+[data-liquid-skin] > .skin-grid {
+  max-width: 1400px;
+  margin-inline: auto;
+}
+
+/* ── 布局：页头 / 导航胶囊 / 窗口栅格（1:1 复刻 §2.2） ── */
+.skin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.skin-header-email {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.skin-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ⚠️ 必须带 [data-liquid-skin] 前缀：后面的 `.skin-glass { position: relative }` 与 `.skin-nav`
+   同为单类选择器，写在后面会把 position: sticky 覆盖成 relative —— 那样残留的 top: 16px
+   会变成「相对偏移」，导航被画低 16px 且完全不吸顶（实测 nav.top 108 而非布局位 92）。
+   ⚠️ 2026-09-21 修正：容器**恢复为真玻璃宿主**（一度降级成普通 CSS 玻璃面，顺手把这一大块折射面
+   也丢了）。现在容器是玻璃宿主、**chip 是平面按钮**（不挂玻璃）→ 不构成嵌套、也就不会重演
+   「容器面被吃成 rgba(0,0,0,0) + chip 各自凸起」的老毛病。
+   轨道 tint 给在 `.lg-inner` 上（不是宿主），这样折射发生在宿主自己的底色之上、不会被自己盖住。 */
+[data-liquid-skin] .skin-nav {
+  position: sticky;
+  top: 16px;
+  z-index: 30;
+  min-height: 44px;
+  margin-bottom: 24px;
+  padding: 0 10px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+}
+[data-liquid-skin] .skin-nav > .lg-inner {
+  /* 2026-09-22 用户反馈「导航栏不是透明的、是白色的」：原来 0.55 的实心白（为了 chip 可读性）
+     渲染出来是 rgb(250,250,251)，而同高的页面背景是 rgb(239,240,245) —— 亮 10 级，读起来就是白条。
+     降到 0.15 与窗口玻璃（0.06）同一语言；chip 文字 #1d1d1f 在 ~#f2f2f5 上仍有 ~15:1 对比度。
+     可读性由引擎自己的 blur（`blur={4}`）+ sticky 层级保证，不靠加白。 */
+  background: rgba(255, 255, 255, 0.15);
+}
+[data-liquid-skin][data-theme='dark'] .skin-nav {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+[data-liquid-skin][data-theme='dark'] .skin-nav > .lg-inner {
+  background: rgba(30, 30, 30, 0.15);
+}
+
+/* ── 滚动条（2026-09-22 用户反馈「滚动栏有点丑、突兀」） ──
+   原生滚动条是 15px + 灰色实心轨道，压在玻璃面（窗内列表 / 概览窗）和全宽画布上都很抢眼。
+   统一成「细 + 透明轨道 + 半透明滑块」。
+   ⚠️ 只用标准属性 `scrollbar-width` / `scrollbar-color`，**不写 `::-webkit-scrollbar`**：
+   两者同时存在时 Chromium 会忽略 webkit 伪元素（Chrome 121+ 起标准属性优先），
+   写了反而会得到「既不生效、又失去原生」的中间态。标准属性覆盖 Chrome/Edge 121+、Firefox、
+   Safari 18.2+；更老的 Safari 走系统 overlay 滚动条（本来就很淡）。 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+html:has([data-liquid-skin][data-theme='dark']) {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+[data-liquid-skin] .skin-list,
+[data-liquid-skin] .skin-overview {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+}
+[data-liquid-skin][data-theme='dark'] .skin-list,
+[data-liquid-skin][data-theme='dark'] .skin-overview {
+  scrollbar-color: rgba(255, 255, 255, 0.27) transparent;
+}
+.skin-nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  /* ⚠️ 必须抬到 `.lg-inner`(z3) 之上：容器恢复成玻璃宿主后，chip 是**平面按钮**（没有
+     position/z-index），不改就会像提醒卡 F2 一样被玻璃面盖住 —— 玻璃面的 backdrop-filter
+     会把 chip 一起磨掉（2026-09-22 实测：Chromium/Firefox 截图里 nav chip 全糊）。 */
+  position: relative;
+  z-index: 4;
+}
+
+.skin-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+  /* 行内居中（2026-09-21 N9 / F5）：窗口列宽被 max-w 档位封顶（420/340/380），
+     4 个窗口时第 4 个独占第二行 → 左对齐会留下约 970px 的右侧空白。
+     居中后第二行左右空白对称（M10），首行因为三个窗口 flex-grow 顶满、看不出差别。 */
+  justify-content: center;
+}
+.skin-grid > .skin-window {
+  flex: 1 1 calc((100% - 48px) / 3);
+  min-width: 0;
+}
+
+/* ── 玻璃宿主通用 ── */
+.skin-glass {
+  position: relative;
+}
+.skin-glass-body {
+  position: relative;
+  z-index: 4; /* 必须 > .lg-inner(z3)，否则内容被压在玻璃面下 */
+}
+/* 窗口面 tint（2026-09-21 N3 / F3，同日修正）。
+   背景：上游 `.lg-inner` 的 background/border 在它自己的 CSS 里被**注释掉**（死代码），面完全透明
+   → 1px 细斜纹直接穿到正文上（实测窗内无文字区 std 2.695 vs 窗外条纹区 5.422）。
+   ⚠️ 修正：一开始用 `rgba(255,255,255,0.78)` 把面刷实 —— 可读性达标了，但**把液态玻璃本身消灭了**
+   （最大的三块面变成不透明白卡，用户直接反馈「我的液态玻璃呢」）。
+   现改走**扩散而不是遮挡**：窗口玻璃的 `blur` 提到 12px（`feGaussianBlur` 在位移之前，见
+   `GlassSurface` 的 blur 参数）→ 7px 周期的条纹被抹成柔光，正文可读；面只保留 0.1 的轻 tint。
+   实测（真 Chrome）：窗内无文字区 std 0.671→0.6x 量级、drms ≈0.4，与刷白方案同级可读性。 */
+[data-liquid-skin] .skin-window > .lg-inner {
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-liquid-skin][data-theme='dark'] .skin-window > .lg-inner {
+  background: rgba(30, 30, 30, 0.06);
+}
+
+/* ── 窗口壳（radius 24；几何对齐 AppleWindowShell.tsx:60） ── */
+.skin-window {
+  border-radius: 24px;
+  height: calc(100dvh - 340px);
+  min-height: 460px;
+  max-height: 640px;
+  max-width: 420px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+[data-liquid-skin][data-theme='dark'] .skin-window {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+.skin-grid > .skin-window.skin-w-overview {
+  max-width: 340px;
+}
+.skin-grid > .skin-window.skin-w-tag {
+  max-width: 380px;
+}
+.skin-window-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+@media (max-width: 640px) {
+  .skin-window {
+    height: auto;
+    min-height: 300px;
+  }
+  /* 窄屏塌缩修复（2026-09-22）：`flex-basis: calc((100% - 48px) / 3)` 在 390px 视口下
+     会让 3 个窗口挤进一行 → 每个只剩 ~98px，文字竖排。窄屏改成一窗一行。
+     （主应用 App.tsx:697 是同款 flex 写法，同样存在，本次只改皮肤页。） */
+  .skin-grid > .skin-window {
+    flex: 1 1 100%;
+  }
+}
+
+/* 标题栏（AppleWindowShell.tsx:76：h-12 px-5） */
+.skin-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+.skin-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.skin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.skin-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skin-titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.skin-titlebar:hover .skin-titlebar-right {
+  opacity: 1;
+}
+
+/* ── 覆盖上游 .lg-button 写死几何（min-width:160 / min-height:48 / padding:1.2rem 1.8rem） ──
+   ⚠️ 2026-09-21 修正：本轮一度把这些按钮降级成平面控件，整页玻璃宿主 52→8、`.lg-inner` 折射层
+   75→31 —— 「液态玻璃」这个载体特征被拆掉了（用户反馈「我的液态玻璃呢」）。现恢复为真玻璃宿主。
+   ⚠️ 本节覆盖必须同时在位：撤掉它按钮会退回 160×48 的隐形大盒。 */
+[data-liquid-skin] .lg-button {
+  min-width: auto;
+  min-height: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  flex-shrink: 0;
+}
+/* 内容必须抬到 .lg-inner(z3) 之上；只针对 svg/span —— .lg-clone/.lg-inner 是 div，不能碰 */
+[data-liquid-skin] .lg-button > svg,
+[data-liquid-skin] .lg-button > span {
+  position: relative;
+  z-index: 5;
+}
+[data-liquid-skin] .lg-button > svg {
+  color: var(--text);
+  pointer-events: none;
+}
+[data-liquid-skin] .lg-button:hover > svg {
+  color: var(--text);
+}
+[data-liquid-skin][data-theme='dark'] .lg-button:hover > svg {
+  color: #f5f5f5;
+}
+[data-liquid-skin] .lg-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+/* 上游无条件 append 一个空 .lg-button-text：它是 flex item，会白白吃掉一个 gap */
+[data-liquid-skin] .lg-button > .lg-button-text:empty {
+  display: none;
+}
+
+/* ── 小控件的「投影离群」修正（2026-09-22） ──
+   上游每帧给 `.lg-inner` 内联写 `0 {sd}px {sd*3}px rgba(0,0,0,.4)`（hover sd=16 / 静止 sd=8），
+   开关滑块更重：`0 10px 30px rgba(0,0,0,.5)`。而本页所有**面**的投影都在 0.06–0.18 之间
+   （窗口 0.08、导航 0.06、横幅 0.12、提醒卡 0.16、预览条 0.18）：
+   24px 的按钮上挂 24px 模糊 + 40% 黑，是窗口的 **5 倍**，与整个页面的语言完全不符。
+   修法不是删材质（第二轮的教训），而是**只换掉投影数值**：保留玻璃的边缘内高光，
+   外投影降到 1px/2px @10%。内联样式只能用作者 `!important` 压过。
+   代价：悬停/按下的投影动画被固定成静态（缩放弹性仍由 JS 的 transform 动画提供）。 */
+[data-liquid-skin] .skin-icon-btn > .lg-inner,
+[data-liquid-skin] .skin-icon-btn-sm > .lg-inner,
+[data-liquid-skin] .skin-routine-btn > .lg-inner {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+/* 深色变体用更高特异性(1,3,0)，压过文件末尾那条 `[data-liquid-skin][data-theme='dark'] .lg-inner`(1,2,0) */
+[data-liquid-skin][data-theme='dark'] .skin-icon-btn > .lg-inner,
+[data-liquid-skin][data-theme='dark'] .skin-icon-btn-sm > .lg-inner,
+[data-liquid-skin][data-theme='dark'] .skin-routine-btn > .lg-inner {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 1px 2px rgba(0, 0, 0, 0.35) !important;
+}
+/* 背景开关的滑块：上游写死 `0 10px 30px rgba(0,0,0,.5)`（比按钮还重），同档降到 1px/2px */
+[data-liquid-skin] .skin-switch .lg-switch-thumb {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 尺寸（页头 24 / 行内与标题栏 30 / 例行 40），对齐主应用真值 */
+.skin-icon-btn,
+.skin-icon-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.skin-icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 10px;
+}
+.skin-icon-btn > svg {
+  width: 16px;
+  height: 16px;
+}
+.skin-icon-btn-sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+.skin-icon-btn-sm > svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+/* 悬停浅底：必须带 [data-liquid-skin] 前缀，否则被 `[data-liquid-skin] .lg-button { background: none }` 压掉 */
+[data-liquid-skin] .skin-icon-btn:hover:not(:disabled),
+[data-liquid-skin] .skin-icon-btn-sm:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-liquid-skin][data-theme='dark'] .skin-icon-btn:hover:not(:disabled),
+[data-liquid-skin][data-theme='dark'] .skin-icon-btn-sm:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+/* 例行任务按钮：真玻璃宿主（40px 有面，够大，玻璃不会读成「按键」） */
+.skin-routine-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.skin-routine-btn > svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+/* ── 导航胶囊内控件（App.tsx:463-599 真值） ──
+   全部是平面 <button>：高度 24 / 圆角 6 / 12px / gap 6 照旧，只是不再挂玻璃。
+   「激活态」= 色点 + 12% 染色底 + 正文色（染色值由 JSX 内联给出，因为主应用是按**各窗口自己的颜色**
+   染色，不是统一 accent 色）；本页 4 个窗口全开 → 4 个入口全是激活态。 */
+.skin-nav-btn,
+[data-liquid-skin] .skin-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.skin-nav-btn > svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.skin-nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.skin-chip,
+[data-liquid-skin] .skin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.skin-chip-name {
+  white-space: nowrap;
+}
+.skin-chip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.skin-chip-badge.today {
+  background: #2563eb;
+  color: #fff;
+}
+.skin-chip-badge.upcoming {
+  color: #4b5563;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+[data-liquid-skin][data-theme='dark'] .skin-chip-badge.upcoming {
+  color: #9ca3af;
+}
+
+/* 📌 上游 .lg-button 的写死几何是背景/边框来源：这里已全部清零（见上），
+   各控件只用自己的盒模型，因此不会再出现 160x48 的隐形大按钮。 */
+
+/* ── 段控件行（AppleTodoPanel.tsx:329-352 真值：px-4 py-2 / 高度 30 / 圆角 6 / 13px） ── */
+.skin-seg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+.skin-seg-row-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  flex-shrink: 0;
+}
+/* createLiquidRadio 默认竖向 radio 组 → 覆盖成主应用的横排分段形态。
+   ⚠️ 与主应用的已知差异：radio 自带一个 12px 选中指示圆点，主应用分段控件没有该元素。 */
+[data-liquid-skin] .lg-radio-group.skin-seg {
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+[data-liquid-skin] .skin-seg .lg-radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+[data-liquid-skin] .skin-seg .lg-radio-item[aria-checked='true'] {
+  background: var(--surface-opaque);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+/* 上游 radio 每个选项自带一个 12px 圆点（circle 里再套 dot/dotInner，circle 本身还是个玻璃宿主），
+   主应用分段控件没有该元素 → 隐藏（2026-09-21 N6 / F9）。
+   ⚠️ 圆角不动：实测轨道 radius 10px、激活项 6px，与主应用 `rounded-[10px]` / `rounded-md` 逐值相同，
+   plan 里「激活项 10 vs 轨道 999」的说法与实际不符（见 journal.md 事实勘误）。 */
+[data-liquid-skin] .skin-seg .lg-radio-circle {
+  display: none;
+}
+[data-liquid-skin] .skin-seg .lg-radio-label-text {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-shadow: none;
+  letter-spacing: 0;
+}
+[data-liquid-skin] .skin-seg .lg-radio-item[aria-checked='true'] .lg-radio-label-text {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ── 任务列表（AppleTodoPanel.tsx:559-664 真值） ── */
+.skin-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+  overscroll-behavior: contain;
+  cursor: default;
+  user-select: none;
+  list-style: none;
+  margin: 0;
+}
+/* 对应主应用 `<ul className="relative space-y-1.5">`（6px 行距） */
+.skin-list > li + li {
+  margin-top: 6px;
+}
+.skin-task {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 56px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: background-color 0.15s;
+}
+.skin-task:hover {
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.skin-task-main {
+  min-width: 0;
+  flex: 1;
+}
+/* 主应用用 line-clamp-1（单行截断） */
+.skin-task-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.skin-task-title.skin-done {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.skin-task-meta {
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* 任务行操作列（2026-09-21 F6/F7）：主应用是「触屏恒显、指针设备 hover 显现」
+   （index.css:203-216 `.row-action`）。拖拽柄 `.skin-grip` 放在这一列内部 → 随列一起显隐，
+   不再常显（本页没有实现拖拽排序，柄只是主应用的视觉复刻）。 */
+.skin-row-action {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: 2px;
+  opacity: 1;
+}
+.skin-grip {
+  display: inline-flex;
+  color: var(--grip);
+  cursor: grab;
+}
+@media (hover: hover) {
+  .skin-row-action {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .skin-task:hover .skin-row-action,
+  .skin-row-action:focus-within {
+    opacity: 1;
+  }
+}
+
+/* 复选框：主应用是 24px 圆（rounded-full）+ 1px #d2d2d7 描边；选中 #34c759（AppleTodoPanel.tsx:584） */
+[data-liquid-skin] .skin-check {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+[data-liquid-skin] .skin-check .lg-checkbox-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+/* is-checked 由主应用封装声明（它剥掉引擎的 aria-checked）；属性版留给预览页（不剥属性）。 */
+[data-liquid-skin] .skin-check:is(.is-checked, [aria-checked='true']) .lg-checkbox-box {
+  border-color: #34c759;
+  background: #34c759;
+}
+[data-liquid-skin] .skin-check .lg-checkbox-check {
+  color: #fff;
+}
+[data-liquid-skin] .skin-check .lg-checkbox-check svg {
+  width: 14px;
+  height: 14px;
+  filter: none;
+}
+[data-liquid-skin] .skin-check:focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── 页脚：例行任务 + 添加输入 + 分页（AppleTodoPanel.tsx:775-870） ── */
+.skin-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.skin-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  width: 100%;
+}
+[data-liquid-skin] .skin-input .lg-input-field {
+  color: var(--text);
+  font-weight: 400;
+  font-size: 14px;
+  padding: 0 12px;
+  letter-spacing: 0;
+  border-radius: 14px;
+}
+[data-liquid-skin] .skin-input .lg-input-field::placeholder {
+  color: var(--text-muted);
+}
+.skin-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.skin-pager-num {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ── 概览窗口内容（结构对齐 AppleOverviewPanel.tsx:262-330） ── */
+.skin-overview {
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  cursor: default;
+  user-select: none;
+}
+.skin-ov-section {
+  padding-bottom: 18px;
+}
+.skin-ov-bordered {
+  border-top: 1px solid var(--divider);
+  padding-top: 14px;
+}
+.skin-ov-eyebrow {
+  margin-bottom: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+/* ── 完成率：68px 环形 + 居中 18px 数字（2026-09-21 N7 / F10） ──
+   主应用形态见 AppleOverviewPanel.tsx:268-287（`flex items-center gap-5` + Ring + 右侧统计块）。
+   本页原先用「40px 大数字 + 12px 线性进度条」，结构与主应用偏离，且进度条的 inset 阴影带浮雕感。 */
+.skin-ov-rate {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.skin-ov-ring-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.skin-ov-ring {
+  display: block;
+  transform: rotate(-90deg); /* 主应用 Ring 用 `-rotate-90` 让进度从 12 点起 */
+}
+.skin-ov-ring-track {
+  stroke: #e8e8ed;
+}
+[data-liquid-skin][data-theme='dark'] .skin-ov-ring-track {
+  stroke: rgba(255, 255, 255, 0.15);
+}
+.skin-ov-ring-fill {
+  stroke: var(--accent);
+  opacity: 0.85;
+}
+.skin-ov-ring-fill-done {
+  stroke: #34c759;
+}
+.skin-ov-ring-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.skin-ov-metrics {
+  min-width: 0;
+}
+.skin-ov-total {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.skin-ov-done {
+  margin-top: 6px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.skin-ov-mini {
+  margin-top: 6px;
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+/* 对应 AppleOverviewPanel.tsx:292 `<h3 class="mb-3 text-sm font-medium text-gray-500">` */
+.skin-ov-h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* 趋势区标题行：标题 + 7/30 天两档切换（对应 AppleOverviewPanel.tsx:318-338） */
+.skin-ov-trend-head {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* 对应 AppleOverviewPanel.tsx:320 `<h3 class="text-[16px] font-semibold text-gray-800">` */
+.skin-ov-h3-trend {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.skin-ov-trend-toggle {
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px;
+  background: rgba(243, 244, 246, 0.8);
+}
+[data-liquid-skin][data-theme='dark'] .skin-ov-trend-toggle {
+  background: rgba(255, 255, 255, 0.1);
+}
+.skin-trend-btn {
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  color: #9ca3af;
+  transition: background-color 0.15s, color 0.15s;
+}
+.skin-trend-btn:hover {
+  color: #4b5563;
+}
+.skin-trend-btn.is-on {
+  background: rgba(229, 231, 235, 0.9);
+  color: var(--text);
+}
+[data-liquid-skin][data-theme='dark'] .skin-trend-btn {
+  color: #9ca3af;
+}
+[data-liquid-skin][data-theme='dark'] .skin-trend-btn:hover {
+  color: #d1d5db;
+}
+[data-liquid-skin][data-theme='dark'] .skin-trend-btn.is-on {
+  background: rgba(255, 255, 255, 0.2);
+  color: #f5f5f5;
+}
+.skin-ov-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.skin-ov-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 15px;
+}
+.skin-ov-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--hairline);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.skin-ov-check > svg {
+  width: 14px;
+  height: 14px;
+}
+.skin-ov-recent-title {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-muted);
+  text-decoration: line-through;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+.skin-ov-recent-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.skin-ov-chart {
+  width: 100%;
+  height: 90px;
+  display: block;
+}
+
+/* ── more 菜单浮层：原生 HTML、不透明底。
+      ⚠️ 口径更新（2026-09-23，plan `tasks/2026-09-23-glassify-popovers` §4.3-4）：
+      原先写的「浮层不套玻璃」决策**已被反转** —— 主应用的 8 个弹层/浮层面板现在都套液态玻璃
+      （`.skin-popover`，见 `liquid-skin.css` 的浮层面板材质块）。
+      这里保留不透明底的是**预览页（/skin.html）的原生 `.skin-menu`**：它是纯 HTML 评估工具、
+      不在 `GlassSurface` 的 React 路径上，故不参与本次统一。 ── */
+.skin-menu {
+  position: absolute;
+  right: 8px;
+  top: 48px;
+  z-index: 40;
+  width: 208px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--menu-border);
+  background: var(--surface-opaque);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+.skin-menu-label {
+  padding: 0 4px 6px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+.skin-menu-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px 8px;
+}
+.skin-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.skin-menu-sep {
+  border-top: 1px solid var(--divider);
+  padding-top: 4px;
+}
+.skin-menu-danger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: #dc2626;
+  cursor: pointer;
+}
+.skin-menu-danger:hover {
+  background: #fef2f2;
+}
+[data-liquid-skin][data-theme='dark'] .skin-menu-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+.skin-menu-danger > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── 全局层：提醒卡（主应用 fixed bottom-16 right-16；本页因右下角被预览控制条占用而上移） ── */
+.skin-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  z-index: 60;
+  width: 320px;
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.16);
+}
+.skin-toast-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.skin-toast-badge {
+  margin-top: 2px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+}
+.skin-toast-badge > svg {
+  width: 12px;
+  height: 12px;
+}
+.skin-toast-main {
+  min-width: 0;
+  flex: 1;
+}
+.skin-toast-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
+}
+.skin-toast-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.skin-toast-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 提醒卡按钮：主应用是「主色实心 + 次要 ghost」两档（ReminderToasts.tsx:67,75），
+   不再用玻璃控件 —— 提醒卡面板本身就是玻璃宿主，内部再挂玻璃 = 玻璃套玻璃（F2 同类缺陷）。 */
+.skin-toast-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.skin-toast-btn-ghost {
+  background: none;
+  color: #6e6e73;
+}
+.skin-toast-btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+[data-liquid-skin][data-theme='dark'] .skin-toast-btn-ghost {
+  color: #d1d5db;
+}
+[data-liquid-skin][data-theme='dark'] .skin-toast-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+}
+.skin-toast-btn-primary {
+  background: #1d1d1f;
+  color: #fff;
+  font-weight: 500;
+}
+.skin-toast-btn-primary:hover {
+  background: #000;
+}
+[data-liquid-skin][data-theme='dark'] .skin-toast-btn-primary {
+  background: #fff;
+  color: #1d1d1f;
+}
+[data-liquid-skin][data-theme='dark'] .skin-toast-btn-primary:hover {
+  background: #e5e7eb;
+}
+
+/* 连接横幅（主应用 fixed bottom-16 left-50% translate-x-1/2） */
+.skin-banner {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
+  background: #fef3c7;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+[data-liquid-skin][data-theme='dark'] .skin-banner {
+  background: #451a03;
+}
+.skin-banner-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #92400e;
+}
+[data-liquid-skin][data-theme='dark'] .skin-banner-text {
+  color: #fcd34d;
+}
+.skin-banner-retry {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #b45309;
+  cursor: pointer;
+}
+[data-liquid-skin][data-theme='dark'] .skin-banner-retry {
+  color: #fcd34d;
+}
+
+/* ── 预览控制条（plan §5.3 三个必带控件；右下角固定、视觉低调） ── */
+.skin-previewbar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-opaque) 90%, transparent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+  max-width: calc(100vw - 32px);
+  flex-wrap: wrap;
+}
+.skin-previewbar-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.skin-switch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+/* 上游 .lg-switch-track 写死 160x67：宿主收到确定尺寸，缩放放在轨道上（避免轨道撑出隐形大盒） */
+.skin-switch {
+  width: 102px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+[data-liquid-skin] .skin-switch .lg-switch-track {
+  transform: scale(0.62);
+  transform-origin: left center;
+}
+/* 强调色统一（2026-09-21 N8 / F4）：上游 switch 的**选中轨道底色是 JS 内联写死的
+   `rgb(139,92,246)`（= violet-500）**（`liquid-glass.esm.js:737` 的 `Math.round(255+(139-255)*tc)`），
+   `--lg-accent` 管不到它（该变量只喂 `.lg-progress` 的渐变）→ 只能用 `!important` 压过内联样式。
+   原先只有这一个控件是紫色，与页面其余部分的蓝形成第三套强调色。 */
+[data-liquid-skin] .skin-switch[aria-checked='true'] .lg-switch-track {
+  background-color: color-mix(in srgb, var(--accent) 50%, transparent) !important;
+}
+.skin-skintoggle {
+  display: inline-flex;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+}
+.skin-skintoggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.skin-skintoggle button[aria-current='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+.skin-degraded-hint {
+  font-size: 11px;
+  color: #b45309;
+  max-width: 220px;
+}
+[data-liquid-skin][data-theme='dark'] .skin-degraded-hint {
+  color: #fcd34d;
+}
+
+/* ── 焦点可见环（页内自带，不假设上游提供，M15） ── */
+[data-liquid-skin] :focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+[data-liquid-skin] .lg-button:focus-visible,
+[data-liquid-skin] .skin-seg .lg-radio-item:focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+}
+
+/* ── 暗色边界：上游把 .lg-inner 的 border/background/box-shadow 在 CSS 里注释掉了、
+   内联 box-shadow 由 JS 写入，唯一能击败内联的只有 !important。
+   这是「对上游的本地覆盖」，不是上游行为（plan §2.1c 事实 6 / M14）。 ── */
+[data-liquid-skin][data-theme='dark'] .lg-inner {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+}
+
+/* ── 引擎分流：磨砂材质（非折射引擎/环境） ──
+   来源：主应用移植层 `src/liquid-skin.css:723-757`（原为 `html[data-glass-engine='frost']` 一节），
+   作用域与选择器**逐字搬运**，只把「暗色」从 `<html>.dark` 改成套件的 `[data-liquid-skin][data-theme='dark']`。
+
+   为什么必须有这一节（实测）：Chromium 走 `backdrop-filter: url(#lg-N)` 实时折射，Firefox / Safari
+   的 CSSOM 接受该写法但**不渲染**（实测与基线 meanDiff = 0），引擎自带的降级是
+   `blur(8px) saturate(1.4) brightness(1.05)` —— 比主应用调好的磨砂**更薄**（窗内细纹透上来、正文可读性下降）。
+   本节给出主应用实测定稿的磨砂：blur 16 / saturate 160% / brightness 1.03 + 面染色 + 1px 内高光。
+   `data-glass-engine` 由 `js/engine-mode.js` 在首帧前写到 `<html>` 上（判定必须用引擎的
+   `supportsBackdropFilter()`：`@supports (backdrop-filter: url(#x))` 在 Firefox 上返回 true —— 解析通过但不渲染）。
+   ⚠️ 不写这一节时，非折射环境不会白屏，只是**材质比主应用弱一档**（对比度实测下降）。
+
+   ⚠️ 特异性预算（照抄源码注释里的纪律，否则会踩两类坑）：
+     · 通用面 (0,2,1)：与主应用逐位相同；
+     · 暗色 box-shadow 用满特异性 (0,4,1) —— 必须压过上面那条暗色边界 (0,3,0)，而它不与无障碍兜底抢属性；
+     · **面染色一律 `:where()` 降到 (0,2,0)** —— 必须低于 `prefers-reduced-transparency` 的兜底同权重、
+       靠源序（无障碍媒体查询在本节之后）胜出，否则「减少透明度」下窗口仍是不透明染色 = 无障碍承诺失效；
+       暗色染色同样 (0,2,0)、排在浅色之后胜出。
+   ⚠️ 材质声明必须 `!important`：上游把 backdrop-filter / box-shadow 写成 `.lg-inner` 的**内联样式**。 */
+html[data-glass-engine='frost'] .lg-inner {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: blur(calc(16px * var(--lg-tune-frost-blur, 1))) saturate(calc(160% * var(--lg-tune-frost-sat, 1)))
+    brightness(calc(1.03 * var(--lg-tune-frost-bri, 1))) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, calc(0.55 * var(--lg-tune-hi, 1))),
+    0 10px 30px rgba(0, 0, 0, calc(0.06 * var(--lg-tune-shadow, 1))) !important;
+}
+html[data-glass-engine='frost'] [data-liquid-skin][data-theme='dark'] .lg-inner {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, calc(0.14 * var(--lg-tune-hi, 1))),
+    0 10px 30px rgba(0, 0, 0, calc(0.5 * var(--lg-tune-shadow, 1))) !important;
+}
+/* 窗口 / 导航面的染色：上游 0.06 在磨砂下太薄（面背后是带细纹的画布） */
+:where(html[data-glass-engine='frost']) .skin-window > .lg-inner {
+  background: rgba(255, 255, 255, calc(0.16 * var(--lg-tune-tint, 1))) !important;
+}
+:where(html[data-glass-engine='frost']) .skin-nav > .lg-inner {
+  background: rgba(255, 255, 255, calc(0.15 * var(--lg-tune-tint, 1))) !important;
+}
+:where(html[data-glass-engine='frost']) :where([data-liquid-skin][data-theme='dark']) .skin-window > .lg-inner {
+  background: rgba(30, 30, 30, calc(0.22 * var(--lg-tune-tint, 1))) !important;
+}
+:where(html[data-glass-engine='frost']) :where([data-liquid-skin][data-theme='dark']) .skin-nav > .lg-inner {
+  background: rgba(30, 30, 30, calc(0.15 * var(--lg-tune-tint, 1))) !important;
+}
+
+/* ── 滚动期间再降一档 ──
+   主应用有两条（Chromium 侧 `html[data-skin='liquid'].is-scrolling` 与磨砂侧
+   `html[data-glass-engine='frost'].is-scrolling`），但**声明完全相同** ⇒ 套件合并为一条。
+   触发方式：滚动开始时给 `<html>` 加 `.is-scrolling`（本项目的实现见
+   `port-example/liquid-skin.css` 对应的 `src/lib/scrollDegrade.ts`；套件不搬那段 JS）。
+   不用 `none`：`.lg-inner` 背景透明、边缘靠 box-shadow，置 none 会让玻璃在滚动时整块消失（闪一下）。 */
+html.is-scrolling [data-liquid-skin] .lg-inner {
+  backdrop-filter: blur(var(--lg-tune-degrade-blur, 12px)) saturate(140%) !important;
+}
+
+/* ── 无障碍兜底（上游 CSS 里 0 条 @media，全部由页内补，M5） ──
+   本文件保留 `prefers-reduced-transparency` + `forced-colors` 两条（它们必须紧挨着
+   `.lg-inner` 的覆盖块，跟顺序强相关）；`prefers-reduced-motion` 在 `css/motion.css`。 */
+@media (prefers-reduced-transparency: reduce) {
+  [data-liquid-skin] .lg-inner {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: color-mix(in srgb, var(--surface-opaque) 92%, transparent) !important;
+  }
+}
+/* `@media (prefers-reduced-motion: reduce)` 兜底已移入 `css/motion.css`（仍在同一次加载里，
+   且加载顺序更晚 → 覆盖能力只增不减）。 */
+@media (forced-colors: active) {
+  [data-liquid-skin] .lg-inner {
+    border: 1px solid CanvasText !important;
+  }
+}

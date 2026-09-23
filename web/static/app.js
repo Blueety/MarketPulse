@@ -880,16 +880,24 @@ function renderLede() {
   });
 
   el.innerHTML = cells.map(function (c) {
-    return '<div class="kpi-card kpi-' + c.kind + '">' +
+    // 液态玻璃皮肤（2026-09-23）：KPI 卡是**动态重建**区（每次 renderLede 都换 innerHTML）⇒
+    // 材质标记与包裹层都写在模板里，重建后由 remount 重挂（见函数末尾）。`.kpi-card` 是 2 列 grid，
+    // 包裹层靠 `skin/mp-skin.css` 的 `display:contents` 透传，**不改 grid 轨迹**。
+    return '<div class="kpi-card kpi-' + c.kind + ' skin-glass"' +
+      ' data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">' +
+      '<div class="skin-glass-body">' +
       '<div class="kpi-info">' +
         '<div class="kpi-label">' + escapeHtml(c.label) + '</div>' +
         '<div class="kpi-val">' + escapeHtml(c.val) + '</div>' +
         '<div class="kpi-sub ' + c.subCls + '">' + escapeHtml(c.sub) + '</div>' +
       '</div>' +
       '<canvas class="kpi-spark" data-sym="' + escapeHtml(c.sym || '') + '"></canvas>' +
+      '</div>' +
       '</div>';
   }).join('');
   paintSparklines();
+  // 皮肤重挂：只建还没建过的面（引擎按 `_lgInit` 幂等）；mpSkin 未就绪时静默跳过，下次渲染再挂。
+  if (window.mpSkin && window.mpSkin.remount) window.mpSkin.remount(el);
 }
 
 // === KPI sparkline（原生 canvas，不用 Chart.js）===

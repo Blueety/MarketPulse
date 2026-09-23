@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN" data-theme="light" data-liquid-skin>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -24,7 +24,41 @@
   })();
 </script>
   <!-- 资源 URL 带 mtime 版本号：CSS/JS 改动后 URL 变化，绕过任何忽略缓存头的中间层 -->
+  <!-- ═══ 液态玻璃皮肤（2026-09-23，仅本页接入；顺序是硬契约，见 skin/mp-skin.css 文件头）═══
+       ① 第三方引擎样式（vendored，禁止改写/内联）→ ② 皮肤令牌 → ③ 皮肤本体 → ④ 减动效守卫
+       → ⑤ 宿主 CSS（既有位置，不动）→ ⑥ 宿主补丁层（最后） -->
+  <link rel="stylesheet" href="/static/vendor/liquid-glass/liquid-glass.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/skin/tokens.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/skin/liquid-skin.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/skin/motion.css?v={{ asset_v }}">
   <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+  <!-- 皮肤宿主补丁层：必须**最后**（靠源顺序压过套件与宿主）。见 skin/mp-skin.css 文件头。 -->
+  <link rel="stylesheet" href="/static/skin/mp-skin.css?v={{ asset_v }}">
+  <script>
+    // 皮肤首帧分流：`data-glass-engine` 必须在**首帧前**落定，否则先按另一条材质路线画一帧再切换（闪一次）。
+    // 这里是 **classic** 内联脚本 ⇒ 不能 import 引擎 ⇒ 只能假性判定，且**必须与引擎同判据**
+    // （引擎 `supportsBackdropFilter()` = `!!window.chrome && CSSOM 接受 url(#…)`），否则每页都会
+    // 先画错一帧再被 skin.js 改正 + 打一条 warn。`window.__MP_FORCE_ENGINE` 供验收强制档位。
+    // ⚠️ 不能用 `@supports (backdrop-filter: url(#x))`：Firefox 上它返回 true 但不渲染（会误判成 Chromium）。
+    (function () {
+      try {
+        var forced = window.__MP_FORCE_ENGINE;
+        if (forced === 'refract' || forced === 'frost') {
+          document.documentElement.dataset.glassEngine = forced;
+          return;
+        }
+        var probe = document.createElement('div');
+        probe.style.backdropFilter = 'url(#lg-probe)';
+        var acceptsUrl = String(probe.style.backdropFilter).indexOf('url') >= 0;
+        document.documentElement.dataset.glassEngine =
+          (!!window.chrome && acceptsUrl) ? 'refract' : 'frost';
+      } catch (e) {
+        document.documentElement.dataset.glassEngine = 'frost';
+      }
+    })();
+  </script>
+  <!-- 皮肤运行时（ESM，动态 import vendored 引擎）：分帧挂载 + 滚动降级 + 重挂载钩子 -->
+  <script type="module" src="/static/skin.js?v={{ asset_v }}"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
           onerror="window.__chartFailed=true"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"
@@ -62,7 +96,12 @@
 
         <!-- 行 2：市场趋势（四图合一 + 类别 tab）+ 自选列表（迷你条） -->
         <div class="row-main">
-          <section class="card" id="trend">
+          <!-- ⚠️ data-blur=1.5（plan §11.1.5 参数表写的是 2.5）：实测 blur 2.5 把 16px 方格抹到
+               留存比 0.367（判据 ≥0.40），blur 1.5 → 0.458。依据是 plan §0 C2 自己的物理结论
+               （衰减 ≈ exp(−2π²σ²/P²)，P=16 / σ=2.5 → 0.62）。 -->
+          <section class="card skin-glass" id="trend"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <div class="card-head">
               <h2>市场趋势 <span class="h2-sub" id="range-label">近 30 日</span></h2>
               <div class="seg" id="trend-tabs"></div>
@@ -89,9 +128,12 @@
               <canvas id="chart-main"></canvas>
             </div>
             <p class="empty chart-empty hidden" id="chart-main-empty"></p>
+            </div><!-- /.skin-glass-body -->
           </section>
 
-          <section class="card hidden" id="watchlist-section">
+          <section class="card hidden skin-glass" id="watchlist-section"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <h2>自选列表 <span class="h2-sub">· 按涨跌幅排序 · config.json 配置 · <span id="watchlist-asof">收盘快照</span> · <span id="watchlist-pnl" hidden></span></span></h2>
             <div class="table-scroll">
               <table class="data-table watchlist-table">
@@ -102,12 +144,15 @@
                 <tbody id="watchlist-body"><tr class="sk-row"><td colspan="6"><span class="skeleton sk-line"></span></td></tr><tr class="sk-row"><td colspan="6"><span class="skeleton sk-line"></span></td></tr></tbody>
               </table>
             </div>
+            </div><!-- /.skin-glass-body -->
           </section>
         </div>
 
         <!-- 行 3：市场概览（6 小卡）+ 市场情绪 & 资金流向（3 子块）+ 行业板块表现（A股/美股 双 tab） -->
         <div class="row-3">
-          <section class="card" id="overview">
+          <section class="card skin-glass" id="overview"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <h2>市场概览 <span class="h2-sub" id="overview-sub">· 最新交易日</span></h2>
             <div class="mini-grid" id="overview-body">
               <div class="skeleton sk-card"></div>
@@ -117,9 +162,12 @@
               <div class="skeleton sk-card"></div>
               <div class="skeleton sk-card"></div>
             </div>
+            </div><!-- /.skin-glass-body -->
           </section>
 
-          <section class="card" id="sectors">
+          <section class="card skin-glass" id="sectors"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <h2>市场情绪 &amp; 资金流向</h2>
             <div class="sub-block" id="risk-appetite">
               <h3>风险偏好</h3>
@@ -133,9 +181,12 @@
               <h3>市场关系</h3>
               <div class="pill-row"></div>
             </div>
+            </div><!-- /.skin-glass-body -->
           </section>
 
-          <section class="card" id="us-sectors">
+          <section class="card skin-glass" id="us-sectors"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <div class="card-head">
               <!-- 陈旧回填标注：as_of ≠ /api/latest 的 date 时由 renderSectorAsOf() 填文案。
                    ⚠️ 必须是 h2 内的行内 span（与「市场概览 · 最新交易日」同款）→ 靠 line-height
@@ -186,12 +237,15 @@
                 </div>
               </div>
             </div>
+            </div><!-- /.skin-glass-body -->
           </section>
         </div>
 
         <!-- 行 4：告警记录（窄）+ 最新资讯（宽）；资金流向/风险偏好已移入行 3 中卡作子块 -->
         <div class="row-news">
-          <section class="card" id="alerts">
+          <section class="card skin-glass" id="alerts"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <h2>告警记录 <span class="h2-sub">· 最近 10 条</span></h2>
             <div id="alert-list" class="alert-list">
               <div class="skeleton sk-item"></div>
@@ -200,11 +254,15 @@
               <div class="skeleton sk-item"></div>
               <div class="skeleton sk-item"></div>
             </div>
+            </div><!-- /.skin-glass-body -->
           </section>
 
-          <section class="card" id="news">
+          <section class="card skin-glass" id="news"
+                   data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">
+            <div class="skin-glass-body">
             <h2>最新资讯 <span class="h2-sub" id="news-date"></span></h2>
             <div id="news-body"></div>
+            </div><!-- /.skin-glass-body -->
           </section>
         </div>
 

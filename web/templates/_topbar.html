@@ -1,4 +1,9 @@
-  <header class="topbar">
+  <header class="topbar skin-glass" data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="4">
+    <!-- ⚠️ 本 include 被 6 个页面共用：`data-liquid-glass` 只在 `/`（唯一加载 skin.js 的页）生效，
+         其余 5 页无 skin.js ⇒ 这些属性完全惰性。**故意不在这里包 `.skin-glass-body`**：那会改动
+         其余 5 页的顶栏 DOM（wrapper 成为 flex item ⇒ 破坏 .topbar 的 flex 分布），
+         改由 `skin/mp-skin.css` §4 直接给顶栏的既有子元素抬 z-index（同一不变量、零 DOM 风险）。
+         详见 tasks/2026-09-23-web-liquid-glass-skin/journal.md 的「偏离记录」。 -->
     <button id="menu-toggle" type="button" class="icon-btn" title="菜单">☰</button>
     <div class="brand">
       <span class="brand-logo">M</span>

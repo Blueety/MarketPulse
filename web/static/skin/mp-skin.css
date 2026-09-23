@@ -1,0 +1,190 @@
+/* ============================================================================
+   MarketPulse 宿主补丁层 · web/static/skin/mp-skin.css
+   ----------------------------------------------------------------------------
+   职责：把 skin-kit（套件）接到 MarketPulse 既有宿主 CSS 上。**必须是最后一张样式表**：
+     ① 引擎样式 /static/vendor/liquid-glass/liquid-glass.css
+     ② /static/skin/tokens.css        （套件令牌 → 宿主令牌的别名）
+     ③ /static/skin/liquid-skin.css   （套件皮肤本体，原样 vendored）
+     ④ /static/skin/motion.css        （套件减动效守卫，原样 vendored）
+     ⑤ /static/style.css              （宿主 CSS，既有位置）
+     ⑥ **本文件**                      ← 永远最后（靠源顺序压过套件与宿主）
+   ⚠️ 禁止 @layer：未分层样式优先于所有分层样式，引擎 CSS 未分层 ⇒ 一旦分层，皮肤覆盖全失效。
+   ----------------------------------------------------------------------------
+   本期范围：仅 `/` 首页（本期不动 /macro、/macro/cn、/timeline、/backtest、/settings）。
+   依据：tasks/2026-09-23-web-liquid-glass-skin/plan.md §3.2 / §11.1.7（配方逐字）。
+   ============================================================================ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1 画布（背景）：16px 方格纸 + 宿主两层环境光
+   ──────────────────────────────────────────────────────────────────────────
+   为什么要有纹理：引擎材质 = feGaussianBlur(σ≈2.5) → feDisplacementMap(scale≈11px)。
+   纹理周期 P 经高斯模糊后的对比衰减 ≈ exp(−2π²σ²/P²)：P=6px 只剩 ~3%（全灭），
+   P=16px 保留 ~52%。所以间距必须 ≥16px，且不能太淡。实测见 plan §3.1。
+   ⚠️ **线强度取 α=.10（用户 2026-09-24 定档；plan §3.1 的备选档）**：α=.06 时单线对比仅 ≈13/255，
+      透过 46% 染色后剩 ≈6/255，目视「液态感」偏弱；.10 把卡外 d11 抬到 ≈2.7、玻璃面后 ≈1.3。
+      代价是整页方格更显眼（用户已确认接受）。改前 α=.06 的基线数值见 journal §2/§9。
+   ⚠️ 多层 background-image 里**每一层都必须是合法图像**：`<纹理>, none` 是非法值，
+      整条声明会被丢弃（2026-09-12 的旧纹理尝试踩过）。
+   ⚠️ 纹理层不参与布局 ⇒ 不影响 scrollHeight 基线。
+   ⚠️ 套件皮肤本体也会画画布（`[data-liquid-skin]` 的斜纹 + body 的 #f5f5f7），
+      且 `html:has([data-liquid-skin][data-theme='dark']) body` 的特异性高到能压过宿主
+      `body` 规则 —— 故这里用**同特异性 + 更晚源序**把两者都收回宿主口径（plan §8 R10）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 关上套件画布（html 层）：底色回到宿主令牌，斜纹/光晕全部关掉。
+   ⚠️ 还必须清掉套件皮肤根上的**布局**声明：套件假设皮肤根是「应用内容列」（它的 demo 里就是
+      一个 div），于是给了 `padding: 40px 24px 120px` + `min-height: 100vh` + `position: relative`
+      —— 挂到 `<html>` 上会整体内缩 40/24/120px（页面总高 +160px、栅格错位）。
+      本项目的皮肤根是 `<html>`（令牌必须与 data-theme 同元素），所以这几条必须归零。 */
+html[data-liquid-skin],
+html[data-liquid-skin][data-theme='dark'] {
+  position: static;
+  min-height: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  background-image: none;
+}
+
+/* 宿主画布：方格纸（2 层）+ 环境光（宿主既有 --ambient-1/--ambient-2）
+   线强度 α = .10（2026-09-24 定档，见上方说明） */
+html[data-liquid-skin] body {
+  background-color: var(--bg-primary);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(17, 24, 39, .10) 0 1px, transparent 1px 16px),
+    repeating-linear-gradient(90deg, rgba(17, 24, 39, .10) 0 1px, transparent 1px 16px),
+    var(--ambient-1), var(--ambient-2);
+  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: fixed;
+}
+/* 暗色：等比例换白线（浅色配方的镜像，同为 α=.10；暗色留存比按同一判据复测，plan §11.5 M2） */
+html[data-liquid-skin][data-theme='dark'] body {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .10) 0 1px, transparent 1px 16px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .10) 0 1px, transparent 1px 16px),
+    var(--ambient-1), var(--ambient-2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §2 宿主旧玻璃让位（不变量 I7：不许玻璃套玻璃）
+   ──────────────────────────────────────────────────────────────────────────
+   今天 .card/.kpi-card/.topbar 自带 `backdrop-filter: var(--glass-blur)` + 半透明白底。
+   接上引擎后材质由 **.lg-inner** 承担；宿主那一层必须同时关掉 blur **和**底色 ——
+   只关 blur 不够：玻璃面在宿主自己的白底之上采样，卡内纹理会直接归零（spike 实测）。
+   ⚠️ .card.promo 不在让位范围（D-9：它是「实底锚点」，保留自身的品牌渐变 +
+      显式 backdrop-filter:none，其规则特异性高于 .card ⇒ 天然不冲突）。
+   ══════════════════════════════════════════════════════════════════════════ */
+/* ⚠️ 必须把 `#overview, #trend, #alerts` 一并列出：宿主对这三张「数据密集卡」有一条
+   **id 级**规则 `#overview, #trend, #alerts { background: var(--glass-bg-strong) }`
+   （style.css:264，(1,0,0)）—— 只写 `.card` 压不过它，卡片仍是 88% 白底，
+   玻璃会采样到「宿主自己的白底」⇒ 卡内纹理直接归零（plan §8 R3 的实测结论）。 */
+.card,
+.kpi-card,
+.topbar,
+#overview,
+#trend,
+#alerts {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3 材质面板染色
+   ──────────────────────────────────────────────────────────────────────────
+   套件窗口染色只有 .06 ⇒ 数据密集看板会「几乎全透」（正文发飘）。这里给到 46% 的
+   --bg-elevated（双主题自动跟随：light #FFF / dark #111827）。
+   ⚠️ 染色必须落在 **.lg-inner**（材质层）上：宿主的 background 在材质层**下面**，
+      染到宿主身上等于没染（会被引擎的 backdrop 采样排除在外）。
+   ⚠️ 不要用 !important 抢引擎的内联 backdrop-filter（plan §8 R6）。
+   ══════════════════════════════════════════════════════════════════════════ */
+.card > .lg-inner,
+.kpi-card > .lg-inner,
+.topbar > .lg-inner {
+  background: color-mix(in srgb, var(--bg-elevated) 46%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §4 内容层抬升
+   ──────────────────────────────────────────────────────────────────────────
+   引擎把 .lg-inner 插成宿主的**第一个子节点**并给 z-index:3 ⇒ 定位元素会盖住
+   未定位的正文。故内容必须抬到 z4。
+   做法：模板里给每个玻璃宿主的内容包一层 `<div class="skin-glass-body">`；
+   宿主若是 flex/grid 容器（.kpi-card 是 2 列 grid、.topbar 是 flex 行），
+   wrapper 用 `display:contents` 透传（不生成盒子、不破坏原有轨迹），
+   改由它的子元素自己承担层级。
+   ⚠️ `.skin-glass-body{z-index:4}` 与套件同名规则一致（套件 liquid-skin.css 亦定义同值），
+      此处复述是为了「宿主补丁层自洽」：删掉套件也能看懂这一层为何存在。
+   ══════════════════════════════════════════════════════════════════════════ */
+.skin-glass-body {
+  position: relative;
+  z-index: 4;
+}
+.kpi-card > .skin-glass-body,
+.topbar > .skin-glass-body {
+  display: contents;
+}
+.kpi-card > .skin-glass-body > *,
+.topbar > .skin-glass-body > * {
+  position: relative;
+  z-index: 4;
+}
+/* 顶栏**没有** `.skin-glass-body` 包裹层（它是 6 页共用的 include，加 wrapper 会改到其余 5 页的
+   顶栏 DOM）⇒ 直接抬既有的 flex 子元素（`position:relative` 在 flex 容器里不改变布局）。
+   ⚠️ 必须排除引擎自己插入的 `.lg-clone` / `.lg-inner` 与那棵 `<svg><filter>`。 */
+.topbar > :not(.lg-clone):not(.lg-inner):not(svg) {
+  position: relative;
+  z-index: 4;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §5 滚动条让位（plan §8 R9）
+   ──────────────────────────────────────────────────────────────────────────
+   套件无条件写了 `html { scrollbar-width: thin; scrollbar-color: … }`。宿主实测结论
+   （style.css:150-171）：**Chromium 只要看到 scrollbar-width 非 auto，就整块忽略
+   ::-webkit-scrollbar** ⇒ 宿主的 6px 细滚动条会退化成 10px。故：
+     · Chromium：把根元素的两个标准属性复位成 auto（放行 webkit 伪元素路由）；
+     · Firefox：用宿主自己的 -moz 门控块给回 thin + 主题色（与 style.css 同款门控）。
+   ══════════════════════════════════════════════════════════════════════════ */
+html {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+@supports (-moz-appearance: none) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §6 调参通道（默认全部未设置 ⇒ var(--lg-tune-*, 1) 恒等，逐像素不变）
+   ──────────────────────────────────────────────────────────────────────────
+   需要现场调材质时在 <html> 上写倍率（**倍率不是绝对值**）：
+     --lg-tune-tint / hi / shadow / frost-blur / frost-sat / frost-bri / degrade-blur
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §7 引擎加载失败降级
+   ──────────────────────────────────────────────────────────────────────────
+   `skin.js` 的动态 import 失败时（离线 / 文件缺失 / 被拦截），页面若只剩「让位后的透明卡片」
+   就会变成「文字浮在背景上、没有面」。此时给它把**宿主自己的旧玻璃**装回去（双主题 token 仍在），
+   视觉回到换肤前的水准，功能零影响。标记由 skin.js 写在 `<html data-skin-degraded="1">`。
+   ══════════════════════════════════════════════════════════════════════════ */
+html[data-skin-degraded='1'] .card:not(.promo),
+html[data-skin-degraded='1'] .kpi-card,
+html[data-skin-degraded='1'] .topbar,
+html[data-skin-degraded='1'] #overview,
+html[data-skin-degraded='1'] #trend,
+html[data-skin-degraded='1'] #alerts {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+html[data-skin-degraded='1'] .topbar {
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+}
+html[data-skin-degraded='1'] #overview,
+html[data-skin-degraded='1'] #trend,
+html[data-skin-degraded='1'] #alerts {
+  background: var(--glass-bg-strong);
+}

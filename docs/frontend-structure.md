@@ -329,5 +329,62 @@ venv/Scripts/python -m pytest tests/test_web.py -v
 venv/Scripts/python -m uvicorn web.app:app --port 8000
 ```
 
-> ⚠️ `verify_ui.py` 常年存在 12 条基线红（上游数据层 10 条 + Firefox CSSOM 2 条），见 `docs/system-overview.md` §9 G8。
-> 判"是不是我改出来的"必须做基线 A/B（`git archive HEAD` 建隔离副本），**不能只看绝对条数**。
+> ⚠️ 历史遗留的「12 条基线红」**已于 2026-09-20 由「判据分层」解决**（上游不可用 ⇒ 该条记 `SKIP` 而非 `FAIL`；
+> 见 `docs/system-overview.md` §9 G8 的「部分解决 → 已完成」）。**2026-09-24 实测：`PASS 710 / FAIL 0 / SKIP 0`（ALL PASSED）**
+> —— 也就是说现在**任何一条 FAIL 都是真回归**，别再按"红色是噪声"处理。
+> `SKIP` = 该条**未判定**（独立直连探测确认上游不可用），不是通过；要「一条都不许未判定」加 `--strict`。
+> 判"是不是我改出来的"仍建议做基线 A/B（`git archive HEAD` 建隔离副本），但不必再预设"必有红"。
+
+---
+
+## 11. 液态玻璃皮肤（2026-09-23，第一期**仅 `/`**）
+
+> 来源：`tasks/2026-09-23-web-liquid-glass-skin/{plan.md,journal.md}`（架构师方案 + 执行记录）。
+> 上游皮肤套件 `D:\AGENT\Todo\skin-kit` + `@avenra/liquid-glass@1.2.0`（MIT）——**引擎已 vendored 进仓**。
+
+### 11.1 新增文件
+
+| 路径 | 角色 | 备注 |
+| --- | --- | --- |
+| `web/static/vendor/liquid-glass/liquid-glass.css` | 引擎样式（16.4 KB） | **原样**，禁止改写/内联 |
+| `web/static/vendor/liquid-glass/liquid-glass.esm.js` | 引擎 ESM（97.9 KB，自包含） | 由 `skin.js` **动态 import**（无 import map） |
+| `web/static/vendor/liquid-glass/LICENSE-avenra-liquid-glass.txt` | MIT 文本 | 分发义务 |
+| `web/static/skin/tokens.css` | 套件令牌 → **宿主令牌别名** | 🔴 **不声明 `--text-muted`** |
+| `web/static/skin/liquid-skin.css` | 套件皮肤本体（49.7 KB，原样） | 含 frost 分支 / 滚动降级 / 无障碍兜底 |
+| `web/static/skin/motion.css` | 减动效守卫（1.9 KB，原样） | |
+| `web/static/skin/mp-skin.css` | **宿主补丁层**（背景配方 / 面板染色 / 旧玻璃让位 / 内容抬层 / 滚动条让位） | **永远最后加载** |
+| `web/static/skin.js` | 皮肤运行时（ESM）：`applyEngineMode` 复核 + `scheduleGlass` 分帧 + `is-scrolling` + `window.mpSkin.remount` | |
+| `tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py` | 皮肤专项验收（`LG-1…LG-11`） | 折射类断言需 `--headed` |
+
+### 11.2 加载顺序（`index.html` `<head>`，硬契约）
+
+```
+引擎 CSS → skin/tokens.css → skin/liquid-skin.css → skin/motion.css
+        → 宿主 style.css → skin/mp-skin.css（最后）
+```
+
+- **禁 `@layer`**：未分层样式优先于所有分层样式，引擎 CSS 未分层 ⇒ 一分层皮肤覆盖全失效。
+- `<html>` 同时带 `data-liquid-skin` 与 `data-theme`（令牌必须与主题同元素，否则 `var()` 全空 ⇒ 整页白页且不报错）。
+- `<head>` 内联 classic 脚本在**首帧前**写 `data-glass-engine`（`refract`/`frost`）；`skin.js` 用引擎真实探测复核。
+- 新增静态文件必须登记 `web/app.py:_ASSET_FILES`（**逐文件**，否则 `?v=` 不换 ⇒ 验证时吃旧副本）。
+
+### 11.3 DOM 契约（改首页模板前必读）
+
+- 玻璃宿主：`<section class="card skin-glass" data-liquid-glass data-bezel-width="20" data-glass-thickness="80" data-blur="1.5">`（`.kpi-card` 同；`.topbar` blur=4）。
+- 宿主内容包一层 `<div class="skin-glass-body">`（z-index 4 > 引擎的 `.lg-inner` z-index 3）。
+  - `.kpi-card`（2 列 grid）与 `.topbar`（flex）用 `display: contents` 或「直接抬子元素」——**不要**让包裹层变成 grid/flex item。
+- `.card.promo` **不上玻璃**（D-9：留作实底锚点）。
+- 引擎会往宿主里插 `.lg-clone`(z1) → `.lg-inner`(z3) 与一棵 `<svg><filter>`（末尾）；**任何 `宿主.innerHTML = …` 都会把它们删掉** ⇒ 重建后必须 `window.mpSkin.remount(宿主)`（引擎按 `_lgInit` 幂等）。
+- 背景纹理在 `body`（`background-attachment: fixed`，不参与布局）：**16px 方格，线强度 α=.10**（浅 `rgba(17,24,39,.10)` / 暗 `rgba(255,255,255,.10)`；
+  α 由 .06 提到 .10 是 2026-09-24 用户定档 —— 判据见 `journal.md §10`：卡外 d11 1.93→3.07、留存比 0.469→0.483、
+  浅色 `--text-muted` 对面板对比度 4.63→**4.59**（阈值 4.5，余量很小，动染色前先跑 `verify_skin --only LG-9`））；
+  套件自带的画布/皮肤根 padding 已被 `mp-skin.css §1` 收回。
+
+### 11.4 验收分工
+
+| 脚本 | 负责 | 备注 |
+| --- | --- | --- |
+| `verify_ui.py` | 通用门禁（布局/契约/canvas/主题/抽屉/console）+ **G-1 玻璃判据（新口径：宿主让位 + `.lg-inner` 材质 + 染色 α∈[0.35,0.60]）** | `.card` 圆角断言 = **16px** |
+| `verify_skin.py` | 皮肤专项：`LG-1` console / `LG-2` 宿主结构 / `LG-3` 材质可见性（留存比 ≥0.40、面板可见、纹理减幅）/ `LG-4` 双主题令牌 / `LG-5` 降级三态 / `LG-6` 磨砂档 / `LG-7` Firefox / `LG-8` 动态重挂 / `LG-9` 对比度 / `LG-10` 背景配方 / `LG-11` 接线阶段 A/B | ⚠️ **折射与留存比必须在 `--headed` 下测**：headless Chromium 无 `window.chrome` ⇒ 引擎 `supportsBackdropFilter()` 恒 false ⇒ 只产磨砂材质（无头下 `LG-3a` 自动降级为「只记录」） |
+
+---

@@ -1,0 +1,42 @@
+/* ============================================================================
+   液态玻璃皮肤 · 主题令牌（**宿主化**）· web/static/skin/tokens.css
+   ----------------------------------------------------------------------------
+   来源：skin-kit/css/tokens.css（23 条声明：12 浅色 + 11 暗色覆盖）。
+   本文件**不是**套件原件的拷贝，而是它在 MarketPulse 的落地版：
+     · 套件令牌名 → 宿主令牌名做**别名**（宿主 style.css 已在 :root / [data-theme="dark"]
+       里维护了完整双主题，值不必抄第二遍，抄了就会漂移）；
+     · 只声明宿主**确实缺失**的名字；
+     · 🔴 **不声明 --text-muted**：同名且宿主已按 WCAG 校准过
+       （light #6B7280 / dark #8E9BAE）。skin-kit 那份是 #86868b / #a1a1a6，
+       写进来会污染已修好的对比度（plan §0 C8 / §8 R5）。
+   ----------------------------------------------------------------------------
+   作用域：`[data-liquid-skin]`（特异性 (0,1,0)）—— 故意**不用**
+   `html[data-skin='liquid']`（(0,1,1)）：后者会连带盖掉宿主的 --text-muted。
+   令牌必须与 `data-theme` 落在**同一个元素**上（本项目即 `<html>`，不变量 I11）：
+   写错层 ⇒ var() guaranteed-invalid ⇒ **整页白页且不报错**。
+   ----------------------------------------------------------------------------
+   【加载顺序】引擎样式 → **本文件** → liquid-skin.css → motion.css → style.css → mp-skin.css
+   令牌必须早于皮肤本体：令牌后到 = 首帧拿到空值。
+   ⚠️ 不要在同一规则里 `var()` 自引用（如 `--accent: var(--accent)`）：同一元素上
+      「自己引用自己」会让两条都变成无效值。
+   ════════════════════════════════════════════════════════════════════════════ */
+
+[data-liquid-skin] {
+  /* ── 画布与正文：别名到宿主已有的双主题令牌 ── */
+  --bg: var(--bg-primary);              /* 皮肤根底色（套件默认 #f5f5f7） */
+  --text: var(--text-primary);          /* 正文色 */
+  /* --text-muted：**刻意缺席**，直接吃宿主的值（见文件头 C8/R5） */
+
+  /* ── 面 / 线 ── */
+  --surface-opaque: var(--bg-elevated); /* 降级兜底（reduced-transparency 92% 混色）与浮层底色 */
+  --divider: var(--border);             /* 列表分隔线 */
+  --menu-border: var(--border);         /* 菜单/弹层描边 */
+  --hairline: color-mix(in srgb, var(--text-primary) 22%, transparent); /* 玻璃面 1px 细边界 */
+  --track: color-mix(in srgb, var(--text-primary) 8%, transparent);     /* 轨道/进度底槽 */
+  --grip: var(--text-muted);            /* 拖拽柄（借用宿主的次要文本色） */
+
+  /* ── 强调色 ── */
+  --accent: var(--blue);                /* 装饰强调色（窗点 / 染色底 / 实底按钮） */
+  --lg-accent: var(--blue);             /* 上游唯一真有效的主题变量：喂 .lg-progress 渐变 */
+  --lg-accent-2: var(--green);          /* 上游进度渐变终点 */
+}

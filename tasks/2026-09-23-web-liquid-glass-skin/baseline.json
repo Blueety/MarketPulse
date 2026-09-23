@@ -1,0 +1,154 @@
+{
+  "material": {
+    "mode": "refract",
+    "sample": "url(\"#lg-1\")"
+  },
+  "texture": {
+    "light": {
+      "host": "trend",
+      "d11_glass": 1.482,
+      "d11_background": 3.072,
+      "retention": 0.483,
+      "mute_ratio": 0.483,
+      "lum_glass": 246.03,
+      "lum_background": 238.47,
+      "panel_diff": 7.57,
+      "lum_patch": 238.03,
+      "panel_diff_vs_page": 8.0,
+      "clip": {
+        "x": 300.0,
+        "y": 336.6000061035156,
+        "width": 220,
+        "height": 150
+      },
+      "patch": {
+        "x": 235,
+        "y": 336.6000061035156,
+        "width": 18,
+        "height": 120,
+        "side": "left"
+      },
+      "dpr": 3.0
+    },
+    "dark": {
+      "host": "trend",
+      "d11_glass": 1.483,
+      "d11_background": 3.186,
+      "retention": 0.466,
+      "mute_ratio": 0.466,
+      "lum_glass": 25.38,
+      "lum_background": 27.16,
+      "panel_diff": 1.78,
+      "lum_patch": 21.76,
+      "panel_diff_vs_page": 3.62,
+      "clip": {
+        "x": 300.0,
+        "y": 336.6000061035156,
+        "width": 220,
+        "height": 150
+      },
+      "patch": {
+        "x": 235,
+        "y": 336.6000061035156,
+        "width": 18,
+        "height": 120,
+        "side": "left"
+      },
+      "dpr": 3.0
+    }
+  },
+  "theme": {
+    "light": {
+      "bg": "rgb(247, 248, 250)",
+      "muted": "#6B7280",
+      "vBg": "#F7F8FA",
+      "vText": "#111827"
+    },
+    "dark": {
+      "bg": "rgb(11, 15, 20)",
+      "muted": "#8E9BAE",
+      "vBg": "#0B0F14",
+      "vText": "#E5E7EB"
+    }
+  },
+  "contrast": {
+    "light": {
+      "panel": [
+        248.05555555555554,
+        248.91666666666666,
+        250.55555555555554
+      ],
+      "text": {
+        "color": "rgb(17, 24, 39)",
+        "size": "13px",
+        "sel": "#overview h2"
+      }
+    },
+    "dark": {
+      "panel": [
+        15.86111111111111,
+        21.22222222222222,
+        31.63888888888889
+      ],
+      "text": {
+        "color": "rgb(229, 231, 235)",
+        "size": "13px",
+        "sel": "#overview h2"
+      }
+    }
+  },
+  "bg": {
+    "light": {
+      "bodyBgImage": "repeating-linear-gradient(0deg, rgba(17, 24, 39, 0.1) 0px, rgba(17, 24, 39, 0.1) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 16px), repeating-linear-gradient(90deg, rgba(17, 24, 39, 0.1) 0px, rgba(17, 24, 39, 0.1) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 16px), radial-gradient(1200px 820px at 78% -8%, rgba(22, 119, 255, 0.1), rgba(0, 0, 0, 0) 62%), linear-gradient(148deg, rgba(0, 0, 0, 0) 18%, rgba(22, 119, 255, 0.05) 40%, rgba(0, 0, 0, 0) 64%)",
+      "bodyLayerCount": 56,
+      "bodyRepeat": "repeat, repeat, no-repeat, no-repeat",
+      "bodyAttachment": "fixed, fixed, fixed, fixed",
+      "bodyBgColor": "rgb(247, 248, 250)",
+      "htmlBgImage": "none"
+    },
+    "dark": {
+      "bodyBgImage": "repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.1) 0px, rgba(255, 255, 255, 0.1) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 16px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0px, rgba(255, 255, 255, 0.1) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 16px), radial-gradient(760px 520px at 28% 10%, rgba(150, 200, 255, 0.32), rgba(0, 0, 0, 0) 58%), radial-gradient(820px 560px at 80% 26%, rgba(140, 185, 255, 0.18), rgba(0, 0, 0, 0) 60%), linear-gradient(148deg, rgba(0, 0, 0, 0) 18%, rgba(120, 160, 220, 0.07) 40%, rgba(0, 0, 0, 0) 64%)",
+      "bodyLayerCount": 65,
+      "bodyRepeat": "repeat, repeat, no-repeat, no-repeat, no-repeat",
+      "bodyAttachment": "fixed, fixed, fixed, fixed, fixed",
+      "bodyBgColor": "rgb(11, 15, 20)",
+      "htmlBgImage": "none"
+    }
+  },
+  "scrollh": {
+    "light": {
+      "skin": 1563,
+      "no_texture": 1563
+    },
+    "dark": {
+      "skin": 1563,
+      "no_texture": 1563
+    }
+  },
+  "ledger": {
+    "hosts": 12,
+    "mounted_now": 12,
+    "mount_calls": "12",
+    "ready": "1",
+    "state": {
+      "mounted": 12,
+      "pending": 0,
+      "mode": "refract",
+      "ms": 207.90000002086163
+    },
+    "longTasks": [
+      {
+        "start": 861,
+        "dur": 82
+      },
+      {
+        "start": 1029,
+        "dur": 99
+      },
+      {
+        "start": 1335,
+        "dur": 56
+      }
+    ]
+  }
+}

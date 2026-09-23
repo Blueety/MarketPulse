@@ -783,3 +783,35 @@
 - **正确做法**：改代码/正则一律用**编辑器类工具（Edit/Write）直接落盘**，或让补丁脚本里
   **完全不含反斜杠转义**（用 `[^A-Za-z]` 代替 B 边界、用 `[ ]`/`[.]` 代替空白与点号）。
   补丁脚本只做"定位 + 替换"，正则本体写在被改文件里。
+
+## 液态玻璃皮肤（2026-09-23，第一期 `/` 首页）
+
+- 🔴 **折射必须在有头 Chromium 里验**：`@avenra/liquid-glass` 的 `supportsBackdropFilter()` 实现是
+  `!!window.chrome && CSSOM 接受 url(#…)`，而 **Playwright 的 headless Chromium 没有 `window.chrome`**
+  （实测 `HeadlessChrome/151` → `hasChrome:false`）⇒ 引擎恒判磨砂、只写 `blur(8px) saturate(1.4) brightness(1.05)`，
+  **永远拿不到 `backdrop-filter: url("#lg-N")`**。同一台机器 `launch(headless=False)` 立刻是 `Chrome/151` + `refract`。
+  ⇒ 任何「折射可见性 / 纹理留存比 / 位移」类断言都必须 `--headed`（`verify_skin.py` 的 `--headed`），
+  无头下只能验结构、降级与磨砂档。
+- 🔴 **class 选择器压不过 id 级背景规则**：宿主 `style.css:264` 有
+  `#overview, #trend, #alerts { background: var(--glass-bg-strong) }`（(1,0,0)）。皮肤让位只写
+  `.card{background:transparent}` 时，这三张卡仍是 88% 白底（实测计算值 `rgba(255,255,255,.88)`），
+  玻璃于是采样到「宿主自家白底」，卡内纹理**直接归零**（外观上只是"玻璃不明显"，不会报错）。
+  ⇒ 让位规则必须把这三个 id 一并列出。**通用教训**：给宿主元素改背景/让位前先 `grep` 它有没有 id 级规则。
+- ⚠️ **套件皮肤根自带布局声明**：`skin-kit/css/liquid-skin.css` 的 `[data-liquid-skin]` 块带
+  `padding: 40px 24px 120px; min-height: 100vh; position: relative`（套件假设皮肤根是"应用内容列"，
+  它的 demo 里就是个 div）。本项目把 `data-liquid-skin` 放在 `<html>` 上（令牌必须与 `data-theme` 同元素）
+  ⇒ 不清掉这几条会让整页内缩 40/24/120px、总高 +160px。`mp-skin.css` 用 `html[data-liquid-skin]`（(0,1,1)）压回。
+- ⚠️ **套件会抢滚动条**：套件无条件写 `html { scrollbar-width: thin; scrollbar-color: … }`；
+  而本项目实测结论是「Chromium 一旦看到 `scrollbar-width` 非 auto 就整块忽略 `::-webkit-scrollbar`」
+  ⇒ 6px 细滚动条退化成 10px（`verify_ui` 的 N-11 在 headed 下才会暴露）。宿主补丁层必须复位成
+  `auto`，并在 `@supports (-moz-appearance: none)` 块里给 Firefox 回填 `thin` + 主题色
+  （**不要**在无门控的地方写 `scrollbar-color: auto`，会让 `verify_ui` 的 N-12a 变红）。
+- ⚠️ **`color-mix()` 的计算色值不是 `rgb(a)`**：`color-mix(in srgb, var(--bg-elevated) 46%, transparent)`
+  的计算结果是 `color(srgb 1 1 1 / 0.46)`；只认 `rgba?(…)` 的 alpha 解析器会**恒为 null**
+  （表现为"没染色"假红）。探针的 `alphaOf` 必须补 `color(… / α)` 分支。
+- ⚠️ **有头窗口的 clip 截图不能越出视口**：headless 下 `page.screenshot(clip=…)` 对"视口外"的区域会补画，
+  **headed 下则给全黑**。实测后果：一次"卡外/卡内"纹理留存比测量因为被测卡片在折叠线以下，
+  卡内区域量到 `lum=0`、留存比 0.0（假红）。⇒ 量之前先挑"视口内可见面积最大"的元素并 `scrollIntoView`。
+- ⚠️ **同区域 A/B 优于跨边缘取样**：`plan` 原设计是"跨卡片左边缘取横跨带"，但 1440 档卡片左缘到侧栏只有 27px，
+  "卡外"半区会压在 `#sidebar` 的导航文字上 ⇒ `d11` 被抬高约 2.5×、留存比被压到 0.186 的假值。
+  改成"同一块像素、只切换玻璃面开/关"后，位置偏置消失（同一实况：0.469）。

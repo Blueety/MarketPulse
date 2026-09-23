@@ -214,7 +214,11 @@ def _log_auth_state() -> None:
 # ⚠️ 2026-09-14（macro-chart-crosshair）：新增 `chart-crosshair.js` 必须在此登记 ——
 #    否则"改它不换 URL"，验证时会吃到旧副本（正是本行注释所警告的坑）。
 _ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_cn.js", "timeline.js",
-                "backtest.js", "settings.js")
+                "backtest.js", "settings.js",
+                # 液态玻璃皮肤（2026-09-23）：目录名可写进元组 —— `_asset_version()` 按**文件**逐个
+                # 取 mtime（`STATIC_DIR / n`），故这里的每一项都必须是**文件**路径，不能只写目录。
+                "skin.js", "skin/tokens.css", "skin/liquid-skin.css", "skin/motion.css", "skin/mp-skin.css",
+                "vendor/liquid-glass/liquid-glass.css", "vendor/liquid-glass/liquid-glass.esm.js")
 
 
 def _asset_version() -> str:

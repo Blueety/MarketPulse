@@ -89,9 +89,11 @@ class TestFetchUsSectorHeat:
     def test_volume_format(self, monkeypatch):
         monkeypatch.setattr(ft._SESSION, "get", _fake_get)
         gainers, _ = ft.fetch_us_sector_heat()
-        # XLK: 200 * 6_000_000 = 1.2e9 -> $1.2B
+        # XLK: 200 * 6_000_000 = 1.2e9 -> 12.0亿
+        # ⚠️ 2026-09-24：原期望 `$1.2B` 是**过期口径** —— US 板块表的「成交额」列与 A 股侧同构，
+        #    全站成交量统一按「亿」展示（`$` + 亿），fetcher 早就改过、测试没跟上（长期红）。
         xlk = next(r for r in gainers if r["top_stock"] == "XLK")
-        assert xlk["turnover"] == "$1.2B"
+        assert xlk["turnover"] == "$12.0亿"
 
     def test_missing_field_returns_empty(self, monkeypatch):
         def bad(url, params=None, timeout=None):
