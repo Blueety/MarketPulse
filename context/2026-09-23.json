@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3947.9247,
-      "change_pct": -0.1063553609599721,
+      "value": 3938.08,
+      "change_pct": -0.35545407436196974,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 13701.626,
-      "change_pct": -0.16110045843934162,
+      "value": 13644.72,
+      "change_pct": -0.575754340928335,
       "status": "连跌2日"
     },
     "CYB": {
-      "value": 3394.479,
-      "change_pct": -0.16032683025827066,
+      "value": 3385.301,
+      "change_pct": -0.430273564455736,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3911.8714,
       3949.9068,
       3952.128,
-      3947.9247
+      3938.08
     ],
     "sz": [
       13972.78,
@@ -307,7 +307,7 @@
       13640.873,
       13730.021,
       13723.735,
-      13701.626
+      13644.72
     ],
     "cyb": [
       3495.589,
@@ -339,7 +339,7 @@
       3372.676,
       3399.59,
       3399.93,
-      3394.479
+      3385.301
     ],
     "gld": [
       415.260009765625,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 0.59,
-        "turnover": "323.9亿",
+        "change": 1.01,
+        "turnover": "1075.5亿",
         "top_stock": "艾力斯"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.11,
-        "turnover": "1028.2亿",
-        "top_stock": "三峡新材"
+        "change": -0.25,
+        "turnover": "3067.6亿",
+        "top_stock": "胜利精密"
       },
       {
-        "name": "通信/电子",
-        "change": -0.05,
-        "turnover": "671.3亿",
-        "top_stock": "联得装备"
+        "name": "农业",
+        "change": -0.34,
+        "turnover": "221.0亿",
+        "top_stock": "万向德农"
       },
       {
         "name": "金融",
-        "change": -0.21,
-        "turnover": "363.8亿",
-        "top_stock": "万 科Ａ"
+        "change": -0.51,
+        "turnover": "1173.9亿",
+        "top_stock": "江淮汽车"
       },
       {
-        "name": "其他",
-        "change": -0.26,
-        "turnover": "3889.5亿",
-        "top_stock": "万 科Ａ"
+        "name": "通信/电子",
+        "change": -0.55,
+        "turnover": "2015.5亿",
+        "top_stock": "安洁科技"
       }
     ],
     "losers": [
       {
-        "name": "农业",
-        "change": -1.34,
-        "turnover": "64.7亿",
-        "top_stock": "中坚科技"
-      },
-      {
-        "name": "资源/有色",
-        "change": -0.82,
-        "turnover": "91.2亿",
-        "top_stock": "金瑞矿业"
-      },
-      {
         "name": "地产/基建",
-        "change": -0.68,
-        "turnover": "33.2亿",
+        "change": -1.38,
+        "turnover": "104.8亿",
         "top_stock": "中华企业"
       },
       {
-        "name": "军工",
-        "change": -0.58,
-        "turnover": "362.8亿",
-        "top_stock": "东材科技"
+        "name": "资源/有色",
+        "change": -1.05,
+        "turnover": "256.1亿",
+        "top_stock": "杉杉股份"
       },
       {
         "name": "消费",
-        "change": -0.49,
-        "turnover": "30.8亿",
-        "top_stock": "上海钢联"
+        "change": -0.83,
+        "turnover": "137.7亿",
+        "top_stock": "天佑德酒"
+      },
+      {
+        "name": "军工",
+        "change": -0.8,
+        "turnover": "1129.3亿",
+        "top_stock": "天和防务"
+      },
+      {
+        "name": "其他",
+        "change": -0.6,
+        "turnover": "11878.1亿",
+        "top_stock": "万 科Ａ"
       }
     ]
   },
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "医药 surge 2026-09-23",
-    "光伏/新能源 surge 2026-09-23",
-    "通信/电子 drop 2026-09-23",
+    "光伏/新能源 drop 2026-09-23",
+    "农业 drop 2026-09-23",
     "金融 drop 2026-09-23",
-    "其他 drop 2026-09-23"
+    "通信/电子 drop 2026-09-23"
   ],
   "correlation": [],
   "watchlist": {
