@@ -1,61 +1,61 @@
 {
-  "date": "2026-09-21",
+  "date": "2026-09-22",
   "items": [
     {
-      "title": "华尔街见闻早餐FM-Radio | 2026年9月22日",
-      "url": "https://wallstreetcn.com/articles/3782256",
+      "title": "华尔街见闻早餐FM-Radio | 2026年9月23日",
+      "url": "https://wallstreetcn.com/articles/3782327",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "华见早安之声 要闻精选 中国国家主席 将于9月23日至25日对美国进行国事访问"
+      "published": "2026-09-23",
+      "summary": "华见早安之声 要闻精选 李强 在上海调研时强调， 加快培育壮大新兴产业和未来产业，持续做大做强先进制造业"
     },
     {
-      "title": "美联储Goolsbee：回到2%通胀目标“不会毫无痛苦”，就业、工资或付出代价",
-      "url": "https://wallstreetcn.com/articles/3782229",
+      "title": "美联储Perli：美联储购债将视市场情况调整，关注融资压力信号，维持准备金充裕",
+      "url": "https://wallstreetcn.com/articles/3782328",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "供给冲击持续累积，美联储内部围绕通胀与就业的政策分歧进一步浮现"
+      "published": "2026-09-23",
+      "summary": "纽约联邦储备银行官员罗伯托·佩利（Roberto Perli）表示，美联储将继续评估银行体系准备金水平，因为美联储购买美国国债短期票据（Treasury bills）的规模并非按照预设路径推进"
     },
     {
-      "title": "沙特管道遭袭后扩大海湾出口，七艘超级油轮装1400万桶，盘中布油破百、美油跌超6%",
-      "url": "https://wallstreetcn.com/articles/3782252",
+      "title": "AI热情叠加中东局势缓和预期，纳指四连涨新高，美金融股下挫，原油五连跌，黄金走V",
+      "url": "https://wallstreetcn.com/articles/3782289",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "沙特阿美以超出市场预期的速度重组原油出口路线，令此前因管道袭击事件积聚的供应中断溢价迅速消退，国际原油期货承压，本周一加速下行，布油一度跌破100美元关口"
+      "published": "2026-09-23",
+      "summary": "人工智能浪潮持续推高芯片及科技股，纳指四连涨再创新高，而\"智能体AI\"对金融行业的颠覆性预期则拖累银行股承压，标普横盘、道指下挫"
     },
     {
-      "title": "比特币升破8.5万美元创八个月新高：立法折戟反成催化，资金从AI回流加密",
-      "url": "https://wallstreetcn.com/articles/3782249",
+      "title": "特朗普7月披露逾千笔证券交易：抛售微软、亚马逊，买入英伟达、Marvell与Salesforce",
+      "url": "https://wallstreetcn.com/articles/3782324",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "比特币升破8.5万美元，创下八个月来新高"
+      "published": "2026-09-23",
+      "summary": "特朗普7月的投资组合再度迎来密集操作"
     },
     {
-      "title": "Muse登上苹果应用商店榜首，Meta暴涨13%，AMD和英特尔也嗨了！",
-      "url": "https://wallstreetcn.com/articles/3782248",
+      "title": "特朗普表态支持禁止柴油出口，炼油股承压",
+      "url": "https://wallstreetcn.com/articles/3782325",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "Meta旗下全新AI助手Muse迅速 攀升至美国苹果和谷歌应用商店免费榜首位 ，早期数据显示其下载量已超越前代产品"
+      "published": "2026-09-23",
+      "summary": "美国柴油价格飙升至历史高位，正在将白宫推向一个充满争议的政策选择"
     },
     {
-      "title": "OpenAI和Anthropic营收面临威胁：成本压力下，更多AI初创企业转向开源模型",
-      "url": "https://wallstreetcn.com/articles/3782247",
+      "title": "报道：苹果开发新型健身追踪器原型机，目标直指Whoop",
+      "url": "https://wallstreetcn.com/articles/3782323",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "法律AI独角兽Harvey今年毛利率一度跌至-50%，成为一个缩影—— 随着OpenAI和Anthropic的API费用持续攀升，越来越多的AI应用初创企业开始拥抱开源权重模型 ，重夺成本控制权"
+      "published": "2026-09-23",
+      "summary": "苹果公司正在悄然布局无屏健身追踪器市场，将竞争目标直接指向Whoop"
     },
     {
-      "title": "报道：OpenAI开发新功能应对Grok Bot和Meta Muse竞争",
-      "url": "https://wallstreetcn.com/articles/3782241",
+      "title": "美联储Barkin：通胀压力消退需要时间，后续是否加息“视情况而定”",
+      "url": "https://wallstreetcn.com/articles/3782318",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "OpenAI正针对SpaceX旗下Grok Bot及Meta新推出的Muse产品，分别开发相应的专项功能"
+      "published": "2026-09-23",
+      "summary": "美联储里士满联储主席Tom Barkin周二警告称，通胀冲击的消退不会一蹴而就，当前高企的通胀水平存在向未来预期传导并形成固化的风险"
     },
     {
-      "title": "印度交易潮吸引华尔街！戴蒙亲赴印度，摩根大通加码争夺大单",
-      "url": "https://wallstreetcn.com/articles/3782242",
+      "title": "OpenAI再推两款GPT-6模型：Sol、Luna定价腰斩，Astra能力加速下沉",
+      "url": "https://wallstreetcn.com/articles/3782320",
       "source": "华尔街见闻",
-      "published": "2026-09-22",
-      "summary": "摩根大通正加码印度市场，CEO杰米·戴蒙将亲赴孟买，争夺这个快速增长的资本市场"
+      "published": "2026-09-23",
+      "summary": "OpenAI已经进一步扩充GPT-6产品线，并将部分Astra的能力带入更快、更便宜的模型"
     }
   ]
 }
