@@ -84,11 +84,17 @@ pytest tests/test_storage.py::TestBug001LockIsNotCorruption tests/test_settings_
 `/api/settings` 里**没有任何数据日字段** ⇒ 按"没有可取的数据日就保持 `—`、不造假"处理，`settings` 保持 `—`，
 测试只断言 `timeline`/`backtest` 的写入分支。
 
-### 待你决定的两个「观察项」（本批按 plan 字面执行，未擅自改）
+### 决策落定 / 观察项
 
-1. **`/api/cn/quotes` 的 15s 上限偏紧**：冷启动实测 **14.85s**（Yahoo CNY=X 403 轮换失败 4.46s +
-   中债 `bond_china_yield` 12.60s）⇒ "慢但会成功"的响应会被降级成空态。放宽到 20s（`fetch_bond_yield_curves`
-   自带 `timeout=20`）或加"旧缓存回退 + stale 标记"都行，等你定。
+1. ✅ **已定档（2026-09-24 用户决定）**：`/api/cn/quotes` 取数上限 **15s → 20s**。理由：实测冷启动
+   **14.85s**（Yahoo CNY=X 403 轮换失败 4.46s + 中债 `bond_china_yield` 12.60s）正好压在 15s 上，
+   上游再慢 0.2s 就会把"本来会成功"的响应降级成空态；20s 与中债自身 `fetch_bond_yield_curves(timeout=20)`
+   同量级（语义 = "最多等一次完整取数"），前端 `macro_cn.js` 30s 留 10s 余量。
+   落地：`web/app.py::_CN_QUOTES_TIMEOUT = 20`（注释写明定档理由）+ 前端注释同步 + 新增参数护栏测试
+   `tests/test_web.py::test_cn_quotes_timeout_parameter_stays_above_measured_cold_start`
+   （断言 上限 ≥ 中债内层 timeout、且 上限×1000 < 前端 fetch 毫秒数）。
+   **证伪**：把上限改回 15s → 该用例 **失败**（`15 >= 20` 不成立），改回 20s → 通过 ⇒ 护栏非空洞。
+   `pytest tests/` → **857 passed**（+1）。
 2. **事件表按月备份 ≈ 60 个小文件**：`data/backup/econ_events_*.json` 覆盖 2021-01 … 2027-12（事件表含
    **未来日程**，所以月份跨度远大于 history 的 13 个月），多数只有 1 行；且按 history 的「历史月冻结」
    纪律，**未来月份的文件在"其月份到来之前"不会刷新**（如 `econ_events_2027-12.json` 今天写一次就冻结，

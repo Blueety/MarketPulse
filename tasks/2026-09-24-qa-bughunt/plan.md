@@ -115,7 +115,7 @@
 | BUG-007 | `web/app.py`、`src/config.py` | 统一 `read_bytes()` + `decode(errors="replace")`，或 `except (json.JSONDecodeError, OSError, UnicodeDecodeError, ValueError)`；断言「坏字节 → 200 + 空结构/默认值」 |
 | BUG-009 | `web/app.py`（已产出）+ `web/static/*.js` | 前端消费 `stale`：卡片角标「取数失败，展示上次快照（as_of）」；`stale` 字段与 `as_of` 同处下发（已就绪） |
 | BUG-010 | `src/config.py` | `ENV_MAP` 补 `ALERT_THRESHOLD_SZ`；加参数化测试覆盖 SCHEMA 里全部 8 个告警阈值 env（防再次漏项） |
-| BUG-012 | `web/app.py` + cn 取数 | `/api/cn/quotes` 复用既有 daemon-thread 限时范式（15s）+ 超时返回空态/旧值；断言冷启动墙钟上限 |
+| BUG-012 | `web/app.py` + cn 取数 | `/api/cn/quotes` 复用既有 daemon-thread 限时范式（**上限 20s**：plan 原写 15s，2026-09-24 用户按实测 14.85s 冷启动定档放宽）+ 超时返回空态/旧值；断言冷启动墙钟上限 + 参数护栏（≥ 一次完整取数 20s，< 前端 fetch 30s） |
 
 ### B3 界面与文档（P2/P3）
 

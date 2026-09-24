@@ -1337,8 +1337,12 @@ _CN_ECON_TTL = 6 * 3600          # 月/季数据为主，与 _ECON_TTL 同纪律
 _CN_QUOTES_TTL = 90              # 行情类（汇率/国债收益率），与 _MACRO_TTL 同口径
 # BUG-012（2026-09-24）：`/api/cn/quotes` 冷缓存时**同步直连取数、无上限**（实测冷启动 13.50s，
 # 上游挂起会占住单 worker）⇒ 复用项目既有 daemon 线程限时范式（`src/fetcher.fetch_sector_heat`），
-# 超时返回空态（HTTP 200，前端按既有「数据暂缺」降级）。上限 15s 覆盖实测冷启动并有富余。
-_CN_QUOTES_TIMEOUT = 15          # 取数限时（秒）
+# 超时返回空态（HTTP 200，前端按既有「数据暂缺」降级）。
+# 🔴 上限 **20s**（2026-09-24 用户定档，原写 15s）：实测冷启动 **14.85s**（Yahoo `CNY=X` 403 双主机
+#    轮换 4.46s + 中债 `bond_china_yield` 12.60s）⇒ 15s 是"刀刃上"的阈值，上游再慢 0.2s 就把**本来会成功**
+#    的响应降级成空态。20s 与 `cn_econ_fetcher.fetch_bond_yield_curves(timeout=20)` 同量级，
+#    语义 = "最多等一次完整取数"；前端 `macro_cn.js` 取 30s，留出 10s 余量。
+_CN_QUOTES_TIMEOUT = 20          # 取数限时（秒）
 _cn_econ_raw: dict = {}          # key -> rows：**跨组累积**，供四象限算轴
 _cn_econ_raw_ts: dict = {}       # key -> 写入时间
 _cn_econ_cache: dict = {"ts": {}, "payload": {}}     # 按 group（"all" 或组名）分桶

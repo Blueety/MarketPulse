@@ -262,7 +262,8 @@
   }
 
   function loadQuotes() {
-    // 30s（与 econ 分组一致）：冷启动 + 并发时 `/api/cn/quotes` 含中债 8s 取数，20s 偏紧
+    // 30s：**服务端**取数上限 20s（`web/app.py::_CN_QUOTES_TIMEOUT`，与中债 `fetch_bond_yield_curves`
+    // 的 timeout=20 同量级）⇒ 这里留 10s 余量覆盖冷启动 + 并发排队（实测冷启动 14.85s）
     getJSON("/api/cn/quotes", 30000)
       .then(function (d) { state.quotes = d || {}; renderAll(); })
       .catch(function (e) { logFetchError("cn-quotes", e); state.quotes = {}; renderAll(); });

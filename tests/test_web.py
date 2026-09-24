@@ -2183,6 +2183,28 @@ def test_api_cn_quotes_timeout_returns_empty_state(monkeypatch):
     assert data["cny"] is None and data["bond10y"] is None and data["credit_spread"] is None
 
 
+def test_cn_quotes_timeout_parameter_stays_above_measured_cold_start():
+    """BUG-012 参数护栏（2026-09-24 用户定档 20s）：上限必须 **≥ 一次完整取数**、且 **< 前端 fetch 超时**。
+
+    两侧耦合都是真实的、且刚刚咬过人：
+    - 上限 **低于** 中债取数自身的 `fetch_bond_yield_curves(timeout=...)` ⇒ "本来会成功"的响应被服务端斩掉，
+      降级成空态（实测冷启动 14.85s 撞 15s 上限就是这一条）；
+    - 上限 **高于** 前端 `getJSON(..., 30000)` ⇒ 客户端先放弃，服务端白干一场、页面照样"数据暂缺"。
+    """
+    import inspect
+
+    from src import cn_econ_fetcher
+
+    inner = inspect.signature(cn_econ_fetcher.fetch_bond_yield_curves).parameters["timeout"].default
+    cap = web.app._CN_QUOTES_TIMEOUT
+    js = _frontend_src("macro_cn.js")
+    m = re.search(r"getJSON\(\s*['\"]/api/cn/quotes['\"]\s*,\s*(\d+)\s*\)", js)
+    assert m, "未在 macro_cn.js 找到 /api/cn/quotes 的 fetch 超时"
+    front_ms = int(m.group(1))
+    assert cap >= inner, f"服务端上限 {cap}s < 一次完整取数 {inner}s ⇒ 会斩掉本可成功的响应"
+    assert cap * 1000 < front_ms, f"服务端上限 {cap}s ≥ 前端 {front_ms}ms ⇒ 客户端先放弃"
+
+
 # ---- BUG-008：设置页死按钮 + 三个子页顶栏日期恒「—」----
 
 def test_settings_page_refresh_button_is_wired():
