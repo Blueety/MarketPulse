@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3921.5608,
-      "change_pct": -0.38000824027333335,
+      "value": 3899.9967,
+      "change_pct": -0.9278042770722342,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 13531.002,
-      "change_pct": -0.7705443663623424,
+      "value": 13399.337,
+      "change_pct": -1.7361082082716843,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 3356.722,
-      "change_pct": -0.6772379061489319,
+      "value": 3317.333,
+      "change_pct": -1.8427274152934818,
       "status": "连跌2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3949.9068,
       3952.128,
       3936.5199,
-      3921.5608
+      3899.9967
     ],
     "sz": [
       14094.168,
@@ -307,7 +307,7 @@
       13730.021,
       13723.735,
       13636.074,
-      13531.002
+      13399.337
     ],
     "cyb": [
       3545.577,
@@ -339,7 +339,7 @@
       3399.59,
       3399.93,
       3379.61,
-      3356.722
+      3317.333
     ],
     "gld": [
       423.3599853515625,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "地产/基建",
-        "change": -0.03,
-        "turnover": "38.3亿",
-        "top_stock": "华升股份"
+        "change": -0.65,
+        "turnover": "92.0亿",
+        "top_stock": "泉阳泉"
       },
       {
         "name": "军工",
-        "change": -0.39,
-        "turnover": "355.1亿",
-        "top_stock": "龙溪股份"
+        "change": -1.25,
+        "turnover": "1108.6亿",
+        "top_stock": "金盾股份"
       },
       {
         "name": "其他",
-        "change": -0.43,
-        "turnover": "3842.2亿",
+        "change": -1.27,
+        "turnover": "10936.2亿",
         "top_stock": "七 匹 狼"
       },
       {
         "name": "金融",
-        "change": -0.53,
-        "turnover": "356.0亿",
-        "top_stock": "科华生物"
+        "change": -1.36,
+        "turnover": "1044.3亿",
+        "top_stock": "宇通客车"
       },
       {
-        "name": "医药",
-        "change": -0.56,
-        "turnover": "298.5亿",
-        "top_stock": "常山药业"
+        "name": "光伏/新能源",
+        "change": -1.42,
+        "turnover": "2752.7亿",
+        "top_stock": "大港股份"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": -1.69,
-        "turnover": "97.0亿",
+        "change": -2.8,
+        "turnover": "293.9亿",
         "top_stock": "*ST景谷"
       },
       {
         "name": "通信/电子",
-        "change": -1.1,
-        "turnover": "627.5亿",
-        "top_stock": "*ST春兴"
-      },
-      {
-        "name": "消费",
-        "change": -0.86,
-        "turnover": "35.3亿",
-        "top_stock": "巨力索具"
+        "change": -2.19,
+        "turnover": "1754.9亿",
+        "top_stock": "泉阳泉"
       },
       {
         "name": "农业",
-        "change": -0.81,
-        "turnover": "77.7亿",
+        "change": -2.13,
+        "turnover": "208.2亿",
         "top_stock": "统一股份"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.71,
-        "turnover": "886.1亿",
-        "top_stock": "金辰股份"
+        "name": "医药",
+        "change": -2.11,
+        "turnover": "934.9亿",
+        "top_stock": "百花医药"
+      },
+      {
+        "name": "消费",
+        "change": -1.59,
+        "turnover": "112.3亿",
+        "top_stock": "巨力索具"
       }
     ]
   },
@@ -485,7 +485,7 @@
     "军工 drop 2026-09-24",
     "其他 drop 2026-09-24",
     "金融 drop 2026-09-24",
-    "医药 drop 2026-09-24"
+    "光伏/新能源 drop 2026-09-24"
   ],
   "correlation": [],
   "watchlist": {
