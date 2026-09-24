@@ -2,60 +2,60 @@
   "date": "2026-09-23",
   "items": [
     {
+      "title": "Meta Connect大会：Muse唱主角，新眼镜发布",
+      "url": "https://wallstreetcn.com/articles/3782418",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "Meta在隔夜的年度Connect大会上全面刷新智能眼镜产品线，并宣布旗下AI助手Muse深度整合至硬件生态，标志着这家社交媒体巨头在可穿戴AI领域的布局进入新阶段"
+    },
+    {
+      "title": "数十年高位收益率未能阻挡全球债券发行热潮，美债抛售加剧",
+      "url": "https://wallstreetcn.com/articles/3782414",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "全球债券市场正面临多重压力的叠加冲击"
+    },
+    {
+      "title": "4台Mac Studio跑通万亿参数模型，苹果向英伟达的推理叙事发起挑战",
+      "url": "https://wallstreetcn.com/articles/3782415",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "苹果正以一套\"本地推理\"逻辑重塑AI硬件市场的竞争格局，将矛头直指英伟达在AI推理领域的潜在增量份额"
+    },
+    {
+      "title": "美联储加息，再传大消息！黄金走高，美芯片股下挫 - 21财经",
+      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQQkl6Q1RzdFM2Zmk1RWJKQktqbU1lQUdFbzI5aFFWbXNENnh3WXBHQTROanV5QXZsNWNUSWIzcHlONl8tYzBweVY2Z3BCOVlNVzU4cExEMTMyck5FTVI0Z3dUMEt6Vi1ad1ZfdDRweElBeWFDY1FaU3hvZC1jZ0tVVGgzNlpEc3lwNXdDTEJIcw?oc=5",
+      "source": "Google News",
+      "published": "2026-09-24",
+      "summary": "美联储加息，再传大消息。黄金走高，美芯片股下挫 21财经"
+    },
+    {
+      "title": "加拿大总理：美加贸易协议仍有可能，但渥太华不会放弃与欧盟深化合作的权利",
+      "url": "https://wallstreetcn.com/articles/3782419",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "加拿大总理马克·卡尼表示，与美国达成互利贸易协议仍有可能，但加拿大不会以主权换取协议，尤其不会放弃与欧盟及其他经济体自主签署贸易协定的权利"
+    },
+    {
+      "title": "一文读懂美债\"黑色星期三\"：\"完美风暴\"冲击，\"10月再加息\"风起",
+      "url": "https://wallstreetcn.com/articles/3782417",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "多重利空因素在同一天集中引爆，美国国债市场经历了近18个月来最惨烈的单日抛售"
+    },
+    {
+      "title": "Muse开门红，但Meta能笑多久？",
+      "url": "https://wallstreetcn.com/articles/3782416",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "Meta的新款个人AI代理Muse上线即爆红，然而亚马逊封堵、隐私争议和竞争威胁正在同步升温，这款产品能否将初期势头转化为持久优势，仍是未知数"
+    },
+    {
       "title": "警示AI信用风险，穆迪：美国五大巨头表外义务3年翻至8倍，飙升至2.8万亿美元",
       "url": "https://wallstreetcn.com/articles/3782413",
       "source": "华尔街见闻",
       "published": "2026-09-24",
       "summary": "五家美国科技巨头为支撑人工智能基础设施扩张，累积了规模庞大的表外负债，其信用风险正受到评级机构的密切关注"
-    },
-    {
-      "title": "华尔街见闻早餐FM-Radio | 2026年9月24日",
-      "url": "https://wallstreetcn.com/articles/3782412",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "华见早安之声 要闻精选 当地时间9月23日下午， 国家主席习近平抵达华盛顿，应美国总统特朗普邀请，对美国进行国事访问"
-    },
-    {
-      "title": "布油收涨近4%，伊朗强硬表态助原油终结五连跌，柴油出口禁令传言搅动市场",
-      "url": "https://wallstreetcn.com/articles/3782408",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "国际原油期货本周三反弹，扭转此前连续五个交易日的跌势"
-    },
-    {
-      "title": "意外强劲PMI重燃加息预期，美债遭“血洗”！纳指终结四连涨，美元涨黄金跌",
-      "url": "https://wallstreetcn.com/articles/3782354",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "油价上涨与强劲经济数据的双重夹击，令市场对美联储将维持更长时间紧缩立场的押注急剧升温，美国国债收益率飙升至近二十年高位，美股随之承压下行"
-    },
-    {
-      "title": "Anthropic的CEO：由于安全的缘故，公司将放慢AI的研发进度",
-      "url": "https://wallstreetcn.com/articles/3782400",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "Anthropic首席执行官Dario Amodei在联合国安理会警告，若管理不善，人工智能可能对全人类构成生存风险，并呼吁各国政府携手制定全球层面的AI安全标准"
-    },
-    {
-      "title": "报道：台积电明年1月起上调晶圆代工价格3%至6%，订单能见度延伸至2030年",
-      "url": "https://wallstreetcn.com/articles/3782403",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "台积电新一轮涨价周期已至，覆盖范围从先进制程延伸至整个半导体供应链"
-    },
-    {
-      "title": "微软、谷歌在气候峰会上正面回应数据中心争议",
-      "url": "https://wallstreetcn.com/articles/3782401",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "数据中心建设浪潮正在引发前所未有的社会阻力，科技巨头反驳了对数据中心快速扩张的批评"
-    },
-    {
-      "title": "美财政部拟再回购至多60亿美元长债，30年期收益率创2007年来新高",
-      "url": "https://wallstreetcn.com/articles/3782394",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "为遏制近期借贷成本上升，美国财政部继续通过回购为市场提供流动性支持"
     }
   ]
 }
