@@ -1,61 +1,61 @@
 {
-  "date": "2026-09-23",
+  "date": "2026-09-24",
   "items": [
+    {
+      "title": "特朗普面临柴油出口禁令两难：选票压力与市场代价的博弈",
+      "url": "https://wallstreetcn.com/articles/3782420",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "美国柴油价格创历史新高，特朗普政府正面临一场政治逻辑与经济逻辑的正面冲突"
+    },
+    {
+      "title": "A股三大股指早盘齐跌，创业板跌近2%，机器人逆势拉升，算力硬件、有色金属下挫，恒科指跌1%，权...",
+      "url": "https://wallstreetcn.com/articles/3782428",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "马斯克\"千亿台\"人形机器人预期叠加特斯拉宁波量产审厂，减速器、机器人执行器集体爆发，洛轴股份20cm涨停"
+    },
+    {
+      "title": "AI算力融资正被重新定价：CoreWeave数据中心债券息票9.25%，较同类高2.7个百分点",
+      "url": "https://wallstreetcn.com/articles/3782433",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "Blue Owl Capital 关联方为 CoreWeave 相关数据中心项目发行的 11 亿美元高收益债券，以 9.25% 的收益率完成定价，较同类评级债券平均收益率高出约 2.7 个百分点"
+    },
+    {
+      "title": "印度央行近几周实施了至少100亿美元规模的货币互换操作 - finance.eastmoney...",
+      "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE5tSUJ6aFJhRFMxTk9iWmxVVkhGZU94S0Vrbm41UVhaNElyTFpPR2RlaUZBYXJaUmlSdUdHMUk5ZldCcklMSHduRTF0WV8ybUQ2Mk5rSDBpVjhBaEVyb2JnYWFYOFpnUQ?oc=5",
+      "source": "Google News",
+      "published": "2026-09-24",
+      "summary": "印度央行近几周实施了至少100亿美元规模的货币互换操作 finance.eastmoney.com"
+    },
+    {
+      "title": "个人Agent入口大战升级！Grok Bot周活激增、Muse登顶App Store，Open...",
+      "url": "https://wallstreetcn.com/articles/3782432",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "AI助手赛道正从\"聊天问答\"向\"替人干活\"全面跃迁，一场争夺用户工作流入口的关键战役已经打响"
+    },
+    {
+      "title": "美联储加息，再传大消息！黄金走高，美芯片股下挫 - 21财经",
+      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQQkl6Q1RzdFM2Zmk1RWJKQktqbU1lQUdFbzI5aFFWbXNENnh3WXBHQTROanV5QXZsNWNUSWIzcHlONl8tYzBweVY2Z3BCOVlNVzU4cExEMTMyck5FTVI0Z3dUMEt6Vi1ad1ZfdDRweElBeWFDY1FaU3hvZC1jZ0tVVGgzNlpEc3lwNXdDTEJIcw?oc=5",
+      "source": "Google News",
+      "published": "2026-09-24",
+      "summary": "美联储加息，再传大消息。黄金走高，美芯片股下挫 21财经"
+    },
+    {
+      "title": "华尔街最火的“金融AI”创始人：如何做“AI时代的彭博”，为何OpenAI和Anthropic...",
+      "url": "https://wallstreetcn.com/articles/3782347",
+      "source": "华尔街见闻",
+      "published": "2026-09-24",
+      "summary": "随着AI深入华尔街的每一个毛细血管，一家估值20亿美元的初创公司正试图通过构建垂直领域的“金融基础设施”，接管传统银行家的工作，并立志成为AI时代的彭博"
+    },
     {
       "title": "全球债务规模扩张增速腰斩，G7利息支出升至2008年来新高",
       "url": "https://wallstreetcn.com/articles/3782429",
       "source": "华尔街见闻",
       "published": "2026-09-24",
       "summary": "全球债务规模持续扩张但增速腰斩，发达经济体正在为多年扩张付出越来越高的利息代价"
-    },
-    {
-      "title": "世界上最有价值的见解并未写在公开网页上-",
-      "url": "https://wallstreetcn.com/articles/3782424",
-      "source": "来自“专家库AI”的思考",
-      "published": "2026-09-24",
-      "summary": "随着金融AI工具的普及，华尔街分析师的工作模式正被彻底重塑，而垂直领域的专有数据和零容错率要求，正成为AI在金融市场中创造“超额收益”的核心壁垒"
-    },
-    {
-      "title": "美联储加息，再传大消息！黄金走高，美芯片股下挫 - 21jingji.com",
-      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQQkl6Q1RzdFM2Zmk1RWJKQktqbU1lQUdFbzI5aFFWbXNENnh3WXBHQTROanV5QXZsNWNUSWIzcHlONl8tYzBweVY2Z3BCOVlNVzU4cExEMTMyck5FTVI0Z3dUMEt6Vi1ad1ZfdDRweElBeWFDY1FaU3hvZC1jZ0tVVGgzNlpEc3lwNXdDTEJIcw?oc=5",
-      "source": "Google News",
-      "published": "2026-09-24",
-      "summary": "美联储加息，再传大消息。黄金走高，美芯片股下挫 21jingji.com"
-    },
-    {
-      "title": "A股低开低走，创业板跌1%，机器人、商业航天逆势拉升，CRO、PCB下挫，港股权重科网股普遍调整",
-      "url": "https://wallstreetcn.com/articles/3782428",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "9月24日，A股早盘低开低走，三大股指盘初集体下跌，深成指、创业板跌近1%，机器人、商业航天、卫星导航等概念股逆势拉升，银行、煤炭、油气股活跃，房地产、贵金属下挫，覆铜板、CRO、电路板等概念股普遍下跌"
-    },
-    {
-      "title": "美国PMI火热背后：价格压力创2022以来新高，供应链瓶颈严重，企业成本压力加剧",
-      "url": "https://wallstreetcn.com/articles/3782423",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "华尔街的共识再次被打破，9月美国标普全球PMI初值不仅没有如预期般小幅下滑，反而呈现出爆炸性的全面增长"
-    },
-    {
-      "title": "Meta Connect大会：Muse唱主角，新眼镜发布",
-      "url": "https://wallstreetcn.com/articles/3782418",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "Meta在隔夜的年度Connect大会上全面刷新智能眼镜产品线，并宣布旗下AI助手Muse深度整合至硬件生态，标志着这家社交媒体巨头在可穿戴AI领域的布局进入新阶段"
-    },
-    {
-      "title": "央行今日开展515亿元7天期逆回购操作 利率1.40%",
-      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE9xa0plYnpBeC1STnk4dkJOemtqUzcySlllck9pOEowYjJ1TlZCQzV5eW5pd210RkRYVkp0cHpuekVWdzRhSTA5c0ZfQUNmNDhKUG80S3JNbTl0VENTTk5hTEd3?oc=5",
-      "source": "观点网",
-      "published": "2026-09-24",
-      "summary": "央行今日开展515亿元7天期逆回购操作 利率1.40%"
-    },
-    {
-      "title": "数十年高位收益率未能阻挡全球债券发行热潮，美债抛售加剧",
-      "url": "https://wallstreetcn.com/articles/3782414",
-      "source": "华尔街见闻",
-      "published": "2026-09-24",
-      "summary": "全球债券市场正面临多重压力的叠加冲击"
     }
   ]
 }
