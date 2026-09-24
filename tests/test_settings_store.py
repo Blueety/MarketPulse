@@ -1,5 +1,6 @@
 """src/settings_store.py 单测：白名单 / 校验 / 备份 / 原子写 / 深合并（不联网、不碰真实 config.json）。"""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -146,3 +147,96 @@ def test_readonly_only_when_railway(monkeypatch):
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     assert ss.is_readonly() is True
     assert "Railway" in (ss.readonly_reason() or "")
+
+
+# ---- BUG-003（2026-09-24）：非有限值不得入盘 ----
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan"), 1e999, "Infinity", "inf", "nan"])
+def test_non_finite_value_rejected_and_file_untouched(cfg_file, bad):
+    """🔴 旧实现只校验 `gt/min/max`，`Infinity` 全部通过 ⇒ 200 落盘 `"vix": Infinity`
+    （非 RFC 8259，Node/浏览器 `JSON.parse` 读不了）且该标的告警永久静默。
+    判据：400（SettingsError）+ **文件字节不变** + 仍可严格解析。
+    """
+    before = cfg_file.read_bytes()
+    with pytest.raises(ss.SettingsError) as ei:
+        ss.apply_updates({"alert.vix": bad}, cfg_file)
+    assert any("有限" in e for e in ei.value.errors), ei.value.errors
+    assert cfg_file.read_bytes() == before, "校验失败不得动文件"
+    json.loads(cfg_file.read_text(encoding="utf-8"))          # 严格 JSON 恒可解析
+
+
+def test_every_float_key_rejects_non_finite(cfg_file):
+    """**全部** float 键都要挡（report 补 B：SCHEMA 里 9 个告警阈值 + k_factor 都能被一次请求废掉）。"""
+    bad_keys = [k for k, spec in ss.SCHEMA.items() if spec["kind"] == "float"]
+    assert len(bad_keys) >= 10, bad_keys
+    before = cfg_file.read_bytes()
+    for key in bad_keys:
+        with pytest.raises(ss.SettingsError):
+            ss.apply_updates({key: float("inf")}, cfg_file)
+    assert cfg_file.read_bytes() == before
+
+
+def test_legacy_infinity_in_file_blocks_write_loudly(tmp_path):
+    """第二道闸（落盘序列化 `allow_nan=False`）：既有文件里**已经**有 `Infinity`（历史遗留）
+    ⇒ 本次保存被拒且指出是哪个键，绝不再写出非法 JSON。"""
+    p = tmp_path / "config.json"
+    p.write_text('{"alert": {"vix": Infinity, "k_factor": 2.0}}', encoding="utf-8")
+    before = p.read_bytes()
+    with pytest.raises(ss.SettingsError) as ei:
+        ss.apply_updates({"alert.k_factor": 2.5}, p)
+    assert "alert.vix" in str(ei.value), ei.value.errors
+    assert p.read_bytes() == before
+    assert not list(p.parent.glob("*.settings-tmp")) and not list(p.parent.glob("*.validate-tmp"))
+
+
+# ---- BUG-014（2026-09-24）：备份/临时文件唯一名（秒级冲突 + 并发写）----
+
+def test_two_saves_in_same_second_keep_two_distinct_backups(cfg_file, monkeypatch):
+    """同秒两次保存必须留下**两个**备份。
+
+    旧实现备份名 `%Y%m%d-%H%M%S`（秒级）⇒ 第二个覆盖第一个，丢掉最接近当前状态的回滚点。
+    这里把时钟钉死在同一纳秒（比「同一秒」更严），唯一性只能靠进程内序号保证。
+    """
+    monkeypatch.setattr(ss.time, "time_ns", lambda: 1_700_000_000_000_000_000)
+    ss.apply_updates({"alert.vix": 21.0}, cfg_file)
+    ss.apply_updates({"alert.vix": 22.0}, cfg_file)
+
+    baks = sorted(cfg_file.parent.glob("config.json.bak-*"))
+    assert len(baks) == 2
+    assert json.loads(baks[0].read_text(encoding="utf-8"))["alert"]["vix"] == 20.0
+    assert json.loads(baks[1].read_text(encoding="utf-8"))["alert"]["vix"] == 21.0
+    assert json.loads(cfg_file.read_text(encoding="utf-8"))["alert"]["vix"] == 22.0
+
+
+def test_atomic_write_tmp_name_is_unique_and_leaves_no_residue(cfg_file, monkeypatch):
+    """写入用的 tmp 名必须逐次唯一（固定名在并发 POST 下会被共享/误删），且不残留。"""
+    seen: list[str] = []
+    real_replace = ss.os.replace
+    monkeypatch.setattr(
+        ss.os, "replace",
+        lambda src, dst: (seen.append(Path(src).name), real_replace(src, dst))[1],
+    )
+
+    ss.apply_updates({"alert.vix": 21.0}, cfg_file)
+    ss.apply_updates({"alert.vix": 22.0}, cfg_file)
+
+    assert len(seen) == 2 and seen[0] != seen[1], seen
+    assert not list(cfg_file.parent.glob("*.settings-tmp")), "成功写盘后不得残留 tmp"
+
+
+def test_validate_tmp_name_is_unique_and_leaves_no_residue(cfg_file, monkeypatch):
+    """校验用的合成文件同样要唯一名（否则并发校验会读到对方内容，误判/丢失更新）。"""
+    seen: list[str] = []
+    real_load = ss.load_config
+
+    def spy(path=None):
+        assert Path(path).exists(), "校验必须把「原文件 + 改动」真的落到一个临时文件再走三级链"
+        seen.append(Path(path).name)
+        return real_load(path)
+
+    monkeypatch.setattr(ss, "load_config", spy)
+    ss.validate_updates({"alert.vix": 21.0}, cfg_file)
+    ss.validate_updates({"alert.vix": 22.0}, cfg_file)
+
+    assert len(seen) == 2 and seen[0] != seen[1], seen
+    assert not list(cfg_file.parent.glob("*.validate-tmp")), "校验后不得残留 tmp"

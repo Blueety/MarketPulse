@@ -1,6 +1,7 @@
 """历史数据回填（Step 10）：把 `data/history.json` 补齐到近 1 年，供看板 1Y 视图使用。
 
-与早期一次性脚本 `seed_history.py` 的差异（后者保留不动）：
+与早期一次性脚本 `seed_history.py` 的差异（⚠️ 后者已按 D-2 **删除**，见
+`tasks/2026-09-24-qa-bughunt/legacy/`；此处保留差异说明以解释"为什么当初要另写一个"）：
 
 1. **走 `fetcher._yahoo_chart_get`**：query1/query2 双主机轮换，规避主机级 403/429
    （`docs/pitfalls.md`「Yahoo chart 需 query1/query2 双主机轮换」）。
@@ -12,7 +13,7 @@
 4. **用 `analyzer.merge_history` 按 date 合并**：不整行覆盖、不抹他市场子集、
    自动按 `HISTORY_MAX` 裁剪、临时文件 + `os.replace` 原子写。
 5. **不调用 `save_last_values`**：`data/last_values.json` 是次日涨跌幅与告警的基准，
-   键名必须保持大写（`seed_history.py` 用小写键整文件覆盖会让次日涨跌幅与告警全部失效）。
+   键名必须保持大写（已删除的 `seed_history.py` 用小写键整文件覆盖会让次日涨跌幅与告警全部失效）。
 6. **A 股覆盖补齐走 AkShare**：Yahoo 对 `399006.SZ`（创业板指）近 1y **只返回 1 天**，而同日的
    `000001.SS`/`399001.SZ` 各 243 天。故 A 股标的 Yahoo 返回 < `AKSHARE_FALLBACK_MIN`(30) 天时
    改用 `ak.stock_zh_index_daily`（daemon 线程 + `join(AKSHARE_TIMEOUT=15s)` 限时，新浪源无

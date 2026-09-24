@@ -58,7 +58,7 @@
 
 ## 模块 src/（六期B：A 股大盘）
 
-- **`save_last_values` 键派生必须 `.upper()`**：扩 SYMBOLS 到小写 ticker（000001.SS/399001.SZ）后，`seed_history.py` 旧代码用 `("vix","vxn","move")` 字面量写 last_values，导致 SH/SZ 写入后 `load_last_values` 按大写 symbol 读不回。六期B 改为 `[s.lower() for s in SYMBOLS]` 全键派生。回填/重置历史后须跑 `daily_report.py` 验证 SH/SZ 出现在报告与 context。
+- **`save_last_values` 键派生必须 `.upper()`**：扩 SYMBOLS 到小写 ticker（000001.SS/399001.SZ）后，`seed_history.py` 旧代码用 `("vix","vxn","move")` 字面量写 last_values，导致 SH/SZ 写入后 `load_last_values` 按大写 symbol 读不回（该脚本已于 2026-09-24 删除，见本节 `seed_history` 条目）。六期B 改为 `[s.lower() for s in SYMBOLS]` 全键派生。回填/重置历史后须跑 `daily_report.py` 验证 SH/SZ 出现在报告与 context。
 - **A 股休市特判 ≠ 美股获取失败**：`build_statuses` 中 A 股（SH/SZ）值为 None 时状态为「休市」而非「获取失败」，避免与美股数据缺失混淆；A 股表行收盘价为「休市」、涨跌幅「—」。
 - **大盘告警恒 WARN/异动**：`check_breach` 对 `STOCK_SYMBOLS`（含 SH/SZ）一律 level=WARN、state=异动，无恐慌区间；阈值严格大于才触发，恰好等于不告警。
 - **末尾平坦日（去尾 0）不打断连涨/跌**：`compute_streaks` 仅裁剪序列末尾的 0（休市日 Yahoo 返回昨收 → 当日涨跌 0）；中间平坦日仍会打断 streak。复现休市场景须让最新一日为平坦。
@@ -240,7 +240,7 @@
 - **BTC 的 Yahoo 日线含周末（7×24），不能作为「交易日」依据**：`BTC-USD` 近 1y 返回 **366 个自然日** bar（比 `^GSPC` 的 252 个交易日多 114 个）。直接用会写出 ~110 个「只有 `btc` 有值」的纯周末行 → 超出 `HISTORY_MAX` 被裁、偏离既有行的交易日口径、切断 `compute_correlation` 的收益链、夸大 `scripts/backtest.py` 的样本计数。**修法**：某天若除 `NON_TRADING_CALENDAR_SYMBOLS = {BTC}` 之外无任何标的有值 → 判为非交易日、整行丢弃（`backfill_history.py::plan_fills`，实测丢弃 104 行）。
 - **history 的日期口径是「按符号所属市场时区」，不是统一美东**：`analyzer.get_market_date` 中 `a-share → SHANGHAI_TZ`、`us → EASTERN_TZ`。Yahoo timestamp 转日期时若统一用美东，A 股（上证 09:30 北京 = 前一日 21:30 ET）会整体**早一天**、与既有行错位/重复。**抽查金标准**（回填后逐条核对）：`2025-12-25` 只有 `sh/sz/btc` 有值（美股圣诞休市）、`2026-01-02` 只有美股类有值（中国元旦假期延续）、`2026-02-17` 只有美股类有值（春节）、`2026-01-01` 整行不存在（中美双休，仅 BTC 有 bar 被丢弃）。
 - **既有行的 `None` 有真实语义，回填不得"补全"**：实测 90 行里 `vix 85/90`、`gld 83/90` 非空——空值本身就是休市/未收盘的记录（`2026-05-25` 美股键全空 = 阵亡将士纪念日；`2026-09-11` 的 `vix/gld/btc` 空 = 美股未收盘）。用 Yahoo 历史 bar 去填空会造出"休市日却有 VIX 值"的假数据。**回填只新增 date 不存在的行**（`backfill_history.py` 默认行为，并报告刻意跳过的键数）。
-- **`seed_history.py` 保留但勿再使用**：它的 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`，而消费方按**大写 symbol** 取值 → 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全部失效；其 `append_history` 整行覆盖还会抹掉既有行的非空值。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。`seed_history_market.py` 同类问题更粗糙，同样勿用。
+- **~~`seed_history.py` 保留但勿再使用~~（2026-09-24 已删除）**：它曾因 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`（消费方按**大写 symbol** 取值 ⇒ 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全失效）、`append_history` 整行覆盖抹掉既有行非空值，被 `AGENTS.md` 标为「勿再使用」。**QA 缺陷轮 D-2 已把 `seed_history.py` / `seed_history_market.py` 从仓库根删除**（源码留档在 `tasks/2026-09-24-qa-bughunt/legacy/` 之外的 git 历史里，`legacy/README.md` 记录退役原因）。**为什么删而不是留**：仓库里同时存在"文档说危险"与"可一键执行"的脚本 = 一把上了膛的枪。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。
 - **CYB（`399006.SZ`）Yahoo 1y 覆盖缺口 → 改走 AkShare 补齐（已落地）**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 回填段 CYB 全空（`cyb 86/259`）。属**外部数据源缺口**（非本地 bug）。修法：A 股标的 Yahoo 返回 < `AKSHARE_FALLBACK_MIN=30` 天时改走 `ak.stock_zh_index_daily`。**四条纪律**：① 新浪源无 timeout → 必须 daemon 线程 + `join(AKSHARE_TIMEOUT=15s)`（复用 `fetch_sector_heat` 范式）；② AkShare 返回**全历史**（2010 起，3956 行）→ 窗口须按 Yahoo 序列最早日期裁剪，且**基准必须排除 7×24 标的**（BTC 的自然日会把窗口提前一天，造出「SH/SZ 为空但 CYB 有值」的错位首行）；③ ticker 换算 `000001.SS → sh000001`、`399006.SZ → sz399006`；④ 单标的失败不回退成 0 行（保留 Yahoo 结果并打印）。补齐后 `cyb 243/259` == `sh 243/259` == `sz 243/259`。**口径交叉验证**：AkShare 对 `2026-09-09/10/11` 的 CYB 收盘 `3354.969 / 3338.422 / 3322.039` 与既有 history 行**逐值相同**，可作正确性判据。
 - **补写既有行空缺的安全边界（仅限 AkShare 权威补数）**：通用回填**只新增 date 不存在的行**（既有 `None` 有休市/未收盘语义）；唯一例外是 AkShare 补的 A 股键，判据三条同时成立才写：① 该键当前为 `None`、② 该行有 `sh`/`sz` 同类非空（证明是 A 股交易日）、③ 只经 `merge_history` 写（只更新非 None 键、不整行覆盖、不新增日期行）。`--no-patch-existing` 可关闭。实测 157 个键补写：**非 cyb 键改动 0、非法覆盖 0、缺同类行的 0、`last_values.json` SHA256 未变**。
 - **回填后必须核对「既有行零改动」与「`last_values.json` 未被动」**：用回填前备份逐键比对（`r.get(k) is not None and a.get(k) != r[k]` → 应为 0 条），并对 `last_values.json` 取 SHA256 前后比对。仅看"行数变多/无报错"不足以证明回填安全。
@@ -815,3 +815,57 @@
 - ⚠️ **同区域 A/B 优于跨边缘取样**：`plan` 原设计是"跨卡片左边缘取横跨带"，但 1440 档卡片左缘到侧栏只有 27px，
   "卡外"半区会压在 `#sidebar` 的导航文字上 ⇒ `d11` 被抬高约 2.5×、留存比被压到 0.186 的假值。
   改成"同一块像素、只切换玻璃面开/关"后，位置偏置消失（同一实况：0.469）。
+
+## 通用（QA 缺陷轮 F1 家族：容错边界，2026-09-24）
+
+`tasks/2026-09-24-qa-bughunt/`（16 条缺陷，5 条致命/严重）里有**一族**是同一个模式：
+**该宽的地方过宽、该窄的地方过窄**。修法原则（改容错代码前先对号入座）：
+
+1. **破坏性恢复只对"可证明不可恢复"的错误开放**。`sqlite3.OperationalError`（"database is locked"）
+   ⊂ `sqlite3.DatabaseError` ⇒ 按**父类**捕获会把「瞬时锁」判成「库损坏」并删库重建
+   （实测：2718 行 / 272 个日期 → 只剩当日行，且被 auto-push 推上线）。锁走 `busy_timeout` +
+   指数退避重试；损坏需 `PRAGMA integrity_check` 非 ok 才算。
+   **通用**：写 `except SomeError` 前先查它的**子类树**，锁/超时/忙这类瞬时错误永远单独分类。
+2. **恢复动作本身要留后路**：损坏副本一律 `os.replace` 改名成 `<db>.corrupt-<ts>`（含 `-wal`/`-shm`），
+   **绝不 `unlink` 唯一副本**；改名失败（Windows `PermissionError`/WinError 32：他进程持有 `-wal`）
+   则放弃重建并把错误抛给入口。
+3. **容错层不得改变对外契约**：docstring 写「恒 200 / 恒 401」的函数，其 `try` 必须包住
+   **函数体全部**（`web/app.py:_authorized` 只包了 base64 解码，`hmac.compare_digest` 留在外面
+   ⇒ 中文口令（非 ASCII 的 `str`）抛 `TypeError` → 500，且**未认证的任何人都能触发**）。
+   同理：`(json.JSONDecodeError, OSError)` 漏掉 `UnicodeDecodeError`（⊂ `ValueError`）⇒ 坏字节文件 500。
+4. **数值入盘前先判有限性**（`math.isfinite`），写盘再用 `json.dumps(..., allow_nan=False)` 做第二道闸。
+   `Infinity` 能穿过 `gt/min/max` 全部比较（`inf > 0` 为真；多数键没有 `max`）⇒ 落盘成非 RFC 8259
+   的 `Infinity` 字面量（Node/浏览器 `JSON.parse` 读不了），且该标的告警**永久静默**
+   （`check_breach` 恒不触发）。两面都要堵：读侧回退默认 + 写侧 400。
+5. **危险脚本默认安全侧**：破坏性操作（`DELETE FROM …`）绝不配 `default=`（裸跑即事故）；
+   目标路径必填 + `--force` 二次确认 + `--dry-run` **真的只打印**。迁移/一次性脚本完成即
+   **移档 `tasks/<日期>-*/legacy/`** 并从 `docs/commands.md` 摘除（留着 = 一把上了膛的枪）。
+   「失败当成功」的脚本（`return 0` 恒真）同样是事故源：父进程/cron 必须能从退出码看出失败。
+
+### 配套：链路级测试纪律（BUG-016 的教训）
+
+774 条绿灯下藏着删库/成本/非有限值/鉴权 500 四类严重缺陷，两个原因都要防：
+- **不许绕过生产入口**：`_build_watchlist_payload(stocks_with_cost, …)` 直接注入 dict 就把
+  "读侧丢弃 cost" 掩盖了；链路用例必须从 `POST /api/settings` → `load_config()` → `GET /api/watchlist`
+  一路走过去。
+- **同一文件里不得重复定义同名 `test_*`**：后定义**静默遮蔽**前者，被遮蔽的块永不执行
+  （`tests/test_backtest.py` 有两对）——`tests/test_test_hygiene.py` 用 `ast` 元测试钉死。
+
+## 验收（环境变量会静默改变验收结果，2026-09-24）
+
+- 🔴 **`CONFIG_PATH` 是"隐形换配置"开关**：`verify_ui.py` 起 uvicorn 时**原样继承** `os.environ`
+  （只额外 pop 掉 `MP_AUTH_DISABLED`），所以只要父进程里残留 `CONFIG_PATH=<pytest 临时文件>`，
+  服务端就会去读那个（可能根本不存在的）配置 ⇒ 自选列表拿不到 `watchlist.stocks` ⇒ `hidden=true`
+  ⇒ 一次跑出 **8 条红**（`自选列表可见且有行` / `F-1b` / `PF-2` / `PF-4` / `A-4` / `A-5` 级联），
+  看起来像前端回归，实际是环境脏。**实测判据**：先 `python -c "import web.app as A; print(A._load_watchlist())"`
+  —— 若 `hidden=True, stocks=0` 而 `config.json` 明明有 11 只，就是这个问题。
+  **纪律**：跑门禁/手工验收前 `unset CONFIG_PATH MP_SKIP_RESTORE MP_AUTH_DISABLED`（或在本进程
+  `os.environ.pop(...)` 后再起子进程）。同理 `MP_SKIP_RESTORE=1` 会跳过启动恢复链，
+  `MP_AUTH_DISABLED=1` 会让"未带凭据 401"类断言**假绿**（实测：起真实服务做鉴权复现时全 200）。
+- ⚠️ **`git add <dir>` 对"没有任何 tracked 文件"的目录会 fatal**：临时仓库里复现 auto-push 时，
+  `git add data context alerts` 报 `fatal: pathspec 'context' did not match any files`（空目录）
+  或 `error: pathspec 'context' did not match any file(s) known to git`（目录存在但无 tracked 文件）
+  ⇒ 提交整条失败。生产仓库没暴露是因为 `context/`、`alerts/` 里确实有 tracked 文件
+  （实测 `git ls-files context alerts` 非空 —— 顺带纠正 `AGENTS.md` 里「`context/`/`alerts/` 被
+  gitignore 排除」的旧说法：`git check-ignore` 对它们**零命中**，它们本来就随 auto-push 入库）。
+  造夹具/新环境时要么先放一个 tracked 文件，要么把 pathspec 收窄到确实存在的路径。

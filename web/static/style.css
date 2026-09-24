@@ -406,6 +406,14 @@ body {
 .mini-bar i.pos { background: var(--green); }
 .mini-bar i.neg { background: var(--red); }
 #watchlist-section { min-height: 240px; }
+/* BUG-009（2026-09-24）：自选卡「陈旧回填」标注 —— 后端回退旧缓存时下发 `stale: true`，
+   前端必须显式标注，否则用户无从分辨展示的是过期快照（与「数据截至」标注纪律一致）。
+   用警示色 + 小字号；`nowrap + ellipsis + min-width:0` 与同排的 `.h2-sub` 同款：
+   标题行不因标注换行而增高（无 stale 时靠 `hidden` 属性隐藏，display:none）。 */
+#watchlist-stale { color: var(--orange); font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                   min-width: 0; flex-shrink: 0; }
+#watchlist-stale[hidden] { display: none; }
 
 /* ===== 市场概览 6 小卡 ===== */
 .mini-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

@@ -151,17 +151,26 @@ def _authorized(header: str) -> bool:
 
     - `Basic ` 前缀按 RFC 大小写不敏感 ⇒ 统一小写比较（plan §5 Step 2 要点①）。
     - `hmac.compare_digest` **用户名与密码都要**（防时序侧信道；只比一个等于没防）。
+    - ⚠️ 2026-09-24（BUG-004）：比较**统一走 bytes**。`compare_digest` 对含非 ASCII 的 `str`
+      直接抛 `TypeError: comparing strings with non-ASCII characters is not supported`
+      （CPython 语义，防的是 `str` 的 Unicode 归一化恒时假象）⇒ 中文口令/用户名**永远 500**
+      —— 而中文口令是本产品用户最可能的选择，且**未认证的任何人都能触发**（刷日志 + 报错页）。
     """
-    if len(header) < 6 or header[:6].lower() != "basic ":
-        return False
     try:
-        raw = base64.b64decode(header[6:], validate=True).decode("utf-8")
-    except Exception:                   # noqa: BLE001 —— 非 base64 / 坏填充 / 非 UTF-8 一律 401
+        if len(header) < 6 or header[:6].lower() != "basic ":
+            return False
+        try:
+            raw = base64.b64decode(header[6:], validate=True).decode("utf-8")
+        except Exception:               # noqa: BLE001 —— 非 base64 / 坏填充 / 非 UTF-8 一律 401
+            return False
+        if ":" not in raw:
+            return False
+        u, p = raw.split(":", 1)
+        # 契约（见 docstring）：**整个函数体**都在 try 内 —— 任何路径都不许把异常漏给 FastAPI。
+        return (hmac.compare_digest(u.encode("utf-8"), _auth_user().encode("utf-8"))
+                and hmac.compare_digest(p.encode("utf-8"), _auth_pass().encode("utf-8")))
+    except Exception:                   # noqa: BLE001 —— 含 `encode` 遇孤立代理字符的 UnicodeEncodeError
         return False
-    if ":" not in raw:
-        return False
-    u, p = raw.split(":", 1)
-    return hmac.compare_digest(u, _auth_user()) and hmac.compare_digest(p, _auth_pass())
 
 
 def _unauthorized() -> JSONResponse:
@@ -367,12 +376,30 @@ def _compute_latest(history: list[dict]):
     return date, indices
 
 
-def _read_context_file(path: Path) -> dict | None:
-    """单文件解析容错：坏 JSON / 非 dict / IO 错误 → None（不阻断回退遍历）。"""
+def _read_text(path: Path) -> str | None:
+    """容错读取 UTF-8 文本：非 UTF-8 字节按**替换符解码**（不抛 `UnicodeDecodeError`）；IO 失败 → None。
+
+    BUG-007（2026-09-24）：此前各读盘点直接用 `path.read_text(encoding="utf-8")`，半写 / 坏字节文件会抛
+    `UnicodeDecodeError`（`ValueError` 子类，不在 `except (json.JSONDecodeError, OSError)` 内）⇒ 出口 500，
+    违反本模块「坏 JSON → 空结构、HTTP 200 恒定、不 500」的契约。本模块所有「读文本 + `json.loads`」
+    的读盘点统一走这里 ⇒ 坏字节退化为「解码出替换符 → `json.loads` 判坏 JSON」的既有降级口径。
+    """
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        log.warning("context 读取失败，跳过该文件: %s (%s)", path.name, exc)
+        return path.read_bytes().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _read_context_file(path: Path) -> dict | None:
+    """单文件解析容错：坏 JSON / 坏字节 / 非 dict / IO 错误 → None（不阻断回退遍历）。"""
+    text = _read_text(path)
+    if text is None:
+        log.warning("context 读取失败，跳过该文件: %s", path.name)
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        log.warning("context 解析失败，跳过该文件: %s (%s)", path.name, exc)
         return None
     if not isinstance(data, dict):
         log.warning("context 非 dict，跳过该文件: %s", path.name)
@@ -450,10 +477,9 @@ def _load_sector_heat() -> dict:
 # ---- 告警解析（直接使用本模块 ALERTS_DIR 常量）----
 
 def _parse_alert_file(path: Path) -> dict | None:
-    """解析告警 md（frontmatter + 字段块）。解析失败 → None（容错，不 500）。"""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
+    """解析告警 md（frontmatter + 字段块）。解析失败（含坏字节 / IO 错误）→ None（容错，不 500）。"""
+    text = _read_text(path)
+    if text is None:
         return None
 
     fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
@@ -1056,16 +1082,22 @@ def api_alerts() -> list[dict]:
 def _load_news() -> dict:
     """读取资讯快照 data/news.json（所有权归 Hermes，web 只读）。
 
-    容错：文件缺失 / 坏 JSON / 非 dict / items 非列表 → 空结构（HTTP 200 恒定，不 500）。
+    容错：文件缺失 / 坏 JSON / **坏字节** / 非 dict / items 非列表 → 空结构
+    （HTTP 200 恒定，不 500 —— 坏字节经 `_read_text` 按替换符解码后退化为坏 JSON，同一口径）。
     条目过滤：dict 且 title 非空 且 url 以 http(s):// 开头（防 javascript: 注入）；
     source/published/summary 缺省 ""；截前 8 条（cap 8，防超量撑破卡片）。
     """
     empty = {"date": None, "items": [], "count": 0}
-    try:
-        data = json.loads(NEWS_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
+    text = _read_text(NEWS_FILE)
+    if text is None:
         if NEWS_FILE.exists():
-            log.warning("资讯文件读取失败，按空结构处理: %s", exc)
+            log.warning("资讯文件读取失败，按空结构处理: %s", NEWS_FILE)
+        return empty
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        if NEWS_FILE.exists():
+            log.warning("资讯文件解析失败，按空结构处理: %s", exc)
         return empty
     if not isinstance(data, dict) or not isinstance(data.get("items"), list):
         log.warning("资讯文件结构异常，按空结构处理")
@@ -1303,6 +1335,10 @@ def macro_page() -> HTMLResponse:
 #   否则一次单接口抖动就会让每次请求都重打 13 个接口（用户等 10s+）。
 _CN_ECON_TTL = 6 * 3600          # 月/季数据为主，与 _ECON_TTL 同纪律（日调用 ≤4 次）
 _CN_QUOTES_TTL = 90              # 行情类（汇率/国债收益率），与 _MACRO_TTL 同口径
+# BUG-012（2026-09-24）：`/api/cn/quotes` 冷缓存时**同步直连取数、无上限**（实测冷启动 13.50s，
+# 上游挂起会占住单 worker）⇒ 复用项目既有 daemon 线程限时范式（`src/fetcher.fetch_sector_heat`），
+# 超时返回空态（HTTP 200，前端按既有「数据暂缺」降级）。上限 15s 覆盖实测冷启动并有富余。
+_CN_QUOTES_TIMEOUT = 15          # 取数限时（秒）
 _cn_econ_raw: dict = {}          # key -> rows：**跨组累积**，供四象限算轴
 _cn_econ_raw_ts: dict = {}       # key -> 写入时间
 _cn_econ_cache: dict = {"ts": {}, "payload": {}}     # 按 group（"all" 或组名）分桶
@@ -1356,6 +1392,36 @@ def api_econ_cn(group: str | None = Query(
     return fresh
 
 
+def _cn_quotes_empty() -> dict:
+    """中国宏观行情空态：无数据 + `failed` 如实列出三项（与「取数全失败」分支同形）。"""
+    return {"as_of": None, "cny": None, "bond10y": None, "credit_spread": None,
+            "failed": ["cny", "bond10y", "credit_spread"]}
+
+
+def _load_cn_quotes_limited() -> dict:
+    """`_load_cn_quotes()` 的**限时**包装：daemon 线程 + `join(_CN_QUOTES_TIMEOUT)`（BUG-012）。
+
+    范式与 `src/fetcher.fetch_sector_heat` 一致（本项目既有写法）。超时 / 取数抛异常 → 空态，
+    HTTP 仍 200、`as_of` 语义与既有失败分支一致（None，前端沿用「数据暂缺」文案）。
+    被放弃的线程是 daemon 且 `_load_cn_quotes` 只读不写缓存 ⇒ 超时后不会回写污染后续请求。
+    """
+    box: dict = {}
+
+    def _worker() -> None:
+        try:
+            box["out"] = _load_cn_quotes()
+        except Exception as exc:  # noqa: BLE001 —— 与既有降级语义一致（不 500）
+            log.warning("中国宏观行情取数异常，降级空态: %s", exc)
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(_CN_QUOTES_TIMEOUT)
+    if t.is_alive():
+        log.warning("中国宏观行情取数超时（>%ss），返回空态", _CN_QUOTES_TIMEOUT)
+        return _cn_quotes_empty()
+    return box.get("out") or _cn_quotes_empty()
+
+
 def _load_cn_quotes() -> dict:
     """人民币汇率（Yahoo `CNY=X`）+ 中债 10Y 国债 + 信用利差（商金债AAA − 国债，bp）。
 
@@ -1363,7 +1429,8 @@ def _load_cn_quotes() -> dict:
     ⚠️ 信用利差是**同一次请求的副产品**（`bond_china_yield` 一次返回 3 条曲线），
        正好补上美国版因 FRED 不通而被迫放弃的信用维度。
     """
-    out: dict = {"as_of": None, "cny": None, "bond10y": None, "credit_spread": None, "failed": []}
+    out: dict = _cn_quotes_empty()
+    out["failed"] = []          # 逐项失败时再 append（默认「三项全失败」留给限时/异常路径）
     try:
         value, series = _fetch_yahoo_watch("CNY=X", "3mo")
         out["cny"] = {"symbol": "CNY=X", "label": "美元/人民币", "value": round(float(value), 4),
@@ -1409,7 +1476,7 @@ def api_cn_quotes() -> dict:
         cached = _cn_quotes_cache["payload"]
         if cached is not None and now - _cn_quotes_cache["ts"] < _CN_QUOTES_TTL:
             return cached
-    fresh = _load_cn_quotes()
+    fresh = _load_cn_quotes_limited()
     if fresh.get("as_of"):
         with _cn_quotes_lock:
             _cn_quotes_cache["ts"] = now

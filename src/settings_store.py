@@ -14,23 +14,56 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import json
+import math
 import os
+import tempfile
 import time
 from pathlib import Path
 
-from src.config import DEFAULTS, ENV_MAP, load_config
+from src.config import (DEFAULTS, ENV_MAP, WATCHLIST_LIMIT, load_config,
+                        normalize_watchlist_cost, watchlist_cost_provided)
 
 #: 备份保留份数（滚动；D-2）
 BACKUP_KEEP = 5
-#: 自选条目上限（**与 `src/config.py:_valid_watchlist` 的 20 一致** —— 写 25 条会被读侧静默截断，
-#: 那比报错更骗人。plan 写的 30 是笔误，journal 已记录）。
-WATCHLIST_MAX = 20
+#: 自选条目上限（**与读侧同源**：直接引 `config.WATCHLIST_LIMIT` —— 写 25 条会被读侧静默截断，
+#: 那比报错更骗人。2026-09-24 收敛：此前是两处各写一个 20）。
+WATCHLIST_MAX = WATCHLIST_LIMIT
 
 # ⚠️ 备份名按 **config 文件自己的名字**派生（不硬编码 "config.json"）——
 #   否则多环境/测试用不同文件名时备份会写错名、甚至互相覆盖（人工闭环实测抓到）。
 def _backup_prefix(path: Path) -> str:
     return path.name + ".bak-"
+
+
+#: 进程内备份序号（BUG-014 的第二道保险：时间戳精度不足时靠它保证唯一）。
+_BACKUP_SEQ = itertools.count(1)
+
+
+def _backup_stamp() -> str:
+    """备份名时间戳 `YYYYmmdd-HHMMSS-<9位纳秒>-<序号>`（字典序 = 时间序，`_prune_backups` 依赖）。
+
+    ⚠️ 2026-09-24（BUG-014）：原为 `%Y%m%d-%H%M%S`（**秒级**）—— 同一秒内两次保存（设置页连点
+    保存 / 脚本循环改配置）第二个备份会**覆盖**第一个，丢掉最接近当前状态的回滚点。纳秒尾数 +
+    进程内序号双保险（即使时钟不前进也不撞名）。
+    """
+    ns = time.time_ns()
+    return "%s-%09d-%06d" % (time.strftime("%Y%m%d-%H%M%S"), ns % 1_000_000_000, next(_BACKUP_SEQ))
+
+
+def _unique_tmp(path: Path, tag: str) -> Path:
+    """在 `path` **同目录**建唯一临时文件（`tempfile.mkstemp`）→ 返回其路径（调用方负责清理）。
+
+    ⚠️ 2026-09-24（BUG-014）：原来是固定名 `<name>.settings-tmp` / `<name>.validate-tmp` —— 并发
+    POST（或同秒重入）下两个请求共享同一 tmp：一个可能读到对方写的内容（校验误判），另一方的
+    `unlink()` 还会把它的文件删掉（丢失更新）。唯一名让两者互不可见。**文件锁仍列为可选**
+    （单 worker 部署下先做唯一名，plan §2 B1）。同目录 ⇒ `os.replace` 依旧是同盘原子替换；
+    名尾保留 `.<tag>`，便于清理与既有 `*.settings-tmp` / `*.validate-tmp` 断言匹配。
+    """
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", suffix="." + tag, dir=str(path.parent))
+    os.close(fd)
+    return Path(name)
 
 
 
@@ -174,6 +207,12 @@ def _validate_one(dotted: str, value) -> object:
         fv = float(value)
     except (TypeError, ValueError):
         raise ValueError("%s 需为数字" % dotted) from None
+    # ⚠️ 2026-09-24（BUG-003）：**有限性必须在校验链最前面** —— `Infinity` 能穿过下面所有
+    #    `gt/min/max` 比较（`inf > 0` 为真、`max` 只约束上界且多数阈值键没有 max），
+    #    一路写进 config.json（`json.dumps` 默认 `allow_nan=True` 会写出非法 JSON 字面量
+    #    `Infinity`）并让该标的告警永久静默（`check_breach` 恒不触发）。
+    if not math.isfinite(fv):
+        raise ValueError("%s 需为有限数字（不接受 Infinity/NaN）" % dotted)
     if "gt" in spec and not fv > spec["gt"]:
         raise ValueError("%s 需大于 %s" % (dotted, spec["gt"]))
     if "min" in spec and fv < spec["min"]:
@@ -203,15 +242,18 @@ def _validate_stocks(value, dotted: str) -> list[dict]:
             raise ValueError("%s 第 %d 项 symbol 重复（%s）" % (dotted, i + 1, sym))
         seen.add(key)
         entry: dict = {"symbol": sym, "label": label}
-        # cost（2026-09-20 组合盈亏）：**可选**；数字且 > 0；None/空串/缺省 = 清除（不写键）
+        # cost（2026-09-20 组合盈亏）：**可选**；有限且 > 0；None/空串/缺省 = 清除（不写键）。
+        # ⚠️ 2026-09-24（BUG-002）：规则收敛到 `config.normalize_watchlist_cost`（读侧同源），
+        #    不再在此处各写一遍「float + >0」。
         cost = item.get("cost")
-        if cost is not None and str(cost).strip() != "":
-            try:
-                cost_f = float(cost)
-            except (TypeError, ValueError):
-                raise ValueError("%s 第 %d 项 cost 需为数字" % (dotted, i + 1)) from None
-            if not cost_f > 0:
-                raise ValueError("%s 第 %d 项 cost 需大于 0" % (dotted, i + 1))
+        if watchlist_cost_provided(cost):
+            cost_f = normalize_watchlist_cost(cost)
+            if cost_f is None:
+                try:
+                    float(cost)
+                except (TypeError, ValueError):
+                    raise ValueError("%s 第 %d 项 cost 需为数字" % (dotted, i + 1)) from None
+                raise ValueError("%s 第 %d 项 cost 需为大于 0 的有限数字" % (dotted, i + 1))
             entry["cost"] = cost_f
         out.append(entry)
     return out
@@ -245,13 +287,12 @@ def validate_updates(patch: dict, config_path: Path | str | None = None) -> dict
         for k in parts[:-1]:
             node = node.setdefault(k, {})
         node[parts[-1]] = value
-    tmp = path.parent / (path.name + ".validate-tmp")
+    tmp = _unique_tmp(path, "validate-tmp")
     try:
-        tmp.write_text(json.dumps(new_raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(_dumps_strict(new_raw), encoding="utf-8")
         merged = load_config(tmp)
     finally:
-        if tmp.exists():
-            tmp.unlink()
+        tmp.unlink(missing_ok=True)
     for a, b, msg in PAIR_RULES:
         va, vb = _get_merged(merged, a), _get_merged(merged, b)
         if va is not None and vb is not None and va >= vb:
@@ -271,10 +312,10 @@ def _get_merged(cfg: dict, dotted: str):
 
 
 def _backup(path: Path) -> Path | None:
-    """写前备份（文件存在才有得备）。"""
+    """写前备份（文件存在才有得备）；名字见 `_backup_stamp`（秒级冲突已修，BUG-014）。"""
     if not path.exists():
         return None
-    dst = path.parent / (_backup_prefix(path) + time.strftime("%Y%m%d-%H%M%S"))
+    dst = path.parent / (_backup_prefix(path) + _backup_stamp())
     dst.write_bytes(path.read_bytes())
     return dst
 
@@ -292,10 +333,54 @@ def _prune_backups(path: Path, keep: int = BACKUP_KEEP) -> int:
     return removed
 
 
+def _non_finite_path(node, prefix: tuple = ()) -> str | None:
+    """找到第一个非有限数值的 dotted path（"alert.vix"）；没有则 None。
+
+    仅用于错误文案：用户看到 400 时要知道**到底是哪个键**坏了，否则只能翻文件。
+    """
+    if isinstance(node, dict):
+        for k, v in node.items():
+            found = _non_finite_path(v, prefix + (str(k),))
+            if found:
+                return found
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            found = _non_finite_path(v, prefix + (str(i),))
+            if found:
+                return found
+    elif isinstance(node, float) and not math.isfinite(node):
+        return ".".join(prefix) or "(根)"
+    return None
+
+
+def _dumps_strict(data: dict) -> str:
+    """严格 JSON 序列化（`allow_nan=False`）—— **BUG-003 的第二道闸**（2026-09-24）。
+
+    `json.dumps` 默认 `allow_nan=True`，会写出 `Infinity` / `NaN` 这种**非 RFC 8259** 字面量：
+    任何非 Python 消费方（Node/Go/Rust/浏览器 `JSON.parse`）都解析失败，而 Python 侧还会把它
+    当成合法阈值读回来（`check_breach` 恒不触发 = 该标的告警静默关闭）。
+    校验层（`_validate_one`）已拦一次；这里是"落盘前最后一道"，防其它调用方绕过校验写脏值
+    （也包括**历史遗留**的脏文件：写入前发现即拒绝，并指出是哪个键）。
+    """
+    try:
+        return json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False)
+    except ValueError as exc:
+        where = _non_finite_path(data)
+        raise SettingsError(
+            ["配置含非法数值（Infinity/NaN）：%s%s（已拒绝写入，请手工修正该键）"
+             % (where, "" if where == "(根)" else "；%s" % exc)]) from None
+
+
 def _atomic_write(path: Path, data: dict) -> None:
-    tmp = path.parent / (path.name + ".settings-tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)                       # 同盘原子替换（analyzer 既有范式）
+    """序列化 → 唯一 tmp → 同盘 `os.replace`；**失败路径不留半成品**（BUG-014）。"""
+    payload = _dumps_strict(data) + "\n"          # 先序列化：非法值在这里就抛，连 tmp 都不建
+    tmp = _unique_tmp(path, "settings-tmp")
+    try:
+        tmp.write_text(payload, encoding="utf-8")
+        os.replace(tmp, path)                     # 同盘原子替换（analyzer 既有范式）
+    except BaseException:
+        tmp.unlink(missing_ok=True)               # 写/替换失败都不留半成品
+        raise
 
 
 def apply_updates(patch: dict, config_path: Path | str | None = None,

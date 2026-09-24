@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 from pathlib import Path
 
@@ -36,6 +37,10 @@ ENV_MAP = {
     "ALERT_THRESHOLD_GSPC": ("alert", "gspc"),
     "ALERT_THRESHOLD_IXIC": ("alert", "ixic"),
     "ALERT_THRESHOLD_SH": ("alert", "sh"),
+    # ⚠️ 2026-09-24（BUG-010）：`alert.sz` 在 SCHEMA（设置页可改）里存在，但 ENV_MAP 漏了它 ⇒
+    #    `ALERT_THRESHOLD_SZ` **静默失效**（文档却宣称 `ALERT_THRESHOLD_*` 通用覆盖）。
+    #    新增告警键时：`DEFAULTS.alert` / `SCHEMA` / `ENV_MAP` **三处必须同步**（测试已钉）。
+    "ALERT_THRESHOLD_SZ": ("alert", "sz"),
     "ALERT_THRESHOLD_CYB": ("alert", "cyb"),
     "STATUS_THRESHOLD_VIX_CALM": ("analysis", "vix", "peaceful"),
     "STATUS_THRESHOLD_VIX_PANIC": ("analysis", "vix", "panic"),
@@ -52,7 +57,7 @@ DEFAULT_CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
 
 
 def env_float(name: str, default: float) -> float:
-    """读取环境变量并解析为 float；缺失/非法/非正回退 default（仅记日志，不抛异常）。"""
+    """读取环境变量并解析为 float；缺失/非法/非有限/非正回退 default（仅记日志，不抛异常）。"""
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -60,15 +65,55 @@ def env_float(name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         value = -1.0
-    if value <= 0:
+    # ⚠️ 2026-09-24（BUG-003 同类）：`ALERT_THRESHOLD_VIX=inf` 会绕过 `<= 0` 判断
+    #    直接进报警链 ⇒ 与 JSON 侧同一道有限性闸门。
+    if not math.isfinite(value) or value <= 0:
         log.warning("环境变量 %s 非法或非正（%r），回退默认 %.1f", name, raw, default)
         return default
     return value
 
 
+#: 自选股条数上限（**读写唯一口径**：`settings_store` 与 `web/app.py` 都引它，别再各写一个 20）。
+WATCHLIST_LIMIT = 20
+
+
+def is_finite_number(value) -> bool:
+    """非 bool 的有限数值（排除 `NaN` / `±Infinity`）。"""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _valid_number(value) -> bool:
-    """叶值校验：非 bool 的数字且 >0（bool 是 int 子类，须显式排除，否则 JSON true 被当 1）。"""
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+    """叶值校验：非 bool 的有限数字且 >0（bool 是 int 子类，须显式排除，否则 JSON true 被当 1）。
+
+    ⚠️ 2026-09-24（BUG-003）：**必须有 `isfinite` 前置** —— 否则 `JSON` 里的 `Infinity`
+    （Python `json` 默认接受）会被当成合法阈值读进报警链，`check_breach` 恒不触发（静默关掉告警）。
+    """
+    return is_finite_number(value) and value > 0
+
+
+def watchlist_cost_provided(raw) -> bool:
+    """自选条目的 `cost` 是否"给了值"（`None` / 空串 = 未给 = 清除该键；`0`/`-1`/`inf` 等 = 给了但非法）。"""
+    return raw is not None and (not isinstance(raw, str) or raw.strip() != "")
+
+
+def normalize_watchlist_cost(raw) -> float | None:
+    """自选条目 `cost` 的**唯一口径**（写读共用，2026-09-24 BUG-002）：有限且 >0 → `float`。
+
+    - 未提供 / 空串 / 非数字 / 非有限（`inf`/`nan`）/ ≤0 → `None`（= 不带 `cost` 键）；
+    - 读侧（`_valid_watchlist`）对 `None` 静默丢键并告警，写侧（`settings_store`）对
+      "给了值却拿到 `None`"报错 —— 两侧规则同源，不再各写一遍（旧实现是写侧收、读侧丢）。
+    """
+    if not watchlist_cost_provided(raw):
+        return None
+    if isinstance(raw, bool):                      # bool 是 int 子类，`true` 不当 1
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return value
 
 
 def _resolve_path(path) -> Path:
@@ -82,13 +127,16 @@ def _resolve_path(path) -> Path:
 
 
 def _read_json(path: Path) -> dict | None:
-    """读配置文件；缺失/损坏/根非 dict → None（调用方用默认值）。"""
+    """读配置文件；缺失/损坏/非 UTF-8/根非 dict → None（调用方用默认值）。"""
     if not path.exists():
         log.warning("配置文件不存在 %s，使用内置默认值", path)
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
+    except (ValueError, OSError) as exc:
+        # ⚠️ 2026-09-24（BUG-007）：只捕 `JSONDecodeError` 会漏掉 `UnicodeDecodeError`
+        #    （坏字节/半写文件）⇒ `load_config` 抛异常 ⇒ 三个入口脚本 + 4 个 API 同时挂。
+        #    `JSONDecodeError` 与 `UnicodeDecodeError` **都是 `ValueError` 子类**，捕父类即是全捕。
         log.warning("配置文件读取失败 %s: %s，使用内置默认值", path, exc)
         return None
     if not isinstance(data, dict):
@@ -128,8 +176,9 @@ def _merge_valid(base: dict, raw: dict, prefix: tuple = ()) -> dict:
 def _valid_watchlist(raw) -> dict:
     """校验 watchlist 配置（值为 list[dict]，_merge_valid 无法处理，单独校验）。
 
-    stocks ≤20 只；symbol 非空字符串、去重（重复丢弃记日志）；label 缺省回退 symbol；
-    非法条目丢弃记日志；corr_high_threshold 走 _valid_number（须为正数字）。
+    stocks ≤`WATCHLIST_LIMIT` 只；symbol 非空字符串、去重（重复丢弃记日志）；label 缺省回退 symbol；
+    `cost` 可选（有限且 >0，口径与写侧同源 `normalize_watchlist_cost`，非法丢键记日志）；
+    非法条目丢弃记日志；corr_high_threshold 走 _valid_number（须为有限正数字）。
     返回 {"stocks": [...], "corr_high_threshold": float}。
     """
     default = {"stocks": [], "corr_high_threshold": 0.7}
@@ -157,10 +206,21 @@ def _valid_watchlist(raw) -> dict:
             label = item.get("label")
             if not isinstance(label, str) or not label.strip():
                 label = sym
-            stocks.append({"symbol": sym, "label": label})
-    if len(stocks) > 20:
-        log.warning("watchlist 数量 %d 超过上限 20，截断至 20", len(stocks))
-        stocks = stocks[:20]
+            entry: dict = {"symbol": sym, "label": label}
+            # ⚠️ 2026-09-24（BUG-002）：**必须透传 cost**。旧实现在这里重建条目时只留
+            #    symbol/label，而写侧（settings_store）是收 cost 的 ⇒ 用户录入的成本价
+            #    存进了 config.json 却永远读不出来，首页「持仓盈亏」列恒为 —。
+            raw_cost = item.get("cost")
+            if watchlist_cost_provided(raw_cost):
+                cost = normalize_watchlist_cost(raw_cost)
+                if cost is None:
+                    log.warning("watchlist %s 的 cost 非法（%r），忽略该键", sym, raw_cost)
+                else:
+                    entry["cost"] = cost
+            stocks.append(entry)
+    if len(stocks) > WATCHLIST_LIMIT:
+        log.warning("watchlist 数量 %d 超过上限 %d，截断", len(stocks), WATCHLIST_LIMIT)
+        stocks = stocks[:WATCHLIST_LIMIT]
     threshold = raw.get("corr_high_threshold")
     if _valid_number(threshold):
         corr_high_threshold = threshold

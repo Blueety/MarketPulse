@@ -26,7 +26,14 @@ def main() -> int:
     parser.add_argument("--backup-dir", default=None, help="备份目录（默认 data/backup/）")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
-    report = export_monthly_backups(backup_dir=args.backup_dir, db_path=args.db)
+    # ⚠️ 2026-09-24（BUG-005b）：原来**恒返回 0** —— 备份失败（库被锁 / 目录不可写 / DB 缺失）
+    #    在 cron 眼里等于成功，数据没了也没人发现。收尾统一兜底：失败 ⇒ log.error + 退出码非 0。
+    try:
+        report = export_monthly_backups(backup_dir=args.backup_dir, db_path=args.db)
+    except Exception as exc:
+        log.error("备份失败（db=%s, backup_dir=%s）: %s: %s",
+                  args.db or "默认库", args.backup_dir or "默认备份目录", type(exc).__name__, exc)
+        return 1
     for item in report:
         log.info("%s (%s, %s 行)", item["file"], item["action"], item["rows"])
     return 0

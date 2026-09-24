@@ -10,6 +10,7 @@ import logging
 import os
 import sqlite3
 import statistics
+import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -635,20 +636,89 @@ def save_last_values(values: dict, date: str) -> None:
 
 
 # ---- 历史数据层（三十一期：JSON → SQLite，三函数签名不变、内部走 storage）----
-def _upsert_history_rows_selfheal(rows, preserve_existing: bool) -> None:
-    """upsert + DB 损坏自愈：DatabaseError → 删除损坏 DB（含 -wal/-shm）重建后重试一次
-    （语义同旧 JSON 层「坏文件容错重建」；查询侧损坏由 storage 返回 [] 处理）。"""
+#: 写库遇锁/忙（瞬时冲突）的退避节奏（秒）—— 3 次重试后仍失败则抛出，不静默丢写。
+#: 单次上限受 `sqlite3` 的 `busy_timeout`（10s）约束 ⇒ 最坏情形约 42s 才会报错。
+_LOCK_RETRY_DELAYS: tuple[float, ...] = (0.2, 0.5, 1.0)
+
+
+def _db_is_corrupt(db_path) -> bool:
+    """**真损坏**判定：`PRAGMA integrity_check` 非 `ok`（或库压根打不开 / 不是 SQLite 文件）。
+
+    这是"重建"这件事的**唯一准入条件**（BUG-001：旧实现按异常父类判定，把瞬时锁也当损坏）。
+    """
     try:
-        upsert_history_rows(rows, preserve_existing=preserve_existing)
-        return
-    except sqlite3.DatabaseError as exc:
-        log.warning("history DB 损坏，删除重建后重试: %s", exc)
-    for suffix in ("-wal", "-shm", ""):
-        p = Path(str(st.DB_PATH) + suffix)
-        if p.exists():
-            p.unlink()
-    st.init_db()
-    upsert_history_rows(rows, preserve_existing=preserve_existing)
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute("PRAGMA integrity_check").fetchone()
+        finally:
+            conn.close()
+    except (sqlite3.DatabaseError, OSError) as exc:
+        log.warning("integrity_check 无法执行（按损坏处理）: %s", exc)
+        return True
+    ok = bool(row) and str(row[0]).lower() == "ok"
+    if not ok:
+        log.warning("integrity_check 报告异常: %r", row)
+    return not ok
+
+
+def _quarantine_db(db_path) -> str:
+    """把判定为损坏的库**改名留档**为 `<path>.corrupt-<ts>`（连 `-wal`/`-shm` 一起），返回基名。
+
+    **绝不 `unlink`** —— 旧实现对 `db`/`-wal`/`-shm` 直接删除，一旦判错就是不可逆的数据丢失
+    （生产库 2715 行）。改名失败（Windows `PermissionError`/WinError 32：别的进程正持有 `-wal`）
+    **原样向上抛** ⇒ 调用方放弃重建、把错误暴露给入口，不做任何破坏性动作。
+    """
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    target = f"{db_path}.corrupt-{stamp}"
+    for suffix in ("", "-wal", "-shm"):
+        src = Path(f"{db_path}{suffix}")
+        if src.exists():
+            os.replace(src, f"{target}{suffix}")
+    return target
+
+
+def _upsert_history_rows_selfheal(rows, preserve_existing: bool) -> None:
+    """写入历史行，并按**错误类型分流**容错（2026-09-24 重写，BUG-001）。
+
+    ① **锁 / 忙（瞬时）** → 退避重试 `_LOCK_RETRY_DELAYS`；**绝不**走重建。超限仍失败 ⇒ 抛出
+       （三入口必须感知，不静默丢写）。
+    ② **真损坏**（`integrity_check` 非 ok）→ 原库改名留档 `.corrupt-<ts>` → `init_db()` 重建 →
+       重试一次；仍失败 ⇒ 抛出。
+    ③ **留档失败**（Windows 他进程持有 `-wal`）→ 放弃重建、抛出（原异常或改名异常）。
+    ④ 其它 `DatabaseError` → 原样抛出（不猜、不吞）。
+
+    查侧损坏仍由 `storage.query_history` 返回 `[]` 处理（纪律不变）。
+    """
+    last_lock: sqlite3.OperationalError | None = None
+    for attempt in range(len(_LOCK_RETRY_DELAYS) + 1):
+        if attempt:
+            time.sleep(_LOCK_RETRY_DELAYS[attempt - 1])
+        try:
+            upsert_history_rows(rows, preserve_existing=preserve_existing)
+            if attempt:
+                log.info("history 写入在第 %d 次重试后成功（锁冲突已解除）", attempt)
+            return
+        except sqlite3.OperationalError as exc:
+            if not st.is_lock_error(exc):
+                raise                                   # 如 readonly / 语法错：不是锁，别重试
+            last_lock = exc
+            log.warning("history DB 被其它进程占用（%s）：第 %d/%d 次尝试失败",
+                        exc, attempt + 1, len(_LOCK_RETRY_DELAYS) + 1)
+        except sqlite3.DatabaseError as exc:
+            if not _db_is_corrupt(st.DB_PATH):
+                raise                                   # 非锁也非损坏（integrity ok）⇒ 不猜，抛出
+            log.error("history DB 确认损坏（%s）→ 留档后重建", exc)
+            quarantined = _quarantine_db(st.DB_PATH)    # 改名失败直接抛，不删任何东西
+            log.error("损坏库已留档: %s（未删除，可事后人工提取）", quarantined)
+            st.init_db()
+            upsert_history_rows(rows, preserve_existing=preserve_existing)
+            return
+    # 走到这里 = 每一轮都被锁拒绝（循环只在「成功 return」或「抛出」时退出）
+    if last_lock is None:                       # 理论不可达，留作显式兜底（`-O` 下 assert 会被剥掉）
+        raise RuntimeError("history 写入既未成功也未抛出异常")
+    log.error("history 写入连续 %d 次被锁拒绝，放弃（数据未写入）: %s",
+              len(_LOCK_RETRY_DELAYS) + 1, last_lock)
+    raise last_lock
 
 def load_history() -> list[dict]:
     """读取历史记录 [{date, gspc, ixic, sh, sz, cyb, vix, vxn, move, gld, btc}]；

@@ -240,7 +240,7 @@ Web 看板（独立进程，只读）：
 
 | 项 | 内容 |
 |---|---|
-| 部署平台 | **Railway**（`Procfile` / `railway.toml` / `app.py`，nixpacks + Python 3.11，healthcheck `/`）；另有 `render.yaml` |
+| 部署平台 | **Railway**（`Procfile` / `railway.toml`，nixpacks + Python 3.11，healthcheck `/healthz`）；`railway.toml` 是唯一在用的部署配置（旧 `app.py` 入口与 `render.yaml` 已于 2026-09-24 退役归档到 `tasks/2026-09-24-qa-bughunt/legacy/`） |
 | 启动命令 | `uvicorn web.app:app --host 0.0.0.0 --port $PORT` |
 | 数据同步 | cron 入口跑完自动 commit + push → Railway 重部署拿到最新数据 |
 | push 代理 | 经 Clash `http://127.0.0.1:7890`（仅注入 push 子进程 env 副本，不改 git config） |
@@ -278,9 +278,11 @@ venv/Scripts/python -m pytest tests/test_web.py -v -k auth                # 鉴�
 # 维护脚本
 venv/Scripts/python scripts/backfill_history.py [--dry-run]
 venv/Scripts/python scripts/backtest.py
-venv/Scripts/python scripts/migrate_to_sqlite.py [--db PATH]
 venv/Scripts/python scripts/backup_db.py
 venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
+# ⚠️ scripts/migrate_to_sqlite.py **已归档（2026-09-24，BUG-005）** ⇒ 不要再跑：
+#    它裸跑会 DELETE FROM history 后从旧 data/history.json（末行 2026-09-11）整库重灌
+#    （生产库 272 个日期塌回旧快照）。留档：tasks/2026-09-24-qa-bughunt/legacy/migrate_to_sqlite.py
 ```
 
 ---
@@ -294,7 +296,7 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | **G3** | **（2026-09-20 已解决）** 孤儿模块：`wecom_*` 三模块在仓库内无任何引用，只能手动启动；与「Hermes → QQ」是两条并行推送路径 | 三个模块已删除 ⇒ 职责边界不再有歧义：**当前唯一的推送路径是「Hermes → QQ」** | ✅ 无需动作 |
 | **G4** | `src/image_renderer.py` 的 **15s 超时 / ≤800KB 尺寸守卫 / zoom 重试已在 `a536888` 删除，当前未实现** | 图片化推送缺乏超时与体积保护 | 按需恢复（见 `docs/architecture.md` §模块划分注） |
 | **G5** | 板块热度偶发取数失败（`us_sector_heat` 更脆弱） | 前端「数据暂缺」，静默降级不中断日报 | 已在任务队列中（见 §10） |
-| **G6** | 仓库根目录有开发残留：`_dbg_hist.json`、`_phase5_run.log`、`web_uvicorn.log`、`task brief.md`、`依赖初始化.md`、`初始prd.md` | 噪声；且外部 cron 的 `git add -A` 会把临时文件提交进仓库 | 清理并确认 `.gitignore` 覆盖 |
+| **G6** | **（2026-09-24 已解决）** 仓库根目录有开发残留：`_dbg_hist.json`、`_phase5_run.log`、`web_uvicorn.log`、`task brief.md`、`依赖初始化.md`、`初始prd.md`，另有危险脚本 `seed_history.py` / `seed_history_market.py`（文档标「勿再使用」却可一键执行） | 噪声；且外部 cron 的 `git add -A` 会把临时文件提交进仓库；危险脚本误跑会污染 `last_values.json` 并抹平 history | ✅ **已清档**（QA 缺陷轮 D-2，`tasks/2026-09-24-qa-bughunt/`）：删除 `seed_history*.py`、`_dbg/`、`_dbg_hist.json`、两个 `*.log`、`task brief.md`；`app.py`（旧入口）、`render.yaml` 移档 `tasks/2026-09-24-qa-bughunt/legacy/`；`*.log` 已在 `.gitignore`（第 27 行）。核对命令：`git status --porcelain` 应只显示上述删除为 `D` |
 | **G7** | **（2026-09-14 曾标记已解决；2026-09-20 复发 → 当日彻底修复）** 仓库外 cron「MarketPulse 自动推送GitHub」（`*/5`）把仓库里**已暂存的**非数据改动一并提交：2026-09-20 16:35 提交 `6ec1562 auto: 每日数据更新`，内含 4 个源码删除 + 1 个测试重命名（`src/wecom_{channel,sdk,ws}.py`、`scripts/wecom_service.bat`、`tests/{test_wecom_env.py => test_env_util.py}`）—— 那是架构师当时**刚 staged、尚未 commit** 的改动。 | 别处未提交的改动被「顺手」提交，`git status` 失真、「改动像丢了」 | 🔴 **真根因（2026-09-20 实测更正；此前把根因写成「prompt 模式不可靠」并不准确）**：`git commit` **不带 pathspec 时提交的是整个暂存区（index）**，而不是「刚 `git add` 的那些」；`git add <白名单>` 只能**添加**、无法**排除** index 里已有的内容。该 cron 的 prompt **明确禁止了** `git add -A` 且被忠实执行 —— 漏洞是「范围只写在 `git add` 上」。**修复（两处，缺一不可）**：① `src/git_ops.py::_commit` 改为 `git commit -m <msg> -- <paths>`（**三个报告入口原本有同一个洞**，只是平时在干净工作区跑所以没暴露）；② 该 cron 由 prompt 模式改为 **script 模式**（`--no-agent`；wrapper `D:\hermes\scripts\marketpulse_autopush.py` → `scripts/auto_commit_data.py` → 复用 `git_ops` 路径白名单），使范围**由代码强制**而非靠 LLM 照做。护栏：`tests/test_phase26.py::test_commit_pathspec_isolates_unrelated_staged_changes`（真临时仓库）+ `test_commit_uses_pathspec`。详见 `tasks/2026-09-20-autopush-pathspec-fix/journal.md` |
 | **G9** | **（2026-09-19 已解决）** web 层**零鉴权**：`web/app.py` 无任何 auth（grep `auth\|login\|token\|password\|API_KEY\|Secret` 零命中），线上 `marketpulse-blue.up.railway.app` 的 `/`、`/api/timeline`、`/api/watchlist` 全部 200 可读 ⇒ 任何人拿到 URL 即可读全部数据，`/api/watchlist` 实质暴露自选股方向 | **P0**：数据全网可读（含自选配置） | **已解决**：全站 **HTTP Basic Auth**（`web/app.py` 中间件；零新依赖 `base64` + `hmac.compare_digest`）+ 无鉴权的 `/healthz` + `railway.toml` 的 `healthcheckPath` 改为 `/healthz`（🔴 不改会让部署因 healthcheck 401 陷入重启循环）。env：`MP_AUTH_USER` / `MP_AUTH_PASS` / `MP_AUTH_DISABLED`；**未配置 ⇒ fail-open**（与项目"失败降级不中断"纪律一致，已裁定）⇒ 公网部署**必须**配并 curl 验 401。验收 `AUTH-*` 7 条 + 单测 9 条（见 `tasks/2026-09-19-web-basic-auth/journal.md`） |
 | **G8** | **（部分解决 2026-09-20 → 见下）** **UI 验收的 12 条常红断言**（2026-09-16 21:44 独立重跑 `verify_ui.py`：`EXIT=1`，`FAILED: 12 条`）。其中 **10 条是上游取数被拒导致的"数据层红"**：`/api/macro` 4 个品种 `value` 全 `null`、`trend.dates=[]`（→ `MX-6` / `MX-7` / `MX-8` / `MX-9` / `MX-13` / `M-4` / `M-5` / `XC-0` 红）；`/api/econ` `as_of=null`（→ `MX-11` / `MX-11b` 红，页面显示「数据暂缺」）。**自测到的上游状态（2026-09-16 21:5x）**：Yahoo chart 直打 `query1` 与 `query2` **均 `HTTP 403`** —— 三十四期的「双主机轮换」已**无法自愈**（两台同时被拒，轮换没有逃生口）；同一时刻 BLS 亦取不到 `as_of`；`/api/cn/quotes` 的 `cny` 同样 `failed`（同一个 Yahoo 403）。另 **2 条与数据无关**：`N-12a` / `N-12b`（Firefox `scrollbar-*` CSSOM 门控专项） | 验收脚本**常年 `EXIT=1`** ⇒ 真回归会被"红色背景"淹没（本项目已有"红色被当噪声"的先例，见 G5）；`/macro` 与 `/macro/cn` 上报价与宏观数据大面积显示「数据暂缺」，功能实际不可用 | ✅ **2026-09-20 已完成「判据分层」（`tasks/2026-09-20-verify-ui-signal-layering/`）**：`verify_ui.py` 改为三态 `PASS / FAIL / SKIP` —— **只有上游被独立直连探测确认不可用**时，带 `deps=` 的断言才记 `SKIP`（不计失败）；上游可用时同样的失败**仍是 `FAIL`**（保证 SKIP 不会掩盖代码回归，见该 plan §3.3 两条硬约束）；汇总同时给三计数 + `上游探测` 行 + `report.json` 的 `skipped`/`upstream` 键；`--strict` 让 SKIP 也判失败。上线当日实测：上游正常时 `PASS 679 / FAIL 0 / SKIP 0`；死代理模拟上游不可用时那 10 条**全部降级为 SKIP 且 `FAILURES` 为空**。**未做**（仍开放）：① 给 Yahoo 链路走代理或换源（数据源任务）；② 那 2 条 `N-12` **已不是红**（2026-09-20 实测通过，G8 原文是 09-16 快照），本任务保持其判据作回归护栏 |

@@ -182,3 +182,52 @@ class TestRunAlertChecks:
         values, last = self._breaching_values()
         alerts = al.run_alert_checks("2026-09-01", values, last, "close", tmp_paths / "daily.md")
         assert [a["symbol"] for a in alerts] == ["VXN"]
+
+
+class TestAlertFileMerge:
+    """BUG-006（2026-09-24）：同日同 type 重跑不得抹掉既有告警块。
+
+    旧实现写盘只用 `pending` 整段重写 ⇒ 触发集合变化时上一次的块消失，而 `alerts.log` 已把
+    该 symbol 记成「当日已告警」（run3 不再补写）⇒ 该条告警**当日永久丢失**。
+    """
+
+    #: MOVE 触发（+22.7%）、VIX/VXN/GSPC/IXIC 均不触发
+    _MOVE_TRIGGER = (
+        {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 135.0},
+        {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 110.0},
+    )
+    #: VIX 触发（+22%）、MOVE 已回落到不触发（+6.7%）
+    _VIX_TRIGGER = (
+        {"GSPC": 4500.0, "IXIC": 17500.0, "VIX": 24.4, "VXN": 18.0, "MOVE": 80.0},
+        {"GSPC": 4400.0, "IXIC": 17000.0, "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0},
+    )
+
+    def test_same_day_rerun_keeps_union_of_blocks(self, tmp_paths, clean_thresholds):
+        first = al.run_alert_checks("2026-09-01", *self._MOVE_TRIGGER, "close", tmp_paths / "daily.md")
+        assert [a["symbol"] for a in first] == ["MOVE"]
+        second = al.run_alert_checks("2026-09-01", *self._VIX_TRIGGER, "close", tmp_paths / "daily.md")
+        assert [a["symbol"] for a in second] == ["VIX"]
+
+        content = (tmp_paths / "alerts" / "2026-09-01-close.md").read_text(encoding="utf-8")
+        assert content.count("---\ntype: close\ndate: 2026-09-01\nsymbol: ") == 2
+        assert "symbol: MOVE" in content, "上一次的块被抹掉 ⇒ 当日告警永久丢失"
+        assert "symbol: VIX" in content
+
+    def test_existing_block_not_triggered_now_is_preserved(self, tmp_paths, clean_thresholds):
+        """文件里已有、但本次未触发的块（以及人工写的非告警内容）必须原样保留。"""
+        path = tmp_paths / "alerts" / "2026-09-01-noon.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        vxn = an.check_breach("VXN", 22.0, 18.0)
+        assert vxn is not None
+        path.write_text(
+            al.render_alert(vxn, "2026-09-01", "noon", tmp_paths / "snap.md") + "\n<!-- 人工备注 -->\n",
+            encoding="utf-8",
+        )
+
+        alerts = al.run_alert_checks("2026-09-01", *self._VIX_TRIGGER, "noon", tmp_paths / "snap.md")
+        assert [a["symbol"] for a in alerts] == ["VIX"]
+
+        content = path.read_text(encoding="utf-8")
+        assert "symbol: VXN" in content and "## ⚠️ VXN（科技波动）告警" in content
+        assert "symbol: VIX" in content
+        assert "<!-- 人工备注 -->" in content, "块以外的既有内容不得丢"

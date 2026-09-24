@@ -5,6 +5,8 @@ monkeypatch 落点严格打在使用方模块 web.app（与项目既有纪律一
 """
 import json
 import logging
+import re
+import time
 from pathlib import Path
 
 import pytest
@@ -1681,6 +1683,38 @@ def test_auth_disabled_env_opens_everything(monkeypatch):
     assert c.get("/healthz").status_code == 200
 
 
+def test_auth_non_ascii_credentials_never_500(monkeypatch):
+    """BUG-004（2026-09-24）：**非 ASCII 凭据不得 500**。
+
+    旧实现把 `hmac.compare_digest` 放在 `try` 之外，而它对含非 ASCII 的 `str` 直接抛
+    `TypeError`（CPython 语义）⇒ 中文口令永远 500，且**未认证的任何人都能触发**（刷日志）。
+    判据：非 ASCII 口令/用户名 = 401（契约"任何异常形态都返回 False"），且相等凭据必须能登录
+    （不能因为改成 bytes 比较就"永远 401"）。
+    """
+    import base64
+
+    from fastapi.testclient import TestClient
+
+    def _hdr(user: str, pwd: str) -> dict:
+        token = base64.b64encode(f"{user}:{pwd}".encode("utf-8")).decode("ascii")
+        return {"Authorization": "Basic " + token}
+
+    monkeypatch.setenv("MP_AUTH_USER", "qa")
+    monkeypatch.setenv("MP_AUTH_PASS", "密码123")
+    monkeypatch.delenv("MP_AUTH_DISABLED", raising=False)
+    c = TestClient(web.app.app)
+    assert c.get("/", headers=_hdr("qa", "密码123")).status_code == 200      # 正确凭据可登录
+    assert c.get("/", headers=_hdr("qa", "错口令")).status_code == 401       # 错口令 → 401 而非 500
+    assert c.get("/", headers=_hdr("用户名", "密码123")).status_code == 401  # 用户名非 ASCII 同理
+    # 服务端凭据本身是 ASCII、请求带非 ASCII（旧实现的 500 触发面最广的一条）
+    monkeypatch.setenv("MP_AUTH_PASS", "ascii-pass")
+    assert c.get("/", headers=_hdr("qa", "密码123")).status_code == 401
+    # 直接打函数：任何形态都只回 bool（契约的单元级锚点）
+    for raw in ("Basic " + base64.b64encode(b"\xff\xfe:abc").decode("ascii"), "Basic !!!", "Basic ", ""):
+        assert web.app._authorized(raw) is False
+    assert web.app._authorized("Basic " + base64.b64encode("qa:ascii-pass".encode()).decode()) is True
+
+
 def test_auth_not_configured_fails_open_and_warns(monkeypatch, caplog):
     """D-1（已裁定）：**未配置**凭据 → 放行 + 启动 WARNING（fail-open，不是 fail-closed）。
 
@@ -1849,6 +1883,76 @@ def test_api_settings_post_saves_and_reloads(_settings_cfg, monkeypatch):
     assert json.loads(_settings_cfg.read_text(encoding="utf-8"))["alert"]["k_factor"] == 2.5
 
 
+def test_settings_cost_persists_and_shows_pnl(tmp_path, monkeypatch):
+    """BUG-002 链路级（2026-09-24）：设置页录入成本价 → **真的存下来也能读出来** → 首页出盈亏。
+
+    ⚠️ 必须**从入口出发**：旧用例（`_wl_payload`）直接注入带 cost 的 stock dict 调
+    `_build_watchlist_payload`，绕过 `load_config` ⇒ 读侧丢弃 cost 的缺陷被完全掩盖（假绿）。
+    本用例走 `POST /api/settings` → `load_config()`（三级链）→ `_load_watchlist()`。
+    """
+    from fastapi.testclient import TestClient
+
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"watchlist": {"stocks": [{"symbol": "600519", "label": "茅台"}]}},
+                              ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(cfg))
+
+    r = TestClient(web.app.app).post("/api/settings", json={
+        "watchlist.stocks": [{"symbol": "600519", "label": "茅台", "cost": 100.0}]})
+    assert r.status_code == 200 and r.json()["saved"] is True
+    # ① 读侧（三级链）必须带回 cost —— 旧实现的断点就在这里（只留 symbol/label）
+    from src.config import load_config
+
+    assert load_config()["watchlist"]["stocks"][0]["cost"] == 100.0
+    # ② 端点层：行情 112.5 ⇒ 盈亏 +12.5%（旧实现 cost 恒 None ⇒ pnl_pct 恒 None）
+    monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda *a, **k: ({"600519": 112.5}, {}, {}))
+    d = web.app._load_watchlist()
+    assert d["stocks"][0]["cost"] == 100.0
+    assert d["stocks"][0]["pnl_pct"] == 12.5
+    assert d["overview"] == {"covered": 1, "total": 1, "avg_pnl_pct": 12.5}
+
+
+def test_settings_cost_invalid_values_rejected(tmp_path, monkeypatch):
+    """BUG-002/003 边界：非法 cost（≤0 / 非有限 / 非数字）⇒ 400，且整体拒绝写入。"""
+    from fastapi.testclient import TestClient
+
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"watchlist": {"stocks": [{"symbol": "600519", "label": "茅台"}]}},
+                              ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(cfg))
+    before = cfg.read_bytes()
+    c = TestClient(web.app.app)
+    for bad in (0, -1, "abc"):
+        r = c.post("/api/settings", json={"watchlist.stocks": [
+            {"symbol": "600519", "label": "茅台", "cost": bad}]})
+        assert r.status_code == 400, bad
+    assert cfg.read_bytes() == before
+
+
+def test_api_settings_post_rejects_non_finite_threshold(_settings_cfg):
+    """BUG-003 链路级：请求体带 `Infinity` ⇒ **400 且文件字节不变**（旧实现 200 落盘 `"vix": Infinity`）。"""
+    from fastapi.testclient import TestClient
+
+    before = _settings_cfg.read_bytes()
+    c = TestClient(web.app.app)
+    # ① 裸 `Infinity` 字面量（Python `json.loads` 接受、RFC 8259 之外）：FastAPI 的 body 解析
+    #    用的也是 Python json ⇒ 能穿到校验层，由 `_validate_one` 的 isfinite 拦下 → 400
+    r = c.post("/api/settings", content='{"alert.vix": Infinity}',
+               headers={"Content-Type": "application/json"})
+    assert r.status_code == 400, r.text
+    assert "有限" in r.text
+    # ② 合法 JSON 表示出的 ∞（`1e999` 溢出为 inf；用 `content=` 发 —— httpx 的 `json=` 自己
+    #    就会拒发 inf，但 curl/浏览器等客户端能发出来）同样 400
+    r2 = c.post("/api/settings", content='{"alert.vix": 1e999}',
+                headers={"Content-Type": "application/json"})
+    assert r2.status_code == 400, r2.text
+    assert "有限" in r2.text
+    # ③ 文件一个字节都没变，且仍可被严格 JSON 解析
+    assert _settings_cfg.read_bytes() == before
+    json.loads(_settings_cfg.read_text(encoding="utf-8"))
+
+
 def test_api_settings_post_rejects_unknown_key(_settings_cfg):
     """白名单外 ⇒ 400 且**文件未变**。"""
     from fastapi.testclient import TestClient
@@ -1880,7 +1984,15 @@ def test_settings_page_renders():
 # 判据：有 cost ⇒ pnl_pct；(value 或 cost) 缺失 ⇒ **None**（绝不算 0）；概览 = 有成本标的等权平均。
 
 def _wl_payload(monkeypatch, stocks, values):
-    """组装 _build_watchlist_payload 的结果（不联网、不依赖快照）。"""
+    """组装 _build_watchlist_payload 的结果（不联网、不依赖快照）。
+
+    ⚠️ **纯函数级用例**：入参直接注入 stocks/values（含 cost），**绕过了 `load_config()` 三级链**
+    —— 端点/配置读侧的缺陷（如 BUG-002 的 cost 被 `_valid_watchlist` 丢弃）在这里**看不见**。
+    链路级覆盖在同文件的 `test_settings_cost_persists_and_shows_pnl`
+    （`POST /api/settings` → `load_config()` → `_load_watchlist()`）；本组用例只钉 `_build_watchlist_payload`
+    自身的盈亏归属（有 cost → pnl_pct；缺 value/cost → None；等权平均）。
+    新增 cost/配置相关用例请走链路级，别在本组加"端到端"断言。
+    """
     monkeypatch.setattr(web.app, "_watchlist_config", lambda: stocks)
     return web.app._build_watchlist_payload(stocks, values, {})
 
@@ -1930,3 +2042,172 @@ def test_load_watchlist_not_broken_by_cost(monkeypatch):
     # 顺带验「存储层零改动」：cost 经快照原样透传，且据此算出盈亏
     assert out["stocks"][0]["cost"] == 1500.0
     assert out["stocks"][0]["pnl_pct"] == 6.67
+
+
+# ---- 2026-09-24 QA 缺陷轮 / B2（BUG-007 / 008 / 009 / 012）----------------------------------
+# 纪律：断言可观察契约（HTTP 状态 + 响应结构 + 墙钟），不钉实现细节；前端改动用「DOM 写入分支」
+# 作为行为锚点（模板挂载点 + JS 里把信号写进该挂载点的分支），而不是只 grep 关键词出现。
+
+WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+
+
+def _frontend_src(name: str) -> str:
+    """读 web/static/<name> 源码（前端断言的行为锚点用）。"""
+    return (WEB_DIR / "static" / name).read_text(encoding="utf-8")
+
+
+# ---- BUG-007：坏字节（非 UTF-8）文件不得把「恒 200」的读端点打成 500 ----
+
+def test_api_news_raw_bad_bytes_is_200_empty(client, tmp_path, monkeypatch):
+    """BUG-007 链路级：`news.json` 含裸 `\\xff` 字节 → 200 + 空结构。
+
+    旧实现 `read_text(encoding="utf-8")` 抛 `UnicodeDecodeError`（`ValueError` 子类，
+    不在 `except (JSONDecodeError, OSError)` 内）→ 端点 500，违反模块自述契约。
+    """
+    f = tmp_path / "news-bytes.json"
+    f.write_bytes(b'{"date": "2026-09-12", "items": [\xff\xfe]}')   # 半写 / 坏字节
+    monkeypatch.setattr(web.app, "NEWS_FILE", f)
+    r = client.get("/api/news")
+    assert r.status_code == 200
+    assert r.json() == {"date": None, "items": [], "count": 0}
+
+
+def test_api_settings_raw_bad_bytes_config_is_200_defaults(tmp_path, monkeypatch):
+    """BUG-007 链路级：`config.json` 含裸 `\\xff` 字节 → `/api/settings` 200 + 内置默认值。
+
+    损坏的 config 会经 `load_config()` 拖垮多个端点与入口脚本，故这里钉「不 500 + 回默认」。
+    """
+    cfg = tmp_path / "config.json"
+    cfg.write_bytes(b'{"alert": {"vix": \xff}}')
+    monkeypatch.setenv("CONFIG_PATH", str(cfg))
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/settings")
+    assert r.status_code == 200
+    assert r.json()["values"]["alert.vix"] == 20.0        # 内置默认（src/config.py DEFAULTS）
+
+
+def test_api_alerts_raw_bad_bytes_skips_file(tmp_path, monkeypatch):
+    """BUG-007 同族读盘点：告警 md 含裸 `\\xff` 字节 → 200 且该文件被跳过（旧实现 500）。
+
+    坏字节经按替换符解码后 frontmatter 无法匹配 ⇒ 复用既有「解析失败 → 跳过该文件」降级
+    （`_load_alerts` 对该函数无 try/except，故解码必须在本函数内部容错）。
+    """
+    alerts = tmp_path / "alerts"
+    alerts.mkdir()
+    (alerts / "2026-09-12-close.md").write_bytes(b"\xff\xfe\x00 no frontmatter at all \xff")
+    monkeypatch.setattr(web.app, "ALERTS_DIR", alerts)
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/alerts")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_api_latest_raw_bad_bytes_context_is_200(tmp_path, monkeypatch):
+    """BUG-007 同族读盘点：context json 含裸 `\\xff` 字节 → 200 且按空态降级（不 500）。"""
+    monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")   # 不碰真实库
+    st.init_db()
+    ctx_dir = tmp_path / "context"
+    ctx_dir.mkdir()
+    (ctx_dir / "2026-09-12.json").write_bytes(b'{"date": \xff, "sector_heat": {}}')
+    monkeypatch.setattr(web.app, "CONTEXT_DIR", ctx_dir)
+    from fastapi.testclient import TestClient
+
+    r = TestClient(web.app.app).get("/api/latest")
+    assert r.status_code == 200
+    assert r.json()["sector_heat"]["gainers"] == []
+
+
+# ---- BUG-009：回退旧缓存必须下发 stale，且前端必须把它渲染进 DOM ----
+
+def test_api_watchlist_stale_only_on_cache_fallback(client, monkeypatch):
+    """BUG-009 契约：取数失败**且有旧缓存** → 200 + `stale: true` + 旧缓存内容（含 `as_of`）；
+    无旧缓存时**不得**下发 stale（否则前端会声称「展示上次快照」却什么都没有）。"""
+    fresh = {"hidden": False, "stocks": [{"symbol": "X", "label": "X", "value": 1.0}],
+             "trend": {"dates": [], "series": []}, "as_of": "2026-09-24T15:00:00"}
+    monkeypatch.setattr(web.app, "_load_watchlist", lambda: fresh)
+    ok = client.get("/api/watchlist").json()
+    assert ok["stocks"][0]["symbol"] == "X" and "stale" not in ok
+
+    failed = {"hidden": False, "stocks": [], "trend": {"dates": [], "series": []}}
+    monkeypatch.setattr(web.app, "_load_watchlist", lambda: failed)
+    web.app._watch_cache["ts"] = 0.0            # 强制 TTL 过期（同进程内时间不会自己跳到 90s 后）
+    r = client.get("/api/watchlist")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["stale"] is True
+    assert data["as_of"] == "2026-09-24T15:00:00"       # 前端「（as_of）」标注的来源
+    assert data["stocks"][0]["symbol"] == "X"
+
+    web.app._watch_cache["payload"] = None              # 无旧缓存 → 不许标 stale
+    r2 = client.get("/api/watchlist")
+    assert r2.status_code == 200
+    assert r2.json()["stocks"] == [] and "stale" not in r2.json()
+
+
+def test_watchlist_stale_signal_has_dom_consumer():
+    """BUG-009 前端行为锚点：`stale` 必须有**把陈旧态写进 DOM 的分支**（原先零消费者）。
+
+    三件事实缺一用户就看不见提示：① 模板有承载元素 `#watchlist-stale`；
+    ② JS 从 `payload.stale` 派生布尔；③ JS 用该布尔写 `hidden` 并写入文案。
+    """
+    tpl = (WEB_DIR / "templates" / "index.html").read_text(encoding="utf-8")
+    assert 'id="watchlist-stale"' in tpl
+    src = _frontend_src("app.js")
+    assert re.search(r"getElementById\(\s*['\"]watchlist-stale['\"]\s*\)", src), "缺承载元素查找"
+    assert re.search(r"stale\s*=\s*!!\(\s*payload\s*&&\s*payload\.stale\s*\)", src), "未消费 stale 信号"
+    assert re.search(r"staleEl\.hidden\s*=\s*!\s*stale", src), "未按 stale 切换显隐"
+    assert re.search(r"staleEl\.textContent\s*=", src), "未把陈旧文案写进 DOM"
+
+
+# ---- BUG-012：/api/cn/quotes 取数必须限时（冷启动不再占住 worker）----
+
+def test_api_cn_quotes_timeout_returns_empty_state(monkeypatch):
+    """BUG-012 链路级：上游挂起 ⇒ 墙钟被限时器截断 + 200 空态（`as_of: None` + failed 列全）。
+
+    限时值用 monkeypatch 调小（不真等 15s）；断言「远小于上游的 60s 挂起」即证明限时生效。
+    """
+    monkeypatch.setattr(web.app, "_fetch_yahoo_watch", lambda *a, **k: time.sleep(60))
+    monkeypatch.setattr(web.app, "_CN_QUOTES_TIMEOUT", 0.3)
+    from fastapi.testclient import TestClient
+
+    started = time.monotonic()
+    r = TestClient(web.app.app).get("/api/cn/quotes")
+    elapsed = time.monotonic() - started
+    assert r.status_code == 200
+    assert elapsed < 5, f"限时器未生效：{elapsed:.2f}s（上游被注入 sleep(60)）"
+    data = r.json()
+    assert data["as_of"] is None                     # 与既有失败分支同语义
+    assert sorted(data["failed"]) == ["bond10y", "cny", "credit_spread"]
+    assert data["cny"] is None and data["bond10y"] is None and data["credit_spread"] is None
+
+
+# ---- BUG-008：设置页死按钮 + 三个子页顶栏日期恒「—」----
+
+def test_settings_page_refresh_button_is_wired():
+    """BUG-008(a)：`/settings` 顶栏「刷新数据」必须绑到 `load()`（原先 6 份 shell 里唯一没绑定的，
+    点击 0 请求）。断言「模板挂了按钮」+「settings.js 里存在 click → load() 分支」。"""
+    from fastapi.testclient import TestClient
+
+    html = TestClient(web.app.app).get("/settings").text
+    assert "settings.js" in html
+    assert 'id="refresh-btn"' in html
+    src = _frontend_src("settings.js")
+    assert re.search(r"el\(\s*['\"]refresh-btn['\"]\s*\)", src), "未取到刷新按钮"
+    assert re.search(
+        r"refreshBtn\.addEventListener\(\s*['\"]click['\"]\s*,\s*function\s*\(\)\s*\{\s*load\(",
+        src), "刷新按钮未绑定 load()"
+
+
+def test_timeline_and_backtest_topbar_date_write_data_day():
+    """BUG-008(b)：`#topbar-date` 在 /timeline、/backtest 由前端写入**数据日**。
+
+    只断言「取到顶栏元素 → 把数据日字段（`as_of`）写进 textContent」这一分支存在，
+    不断言日期值（值随库内最新行情日变化）。`/settings` 无数据日可取 ⇒ 刻意保持「—」（见
+    settings.js 内注释），故不在此断言内。
+    """
+    topbar = re.compile(r"el\(\s*['\"]topbar-date['\"]\s*\)[\s\S]{0,400}?\.textContent"
+                        r"[\s\S]{0,200}?as_of")
+    for name in ("timeline.js", "backtest.js"):
+        assert topbar.search(_frontend_src(name)), f"{name} 未把数据日写进 #topbar-date"

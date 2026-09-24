@@ -38,10 +38,22 @@ htmlcov/
 
 # Runtime-generated data (运行时自动创建，不入 git)
 reports/
-# 三十一期：SQLite 库不入 git（Railway 经 data/backup/ 恢复链取数）
+# 三十一期：SQLite 库**入库**（tracked）—— 它就是线上数据源：Railway 跑的就是仓库里这份 .db，
+# `data/backup/` 恢复链（`restore_if_empty`）只在「库为空」时兜底，不是日常取数路径。
+# 下面三行里只有 `-wal`/`-shm` 真的生效：`.gitignore` 对已跟踪文件无效，`data/marketpulse.db`
+# 自身已是 tracked（`git ls-files data/marketpulse.db` 可验），这行只在它被 `git rm --cached`
+# 之后才会咬人 ⇒ 新行还留在 WAL 里时，提交的 .db 就会漏数据。
+# 纪律：写库后提交前必须 `storage.wal_checkpoint()`（已由 `src/git_ops.py` 的提交前护栏强制）。
+# 备份：history 与事件表（econ_events / econ_event_news）按月备份到
+# `data/backup/{history,econ_events}_YYYY-MM.json`，两处备份都必须保持入库（恢复链唯一数据源）。
 data/marketpulse.db
 data/marketpulse.db-wal
 data/marketpulse.db-shm
+# 损坏库留档（`analyzer._quarantine_db` 产出 `<db>.corrupt-<ts>[-wal|-shm]`）与修复前手写快照
+# （`<db>-pre-<tag>`）：只用于人工取证，**绝不入库** —— `data/` 在自动提交白名单里，
+# 漏掉这两条会让几百 KB 的损坏副本被 commit + push 上线。
+data/*.corrupt-*
+data/*.db-pre-*
 # data/backup/ 必须保持入库（Web 启动恢复链的唯一数据源，勿加进忽略清单）
 
 # Agent work (保留 tasks/，忽略临时文件)

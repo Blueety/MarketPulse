@@ -1,0 +1,28 @@
+{
+  "export_date": "2026-09-24T10:28:31+08:00",
+  "month": "2022-09",
+  "record_count": 1,
+  "records": [
+    {
+      "date": "2022-09-21",
+      "kind": "FOMC",
+      "title": "FOMC Meeting - Sep 20-21, 2022",
+      "agency": "Fed",
+      "source": "fed",
+      "time_et": null,
+      "status": "ok",
+      "note": "两日会议（9 月 20-21）的决议日；含 SEP 经济预测",
+      "fetched_at": "2026-09-24T09:00:20",
+      "actual": null,
+      "forecast": null,
+      "previous": null,
+      "unit": null,
+      "importance": null,
+      "value_source": null,
+      "value_title": null,
+      "value_fetched_at": null
+    }
+  ],
+  "news_record_count": 0,
+  "news_records": []
+}

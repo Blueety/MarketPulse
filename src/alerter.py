@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from .analyzer import ALERTS_DIR, ALERTS_LOG, check_breach
@@ -16,6 +17,9 @@ from .config import load_config
 from .fetcher import SYMBOLS, ALT_SYMBOLS
 
 log = logging.getLogger("marketpulse")
+
+#: 告警块起始（`render_alert` 输出的 frontmatter 前四行；symbol 值随后单独捕获）。
+_BLOCK_HEAD = "---\ntype: %s\ndate: %s\nsymbol: "
 
 
 def _load_alerted(date: str) -> set[str]:
@@ -37,6 +41,40 @@ def _mark_alerted(date: str, symbols: set[str]) -> None:
     tmp = ALERTS_LOG.with_name(ALERTS_LOG.name + ".tmp")
     tmp.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
     os.replace(tmp, ALERTS_LOG)
+
+
+def _read_existing_blocks(path: Path, date: str, alert_type: str) -> "tuple[dict[str, str], list[str]]":
+    """读回同 `(date, alert_type)` 告警文件的既有块 → ({symbol: 块文本}, 其它内容片段)。
+
+    ⚠️ 2026-09-24（BUG-006）：文件是「多块 Markdown 顺序拼接」的既有格式（块 = frontmatter
+    `---/type/date/symbol` + 标题 + 字段），这里按 frontmatter 定界切回块。
+    **除块以外的任何内容**（人工加的分隔符/尾注、半截块、格式不符的块）原样收进 fragments，
+    绝不丢；文件缺失/读不到 → 空结果（按「无既有块」处理，调用方仍会正常新建）。
+    """
+    if not path.exists():
+        return {}, []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        log.warning("告警文件读回失败，按无既有块处理: %s", exc)
+        return {}, []
+    pattern = re.compile(
+        re.escape(_BLOCK_HEAD % (alert_type, date)) + r"(?P<symbol>[^\n]+)\n.*?(?=\n---\ntype: |\Z)",
+        re.S,
+    )
+    blocks: dict[str, str] = {}
+    fragments: list[str] = []
+    pos = 0
+    for match in pattern.finditer(text):
+        gap = text[pos:match.start()]
+        if gap.strip():
+            fragments.append(gap.strip("\n"))
+        blocks[match.group("symbol")] = match.group(0)
+        pos = match.end()
+    tail = text[pos:]
+    if tail.strip():
+        fragments.append(tail.strip("\n"))
+    return blocks, fragments
 
 
 def render_alert(alert: dict, date: str, alert_type: str, report_path: "Path") -> str:
@@ -97,11 +135,18 @@ def run_alert_checks(date: str, values: dict, last_values: dict,
         return []
     ALERTS_DIR.mkdir(parents=True, exist_ok=True)
     path = ALERTS_DIR / f"{date}-{alert_type}.md"
-    path.write_text(
-        "\n".join(render_alert(a, date, alert_type, report_path) for a in pending),
-        encoding="utf-8",
-    )
+    # ⚠️ 2026-09-24（BUG-006）：原来**只用 pending 整段重写**文件 —— 同日同 type 重跑且触发集合
+    #    变化时，上一次写入的块被抹掉；而 alerts.log 已把该 symbol 记成「当日已告警」（不再补写）
+    #    ⇒ 那条告警当日**永久丢失**。改为写前读回既有块，按 symbol 合并后再写（同 symbol 以本次
+    #    渲染为准；既有顺序保留，新块追加）。文件里块以外的内容（分隔符/尾注）原样保留。
+    merged, fragments = _read_existing_blocks(path, date, alert_type)
+    for alert in pending:
+        merged[alert["symbol"]] = render_alert(alert, date, alert_type, report_path)
+    text = "\n".join(merged.values())
+    if fragments:
+        text += "\n" + "\n".join(fragments)
+    path.write_text(text, encoding="utf-8")
     _mark_alerted(date, alerted | {a["symbol"] for a in pending})
-    log.info("告警文件已生成: %s（%d 项）", path, len(pending))
+    log.info("告警文件已生成: %s（%d 项 / 文件共 %d 块）", path, len(pending), len(merged))
     return pending
 

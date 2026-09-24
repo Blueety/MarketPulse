@@ -219,6 +219,10 @@
     el("bt-nsymbols").textContent = String((p.symbols || []).length);
     el("bt-elapsed").textContent = p.elapsed_ms == null ? "—" : (p.elapsed_ms / 1000).toFixed(2) + "s";
     el("bt-asof").textContent = p.as_of || "—";
+    // BUG-008(b)（2026-09-24）：顶栏 `#topbar-date` 原先在本页**无人写入** ⇒ 恒为「—」。
+    // 数据日取 `/api/backtest` 的 `as_of`（库内最新行情日）；无数据（空态 / as_of 缺失）保持「—」。
+    var tb = el("topbar-date");
+    if (tb) tb.textContent = p.as_of || "—";
     var w = p.window || {};
     el("bt-window").textContent = (w.start && w.end)
       ? "数据窗口 " + w.start + " ~ " + w.end + "（共 " + (st.rows || 0) + " 行）"

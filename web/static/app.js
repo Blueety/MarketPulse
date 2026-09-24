@@ -968,6 +968,19 @@ function renderWatchlist(payload) {
     const asOf = payload && payload.as_of ? String(payload.as_of) : '';
     asofEl.textContent = asOf.length >= 16 ? asOf.slice(5, 16).replace('T', ' ') : '收盘快照';
   }
+  // BUG-009：后端取数失败且有旧缓存时回退旧缓存并下发 `stale: true`（web/app.py /api/watchlist）
+  // —— 必须显式标注，否则用户无从分辨卡里是刚取的还是过期快照（与「数据截至」标注纪律一致）。
+  // `as_of` 只在快照路径存在；实时路径回退的旧缓存没有它 → 括号省略，不编造时点。
+  const staleEl = document.getElementById('watchlist-stale');
+  if (staleEl) {
+    const stale = !!(payload && payload.stale);
+    staleEl.hidden = !stale;
+    if (stale) {
+      const snapAt = payload && payload.as_of ? String(payload.as_of) : '';
+      const when = snapAt.length >= 16 ? snapAt.slice(5, 16).replace('T', ' ') : snapAt;
+      staleEl.textContent = '⚠ 取数失败，展示上次快照' + (when ? '（' + when + '）' : '');
+    }
+  }
   // 组合概览（等权平均 + 已录成本条数；**无 shares ⇒ 不是组合总收益**，文案显式标注"未含份额"）
   const pnlEl = document.getElementById('watchlist-pnl');
   if (pnlEl) {

@@ -414,6 +414,11 @@
     var p = state.payload;
     var asof = el("tl-asof");
     if (asof) asof.textContent = p ? (p.as_of || "—") : "—";
+    // BUG-008(b)（2026-09-24）：顶栏 `#topbar-date` 原先在本页**无人写入** ⇒ 恒为「—」。
+    // 本页有数据日（`/api/timeline` 下发的 `as_of` = 库内最新行情日）⇒ 用它回填；
+    // 取数失败 / `as_of` 缺失时保持「—」，不编造日期。
+    var tb = el("topbar-date");
+    if (tb) tb.textContent = (p && p.as_of) || "—";
 
     if (!p) {
       ["tl-upcoming-body", "tl-past-body"].forEach(function (id) {

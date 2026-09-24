@@ -126,6 +126,14 @@
     backdrop.addEventListener("click", function () { document.body.classList.remove("nav-open"); });
     var main = el("main");
     if (main) main.addEventListener("click", function () { document.body.classList.remove("nav-open"); });
+    // BUG-008(a)（2026-09-24）：顶栏「刷新数据」原本是**死按钮** —— settings.js 是 6 份 shell 副本里
+    //   唯一没绑定的（另 5 页都是 `load(true)`），点击 0 请求、用户以为在刷新。
+    //   本页语义 = 重新拉 `/api/settings`（生效值 + env 覆盖 + schema），即重跑 `load()`
+    //   （本页无趋势图缓存，无需 force 参数）；绑定位置与另 5 页一致，都放在 `bindShell`。
+    var refreshBtn = el("refresh-btn");
+    if (refreshBtn) refreshBtn.addEventListener("click", function () { load(); });
+    // BUG-008(b)：本页**不写** `#topbar-date` —— 设置页展示的是配置生效值，没有「数据日」可取，
+    //   凭空填一个日期等于造假（口径：有数据的页面写数据日，没有的保持「—」）。
     updateMarketStatus();
     setInterval(updateMarketStatus, 60000);
   }

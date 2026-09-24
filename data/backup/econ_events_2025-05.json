@@ -1,0 +1,28 @@
+{
+  "export_date": "2026-09-24T10:28:31+08:00",
+  "month": "2025-05",
+  "record_count": 1,
+  "records": [
+    {
+      "date": "2025-05-07",
+      "kind": "FOMC",
+      "title": "FOMC Meeting - May 6-7, 2025",
+      "agency": "Fed",
+      "source": "fed",
+      "time_et": null,
+      "status": "ok",
+      "note": "两日会议（5 月 6-7）的决议日",
+      "fetched_at": "2026-09-24T09:00:20",
+      "actual": null,
+      "forecast": null,
+      "previous": null,
+      "unit": null,
+      "importance": null,
+      "value_source": null,
+      "value_title": null,
+      "value_fetched_at": null
+    }
+  ],
+  "news_record_count": 0,
+  "news_records": []
+}

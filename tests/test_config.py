@@ -289,3 +289,108 @@ class TestWatchlistValidation:
         p = _write(tmp_path, {"watchlist": "bad"})
         cfg = load_config(path=p)
         assert cfg["watchlist"] == {"stocks": [], "corr_high_threshold": 0.7}
+
+    # ---- BUG-002（2026-09-24）：读侧必须透传 cost（旧实现重建条目时只留 symbol/label）----
+
+    def test_valid_cost_passed_through(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [
+            {"symbol": "600519", "label": "茅台", "cost": 1500.0},
+            {"symbol": "AAPL", "label": "苹果"}]}})
+        cfg = load_config(path=p)
+        assert cfg["watchlist"]["stocks"][0] == {"symbol": "600519", "label": "茅台", "cost": 1500.0}
+        assert "cost" not in cfg["watchlist"]["stocks"][1]      # 没给就不造键（不是 None）
+
+    def test_illegal_cost_dropped_not_crashed(self, tmp_path):
+        """非法 cost（≤0 / 非有限 / 非数字）⇒ **丢该键**、条目保留（读侧宽容，写侧才报错）。"""
+        p = _write(tmp_path, {"watchlist": {"stocks": [
+            {"symbol": "A", "cost": 0},
+            {"symbol": "B", "cost": -1},
+            {"symbol": "C", "cost": float("inf")},
+            {"symbol": "D", "cost": "abc"},
+            {"symbol": "E", "cost": None},
+            {"symbol": "F", "cost": ""}]}})
+        stocks = load_config(path=p)["watchlist"]["stocks"]
+        assert [s["symbol"] for s in stocks] == ["A", "B", "C", "D", "E", "F"]
+        assert all("cost" not in s for s in stocks)
+
+    def test_cost_string_number_accepted(self, tmp_path):
+        p = _write(tmp_path, {"watchlist": {"stocks": [{"symbol": "A", "cost": "12.5"}]}})
+        assert load_config(path=p)["watchlist"]["stocks"][0]["cost"] == 12.5
+
+
+class TestNonFiniteReadSide:
+    """BUG-003 读侧（2026-09-24）：历史遗留的 `Infinity` 阈值必须回退内置默认，不能进报警链。
+
+    `json.loads` 默认接受 `Infinity/NaN`（Python 扩展），旧写侧会把它落盘 ⇒ 读侧必须挡。
+    """
+
+    def test_infinite_threshold_falls_back_to_default(self, tmp_path):
+        p = _write(tmp_path, {"alert": {"vix": float("inf"), "sh": float("nan"), "gspc": 3.0}})
+        cfg = load_config(path=p)
+        assert cfg["alert"]["vix"] == DEFAULTS["alert"]["vix"]     # ∞ → 默认 20
+        assert cfg["alert"]["sh"] == DEFAULTS["alert"]["sh"]       # NaN → 默认 2.5
+        assert cfg["alert"]["gspc"] == 3.0                         # 正常值不受影响
+
+    def test_infinite_analysis_and_k_factor_fall_back(self, tmp_path):
+        p = _write(tmp_path, {"analysis": {"vix": {"peaceful": float("inf"), "panic": 30.0}},
+                              "alert": {"k_factor": 1e999}})
+        cfg = load_config(path=p)
+        assert cfg["analysis"]["vix"]["peaceful"] == 20.0
+        assert cfg["alert"]["k_factor"] == 2.0
+
+    def test_env_float_rejects_non_finite(self, monkeypatch):
+        """env 侧同一道闸：`ALERT_THRESHOLD_VIX=inf` 不得进报警链（否则告警静默关闭）。"""
+        monkeypatch.setenv("ALERT_THRESHOLD_VIX", "inf")
+        assert config.env_float("ALERT_THRESHOLD_VIX", 20.0) == 20.0
+        monkeypatch.setenv("ALERT_THRESHOLD_VIX", "nan")
+        assert config.env_float("ALERT_THRESHOLD_VIX", 20.0) == 20.0
+        monkeypatch.setenv("ALERT_THRESHOLD_VIX", "25")
+        assert config.env_float("ALERT_THRESHOLD_VIX", 20.0) == 25.0
+
+    def test_bad_bytes_config_falls_back_to_defaults(self, tmp_path):
+        """BUG-007 同类（读侧）：非 UTF-8 字节 ⇒ 内置默认，**绝不抛异常**（否则四 API + 三入口同挂）。"""
+        p = tmp_path / "config.json"
+        p.write_bytes(b'{"alert": {"vix": 25.0}}\xff\xfe')
+        cfg = load_config(path=p)
+        assert cfg["alert"]["vix"] == DEFAULTS["alert"]["vix"]
+
+
+class TestAlertThresholdEnvCoverage:
+    """BUG-010（2026-09-24）：`settings_store.SCHEMA` 的**8 个标的阈值**都要有 env 覆盖。
+
+    旧实现漏了 `ALERT_THRESHOLD_SZ`（SCHEMA 能改、env 改不动，文档却宣称 `ALERT_THRESHOLD_*`
+    通用覆盖）⇒ 用**参数化**把 `DEFAULTS.alert` / `SCHEMA` / `ENV_MAP` 三处钉在一起，防再漏项。
+    ⚠️ `alert.k_factor` / `lookback_days` / `dynamic` **有意不给 env**（设置页专属；本用例断言
+    的集合刻意不含它们——若将来补 env，请连同这张清单一起改）。
+    """
+
+    SYMBOL_KEYS = ["vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb"]
+
+    @staticmethod
+    def _float_alert_keys():
+        from src import settings_store as ss
+
+        return sorted(k[len("alert."):] for k, spec in ss.SCHEMA.items()
+                      if k.startswith("alert.") and spec["kind"] == "float")
+
+    def test_all_symbol_thresholds_have_defaults_schema_and_env(self):
+        from src import settings_store as ss
+
+        keys = self._float_alert_keys()
+        assert set(keys) == set(self.SYMBOL_KEYS) | {"k_factor"}
+        env_paths = set(config.ENV_MAP.values())
+        missing = [k for k in self.SYMBOL_KEYS if ("alert", k) not in env_paths]
+        assert not missing, "缺 env 映射: %s" % missing
+        # 三个来源必须同源（默认值 / 设置页白名单 / env 映射）
+        for k in self.SYMBOL_KEYS:
+            assert k in DEFAULTS["alert"] and ("alert." + k) in ss.SCHEMA
+
+    def test_sz_env_takes_effect(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ALERT_THRESHOLD_SZ", "9")
+        assert load_config(path=tmp_path / "nope.json")["alert"]["sz"] == 9.0
+
+    @pytest.mark.parametrize("key", ["vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb"])
+    def test_each_threshold_env_overrides(self, key, monkeypatch, tmp_path):
+        by_path = {path: name for name, path in config.ENV_MAP.items()}
+        monkeypatch.setenv(by_path[("alert", key)], "7.5")
+        assert load_config(path=tmp_path / "nope.json")["alert"][key] == 7.5

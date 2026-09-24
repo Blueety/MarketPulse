@@ -24,7 +24,10 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
+
+from src import storage
 
 logger = logging.getLogger("marketpulse.git")
 
@@ -40,6 +43,17 @@ _PUSH_TIMEOUT = 120
 #   的显式 pathspec（会直接抛 `The following paths are ignored…` → 三个入口的数据提交全挂）。
 # - 顺序即 `git add` 的实参顺序，测试 test_add_uses_path_whitelist 钉死。
 _DATA_PATHS: tuple[str, ...] = ("data", "context", "alerts")
+
+# ---- 提交前数据护栏（2026-09-24，D-3 / B1-4b）------------------------------------------
+#: 守卫目标：仓库里**将要被提交的那个** DB 文件（相对于 `root`）。刻意不取
+#: `storage.DB_PATH` 的模块默认值 —— 护栏守的是"这个仓库要推上去的库"，`root=` 指到临时
+#: 仓库时（测试）就不该去碰进程外那个真实库。
+_DB_REL = "data/marketpulse.db"
+
+#: 骤减判据：HEAD 行数超过 `_DROP_MIN_ROWS` 且当前不足其 `_DROP_RATIO` → 拒绝。
+#: （历史裁剪的正当代价远小于"删库上线"，阈值取宽：只有"腰斩"才拦。）
+_DROP_MIN_ROWS = 200
+_DROP_RATIO = 0.5
 
 
 def _enabled() -> bool:
@@ -150,17 +164,108 @@ def _push(root: Path) -> None:
         raise last_exc
 
 
+def _db_row_counts(db_path) -> tuple[int, int]:
+    """(`history` 行数, `econ_events` 行数) —— 读侧容错口径（损坏 / 被锁 / 缺表 → 0）。
+
+    ⚠️ 0 的语义是**故意保守**的：两侧都用 0 表示"读不出来"。对**当前库**而言，读不出来
+    （被锁 / 损坏 / 被清空）就命中"HEAD 有行、当前 0 行"的拒绝规则 ⇒ 宁可拒绝一次提交，
+    也绝不把读不出来的库推上线（BUG-001 的放大链正是"删库 → 空库被 commit + push"）；
+    对 **HEAD 副本**而言 0 行不触发任何拒绝（HEAD 无该文件 / 读不动 → 放行）。
+    """
+    return (len(storage.query_history(db_path=db_path)),
+            len(storage.query_econ_events(db_path=db_path)))
+
+
+def _head_db_counts(root: Path) -> tuple[int, int] | None:
+    """HEAD 中 `data/marketpulse.db` 的 (history, econ_events) 行数；取不到 → None。
+
+    `git show` 的标准输出**重定向到临时文件**（不是 `capture_output`）：二进制 blob 必须落文件
+    才能读，而且管道有实测坑 —— git 的孙进程会一直持有管道，`subprocess` 的 timeout 形同虚设
+    （见 `_push` 上方注释）。`stderr` 走 DEVNULL 只求不刷屏，同样不是管道。
+
+    HEAD 里没有这个文件（首次提交）/ 拿不到 HEAD 对象（浅克隆、无 HEAD）/ 副本读不出
+    → `CalledProcessError` 或 0 行 → 调用方放行。
+    """
+    with tempfile.TemporaryDirectory(prefix="mp-head-") as td:
+        copy = Path(td) / "head.db"
+        with open(copy, "wb") as fh:
+            subprocess.run(["git", "show", f"HEAD:{_DB_REL}"], cwd=str(root), stdout=fh,
+                           stderr=subprocess.DEVNULL, check=True, timeout=_STATUS_TIMEOUT)
+        return _db_row_counts(copy)
+
+
+def _row_guard_reason(head: tuple[int, int], cur: tuple[int, int]) -> str:
+    """行数守卫判据（纯函数）：返回拒绝原因；放行 → 空串。两个 tuple 均为 (history, econ_events)。"""
+    h_hist, h_econ = head
+    c_hist, c_econ = cur
+    if h_hist > 0 and c_hist == 0:
+        return f"history 表被清空（HEAD {h_hist} 行 → 当前 0 行）"
+    if h_hist > _DROP_MIN_ROWS and c_hist < h_hist * _DROP_RATIO:
+        return f"history 行数骤减（HEAD {h_hist} 行 → 当前 {c_hist} 行，不足一半）"
+    if h_econ > 0 and c_econ == 0:
+        return f"econ_events 表被清空（HEAD {h_econ} 行 → 当前 0 行）"
+    return ""
+
+
+def _data_guard(root: Path) -> tuple[bool, str]:
+    """提交前数据护栏：返回 `(放行?, 原因)`；**拒绝时调用方不得执行 `git add/commit/push`**。
+
+    ① `storage.wal_checkpoint()`：`-wal` 里的新行先落进**将要提交的那个** `.db`。
+    `.gitignore` 排除 `-wal/-shm`（D-1：DB 本身入库、即线上数据源）⇒ 不 checkpoint 就会把
+    「少最后一批行」的库推上线；这一步把纪律从"靠人记得"变成代码强制。
+    ② 行数守卫（对比 `HEAD:data/marketpulse.db` 的副本，见 `_row_guard_reason`）。
+
+    放行侧（**都只记 warning**）：DB 文件不存在 / HEAD 里没有该文件 / `git show` 失败
+    （浅克隆、无 HEAD）/ 任何未预期异常 —— 护栏是**可用性**部件，绝不能把正常推送卡死。
+    """
+    db = root / _DB_REL
+    if not db.exists():
+        logger.warning("[data-guard] %s 不存在，跳过行数守卫", _DB_REL)
+        return True, "db-missing"
+    try:
+        storage.wal_checkpoint(db_path=db)
+    except Exception as exc:  # noqa: BLE001 —— 收尾失败不该阻断推送（下行守卫仍会兜底）
+        logger.warning("[data-guard] wal_checkpoint 失败（继续）: %s", exc)
+    try:
+        try:
+            head = _head_db_counts(root)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+            head = None                       # 首次提交 / 浅克隆 / 无 HEAD / git 不在 PATH
+            logger.warning("[data-guard] 读不到 HEAD:%s（%s），跳过行数守卫", _DB_REL, exc)
+        if head is None:
+            return True, "head-unavailable"
+        cur = _db_row_counts(db)
+        reason = _row_guard_reason(head, cur)
+        if reason:
+            logger.error("[data-guard] 拒绝提交：%s（HEAD history=%d / 当前 history=%d；"
+                         "HEAD econ_events=%d / 当前 econ_events=%d）",
+                         reason, head[0], cur[0], head[1], cur[1])
+            return False, reason
+        return True, "ok"
+    except Exception as exc:  # noqa: BLE001 —— 未预期错误一律放行（见 docstring 放行侧）
+        logger.warning("[data-guard] 行数守卫异常（放行）: %s", exc)
+        return True, f"guard-error: {exc}"
+
+
 def auto_commit_push(date_str: str, report_type: str, root: Path = PROJECT_ROOT) -> bool:
     """将当前仓库变更 commit 并 push 到 origin/master。
 
-    成功返回 True；以下情况返回 False：关闭（AUTO_PUSH=0）/ 无改动 / 任意失败
-    （代理黑洞、超时、无 git）。失败仅打印日志，不抛异常（F6 + 退出码恒 0 约定）。
+    成功返回 True；以下情况返回 False：关闭（AUTO_PUSH=0）/ 无改动 / **数据护栏拒绝** /
+    任意失败（代理黑洞、超时、无 git）。失败仅打印日志，不抛异常（F6 + 退出码恒 0 约定）。
+
+    2026-09-24（D-3）：`_commit` **之前**过一道 `_data_guard` —— 空库 / 行数腰斩 / 事件表被清空
+    一律拒绝（不 add、不 commit、不 push），`scripts/auto_commit_data.py` 据此返回 1、Hermes cron
+    可见。护栏本身对"读不出 HEAD""DB 不存在"等情况放行，不会卡死正常推送。
     """
     if not _enabled():
         return False
     try:
         if not _has_changes(root):
             print("[auto-push] No changes, skipping.")
+            return False
+        allowed, reason = _data_guard(root)
+        if not allowed:
+            print(f"[auto-push] Refused by data guard: {reason}")
             return False
         _commit(root, date_str, report_type)
         _push(root)
