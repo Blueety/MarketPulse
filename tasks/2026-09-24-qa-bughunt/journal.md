@@ -187,3 +187,42 @@ B1-4 护栏演练（脚本入口 python -m scripts.auto_commit_data，真 git �
    被 gitignore 排除」的三处旧说法（实际：`*.log` + `!data/alerts.log` 是**反排除**，三者都会随 auto-push 入库）。
 
 ---
+
+---
+
+## 🔴 线上事故：Railway 部署全失败（10:30 → 12:26），根因 = 本轮清理删了部署入口
+
+**症状**：用户报"railway 提示部署失败"。独立复核：`https://marketpulse-blue.up.railway.app/healthz`
+返回 **502 `Application failed to respond`**（`x-railway-fallback: true`）⇒ 容器没起来，
+不是"状态标志"而已，线上从 10:30 起一直是挂的。
+
+**根因**：B3/B4 的"清理仓库根误放文件"把 **`app.py`** 随 `_dbg/`、`seed_history*.py` 一起移进
+`tasks/2026-09-24-qa-bughunt/legacy/`。而 `app.py` 的 docstring 明写「Railway 入口文件」，
+且 `tasks/20260901-railway-deploy-fix/plan.md` 记录过 `railway.toml` 的 startCommand **曾是**
+`uvicorn app:app` ⇒ **那是线上活的入口**，不是实验文件。本地 `uvicorn web.app:app` + 全部门禁
+（pytest 856 / verify_ui 710）全绿，因为**没有任何门禁跑过线上那条命令**。
+
+**定位手法（无需登录 Railway，可复用，已写入 `docs/pitfalls.md`）**：Railway 把部署结果回写成
+GitHub commit status，公开仓库免鉴权可读 ⇒ 逐提交查 `/commits/<sha>/status`：
+
+| 提交 | 时间 | 部署 |
+|---|---|---|
+| `6d22845` auto: data sync | 10:15 | **success**（最后一次成功） |
+| **`4392e6f` fix(qa): 缺陷轮** | **10:30** | **failure**（第一次失败，与本轮清理精确吻合） |
+| `75eb79e` … `dccd6e0`（其后每一个） | 11:05–11:46 | failure |
+
+**修复**：恢复 `app.py`（与删除前逐字一致，仅加"勿删"警示注释）；新增两条护栏
+`tests/test_web.py::test_railway_entry_point_module_exposes_the_app`（入口存在 + 导出的就是
+`web.app.app` 本体）与 `test_deploy_start_commands_reference_an_importable_module`
+（三个配置里的 `uvicorn X:Y` 必须真能 import）。**证伪**：把 `app.py` 移走 → 第一条 **FAIL**；
+还原 → 通过。`pytest tests/` → **860 passed**。文档同步：`AGENTS.md` 项目地图新增 `app.py` 行、
+`docs/pitfalls.md` 新增该事故条目（含 GitHub commit-status 查法）。
+
+**验证（线上，实测）**：提交 `481902b` 推送后
+- GitHub commit status：`state=success`、`Success - marketpulse-blue.up.railway.app`（04:26:14Z = 12:26）；
+- `GET /healthz` → **200 `{"status":"ok"}`**（事故期间 502）；
+- `GET /`（未带凭据）→ **401** + `www-authenticate: Basic realm="MarketPulse"`（鉴权按配置生效、应用在正常服务）。
+
+**教训**：删除"部署链路上的文件"前，三处口径（**平台 dashboard 的启动命令 / 仓库配置文件 /
+文件本体**）必须都能对上；只对上一处不算数。而"本地能跑"永远证明不了"线上能起"——
+线上跑的是平台那条命令，不是我们敲的那条。
