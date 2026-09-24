@@ -2233,3 +2233,41 @@ def test_timeline_and_backtest_topbar_date_write_data_day():
                         r"[\s\S]{0,200}?as_of")
     for name in ("timeline.js", "backtest.js"):
         assert topbar.search(_frontend_src(name)), f"{name} 未把数据日写进 #topbar-date"
+
+
+# ---- 部署入口与启动命令（2026-09-24 线上事故回归）----
+
+def test_railway_entry_point_module_exposes_the_app():
+    """仓库根 `app.py`（Railway 启动命令 `uvicorn app:app` 的落点）必须存在且导出同一个应用。
+
+    2026-09-24：清理"误放文件"时把它移进 `tasks/.../legacy/`，线上从那一刻起**每次部署都失败**
+    （502 `Application failed to respond`），而本地 `uvicorn web.app:app` 与全部门禁全绿
+    ⇒ 只有这条用例能在本地拦住这个漂移。返回的对象必须**是同一个** FastAPI 实例（不是副本）。
+    """
+    import importlib.util
+
+    entry = WEB_DIR.parent / "app.py"
+    assert entry.exists(), "Railway 入口 app.py 丢了（线上启动命令是 `uvicorn app:app`）"
+    spec = importlib.util.spec_from_file_location("_railway_entry_app", entry)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.app is web.app.app, "入口导出的不是 web.app.app 本体"
+
+
+def test_deploy_start_commands_reference_an_importable_module():
+    """三个部署配置里的 `uvicorn X:Y` 都必须能 import 且带该属性。
+
+    防的是"配置指向一个不存在的模块/属性"——这类漂移只在线上暴露（本地跑的是自己敲的命令）。
+    配置写作 `uvicorn web.app:app --host ...` 或 Procfile 的 `web: uvicorn ...` 都能解析。
+    """
+    import importlib
+
+    root = WEB_DIR.parent
+    targets: set[tuple[str, str]] = set()
+    for name in ("railway.toml", "Procfile", "railpack.json"):
+        text = (root / name).read_text(encoding="utf-8")
+        targets |= set(re.findall(r"uvicorn\s+([A-Za-z_][\w.]*):(\w+)", text))
+    assert targets, "未从部署配置里解析出任何 uvicorn 启动命令"
+    for modname, attr in sorted(targets):
+        mod = importlib.import_module(modname)
+        assert hasattr(mod, attr), f"部署配置指向 {modname}:{attr}，但该模块里没有 {attr}"

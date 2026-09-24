@@ -2,6 +2,7 @@
 
 ## Project Map
 
+- `app.py`: 🔴 **Railway 部署入口（勿删勿移）** —— 3 行转发 `from web.app import app`，线上服务的实际启动命令是 `uvicorn app:app`（仓库内 `railway.toml` / `Procfile` / `railpack.json` 是否生效取决于 Railway dashboard 的 config-as-code 开关，本地无从确认）。2026-09-24 曾把它当"误放的实验文件"移进 `tasks/2026-09-24-qa-bughunt/legacy/` ⇒ **每一次部署都失败**（线上 502 `Application failed to respond`），而本地 `uvicorn web.app:app` + 全部门禁全绿，**本地测试发现不了**。回归护栏：`tests/test_web.py::test_railway_entry_point_module_exposes_the_app`。
 - `daily_report.py`: 收盘日报编排入口（取数 → 报告 + 趋势图 → 写历史/缓存 → context 上下文）。
 - `snapshot_report.py`: 盘中快照独立入口（4 个 Hermes cron：A 股午盘 11:30 / A 股收盘 15:00 / 美股开盘 21:30 / 美股午盘 00:00；按 `--market a-share|us` + `--time open|midday|close|noon` 取市场子集，单板块渲染，仅存盘不推送；裸跑=美股午盘）。
 - `scripts/backtest.py`: 独立回测脚本（十三期）：复用生产 `check_breach` 语义回放历史触发事件，统计每标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率；只读历史、仅写 `reports/backtest_report.md`，不联网、零副作用（`--history PATH` 指定只读输入）。⚠️ 输入**实为 SQLite `data/marketpulse.db`**（三十一期起 `load_history()` 已迁移；`data/history.json` 只是 09-12 旧快照，仅供 `--history` 演练）—— 旧描述"回放 `data/history.json`"已过时。⚠️ **纯统计逻辑在 `src/backtest.py`**（2026-09-20 搬迁，**唯一实现**）：CLI 与看板 `GET /api/backtest` 共用同一份计算；本文件只留 `render_report`（md）/ `print_summary` / `main`，并 re-export 被搬迁的名字（`tests/test_backtest.py` / `test_phase27.py` 的 `bt.<name>` 用法不变）。

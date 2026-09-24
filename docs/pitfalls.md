@@ -869,3 +869,35 @@
   （实测 `git ls-files context alerts` 非空 —— 顺带纠正 `AGENTS.md` 里「`context/`/`alerts/` 被
   gitignore 排除」的旧说法：`git check-ignore` 对它们**零命中**，它们本来就随 auto-push 入库）。
   造夹具/新环境时要么先放一个 tracked 文件，要么把 pathspec 收窄到确实存在的路径。
+
+## 线上部署：`app.py` 是入口，不是"误放的实验文件"（2026-09-24 事故）
+
+- **症状**：Railway 每次部署都失败；`https://marketpulse-blue.up.railway.app/healthz`
+  返回 **502 `Application failed to respond`**（`x-railway-fallback: true`）。本地
+  `uvicorn web.app:app`、`pytest tests/`、`verify_ui.py` **全绿**——因为本地敲的是
+  `web.app:app`，而**线上生效的命令是 `uvicorn app:app`**（落点 = 仓库根那个 3 行转发文件）。
+- **根因**：QA 轮把它当"误放的实验文件"随 `_dbg/`、`seed_history*.py` 一起清进
+  `tasks/2026-09-24-qa-bughunt/legacy/`。`app.py` 的 docstring 明写「Railway 入口文件」，
+  且 `tasks/20260901-railway-deploy-fix/plan.md` 记录过 `railway.toml` 的 startCommand
+  **曾是** `uvicorn app:app` ⇒ 那是活的部署基础设施。
+- **🔧 定位手法（无需登录 Railway，可直接照搬）**：Railway 会把部署结果回写成
+  **GitHub commit status**，公开仓库免鉴权可读 ⇒ 逐提交查询即可画出"哪一次提交开始失败"：
+
+  ```bash
+  # 最新提交的部署状态（state/description/target_url 指向 Railway 部署详情）
+  curl -s https://api.github.com/repos/Blueety/MarketPulse/commits/master/status
+  # 逐个历史提交（找 last success → 下一次 failure 就是肇事提交）
+  curl -s https://api.github.com/repos/Blueety/MarketPulse/commits/<sha>/status
+  # 部署列表（含 environment / created_at / statuses_url）
+  curl -s "https://api.github.com/repos/Blueety/MarketPulse/deployments?per_page=10"
+  ```
+  本次实测即：`6d22845`（10:15）= 最后一次 `success`，`4392e6f`（10:30）起全部 `failure`，
+  与"清理误放文件"的提交时间**精确吻合**。⚠️ 未鉴权有 60 次/小时限额（超限返回
+  `API rate limit exceeded`）；`deployments/{id}/statuses` 里的 `log_url` 指向 Railway
+  控制台（需登录），拿不到构建日志正文。
+- **纪律**：仓库根/部署链路上的文件，删除前先问"线上是不是在用它"——判据是
+  **启动命令、配置文件、平台 dashboard 三处都要能对上**，只对上一处不算数。
+  回归护栏已加：`tests/test_web.py::test_railway_entry_point_module_exposes_the_app`
+  （入口文件存在 + 导出的就是 `web.app.app` 本体）与
+  `test_deploy_start_commands_reference_an_importable_module`（三个配置里的 `uvicorn X:Y`
+  必须真能 import）。
