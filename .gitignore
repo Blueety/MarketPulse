@@ -44,8 +44,8 @@ reports/
 # 自身已是 tracked（`git ls-files data/marketpulse.db` 可验），这行只在它被 `git rm --cached`
 # 之后才会咬人 ⇒ 新行还留在 WAL 里时，提交的 .db 就会漏数据。
 # 纪律：写库后提交前必须 `storage.wal_checkpoint()`（已由 `src/git_ops.py` 的提交前护栏强制）。
-# 备份：history 与事件表（econ_events / econ_event_news）按月备份到
-# `data/backup/{history,econ_events}_YYYY-MM.json`，两处备份都必须保持入库（恢复链唯一数据源）。
+# 备份：history（按月 `history_YYYY-MM.json`）与事件表（单文件 `econ_events.json`）都在
+# `data/backup/`，两处备份都必须保持入库（恢复链唯一数据源）。
 data/marketpulse.db
 data/marketpulse.db-wal
 data/marketpulse.db-shm

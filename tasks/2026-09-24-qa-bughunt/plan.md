@@ -96,6 +96,7 @@
 
 1. **备份面扩到事件表**（`src/storage.py`）：
    - `export_monthly_backups()` 追加 `data/backup/econ_events_YYYY-MM.json`（按月、当月覆盖 / 历史月冻结，与 history 同纪律），并把报告项行数一并返回；
+     **⚠️ 2026-09-24 用户定档：改为单文件 `data/backup/econ_events.json` 全量重写**（事件表含未来日程且每个月都会变 ⇒ 按月冻结既产出 60 个 1 行文件、又让未来月备份停在旧值；空表时不覆盖已有备份）。理由与实测见 `journal.md`。
    - `restore_if_empty()` 在恢复 history 后按同一命名规则恢复事件表（**仅空表触发**，幂等）；
    - 触发点不变（报告链路的 backup 步骤 + `scripts/backup_db.py`）。
 2. **提交前护栏**（`src/git_ops.py`，新增 `_data_guard(root) -> tuple[bool, str]`，在 `auto_commit_push()` 的 `_commit` 之前调用）：
@@ -123,7 +124,7 @@
 |---|---|---|
 | BUG-008 | `web/static/settings.js`、`web/templates/_topbar.html` | settings 页绑定 `#refresh-btn`（重跑 `load()`）或隐藏该按钮；`/timeline`、`/backtest`、`/settings` 补写 `#topbar-date`（有数据的页面写数据日） |
 | BUG-013 | `AGENTS.md`、`docs/commands.md` | 以代码为准（3650）改文档；AGENTS.md 是 agent 上下文文件，漂移会持续误导 ⇒ 优先改它 |
-| BUG-011 | `.gitignore`、`docs/`、`data/backup/` | 按 D-1 采纳 A：① `.gitignore:41-45` 注释改成事实——「本库**入库**，即线上数据源；`-wal/-shm` 排除 ⇒ 写库后提交前必须 `wal_checkpoint`（由 `git_ops` 护栏强制）；事件表备份见 `data/backup/econ_events_*.json`」；② 把「DB 入库 + 事件表备份」写进 `docs/architecture.md` 的数据流；③ 事件表备份/恢复的落地在 B1-4（同批）；`git rm --cached` 方案**不在本批**，单独立项（需验证 Railway 恢复链） |
+| BUG-011 | `.gitignore`、`docs/`、`data/backup/` | 按 D-1 采纳 A：① `.gitignore:41-45` 注释改成事实——「本库**入库**，即线上数据源；`-wal/-shm` 排除 ⇒ 写库后提交前必须 `wal_checkpoint`（由 `git_ops` 护栏强制）；事件表备份见 `data/backup/econ_events.json`」；② 把「DB 入库 + 事件表备份」写进 `docs/architecture.md` 的数据流；③ 事件表备份/恢复的落地在 B1-4（同批）；`git rm --cached` 方案**不在本批**，单独立项（需验证 Railway 恢复链） |
 
 ### B4 卫生与测试（P3）
 
@@ -162,7 +163,7 @@
 | 013 | `tests/test_web.py` | 断言文档中的上限值 == `api_history` 的 `le`（用 `inspect.signature` 或直接钉 3650），文档漂移即红 |
 | 014 | `tests/test_settings_store.py` | 同秒两次 `apply_updates` → 产生两个不同备份；并发 tmp 名唯一 |
 | 016 | 元测试 | `tests/` 内同一文件不得重复定义同名 `test_*`（CollectionError 前置拦截） |
-| B1-4a | `tests/test_phase31_storage.py` | `export_monthly_backups()` 产出含 `econ_events_*.json` 且行数与库一致；`restore_if_empty()` 对空表恢复事件表；非空表不动作（幂等） |
+| B1-4a | `tests/test_storage.py` | `export_monthly_backups()` 产出 `econ_events.json`（单文件全量，**定档**）且行数与库一致；跨月（含未来月）改动都会刷新；空表不覆盖备份；`restore_if_empty()` 对空表恢复事件表；非空表不动作（幂等） |
 | B1-4b | `tests/test_git_ops.py`（或既有同类） | 临时仓库：HEAD 300 行 + 工作区库清空 → `auto_commit_push` 返回 False、`git status` 与 HEAD 一致（**未提交**）；正常新增行 → 提交成功；`git show` 失败（无 HEAD）→ 放行不阻塞；提交前 `-wal` 内容已并入 `.db`（checkpoint 生效） |
 
 > 纪律（`AGENTS.md`）：测试要断言**可观察契约**，不要钉实现细节/文案；不得为了让变更「有测试」而写空断言。
@@ -179,7 +180,7 @@ venv/Scripts/python -m uvicorn web.app:app --port 8128       # Basic Auth 实例
 CONFIG_PATH=<tmp副本> venv/Scripts/python -m uvicorn web.app:app --port 8126   # 设置写链路
 venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py      # B3 前端改动后
 venv/Scripts/python -m scripts.auto_commit_data              # B1-4 护栏：无改动「跳过」/ 空库「拒绝」都不许推
-venv/Scripts/python scripts/backup_db.py                     # B1-4：data/backup/ 应新增 econ_events_*.json
+venv/Scripts/python scripts/backup_db.py                     # B1-4：data/backup/ 新增/刷新 econ_events.json（单文件）
 venv/Scripts/python -m pytest tests/ -q -k "guard or backup or single_impl"
 ```
 **改动前后都要做的数据自保**：`cp data/marketpulse.db{,-pre-b0}`；B0 期间**不得**在生产库上触发重建路径（用 `CONFIG_PATH`/`--db` 指向临时库）。
@@ -247,3 +248,6 @@ venv/Scripts/python -m pytest tests/ -q -k "guard or backup or single_impl"
 | 016 | 测试假绿/死代码 | B4 | `tests/` | 元测试（同名禁止） | ✅ |
 
 > 执行者每完成一批：跑 §5 命令 → 更新本表 ✅→✅ → 把证据（命令 + 输出摘要）写进 `journal.md`。
+
+> **定档注（2026-09-24 用户）**：① BUG-012 的取数上限 **15s → 20s**；② B1-4a 的事件表备份由
+> 「按月 + 历史月冻结」改为**单文件全量** `econ_events.json`。两处均已落地 + 补参数/性质护栏测试，证据见 `journal.md`。

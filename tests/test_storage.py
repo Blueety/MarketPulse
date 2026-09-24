@@ -6,7 +6,7 @@ monkeypatch.setattr(storage, "DB_PATH", tmp) 单点全局生效。
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
@@ -19,13 +19,6 @@ def _month_str(offset: int = 0) -> str:
     d = datetime.now().replace(day=1)
     y, m = divmod(d.year * 12 + (d.month - 1) + offset, 12)
     return "%04d-%02d" % (y, m + 1)
-
-
-def _month_last_day(month: str) -> str:
-    """`YYYY-MM` 的月末（下月 1 号的前一天），用于构造"历史月里的一条新日期"。"""
-    y, m = int(month[:4]), int(month[5:7])
-    nxt = datetime(y + (m == 12), (m % 12) + 1, 1)
-    return (nxt - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 def _event(date: str, kind: str = "cpi", title: str = "CPI", source: str = "fed", **extra) -> dict:
@@ -175,10 +168,20 @@ class TestConvert:
 
 
 class TestMonthlyBackup:
+    """history 的按月备份（当月覆盖 / 历史月冻结 / 缺失自愈）。
+
+    ⚠️ `export_monthly_backups()` 的报告列表**同时含事件表单文件项**（`econ_events.json`，没有
+    `month` 键）⇒ 这些用例一律先按文件名前缀筛出 history 项，别对整表取 `r["month"]`。
+    """
+
+    @staticmethod
+    def _hist(rep):
+        return [r for r in rep if r["file"].startswith("history_")]
+
     def test_export_two_months_and_freeze(self, db, tmp_path):
         st.upsert_history_rows(_rows([("2026-08-31", 1.0), ("2026-09-01", 2.0)]))
         bdir = tmp_path / "backup"
-        rep = st.export_monthly_backups(backup_dir=bdir)
+        rep = self._hist(st.export_monthly_backups(backup_dir=bdir))
         assert {r["month"] for r in rep} == {"2026-08", "2026-09"}
         assert (bdir / "history_2026-08.json").exists()
         assert (bdir / "history_2026-09.json").exists()
@@ -193,7 +196,7 @@ class TestMonthlyBackup:
         # 历史月数据在 DB 内被改写 → 重导出时 8 月文件冻结不更新；当月文件覆盖
         st.upsert_history_rows(_rows([("2026-08-31", 99.0)]), preserve_existing=True)
         st.upsert_history_rows(_rows([("2026-09-02", 3.0)]))
-        rep = st.export_monthly_backups(backup_dir=bdir)
+        rep = self._hist(st.export_monthly_backups(backup_dir=bdir))
         actions = {r["month"]: r["action"] for r in rep}
         assert actions["2026-08"] == "frozen"
         assert actions["2026-09"] == "written"
@@ -206,7 +209,7 @@ class TestMonthlyBackup:
         bdir = tmp_path / "backup"
         st.export_monthly_backups(backup_dir=bdir)
         (bdir / "history_2026-08.json").unlink()
-        rep = st.export_monthly_backups(backup_dir=bdir)
+        rep = self._hist(st.export_monthly_backups(backup_dir=bdir))
         actions = {r["month"]: r["action"] for r in rep}
         assert actions["2026-08"] == "written"   # 缺失即补，即便已非当月
         assert (bdir / "history_2026-08.json").exists()
@@ -425,12 +428,16 @@ class TestBug001LockIsNotCorruption:
         assert st.is_lock_error(OSError("boom")) is False
 
 
-class TestEconMonthlyBackup:
-    """B1-4a（D-3）：经济事件两张表纳入按月备份 / 空表恢复。
+class TestEconBackup:
+    """B1-4a（D-3）：经济事件两张表纳入备份 / 空表恢复。
 
     修复前 `export_monthly_backups` 只导 `history_*`、`restore_if_empty` 也只恢复 history ⇒
     `econ_events`（骨架 + 结果值层）与 `econ_event_news`（叙事层）**无任何备份/恢复路径**：
     Railway 的临时文件系统下一重建库，整块经济日历数据就永久消失（备份链是线上的主数据源）。
+
+    ⚠️ 2026-09-24 定档：事件表备份是**单文件全量** `econ_events.json`（不是按月的
+    `econ_events_YYYY-MM.json`）—— 这张表含未来日程且每个月都会变，按月"历史月冻结"会把未来月的
+    备份长期钉在旧值上。下面的用例覆盖「跨月改动都能刷新」「空表不许抹掉备份」两条关键性质。
     """
 
     @staticmethod
@@ -446,41 +453,65 @@ class TestEconMonthlyBackup:
                                       "forecast": 3.0, "unit": "%", "value_source": "tradingview"}])
         st.upsert_event_news([(f"{this}-01", "cpi", 4, "CPI 前瞻", "https://example.com/a")])
 
-    def test_export_writes_econ_file_with_db_row_counts(self, db, tmp_path):
-        """产出 `econ_events_YYYY-MM.json`，行数/内容与库一致（含值层与叙事层）。"""
+    def test_export_writes_single_file_with_db_row_counts(self, db, tmp_path):
+        """产出**单个** `econ_events.json`，行数/内容与库一致（含值层与叙事层）。"""
         self._seed_events()
         bdir = tmp_path / "backup"
-        rep = {r["file"]: r for r in st.export_monthly_backups(backup_dir=bdir)}
-        this, prev = _month_str(0), _month_str(-1)
-        cur = json.loads((bdir / f"econ_events_{this}.json").read_text(encoding="utf-8"))
-        old = json.loads((bdir / f"econ_events_{prev}.json").read_text(encoding="utf-8"))
-        assert cur["record_count"] == 1 and old["record_count"] == 2      # ★ 与库一致
-        assert [r["date"] for r in cur["records"]] == [f"{this}-01"]
-        assert cur["records"][0]["actual"] == 3.1 and cur["records"][0]["unit"] == "%"   # ★ 值层一并归档
-        assert cur["news_record_count"] == 1
-        assert cur["news_records"] == [[f"{this}-01", "cpi", 4, "CPI 前瞻", "https://example.com/a"]]
-        assert rep[f"econ_events_{this}.json"]["rows"] == 1
-        assert rep[f"econ_events_{prev}.json"]["rows"] == 2
+        rep = st.export_monthly_backups(backup_dir=bdir)
+        econ = [r for r in rep if r["file"] == "econ_events.json"]
+        assert len(econ) == 1 and econ[0]["action"] == "written"
+        assert econ[0]["rows"] == 3 and econ[0]["news_rows"] == 1
+        assert not list(bdir.glob("econ_events_*.json")), "不应再产出按月文件"
+        data = json.loads((bdir / "econ_events.json").read_text(encoding="utf-8"))
+        assert data["record_count"] == 3 == len(data["records"])              # ★ 与库一致
+        got = {r["date"]: r for r in data["records"]}
+        assert got[f"{_month_str(0)}-01"]["actual"] == 3.1                    # ★ 值层一并归档
+        assert got[f"{_month_str(0)}-01"]["unit"] == "%"
+        assert data["news_record_count"] == 1
+        assert data["news_records"] == [[f"{_month_str(0)}-01", "cpi", 4, "CPI 前瞻",
+                                        "https://example.com/a"]]
 
-    def test_export_econ_current_overwrites_history_month_frozen(self, db, tmp_path):
-        """当月覆盖 / 历史月冻结（与 history 同纪律），历史月文件缺失则自愈补写。"""
+    def test_export_refreshes_every_month_including_future(self, db, tmp_path):
+        """🔴 单文件方案的核心性质：**任何月份**（过去 / 当月 / 未来）的行改动都会在下一次导出出现。
+
+        旧实现（按 history 的"历史月冻结"纪律）会让 `econ_events_2027-12.json` 写一次就冻结到
+        2027-12 ⇒ 结果值层补数、日程改期都进不了备份。这里同时改**过去月**与**未来月**的行。
+        """
+        this = _month_str(0)
+        future = f"{int(this[:4]) + 1}-12"
+        past = f"{int(this[:4]) - 1}-01"
+        st.upsert_econ_events([_event(f"{past}-05", kind="cpi", title="旧标题"),
+                               _event(f"{future}-20", kind="fomc", title="待定")])
+        bdir = tmp_path / "backup"
+        st.export_monthly_backups(backup_dir=bdir)
+        first = json.loads((bdir / "econ_events.json").read_text(encoding="utf-8"))
+        assert {r["title"] for r in first["records"]} == {"旧标题", "待定"}
+
+        st.upsert_econ_events([_event(f"{past}-05", kind="cpi", title="改期后的标题")])
+        st.upsert_econ_events([_event(f"{future}-20", kind="fomc", title="已确认")])
+        rep = st.export_monthly_backups(backup_dir=bdir)
+        assert [r for r in rep if r["file"] == "econ_events.json"][0]["action"] == "written"
+        second = json.loads((bdir / "econ_events.json").read_text(encoding="utf-8"))
+        assert {r["title"] for r in second["records"]} == {"改期后的标题", "已确认"}   # ★ 两处都刷新
+
+    def test_export_refuses_to_clobber_backup_with_empty_table(self, db, tmp_path):
+        """🔴 空表**不许**把已有备份抹成 `record_count: 0`（那是把最后的恢复源也赔掉）。
+
+        场景就是 BUG-001 的同族：库被清空/重建后备份步骤照跑。判据：文件字节不变 + 报告项
+        明确 `skipped-empty`（不是静默）。
+        """
         self._seed_events()
         bdir = tmp_path / "backup"
         st.export_monthly_backups(backup_dir=bdir)
-        this, prev = _month_str(0), _month_str(-1)
-        frozen_before = (bdir / f"econ_events_{prev}.json").read_bytes()
-        st.upsert_econ_events([_event(_month_last_day(prev), kind="cpi", title="改期后的标题")])
-        st.upsert_econ_events([_event(f"{this}-02", kind="ppi")])
-        rep = {r["file"]: r for r in st.export_monthly_backups(backup_dir=bdir)}
-        assert rep[f"econ_events_{prev}.json"]["action"] == "frozen"
-        assert rep[f"econ_events_{this}.json"]["action"] == "written"
-        assert (bdir / f"econ_events_{prev}.json").read_bytes() == frozen_before      # ★ 历史月冻结
-        cur = json.loads((bdir / f"econ_events_{this}.json").read_text(encoding="utf-8"))
-        assert cur["record_count"] == 2                                              # ★ 当月覆盖为最新
-        (bdir / f"econ_events_{prev}.json").unlink()
-        rep2 = {r["file"]: r for r in st.export_monthly_backups(backup_dir=bdir)}
-        assert rep2[f"econ_events_{prev}.json"]["action"] == "written"                # 缺失即补（自愈）
-        assert rep2[f"econ_events_{prev}.json"]["rows"] == 3
+        before = (bdir / "econ_events.json").read_bytes()
+        conn = sqlite3.connect(str(db))
+        conn.execute("DELETE FROM econ_events")
+        conn.execute("DELETE FROM econ_event_news")
+        conn.commit()
+        conn.close()
+        rep = st.export_monthly_backups(backup_dir=bdir)
+        assert [r for r in rep if r["file"] == "econ_events.json"][0]["action"] == "skipped-empty"
+        assert (bdir / "econ_events.json").read_bytes() == before      # ★ 备份原样保住
 
     def test_export_econ_failure_keeps_history_report(self, db, tmp_path):
         """事件表读不出来（旧库没这两张表）→ 只记日志，history 备份报告照常返回（不抛）。"""
@@ -494,13 +525,13 @@ class TestEconMonthlyBackup:
         assert rep[0]["action"] == "written"
 
     def test_restore_events_into_empty_tables(self, db, tmp_path, monkeypatch):
-        """空表 → 从 `econ_events_*.json` 恢复事件（含值层原样）与叙事层。"""
+        """空表 → 从 `econ_events.json` 恢复事件（含值层原样）与叙事层。"""
         monkeypatch.setattr(st, "DATA_DIR", tmp_path / "no-legacy")    # 隔离真实 data/history.json
         prev = _month_str(-1)
         bdir = tmp_path / "backup"
         bdir.mkdir()
-        (bdir / f"econ_events_{prev}.json").write_text(json.dumps({
-            "month": prev, "record_count": 1,
+        (bdir / "econ_events.json").write_text(json.dumps({
+            "record_count": 1,
             "records": [_event(f"{prev}-05", actual=2.9, value_source="tradingview",
                                value_fetched_at="2026-01-01T00:00:00")],
             "news_records": [[f"{prev}-05", "cpi", 2, "标题", "https://example.com/n"]],
@@ -519,8 +550,8 @@ class TestEconMonthlyBackup:
         st.upsert_econ_events([_event(f"{this}-01", title="库里的")])
         bdir = tmp_path / "backup"
         bdir.mkdir()
-        (bdir / f"econ_events_{this}.json").write_text(json.dumps(
-            {"month": this, "records": [_event(f"{this}-01", title="备份里的")]},
+        (bdir / "econ_events.json").write_text(json.dumps(
+            {"records": [_event(f"{this}-01", title="备份里的")]},
             ensure_ascii=False), encoding="utf-8")
         assert st.restore_if_empty(backup_dir=bdir) == "empty"    # history 仍空（返回值是 history 链语义）
         assert [r["title"] for r in st.query_econ_events()] == ["库里的"]
@@ -529,23 +560,20 @@ class TestEconMonthlyBackup:
         assert [r["title"] for r in st.query_econ_events()] == ["库里的"]
 
     def test_restore_events_skips_corrupt_backup_file(self, db, tmp_path, monkeypatch):
-        """坏备份文件跳过继续（恢复链不得因单个文件中断）。"""
+        """坏备份文件 → 跳过（记日志），恢复链不中断、不抛。"""
         monkeypatch.setattr(st, "DATA_DIR", tmp_path / "no-legacy")
-        this, prev = _month_str(0), _month_str(-1)
         bdir = tmp_path / "backup"
         bdir.mkdir()
-        (bdir / f"econ_events_{prev}.json").write_text("{broken", encoding="utf-8")
-        (bdir / f"econ_events_{this}.json").write_text(json.dumps(
-            {"month": this, "records": [_event(f"{this}-01")]}, ensure_ascii=False), encoding="utf-8")
-        assert st.restore_if_empty(backup_dir=bdir) == "backup"
-        assert [r["date"] for r in st.query_econ_events()] == [f"{this}-01"]
+        (bdir / "econ_events.json").write_text("{broken", encoding="utf-8")
+        assert st.restore_if_empty(backup_dir=bdir) == "empty"     # history 也无备份 ⇒ empty
+        assert st.query_econ_events() == []
 
     def test_restore_events_skipped_when_db_locked(self, db, tmp_path, monkeypatch):
         """瞬时锁不是"空表"的证据：判空抛错 → 跳过本轮事件表恢复（一行都不写）。"""
         monkeypatch.setattr(st, "DATA_DIR", tmp_path / "no-legacy")
         bdir = tmp_path / "backup"
         bdir.mkdir()
-        (bdir / f"econ_events_{_month_str(0)}.json").write_text(json.dumps(
+        (bdir / "econ_events.json").write_text(json.dumps(
             {"records": [_event(f"{_month_str(0)}-01")]}, ensure_ascii=False), encoding="utf-8")
 
         def locked(*a, **kw):

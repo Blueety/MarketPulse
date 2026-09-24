@@ -55,7 +55,7 @@ pytest tests/test_storage.py::TestBug001LockIsNotCorruption tests/test_settings_
 | 005b | `scripts/backup_db.py` | `export_monthly_backups` 包 try/except：失败 `log.error` + `return 1`，成功/空库语义不变 | `tests/test_scripts.py` 4 条 |
 | 006 | `src/alerter.py` | 写盘前用 `_read_existing_blocks` 读回同 `(date,type)` 的既有块，按 symbol 合并（既有顺序保留、同 symbol 以本次渲染为准、新块追加），块外的内容（分隔符/尾注）收进 fragments 原样保留；`pending` 为空仍**早退不写文件**（幂等） | 把 `_read_existing_blocks` 换成 `({},[])`（等价旧行为）→ 同日两次 run 只剩 1 块、MOVE 丢；修复后 2 块且 MOVE 保留（`tests/test_alerter.py` 25 passed） |
 | 014 | `src/settings_store.py` | `_backup_stamp()`（秒+9 位纳秒+进程序号，字典序=时间序）；`_unique_tmp()` 用 `tempfile.mkstemp(dir=同目录)` + `os.close(fd)`；`_atomic_write` 先序列化再建 tmp、失败 unlink 后 re-raise | 换回固定名模拟旧实现 → 两次 `os.replace` 源同名；修复后两个唯一名、备份名唯一（`tests/test_settings_store.py` 27 passed） |
-| B1-4a | `src/storage.py` | `export_monthly_backups` 追加 `econ_events_YYYY-MM.json`（两表并进同一文件；当月覆盖 / 历史月冻结 / 缺历史月自愈；失败只 log）；`restore_if_empty` 在 history 之前按同规则恢复事件表（**仅空表触发**、幂等、`_count_econ_rows_strict` 判空、坏文件跳过）；恢复用整行 `INSERT … ON CONFLICT`（保留值层与 `value_fetched_at` 原样，不复用会刷新时间戳的 upsert） | `tests/test_storage.py` → 43 passed（新增 7 例） |
+| B1-4a | `src/storage.py` | `export_monthly_backups` 追加事件表备份（两表并进同一文件；失败只 log）；`restore_if_empty` 在 history 之前恢复事件表（**仅空表触发**、幂等、`_count_econ_rows_strict` 判空、坏文件跳过）；恢复用整行 `INSERT … ON CONFLICT`（保留值层与 `value_fetched_at` 原样，不复用会刷新时间戳的 upsert）。**⚠️ 2026-09-24 定档改为单文件 `econ_events.json` 全量**（原按月 + 历史月冻结，见下方「决策落定」#2） | `tests/test_storage.py::TestEconBackup` → 8 例（含"跨月改动都刷新""空表不覆盖备份"两条新性质） |
 | B1-4b | `src/git_ops.py` | `auto_commit_push` 在 `_commit` **之前**调 `_data_guard(root)`：① `storage.wal_checkpoint`；② 行数守卫 vs `git show HEAD:data/marketpulse.db` 临时副本（HEAD>0 且当前==0 → 拒绝；HEAD>200 且当前 < HEAD×0.5 → 拒绝；事件表同「HEAD 有行、当前 0 行」拒绝）；③ 放行侧只 warning（DB 不存在 / HEAD 无该文件 / `git show` 失败 / 任何未预期异常都放行 —— 护栏是可用性部件，绝不卡死推送）；④ 拒绝 ⇒ `log.error` 打印两边行数 + 返回 False 且**不执行** `git add/commit/push` | `tests/test_git_ops.py` → 22 passed（8 条行为 + 8 case 边界参数化，真 git 临时仓库 + bare origin）；`tests/test_phase26.py` → 20 passed（白名单/pathspec 护栏未回归） |
 
 **B1 期间发现并修掉一个 B0 引入的回归（重要）**：B1Guard 的真实数据探针发现
@@ -95,16 +95,28 @@ pytest tests/test_storage.py::TestBug001LockIsNotCorruption tests/test_settings_
    （断言 上限 ≥ 中债内层 timeout、且 上限×1000 < 前端 fetch 毫秒数）。
    **证伪**：把上限改回 15s → 该用例 **失败**（`15 >= 20` 不成立），改回 20s → 通过 ⇒ 护栏非空洞。
    `pytest tests/` → **857 passed**（+1）。
-2. **事件表按月备份 ≈ 60 个小文件**：`data/backup/econ_events_*.json` 覆盖 2021-01 … 2027-12（事件表含
-   **未来日程**，所以月份跨度远大于 history 的 13 个月），多数只有 1 行；且按 history 的「历史月冻结」
-   纪律，**未来月份的文件在"其月份到来之前"不会刷新**（如 `econ_events_2027-12.json` 今天写一次就冻结，
-   要等 2027-12 才更新）。恢复链按月份升序合并，功能上没问题；可选的替代：未来月不冻结（`m >= 当月` 就覆盖）
-   或整表存单文件（`econ_events_all.json`）—— 两个都要改 plan 的命名/纪律，故留给你决定。
+2. ✅ **已定档（2026-09-24 用户决定，采纳建议）**：事件表备份从「按月 + 历史月冻结」改为 **单文件全量
+   `data/backup/econ_events.json`**。理由两条，都来自这张表的性质：① 事件表含**未来日程**（实测
+   2021-01-27 … 2027-12-08），60 个月里多数只有 1 行，而全表仅 103 行 ⇒ 单文件 ~40KB 与
+   `history_2026-09.json` 同量级；② **"历史月冻结"的语义前提（过去不可变）对事件不成立** ——
+   结果值层会补数、日程会改期、未来月临近后会重抓，冻结会让 `econ_events_2027-12.json` 一直停在
+   2026 年写下的旧值。
+   落地：`src/storage.py` 的 `_ECON_BACKUP_NAME = "econ_events.json"` + `_export_econ_backups(bdir, db_path)`
+   全量重写 + `_restore_econ_backups` 读单文件；**新增护栏**：表为 0 行而备份有行 ⇒ **跳过导出**
+   （`action: skipped-empty`，不拿空表抹掉最后的恢复源；行数下降则记 warning 但照写，因为库是真相源）。
+   仓库侧：删除 60 个 `econ_events_YYYY-MM.json`，`scripts/backup_db.py` 重跑产出单文件
+   （`record_count=103` / `news_record_count=13`，与库逐值一致）；`data/backup/` 从 73 个文件降到 14 个。
+   文档同步：`AGENTS.md`（两处）、`docs/architecture.md`（模块表 + 数据流）、`.gitignore` 注释、plan 对应行 + 定档注。
+   **测试**：`tests/test_storage.py::TestEconBackup` 8 例（重写按月 3 例为「跨月改动都刷新」「空表不覆盖备份」），
+   `TestMonthlyBackup` 三例改为按 `history_` 前缀筛报告项（报告列表现在两类项共存）。
+   `pytest tests/` → 见「全量验收」。
 
-### 附：B1-4a 的真实产出（`python scripts/backup_db.py`，2026-09-24 10:28）
+### 附：B1-4a 的真实产出（`python scripts/backup_db.py`）
 
-`data/backup/` 新增 60 个 `econ_events_YYYY-MM.json`（样本 `econ_events_2026-09.json` 键：`export_date/month/
-record_count/records/news_record_count/news_records`，9 月 8 条事件 + 6 条叙事），`history_2026-09.json` 当月覆盖更新。
+- 首次（10:28，按月方案）：`data/backup/` 新增 60 个 `econ_events_YYYY-MM.json`，`history_2026-09.json` 当月覆盖更新。
+- **定档后（11:15，单文件方案）**：删除那 60 个文件，重跑产出 `econ_events.json`
+  （`record_count=103` / `news_record_count=13`，日期跨度 2021-01-27 … 2027-12-08，与库逐值一致）；
+  `data/backup/` 由 73 个文件降到 **14 个**（13 个 `history_*.json` + 1 个 `econ_events.json`）。
 
 ### 生产数据零改动的证明
 
