@@ -118,6 +118,20 @@ pytest tests/test_storage.py::TestBug001LockIsNotCorruption tests/test_settings_
   （`record_count=103` / `news_record_count=13`，日期跨度 2021-01-27 … 2027-12-08，与库逐值一致）；
   `data/backup/` 由 73 个文件降到 **14 个**（13 个 `history_*.json` + 1 个 `econ_events.json`）。
 
+### 恢复链端到端实测（2026-09-24 11:3x，用真实 `data/backup/`）
+
+把一个**不存在的空库**指向 `data/backup/` 跑 `restore_if_empty()`，逐表对账生产库：
+
+| 项 | 恢复出来的 | 生产库 | 一致 |
+|---|---|---|---|
+| `outcome` | `backup` | — | ✅ 走的是备份链（不是 `empty`/`json`） |
+| `history` 行数 / 非空值 | 2718 / 2613 | 2718 / — | ✅ |
+| `econ_events` 行数 / `actual` 非空 | 103 / 22 | 103 / 22 | ✅ |
+| `econ_event_news` 行数 | 13 | 13 | ✅ |
+| history 日期跨度 | 2025-09-11 … 2026-09-24 | 同 | ✅ |
+
+⇒ 单文件方案在**生产布局**下真的可恢复（这是 B1-4a 的 DoD：事件表进 `data/backup/` 且恢复链覆盖）。
+
 ### 生产数据零改动的证明
 
 `data/marketpulse.db` md5 **`bbd45076ec2b800fb9340cc355497532`**（B0 动手前 09:41 与全部批次跑完后
