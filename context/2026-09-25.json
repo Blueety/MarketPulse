@@ -12,14 +12,14 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3888.3738,
-      "change_pct": 0.0,
-      "status": "连跌2日"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "SZ": {
-      "value": 13316.969,
-      "change_pct": 0.0,
-      "status": "下跌趋势"
+      "value": null,
+      "change_pct": null,
+      "status": "休市"
     },
     "CYB": {
       "value": 3288.948,
