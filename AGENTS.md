@@ -35,7 +35,7 @@
 - `docs/adr/`: 决策记录（为什么这么做）。
 - `docs/agents/`: 角色提示词和流程细则（任务分级 / 架构师 / 执行者）。
 - `tasks/`: 任务目录和交接记录。
-- `skills/`: 可复用流程（bug-fix / pre-review / tdd 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
+- `skills/`: 可复用流程（bug-fix / pre-review / research / tdd 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
 
 ## Required Reading
 
@@ -43,7 +43,7 @@
 - 修改前先读 `docs/architecture.md`。
 - 改行为前先读 `docs/commands.md`。
 - 复杂任务先读当前 `tasks/` 下的任务文件。
-- 修 bug：`skills/bug-fix/SKILL.md`（闸门 A）；写测试：`skills/tdd/SKILL.md`（seam 先确认）；提交前审查：`skills/pre-review/SKILL.md`（双轴）。
+- 修 bug：`skills/bug-fix/SKILL.md`（闸门 A）；写测试：`skills/tdd/SKILL.md`（seam 先确认）；提交前审查：`skills/pre-review/SKILL.md`（双轴）；要查外部一手事实（AkShare/BLS 接口口径、规范原文、第三方 API 行为）：`skills/research/SKILL.md`。
 - 已有决策看 `docs/adr/`，遵守其中仍然生效的决定。
 
 ## Commands（基于实际环境；所有命令在 venv 内执行）

@@ -328,7 +328,7 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | 迭代 | 35+ 期 |
 
 **其它目录**：
-- `skills/` — 6 个流程：**v2 通用三件套**（`bug-fix` 闸门 A/B · `pre-review` 双轴 + 独立期望值预言机 · `tdd` seam 先约定）+ 3 个项目专属（`hermes-cron-script` / `source-value-layer` / `ui-verify-assertion`）
+- `skills/` — 7 个流程：**v2 通用四件套**（`bug-fix` 闸门 A/B · `pre-review` 双轴 + 独立期望值预言机 · `research` 外查一手资料 · `tdd` seam 先约定）+ 3 个项目专属（`hermes-cron-script` / `source-value-layer` / `ui-verify-assertion`）
 - `tasks/` — 按 `<日期>-<简述>/` 组织，每任务含 `prd.md` / `plan.md` / `journal.md`；`_template/` 是空白模板，`README.md` 用 6 条信号判定何时建目录
 - `CONTEXT.md` — 领域词表（术语 + 关系 + 已消歧的歧义）
 - `docs/agents/` — 角色提示词与档位细则；`docs/adr/` — 决策记录（新决策；历史决策仍在 `architecture.md` 决策台账）
