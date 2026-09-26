@@ -39,6 +39,19 @@
 | `venv/Scripts/python -m pytest tests/ -v` | 完整测试套件 | 提交前 |
 | `venv/Scripts/python -c "import matplotlib; matplotlib.use('Agg')"` | 校验 matplotlib 可用（Agg 无头后端） | 环境变更 / 提交前 |
 
+## 提交前（闸门 B 清理）
+
+> 对应 `skills/bug-fix/SKILL.md` 的闸门 B 与 `AGENTS.md` 的 Working Rules：清理不通过不许提交。
+
+| 命令 | 用途 | 判据 |
+|---|---|---|
+| `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 调试埋点残留 | **必须无输出** |
+| `git status --short` | 一次性原型 / 探针是否落进仓库 | 只应有本次任务预期的文件；探针脚本应落 `%TEMP%` |
+| `venv/Scripts/python -m pytest tests/ -v` | 完整测试套件 | 全绿（未跑的要在 journal 里标注原因） |
+| `git diff` | 改动范围 | 与计划里的「预估 diff 范围」一致 |
+
+⚠️ 本项目有 auto-push 白名单（`data/` `context/` `alerts/`，见 `AGENTS.md`）：**临时文件一旦落进这三个目录就会被自动推上线上**，清理必须在提交前做完（旧账见 `tasks/2026-09-24-qa-bughunt/journal.md`）。
+
 ## 何时跑什么
 
 | 改动类型 | 必须运行 |

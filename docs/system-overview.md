@@ -328,8 +328,10 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | 迭代 | 35+ 期 |
 
 **其它目录**：
-- `skills/` — 2 个 Agent 工作流技能（`bug-fix/SKILL.md`、`pre-review/SKILL.md`）
-- `tasks/` — 按 `<日期>-<简述>/` 组织，每任务含 `prd.md` / `plan.md` / `journal.md`
+- `skills/` — 6 个流程：**v2 通用三件套**（`bug-fix` 闸门 A/B · `pre-review` 双轴 + 独立期望值预言机 · `tdd` seam 先约定）+ 3 个项目专属（`hermes-cron-script` / `source-value-layer` / `ui-verify-assertion`）
+- `tasks/` — 按 `<日期>-<简述>/` 组织，每任务含 `prd.md` / `plan.md` / `journal.md`；`_template/` 是空白模板，`README.md` 用 6 条信号判定何时建目录
+- `CONTEXT.md` — 领域词表（术语 + 关系 + 已消歧的歧义）
+- `docs/agents/` — 角色提示词与档位细则；`docs/adr/` — 决策记录（新决策；历史决策仍在 `architecture.md` 决策台账）
 
 ---
 
@@ -341,4 +343,7 @@ venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD
 | `docs/architecture.md` | **决策台账**（选了什么 / 为什么 / 何时） | 改架构相关代码前 |
 | `docs/commands.md` | 验证命令与「何时跑什么」 | 改完代码后 |
 | `docs/pitfalls.md` | 踩坑记录（402 行） | 改相关模块前 |
+| `CONTEXT.md` | 领域词表（触发 / 告警 / 快照 / 板块…） | 命名或描述任何东西前 |
+| `docs/agents/任务分级.md` | 档位判定（6 信号 + 两轴 + 3 升级规则） | 每个任务开工前 |
+| `docs/adr/` | 决策记录（为什么这么做） | 想改既有设计前 |
 | **本文** | 系统现状总览 | 首次接触 / 需要全局视角 |
