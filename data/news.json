@@ -1,61 +1,61 @@
 {
-  "date": "2026-09-24",
+  "date": "2026-09-26",
   "items": [
     {
-      "title": "报道：蓝色起源按1400亿美元估值融资100亿美元",
-      "url": "https://wallstreetcn.com/articles/3782506",
+      "title": "AI基础设施撞上“墙”！Marvell：铜连接、内存瓶颈成下一阶段算力扩张关键",
+      "url": "https://wallstreetcn.com/articles/3782579",
       "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "蓝色起源完成首轮外部融资，估值达1400亿美元，创始人杰夫·贝索斯在这家太空公司上的累计投入已高达300亿美元"
+      "published": "2026-09-26",
+      "summary": "AI算力竞赛正从单纯的芯片之争，演变为一场涵盖互连、内存与网络的系统级博弈"
     },
     {
-      "title": "华尔街见闻早餐FM-Radio | 2026年9月25日",
-      "url": "https://wallstreetcn.com/articles/3782511",
+      "title": "高盛测算：“AI第二阶段”的“资本缺口”要怎么补？",
+      "url": "https://wallstreetcn.com/articles/3782577",
       "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "华见早安之声 要闻精选 习近平 同美国总统特朗普会谈"
+      "published": "2026-09-26",
+      "summary": "超大规模云计算企业（Hyperscaler）的AI资本支出狂潮正从\"花多少\"的争论，转向\"能赚回多少\"的核心命题"
     },
     {
-      "title": "美联储3位官员同日放鹰，市场预期10月加息概率升至69%",
-      "url": "https://wallstreetcn.com/articles/3782502",
-      "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "美联储多位官员近日密集表态，警告通胀持续高企，当前政策立场可能仍不足以将物价压回2%目标，市场对10月加息的预期随之大幅升温"
+      "title": "10月加息稳了？“鹰风”席卷美联储：三位官员同日警告通胀风险",
+      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE5nRWI4OXdwWFZKZVNrNEdVMks2NW9abXJFbXZfeHJQSTdPZHpJOUNCeFc4VkxWTHhEdTNRcDFGQ0VoNlFsS1Fma1Zkb09YdmRXU1E0QVl0QURjeEZMMGVETXJR?oc=5",
+      "source": "天天基金",
+      "published": "2026-09-26",
+      "summary": "10月加息稳了。“鹰风”席卷美联储：三位官员同日警告通胀风险"
     },
     {
-      "title": "美参议院以一票之差否决终止伊朗战争决议，油价压力令共和党人承压",
-      "url": "https://wallstreetcn.com/articles/3782508",
+      "title": "阿波罗首席经济学家警告：美联储可能忽视了柴油价格风险",
+      "url": "https://wallstreetcn.com/articles/3782576",
       "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "美国参议院周四以微弱劣势否决了一项要求终止对伊战争的决议，但围绕这场冲突的政治裂痕正在共和党内部加速扩大"
+      "published": "2026-09-26",
+      "summary": "阿波罗全球管理公司首席经济学家Torsten Slok发出警告，创纪录的柴油价格对通胀构成的威胁，可能远超美联储目前的评估——因为柴油成本会渗透进核心消费者价格指数，而后者恰恰是美联储货币政策的核心参照指标"
     },
     {
-      "title": "美债抛售加剧，30年期美债收益率创逾20年新高，美股指承压横盘，美元原油齐升",
-      "url": "https://wallstreetcn.com/articles/3782452",
+      "title": "冲刺美股史上最大半导体IPO！英特尔曾以90亿美元卖掉的Solidigm，如今估值或达1500亿美元",
+      "url": "https://wallstreetcn.com/articles/3782575",
       "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "美债持续承压、油价走高与美联储官员密集发表鹰派表态，三重压力叠加，令市场风险偏好明显收紧"
+      "published": "2026-09-26",
+      "summary": "SK海力士旗下固态存储子公司Solidigm正筹划赴美上市， 目标估值高达1500亿美元，拟募资150亿美元，有望刷新美股半导体IPO纪录"
     },
     {
-      "title": "美债抛售加剧！7年期美债拍卖遇冷，财政部回购规模再度低于上限，市政债收益率创15年新高",
-      "url": "https://wallstreetcn.com/articles/3782509",
-      "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "美国国债市场本周持续承压"
+      "title": "美联储加息预期、美债收益率与中东风险：欧元承压的三重逻辑",
+      "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxOQTlYenBiWkFmMHNMYVF0S3RPS29RaTNUY3ZhUVFuTGl1b0JwUk9YazJxTmk3N1Zyb0FVcW1xNTVEZGVhV3VrSVFxMkFOYXd0clF1RVFmODEyQ1F0cTVDakRiNDZ4X1laTmRFek5mWWdOb094OTVtRXNYT0NFWFVUc0I1OXNDQUE?oc=5",
+      "source": "新浪财经",
+      "published": "2026-09-26",
+      "summary": "美联储加息预期、美债收益率与中东风险：欧元承压的三重逻辑"
     },
     {
-      "title": "印度放宽资产管理规则：投资组合管理行业首次获准海外投资、做空股票",
-      "url": "https://wallstreetcn.com/articles/3782505",
-      "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "印度证券市场迎来重大改革"
+      "title": "“Agent vs 美债”—",
+      "url": "https://wallstreetcn.com/articles/3782574",
+      "source": "谁将主导美股？",
+      "published": "2026-09-26",
+      "summary": "AI Agent浪潮与美债利率上行的对峙，正将美股撕裂成两个截然不同的世界"
     },
     {
-      "title": "Meta推出AI游戏开发工具，竞争对手股价应声下跌",
-      "url": "https://wallstreetcn.com/articles/3782504",
-      "source": "华尔街见闻",
-      "published": "2026-09-25",
-      "summary": "Meta在年度Connect大会上发布两款AI驱动游戏创作工具，剑指数十亿社交平台用户，直接冲击传统游戏开发生态"
+      "title": "黄金再遭“通胀暴击”！美国一年期预期升至4.6%，金价急跌直逼4250美元",
+      "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE8zMzFUbjB5Qjd1RWwxZUlCZlU1SlFoaDBmSFpqLVRKcnVLRnNNUGFaeFhUdkFrVzQ1YTMwUGRKa0FkVHVFalVSZWxnNkZkd01qcnAtUlV6am9tZTY2ZlZLYnpfV3N0UFVn?oc=5",
+      "source": "黄金网",
+      "published": "2026-09-26",
+      "summary": "黄金再遭“通胀暴击”。美国一年期预期升至4.6%，金价急跌直逼4250美元_金市直播"
     }
   ]
 }
