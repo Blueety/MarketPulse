@@ -30,15 +30,21 @@
 - `data/marketpulse.db`（+ `-wal`/`-shm`）: SQLite 库（三十一期）：`history` 行情长表 + **`econ_events` / `econ_event_news` 事件表**（2026-09-18/19）。⚠️ **`.db` 是 tracked 文件 ⇒ 入库即线上数据源**（Railway 跑的就是仓库里这份；`git cat-file -e HEAD:data/marketpulse.db` 可验；`.gitignore` 对已跟踪文件无效，写进去的那行只对未跟踪路径生效）；**`-wal`/`-shm` 才是真排除** ⇒ 写库后 push 前必须 `storage.wal_checkpoint()`（防提交的副本漏掉新行；已由 `src/git_ops.py` 的提交前护栏在 `auto_commit_push` 内强制）。备份 = `data/backup/history_YYYY-MM.json`（按月）+ `data/backup/econ_events.json`（事件表单文件全量）（两者**均入库**，`storage.restore_if_empty` 在空库时按同一命名规则恢复）。
 - `data/backup/`: 备份（**入库**，web 启动空库恢复链的唯一数据源）——`history_YYYY-MM.json`（行情，按月：当月覆盖 / 历史月冻结 / 缺失自愈）+ **`econ_events.json`**（事件表 `econ_events` / `econ_event_news`，**单文件全量**：2026-09-24 定档 — 这张表含未来日程且每个月都会变，按月的"历史月冻结"既产出 60 个 1 行文件、又会让未来月的备份长期停在旧值；空表时**不覆盖已有备份**）。
 - `data/alerts.log`: 当日已告警标记（午盘触发则收盘跳过）。⚠️ 2026-09-24 实测更正：`.gitignore` 是 `*.log` + `!data/alerts.log`（**反排除**）⇒ 它**会入库**（旧描述「gitignore 排除」说反了）。
+- `CONTEXT.md`: 领域词表。命名和描述一律用这里的词；术语冲突当场指出并更新它。
 - `docs/`: 项目知识和规则。
+- `docs/adr/`: 决策记录（为什么这么做）。
+- `docs/agents/`: 角色提示词和流程细则（任务分级 / 架构师 / 执行者）。
 - `tasks/`: 任务目录和交接记录。
-- `skills/`: 可复用流程。
+- `skills/`: 可复用流程（bug-fix / pre-review / tdd 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
 
 ## Required Reading
 
+- 任何任务开始前先读 `docs/agents/任务分级.md`，并在只读分析末尾按格式声明档位（一行）。
 - 修改前先读 `docs/architecture.md`。
 - 改行为前先读 `docs/commands.md`。
 - 复杂任务先读当前 `tasks/` 下的任务文件。
+- 修 bug：`skills/bug-fix/SKILL.md`（闸门 A）；写测试：`skills/tdd/SKILL.md`（seam 先确认）；提交前审查：`skills/pre-review/SKILL.md`（双轴）。
+- 已有决策看 `docs/adr/`，遵守其中仍然生效的决定。
 
 ## Commands（基于实际环境；所有命令在 venv 内执行）
 
@@ -53,7 +59,7 @@
 
 - 复杂任务先只读分析，不要直接改。
 - 每次制定完计划后，将计划保存到 `tasks/<日期>-<简述>/plan.md`（日期用当天 `YYYY-MM-DD`，简述用简短英文描述，如 `2026-08-29-marketpulse/plan.md`）。
-  - 计划应包含：目标、涉及文件、实施步骤、验证命令。
+  - 计划应包含：目标、涉及文件、实施步骤、验证命令、测试 seam、预估 diff 范围。
 - 保持 diff 最小，不重构无关代码。
 - 不引入新依赖，除非先说明理由并等待确认。
 - 不修改 `.env`、生产配置、生成文件。
@@ -63,12 +69,20 @@
 - 如有失败，先解释原因再修复，不要绕过问题。
 - 验证通过后，运行 `git diff` 检查改动范围。
 - 任务完成后，提取可复用的规则（不是泛化建议），追加到 `docs/pitfalls.md` 或 `AGENTS.md`。
-- 每次任务完成后，将日志保存到 `tasks/<日期>-<简述>/journal.md`，内容包括：目标、改动文件清单、验证结果、遇到的问题、下次注意什么。这样下次会话接手时能快速了解上下文。
+- 每次任务完成后，将日志保存到 `tasks/<日期>-<简述>/journal.md`，内容包括：目标、改动文件清单、验证结果、遇到的问题、下次注意什么、涉及的 ADR 编号。这样下次会话接手时能快速了解上下文。
+- 只读分析末尾声明档位（一行，格式见 `docs/agents/任务分级.md`），等确认后再实施；用户一句话可覆盖档位（如「T3，我不确定根因」）。
+- 修 bug 时：进入根因假设前，必须有一条已经实跑过、能对**这个** bug 变红的命令（`skills/bug-fix/SKILL.md` 闸门 A）；拿不出这条命令就先停下说明试过什么、缺什么。本地门禁全绿不代表线上没事（见 `app.py` 那条事故）。
+- 写测试前：先书面列出要测的 seam 并等待确认（`skills/tdd/SKILL.md`）；修 bug 的回归测试只在存在正确 seam 时写。
+- 调试日志统一加 `[DEBUG-xxxx]` 前缀，提交前 grep 清干净；一次性原型 / 临时脚本一并删除（闸门 B）。注意本项目有 auto-push 白名单（见上），临时文件进白名单就会被自动推上去。
+- 提交前按 `skills/pre-review/SKILL.md` 出双轴报告（Standards / Spec 分别报告，不合并、不跨轴排序）。
+- 任务结束后：同时满足三条准入（难以撤销 + 没有背景会让人困惑 + 是真实取舍）的决策写进 `docs/adr/NNNN-slug.md`（编号取现有最大值 +1）；三条不齐不写。
 
 ## Done Means
 
 - 验收标准已满足。
 - 相关测试/checks 已运行或清楚标注未运行。
+- `[DEBUG-` 无残留，一次性脚本已删。
+- 本次任务的经验/决策已落盘（`docs/pitfalls.md` / `docs/adr/`）。
 - diff 已摘要。
 - 风险和后续工作已列出。
 
