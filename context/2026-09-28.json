@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3820.8188,
-      "change_pct": -1.7373586870686106,
+      "value": 3823.6206,
+      "change_pct": -1.6653028574567512,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 12868.282,
-      "change_pct": -3.3692877110399517,
+      "value": 12858.753,
+      "change_pct": -3.440843032675067,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3146.9,
-      "change_pct": -4.318949402666135,
+      "value": 3139.825,
+      "change_pct": -4.5340637796645025,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3888.3738,
       3888.3738,
       3888.3738,
-      3820.8188
+      3823.6206
     ],
     "sz": [
       13841.327,
@@ -307,7 +307,7 @@
       13316.969,
       13316.969,
       13316.969,
-      12868.282
+      12858.753
     ],
     "cyb": [
       3414.883,
@@ -339,7 +339,7 @@
       3288.948,
       3288.948,
       3288.948,
-      3146.9
+      3139.825
     ],
     "gld": [
       421.32000732421875,
@@ -411,25 +411,25 @@
     "indices": [
       {
         "name": "SH",
-        "current": 3820.8188,
+        "current": 3823.6206,
         "previous": 3888.3738,
-        "change_pct": -1.74,
+        "change_pct": -1.67,
         "threshold": 1.5622393071486673,
         "level": "WARN"
       },
       {
         "name": "SZ",
-        "current": 12868.282,
+        "current": 12858.753,
         "previous": 13316.969,
-        "change_pct": -3.37,
+        "change_pct": -3.44,
         "threshold": 2.9321384276952474,
         "level": "WARN"
       },
       {
         "name": "CYB",
-        "current": 3146.9,
+        "current": 3139.825,
         "previous": 3288.948,
-        "change_pct": -4.32,
+        "change_pct": -4.53,
         "threshold": 4.119629506974958,
         "level": "WARN"
       }
@@ -439,64 +439,64 @@
     "gainers": [
       {
         "name": "医药",
-        "change": -0.86,
-        "turnover": "796.4亿",
-        "top_stock": "健康元"
+        "change": -0.56,
+        "turnover": "1179.7亿",
+        "top_stock": "康希诺"
       },
       {
         "name": "消费",
-        "change": -1.37,
-        "turnover": "114.2亿",
+        "change": -1.1,
+        "turnover": "170.0亿",
         "top_stock": "巨力索具"
       },
       {
         "name": "金融",
-        "change": -1.6,
-        "turnover": "1202.9亿",
+        "change": -1.34,
+        "turnover": "1791.1亿",
         "top_stock": "江淮汽车"
       },
       {
         "name": "农业",
-        "change": -2.62,
-        "turnover": "182.9亿",
-        "top_stock": "罗 牛 山"
+        "change": -2.11,
+        "turnover": "271.6亿",
+        "top_stock": "ST星农"
       },
       {
         "name": "其他",
-        "change": -2.83,
-        "turnover": "12447.0亿",
+        "change": -2.7,
+        "turnover": "18196.8亿",
         "top_stock": "华东医药"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -5.23,
-        "turnover": "2144.3亿",
+        "change": -5.27,
+        "turnover": "3036.1亿",
         "top_stock": "欣旺达"
       },
       {
         "name": "资源/有色",
-        "change": -4.25,
-        "turnover": "322.8亿",
+        "change": -4.14,
+        "turnover": "460.9亿",
         "top_stock": "炼石航空"
       },
       {
         "name": "地产/基建",
-        "change": -3.79,
-        "turnover": "88.8亿",
+        "change": -3.55,
+        "turnover": "126.7亿",
         "top_stock": "方大集团"
       },
       {
         "name": "军工",
-        "change": -3.49,
-        "turnover": "1203.9亿",
+        "change": -3.37,
+        "turnover": "1715.1亿",
         "top_stock": "中孚信息"
       },
       {
         "name": "光伏/新能源",
-        "change": -3.22,
-        "turnover": "3193.6亿",
+        "change": -3.07,
+        "turnover": "4706.0亿",
         "top_stock": "时代万恒"
       }
     ]
