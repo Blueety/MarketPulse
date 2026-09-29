@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3826.511,
-      "change_pct": 0.07559327408163279,
+      "value": 3830.4513,
+      "change_pct": 0.17864481638162474,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 12911.782,
-      "change_pct": 0.4123961320354985,
+      "value": 12901.947,
+      "change_pct": 0.33591126604577837,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 3150.374,
-      "change_pct": 0.3359741386860726,
+      "value": 3142.563,
+      "change_pct": 0.08720231223078624,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3888.3738,
       3888.3738,
       3823.6206,
-      3826.511
+      3830.4513
     ],
     "sz": [
       14048.876,
@@ -307,7 +307,7 @@
       13316.969,
       13316.969,
       12858.753,
-      12911.782
+      12901.947
     ],
     "cyb": [
       3473.355,
@@ -339,7 +339,7 @@
       3288.948,
       3288.948,
       3139.825,
-      3150.374
+      3142.563
     ],
     "gld": [
       422.6000061035156,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "地产/基建",
-        "change": 1.38,
-        "turnover": "66.7亿",
+        "change": 0.96,
+        "turnover": "102.9亿",
         "top_stock": "泉阳泉"
       },
       {
         "name": "通信/电子",
-        "change": 1.01,
-        "turnover": "1536.9亿",
+        "change": 0.79,
+        "turnover": "2399.3亿",
         "top_stock": "泉阳泉"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.65,
-        "turnover": "2552.9亿",
+        "change": 0.55,
+        "turnover": "4034.3亿",
         "top_stock": "国轩高科"
       },
       {
-        "name": "其他",
-        "change": 0.39,
-        "turnover": "9074.0亿",
-        "top_stock": "万 科Ａ"
+        "name": "资源/有色",
+        "change": 0.52,
+        "turnover": "353.7亿",
+        "top_stock": "西部矿业"
       },
       {
-        "name": "消费",
-        "change": 0.38,
-        "turnover": "87.8亿",
-        "top_stock": "天音控股"
+        "name": "其他",
+        "change": 0.22,
+        "turnover": "14936.3亿",
+        "top_stock": "万 科Ａ"
       }
     ],
     "losers": [
       {
         "name": "农业",
-        "change": -0.54,
-        "turnover": "133.1亿",
+        "change": -0.84,
+        "turnover": "218.7亿",
         "top_stock": "节能铁汉"
       },
       {
         "name": "医药",
-        "change": -0.18,
-        "turnover": "903.4亿",
+        "change": -0.36,
+        "turnover": "1288.5亿",
         "top_stock": "*ST香雪"
       },
       {
         "name": "金融",
-        "change": -0.03,
-        "turnover": "953.9亿",
+        "change": -0.06,
+        "turnover": "1589.0亿",
         "top_stock": "万 科Ａ"
       },
       {
-        "name": "军工",
-        "change": 0.28,
-        "turnover": "764.5亿",
-        "top_stock": "华自科技"
+        "name": "消费",
+        "change": 0.02,
+        "turnover": "142.6亿",
+        "top_stock": "天音控股"
       },
       {
-        "name": "资源/有色",
-        "change": 0.3,
-        "turnover": "195.0亿",
-        "top_stock": "永杉锂业"
+        "name": "军工",
+        "change": 0.14,
+        "turnover": "1271.4亿",
+        "top_stock": "华自科技"
       }
     ]
   },
@@ -484,8 +484,8 @@
     "地产/基建 surge 2026-09-29",
     "通信/电子 surge 2026-09-29",
     "光伏/新能源 surge 2026-09-29",
-    "其他 surge 2026-09-29",
-    "消费 surge 2026-09-29"
+    "资源/有色 surge 2026-09-29",
+    "其他 surge 2026-09-29"
   ],
   "correlation": [],
   "watchlist": {
