@@ -2,14 +2,14 @@
   "date": "2026-09-30",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7691.06,
+      "change_pct": 0.2635956427197055,
+      "status": "连涨1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26929.645,
+      "change_pct": 0.4929706050267797,
+      "status": "连涨1日"
     },
     "SH": {
       "value": 3842.1946,
@@ -211,7 +211,7 @@
       7743.41,
       7683.69,
       7670.84,
-      null
+      7691.06
     ],
     "ixic": [
       null,
@@ -243,7 +243,7 @@
       27068.717,
       26820.38,
       26797.541,
-      null
+      26929.645
     ],
     "sh": [
       3952.179,
