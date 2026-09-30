@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3842.8645,
-      "change_pct": 0.32406625297650854,
+      "value": 3840.8279,
+      "change_pct": 0.270897583269106,
       "status": "连涨2日"
     },
     "SZ": {
-      "value": 12941.762,
-      "change_pct": 0.30859683426075546,
-      "status": "连涨2日"
+      "value": 12894.606,
+      "change_pct": -0.05689838905709618,
+      "status": "连跌1日"
     },
     "CYB": {
-      "value": 3164.551,
-      "change_pct": 0.6996836658485391,
-      "status": "连涨2日"
+      "value": 3137.114,
+      "change_pct": -0.17339350078264362,
+      "status": "连跌1日"
     },
     "VIX": {
       "value": null,
@@ -275,7 +275,7 @@
       3888.3738,
       3823.6206,
       3830.4513,
-      3842.8645
+      3840.8279
     ],
     "sz": [
       13953.065,
@@ -307,7 +307,7 @@
       13316.969,
       12858.753,
       12901.947,
-      12941.762
+      12894.606
     ],
     "cyb": [
       3424.401,
@@ -339,7 +339,7 @@
       3288.948,
       3139.825,
       3142.563,
-      3164.551
+      3137.114
     ],
     "gld": [
       null,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 1.21,
-        "turnover": "301.6亿",
+        "change": 3.09,
+        "turnover": "1203.2亿",
         "top_stock": "康希诺"
       },
       {
         "name": "农业",
-        "change": 1.07,
-        "turnover": "54.5亿",
+        "change": 1.44,
+        "turnover": "166.0亿",
         "top_stock": "海南橡胶"
-      },
-      {
-        "name": "军工",
-        "change": 0.77,
-        "turnover": "255.6亿",
-        "top_stock": "海南橡胶"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": 0.74,
-        "turnover": "822.3亿",
-        "top_stock": "时代万恒"
       },
       {
         "name": "资源/有色",
-        "change": 0.59,
-        "turnover": "51.6亿",
+        "change": 0.53,
+        "turnover": "195.7亿",
         "top_stock": "闽东电力"
+      },
+      {
+        "name": "金融",
+        "change": 0.53,
+        "turnover": "1015.0亿",
+        "top_stock": "江淮汽车"
+      },
+      {
+        "name": "消费",
+        "change": 0.2,
+        "turnover": "76.2亿",
+        "top_stock": "金徽酒"
       }
     ],
     "losers": [
       {
+        "name": "通信/电子",
+        "change": -1.02,
+        "turnover": "1459.8亿",
+        "top_stock": "*ST春兴"
+      },
+      {
         "name": "地产/基建",
-        "change": -0.59,
-        "turnover": "26.0亿",
+        "change": -0.13,
+        "turnover": "73.8亿",
         "top_stock": "海南橡胶"
       },
       {
-        "name": "通信/电子",
-        "change": 0.11,
-        "turnover": "434.1亿",
-        "top_stock": "长芯博创"
-      },
-      {
-        "name": "消费",
-        "change": 0.22,
-        "turnover": "22.8亿",
-        "top_stock": "巨力索具"
-      },
-      {
         "name": "其他",
-        "change": 0.33,
-        "turnover": "2760.8亿",
-        "top_stock": "七 匹 狼"
+        "change": 0.14,
+        "turnover": "9378.7亿",
+        "top_stock": "科伦药业"
       },
       {
-        "name": "金融",
-        "change": 0.33,
-        "turnover": "297.7亿",
-        "top_stock": "科华生物"
+        "name": "光伏/新能源",
+        "change": 0.17,
+        "turnover": "2559.4亿",
+        "top_stock": "时代万恒"
+      },
+      {
+        "name": "军工",
+        "change": 0.18,
+        "turnover": "782.8亿",
+        "top_stock": "海南橡胶"
       }
     ]
   },
@@ -483,9 +483,9 @@
   "search_keywords": [
     "医药 surge 2026-09-30",
     "农业 surge 2026-09-30",
-    "军工 surge 2026-09-30",
-    "光伏/新能源 surge 2026-09-30",
-    "资源/有色 surge 2026-09-30"
+    "资源/有色 surge 2026-09-30",
+    "金融 surge 2026-09-30",
+    "消费 surge 2026-09-30"
   ],
   "correlation": [],
   "watchlist": {
