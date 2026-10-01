@@ -1,5 +1,5 @@
 {
-  "export_date": "2026-09-30T08:02:53+08:00",
+  "export_date": "2026-10-01T08:01:33+08:00",
   "record_count": 103,
   "records": [
     {
@@ -11,7 +11,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 26-27）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -30,7 +30,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 16-17）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -49,7 +49,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（4 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -68,7 +68,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 15-16）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -87,7 +87,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -106,7 +106,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 21-22）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -125,7 +125,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（11 月 2-3）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -144,7 +144,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 14-15）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -163,7 +163,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 25-26）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -182,7 +182,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 15-16）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -201,7 +201,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（5 月 3-4）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -220,7 +220,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 14-15）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -239,7 +239,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 26-27）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -258,7 +258,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 20-21）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -277,7 +277,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（11 月 1-2）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -296,7 +296,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 13-14）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -315,7 +315,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（Jan 31 - Feb 1）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -334,7 +334,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 21-22）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -353,7 +353,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（5 月 2-3）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -372,7 +372,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 13-14）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -391,7 +391,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 25-26）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -410,7 +410,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 19-20）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -429,7 +429,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（Oct 31 - Nov 1）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -448,7 +448,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 12-13）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -467,7 +467,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 30-31）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -486,7 +486,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 19-20）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -505,7 +505,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（Apr 30 - May 1）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -524,7 +524,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 11-12）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -543,7 +543,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 30-31）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -562,7 +562,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 17-18）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -581,7 +581,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（11 月 6-7）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -600,7 +600,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 17-18）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -619,7 +619,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 28-29）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -638,7 +638,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 18-19）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -657,7 +657,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（5 月 6-7）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -676,7 +676,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 17-18）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -695,7 +695,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 29-30）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -714,7 +714,7 @@
       "time_et": null,
       "status": "ok",
       "note": "单日会议",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -733,7 +733,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 16-17）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -752,7 +752,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（10 月 28-29）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -771,7 +771,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 9-10）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -790,7 +790,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -809,7 +809,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 17-18）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -828,7 +828,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（4 月 28-29）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -847,7 +847,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -866,7 +866,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -885,7 +885,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -904,7 +904,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 16-17）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -923,7 +923,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.3,
       "forecast": 0.3,
       "previous": 0.3,
@@ -942,7 +942,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 57.0,
       "forecast": 110.0,
       "previous": 129.0,
@@ -950,7 +950,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "Non Farm Payrolls",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-14",
@@ -961,7 +961,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 333.95,
       "forecast": 334.7,
       "previous": 335.12,
@@ -969,7 +969,7 @@
       "importance": 0,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "CPI",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-15",
@@ -980,7 +980,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": -0.3,
       "forecast": 0.0,
       "previous": 0.6,
@@ -988,7 +988,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "PPI MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-16",
@@ -999,7 +999,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.2,
       "forecast": 0.2,
       "previous": 1.0,
@@ -1007,7 +1007,7 @@
       "importance": 1,
       "value_source": "Census Bureau",
       "value_title": "Retail Sales MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-17",
@@ -1018,7 +1018,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.1,
       "forecast": 0.2,
       "previous": 0.1,
@@ -1026,7 +1026,7 @@
       "importance": 0,
       "value_source": "Federal Reserve",
       "value_title": "Industrial Production MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-29",
@@ -1037,7 +1037,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 28-29）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 3.75,
       "forecast": 3.75,
       "previous": 3.75,
@@ -1045,7 +1045,7 @@
       "importance": 1,
       "value_source": "Federal Reserve",
       "value_title": "Fed Interest Rate Decision",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-30",
@@ -1056,7 +1056,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 1.5,
       "forecast": 2.1,
       "previous": 2.1,
@@ -1064,7 +1064,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "GDP Growth Rate QoQ Adv",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-07-30",
@@ -1075,7 +1075,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.1,
       "forecast": 0.2,
       "previous": 0.3,
@@ -1083,7 +1083,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "Core PCE Price Index MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-07",
@@ -1094,7 +1094,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": -23.0,
       "forecast": 80.0,
       "previous": 20.0,
@@ -1102,7 +1102,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "Non Farm Payrolls",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-12",
@@ -1113,7 +1113,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 333.92,
       "forecast": 333.99,
       "previous": 333.95,
@@ -1121,7 +1121,7 @@
       "importance": 0,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "CPI",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-13",
@@ -1132,7 +1132,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.0,
       "forecast": 0.2,
       "previous": -0.1,
@@ -1140,7 +1140,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "PPI MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-14",
@@ -1151,7 +1151,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": -0.6,
       "forecast": 0.1,
       "previous": 0.2,
@@ -1159,7 +1159,7 @@
       "importance": 1,
       "value_source": "Census Bureau",
       "value_title": "Retail Sales MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-18",
@@ -1170,7 +1170,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.2,
       "forecast": 0.3,
       "previous": 0.3,
@@ -1178,7 +1178,7 @@
       "importance": 0,
       "value_source": "Federal Reserve",
       "value_title": "Industrial Production MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-26",
@@ -1189,7 +1189,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 1.5,
       "forecast": 1.5,
       "previous": 2.1,
@@ -1197,7 +1197,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "GDP Growth Rate QoQ 2nd Est",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-08-26",
@@ -1208,7 +1208,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.2,
       "forecast": 0.2,
       "previous": 0.1,
@@ -1216,7 +1216,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "Core PCE Price Index MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-04",
@@ -1227,7 +1227,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 162.0,
       "forecast": 56.0,
       "previous": 21.0,
@@ -1235,7 +1235,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "Non Farm Payrolls",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-10",
@@ -1246,7 +1246,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.4,
       "forecast": 0.4,
       "previous": 0.1,
@@ -1254,7 +1254,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "PPI MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-11",
@@ -1265,7 +1265,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 334.98,
       "forecast": 334.85,
       "previous": 333.92,
@@ -1273,7 +1273,7 @@
       "importance": 0,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "CPI",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-16",
@@ -1284,7 +1284,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 15-16）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 4.0,
       "forecast": 4.0,
       "previous": 3.75,
@@ -1292,7 +1292,7 @@
       "importance": 1,
       "value_source": "Federal Reserve",
       "value_title": "Fed Interest Rate Decision",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-16",
@@ -1303,7 +1303,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 1.2,
       "forecast": 0.8,
       "previous": -0.5,
@@ -1311,7 +1311,7 @@
       "importance": 1,
       "value_source": "Census Bureau",
       "value_title": "Retail Sales MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-18",
@@ -1322,7 +1322,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": 0.0,
       "forecast": 0.3,
       "previous": 0.2,
@@ -1330,7 +1330,7 @@
       "importance": 0,
       "value_source": "Federal Reserve",
       "value_title": "Industrial Production MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-30",
@@ -1341,7 +1341,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": 1.5,
       "previous": 2.1,
@@ -1349,7 +1349,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "GDP Growth Rate QoQ Final",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-09-30",
@@ -1360,7 +1360,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": 0.3,
       "previous": 0.2,
@@ -1368,7 +1368,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "Core PCE Price Index MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-02",
@@ -1379,15 +1379,15 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
-      "forecast": 84.0,
+      "forecast": 90.0,
       "previous": 162.0,
       "unit": null,
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "Non Farm Payrolls",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-14",
@@ -1398,7 +1398,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": 334.98,
@@ -1406,7 +1406,7 @@
       "importance": 0,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "CPI",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-15",
@@ -1417,7 +1417,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": 0.4,
@@ -1425,7 +1425,7 @@
       "importance": 1,
       "value_source": "Bureau of Labour Statistics",
       "value_title": "PPI MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-15",
@@ -1436,7 +1436,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": 1.2,
@@ -1444,7 +1444,7 @@
       "importance": 1,
       "value_source": "Census Bureau",
       "value_title": "Retail Sales MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-16",
@@ -1455,7 +1455,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": 0.0,
@@ -1463,7 +1463,7 @@
       "importance": 0,
       "value_source": "Federal Reserve",
       "value_title": "Industrial Production MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-28",
@@ -1474,7 +1474,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（10 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": 4.0,
@@ -1482,7 +1482,7 @@
       "importance": 1,
       "value_source": "Federal Reserve",
       "value_title": "Fed Interest Rate Decision",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-29",
@@ -1493,7 +1493,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1501,7 +1501,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "GDP Growth Rate QoQ Adv",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-10-29",
@@ -1512,7 +1512,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1520,7 +1520,7 @@
       "importance": 1,
       "value_source": "Bureau of Economics Analysis",
       "value_title": "Core PCE Price Index MoM",
-      "value_fetched_at": "2026-09-29T09:00:45"
+      "value_fetched_at": "2026-09-30T09:00:18"
     },
     {
       "date": "2026-11-06",
@@ -1531,7 +1531,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1550,7 +1550,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1569,7 +1569,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1588,7 +1588,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1607,7 +1607,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1626,7 +1626,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1645,7 +1645,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1664,7 +1664,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1683,7 +1683,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 8-9）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1702,7 +1702,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1721,7 +1721,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1740,7 +1740,7 @@
       "time_et": "09:15",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1759,7 +1759,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1778,7 +1778,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1797,7 +1797,7 @@
       "time_et": "08:30",
       "status": "ok",
       "note": "",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1816,7 +1816,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（1 月 26-27）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1835,7 +1835,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（3 月 16-17）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1854,7 +1854,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（4 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1873,7 +1873,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（6 月 8-9）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1892,7 +1892,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（7 月 27-28）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1911,7 +1911,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（9 月 14-15）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1930,7 +1930,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（10 月 26-27）的决议日",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1949,7 +1949,7 @@
       "time_et": null,
       "status": "ok",
       "note": "两日会议（12 月 7-8）的决议日；含 SEP 经济预测",
-      "fetched_at": "2026-09-29T09:00:35",
+      "fetched_at": "2026-09-30T09:00:08",
       "actual": null,
       "forecast": null,
       "previous": null,
@@ -1960,7 +1960,7 @@
       "value_fetched_at": null
     }
   ],
-  "news_record_count": 13,
+  "news_record_count": 15,
   "news_records": [
     [
       "2026-08-07",
@@ -1994,55 +1994,55 @@
       "2026-08-18",
       "工业产出",
       32,
-      "US Industrial Production Rises 0.2%, Helped by Factory Output - Bloomberg.com",
-      "https://news.google.com/rss/articles/CBMirwFBVV95cUxPVVJoRmt4Vm5HZUIxODRDSjhsNUVNNnQ1blRDeGwzbTdQazBtVGJCaGRBMHFHZTRwMzROaWhsVGtTNlpPWWo1SUtpM0JScF94MVNZOUEwcnBCaE84NlpyTldWakF0ZXJJRkhoSURFZ3RpUmYwRk9QalhnYXNqRUUzS0JJcktmbXBZdWY1VTRKS2pGZnJKR3JteFI1d05TRGlDbnkwOEdCYmFaQ1ZuZXFB?oc=5"
+      "US industrial production rises below expectations in July - Anadolu Ajansı",
+      "https://news.google.com/rss/articles/CBMinwFBVV95cUxOOFhFYVNmdG1Hak4tcExRVlJNcWMxTTJnRlFRY3l0V05LbS13SUVWMFF6VDlzdTJydGVodE9BemxBcU1ZMmNlcFE3VzdCMmpfTllybXlzNVBPUTluWlZMZ3k2czJwekFCbWNKQTJ6ZV94Tzh5SnNzbGUzRnd3Q3ZaRlZIS3Q5eC16Q0ppSDhMMUJMd3pFN0JmQW43VXdJUlE?oc=5"
     ],
     [
       "2026-08-26",
       "GDP",
-      22,
+      23,
       "GDP Slowed in Second Quarter of 2026 — What That Means - NerdWallet",
       "https://news.google.com/rss/articles/CBMiYEFVX3lxTE5ONVdOSDFMaUZ5MUxLanE3am95RE9OOVRHSTV4S2JtU29zellFaWpPVlNYZUVuSFB4Zi13NzBZRGp6d0NoY295dDFDMmNrSUd1aWgySm9qT3FaQjR2UzA1TQ?oc=5"
     ],
     [
       "2026-08-26",
       "PCE",
-      33,
+      34,
       "Trimmed Mean PCE Inflation rate, July 2026 - Federal Reserve Bank of Dallas",
       "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9CNVBaQ3NrcS1OYk40UUpQZ2JvanMwb3VqV2lRZDBtckl5VUd1MjB0VEl0OUkzUFc1dnJXWTJkN3VyNjlYcUxadDFGZWxWMWc?oc=5"
     ],
     [
       "2026-09-04",
       "非农",
-      58,
+      57,
       "US nonfarm payrolls blow past expectations in August; unemployment rate steady at 4.1% - Reuters",
       "https://news.google.com/rss/articles/CBMiqAFBVV95cUxPbUlhOGI2YkQzM0dqZll6Rm5VSDBReEZQMkZRODlvQkJBTGJfeDhVbjE1c2dXbEVBYmZieElLdEtLR1BZZlQ3NENYdUNSLUgyNnNCMHVJcEl3T2ZyUlVoYndDQ1pYOWhmRnlncUxZMUpjMTlvYTJET2kxMHpiSzN5WUJSMVc1VVkyVGxSRVVkQmRNQUJNVmRjX1lSdzdwbi1PUUhsRUthaUE?oc=5"
     ],
     [
       "2026-09-10",
       "PPI",
-      59,
+      53,
       "US producer prices increase as expected in August; but key details firmer - Reuters",
       "https://news.google.com/rss/articles/CBMikgFBVV95cUxQSllzbWpfQ2xZcDA5eExQYUxKdVRwdEdUdFFpMzJPWW1ib29Ocm85Z3ZDaVFpMkZGQnpUQ1Z2Zy1pelQ5Tk5TY0lKSUJ5RlZiUDhoeU5jWHpRX3dZQzFqcWtfT3J2UTM3Q2doaTdRUHEtczI1TDVkOE5jN2V1b2h1S01fYktSLV9yTERENnpxeHVLdw?oc=5"
     ],
     [
       "2026-09-11",
       "CPI",
-      66,
-      "Inflation persisted in August, potentially locking in a Fed interest rate hike - CNBC",
-      "https://news.google.com/rss/articles/CBMieEFVX3lxTE45NWtYSmQ5R05raVhQakVkMUdmLWJVTmlCR0R3WWZBbmVsVVQ3SEpnS181Wk5qRUt1cWJhelI4cEZtUDVwb0c5U2dNN0hiZVd0NkdQU1Y0SWRrMlJnQjlXZ1BtdlBHbzF2WkswVFhUVTNXQ3dkcmc5Wg?oc=5"
+      65,
+      "Inflation persisted in August, potentially locking in a Fed interest rate hike - cnbc.com",
+      "https://news.google.com/rss/articles/CBMieEFVX3lxTE45NWtYSmQ5R05raVhQakVkMUdmLWJVTmlCR0R3WWZBbmVsVVQ3SEpnS181Wk5qRUt1cWJhelI4cEZtUDVwb0c5U2dNN0hiZVd0NkdQU1Y0SWRrMlJnQjlXZ1BtdlBHbzF2WkswVFhUVTNXQ3dkcmc5WtIBfkFVX3lxTE9FQ0o0emFuVFUxWFIyNEpyaXpvaS0wVVlydUtLSHhBVDh1blJ6LTdreGozdjZjdmo5eXF5cFdYc05xQjFCMVhnQzFMRkpJVkk2VWwzUlJ3a3F6bjZXTEt4dW1aUDdEWFdHek9FSTVUVTAxdmNSVk8xa0dUMXk5dw?oc=5"
     ],
     [
       "2026-09-16",
       "FOMC",
       100,
-      "Fed approves interest rate hike, signals one more to come this year - CNBC",
+      "Fed approves interest rate hike, signals one more to come this year - cnbc.com",
       "https://news.google.com/rss/articles/CBMieEFVX3lxTFB2d21SUXhkazRGZk1QSTgxb2lQME5TUzdVNEZ0bWVxdWRENm96dUNfU040Rnc4Skl5MnZwcXlKLXh0c1NzYVhrNDZHY0F2M2otb0ZEZmRyd0N2Vlk1WjZ1a1FpZk9jaEtBV25HejlPUE5LVWllZDN2TtIBfkFVX3lxTE5MbUliaWM2Nm1nSDRQU0ZEUmdZUXVNVjRZeXpzRWlaY2pMRzMwdGFUb09jaWhqUFNJZEo5OUxJenR2aEtkcWR0MnVYR3VmdndJWlJTNGlPWmUzNmJYLS1oZ29fMW5PR0dzY3JYUkUzaGdfemtIQjBqc1hjMjNtZw?oc=5"
     ],
     [
       "2026-09-16",
       "零售",
-      73,
+      70,
       "Monthly Retail Trade - Sales Report - Census.gov",
       "https://news.google.com/rss/articles/CBMiUkFVX3lxTFBTZ0xCM0k1TjhISk1PSHVjZmNkRkluTlhWVXFXTzRXWEY5ek02S0ZKT3NBbzgtNVVPdmN5ZDc1ZzQ5QzBjd0lOUW50RmxRVnlfUnc?oc=5"
     ],
@@ -2050,8 +2050,22 @@
       "2026-09-18",
       "工业产出",
       55,
-      "US factory production falls in August; outlook clouded by rising costs - Reuters",
-      "https://news.google.com/rss/articles/CBMitwFBVV95cUxQekwzelo0S3RpaVZiQXFlQmZPSDVVSXNUMXo2N1JjTW1oTHUzbU1FZVljOHlZZ0R1WlRUdUVnWkFaTUJlTFZUQ3FaYVlxbHR0UEVQTXVlUk8wU05MSEtQbDFKbEVxY1lXUGZxR3VoVFkyTFNqZU93MUViajNyZm5sbDNUQVlBRHVMdzFncWJzcUI2Tkg4RFdHVUZsTlBwaXlQd0MtRHlvNy1PTkR0YmtBLTdCOUxIUmM?oc=5"
+      "U.S. Industrial Production Was Unchanged in August - WSJ",
+      "https://news.google.com/rss/articles/CBMinwFBVV95cUxPVldjOHNzMlBuT1hka1d1SXBIVjZUOGo4UThfMjZxOVUxMjAxQkZzei1SbWpnXzhteFVseS1iY3ZqM3V1cFJ6bzdlZ2Nsb2RUWG14RmJrOWIwSUlOdURfWkRDTUVrYlViRVhBaWhHNlBUck9wZkpEeXZLT3Q0cFc0SjNJc25GdGdOUlFPRmJuUS1nc3JHUVlMaTdKM3dXekE?oc=5"
+    ],
+    [
+      "2026-09-30",
+      "GDP",
+      0,
+      null,
+      null
+    ],
+    [
+      "2026-09-30",
+      "PCE",
+      0,
+      null,
+      null
     ]
   ]
 }
