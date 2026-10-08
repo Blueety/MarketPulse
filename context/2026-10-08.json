@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3831.8441,
-      "change_pct": -0.2693903114641828,
+      "value": 3811.9043,
+      "change_pct": -0.7883593402582904,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 12727.709,
-      "change_pct": -1.240810948802029,
+      "value": 12620.897,
+      "change_pct": -2.0696063353823275,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3068.616,
-      "change_pct": -2.126159825750645,
+      "value": 3036.657,
+      "change_pct": -3.145495597358699,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       null,
       null,
       3842.1946,
-      3831.8441
+      3811.9043
     ],
     "sz": [
       13625.122,
@@ -307,7 +307,7 @@
       null,
       null,
       12887.62,
-      12727.709
+      12620.897
     ],
     "cyb": [
       3312.541,
@@ -339,7 +339,7 @@
       null,
       null,
       3135.277,
-      3068.616
+      3036.657
     ],
     "gld": [
       410.22,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 0.3,
-        "turnover": "199.4亿",
+        "change": -0.49,
+        "turnover": "294.2亿",
         "top_stock": "金健米业"
       },
       {
+        "name": "金融",
+        "change": -0.63,
+        "turnover": "1918.6亿",
+        "top_stock": "中国石化"
+      },
+      {
         "name": "地产/基建",
-        "change": -0.07,
-        "turnover": "82.1亿",
+        "change": -0.78,
+        "turnover": "118.4亿",
         "top_stock": "红棉股份"
       },
       {
-        "name": "金融",
-        "change": -0.14,
-        "turnover": "1222.7亿",
-        "top_stock": "山煤国际"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -0.38,
-        "turnover": "3348.0亿",
-        "top_stock": "雄韬股份"
+        "name": "消费",
+        "change": -0.86,
+        "turnover": "154.6亿",
+        "top_stock": "来伊份"
       },
       {
         "name": "资源/有色",
-        "change": -0.49,
-        "turnover": "234.5亿",
+        "change": -0.95,
+        "turnover": "371.9亿",
         "top_stock": "永杉锂业"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -2.56,
-        "turnover": "1858.9亿",
-        "top_stock": "百邦科技"
+        "change": -3.57,
+        "turnover": "2816.8亿",
+        "top_stock": "*ST春兴"
       },
       {
         "name": "医药",
-        "change": -1.78,
-        "turnover": "1283.5亿",
-        "top_stock": "海辰药业"
+        "change": -2.89,
+        "turnover": "1819.2亿",
+        "top_stock": "联环药业"
       },
       {
         "name": "军工",
-        "change": -0.56,
-        "turnover": "1184.8亿",
+        "change": -1.38,
+        "turnover": "1734.2亿",
         "top_stock": "东材科技"
       },
       {
         "name": "其他",
-        "change": -0.51,
-        "turnover": "11515.6亿",
-        "top_stock": "三安光电"
+        "change": -1.04,
+        "turnover": "17776.1亿",
+        "top_stock": "中国石化"
       },
       {
-        "name": "消费",
-        "change": -0.51,
-        "turnover": "96.2亿",
-        "top_stock": "来伊份"
+        "name": "光伏/新能源",
+        "change": -1.02,
+        "turnover": "5006.5亿",
+        "top_stock": "雄韬股份"
       }
     ]
   },
@@ -481,10 +481,10 @@
     "losers": []
   },
   "search_keywords": [
-    "农业 surge 2026-10-08",
-    "地产/基建 drop 2026-10-08",
+    "农业 drop 2026-10-08",
     "金融 drop 2026-10-08",
-    "光伏/新能源 drop 2026-10-08",
+    "地产/基建 drop 2026-10-08",
+    "消费 drop 2026-10-08",
     "资源/有色 drop 2026-10-08"
   ],
   "correlation": [],
