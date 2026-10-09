@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3765.7106,
-      "change_pct": -1.211827379821688,
-      "status": "连跌2日"
+      "value": 3813.7913,
+      "change_pct": 0.04950281674174549,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 12356.56,
-      "change_pct": -2.094439087808112,
-      "status": "连跌2日"
+      "value": 12641.858,
+      "change_pct": 0.16608169767964454,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": 2957.325,
-      "change_pct": -2.6124781297328057,
-      "status": "连跌2日"
+      "value": 3043.335,
+      "change_pct": 0.21991288446472165,
+      "status": "连涨1日"
     },
     "VIX": {
       "value": null,
@@ -275,7 +275,7 @@
       null,
       3842.1946,
       3811.9043,
-      3765.7106
+      3813.7913
     ],
     "sz": [
       13516.969,
@@ -307,7 +307,7 @@
       null,
       12887.62,
       12620.897,
-      12356.56
+      12641.858
     ],
     "cyb": [
       3286.546,
@@ -339,7 +339,7 @@
       null,
       3135.277,
       3036.657,
-      2957.325
+      3043.335
     ],
     "gld": [
       406.77,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 0.88,
-        "turnover": "261.6亿",
-        "top_stock": "金健米业"
-      },
-      {
-        "name": "消费",
-        "change": -0.03,
-        "turnover": "101.3亿",
-        "top_stock": "汇嘉时代"
+        "change": 2.98,
+        "turnover": "409.7亿",
+        "top_stock": "神农种业"
       },
       {
         "name": "资源/有色",
-        "change": -0.52,
-        "turnover": "312.2亿",
-        "top_stock": "永杉锂业"
+        "change": 2.41,
+        "turnover": "570.3亿",
+        "top_stock": "亚盛集团"
+      },
+      {
+        "name": "地产/基建",
+        "change": 1.88,
+        "turnover": "150.7亿",
+        "top_stock": "敦煌种业"
+      },
+      {
+        "name": "消费",
+        "change": 1.36,
+        "turnover": "182.5亿",
+        "top_stock": "汇嘉时代"
       },
       {
         "name": "金融",
-        "change": -0.55,
-        "turnover": "1231.5亿",
-        "top_stock": "广汇能源"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -1.54,
-        "turnover": "3859.1亿",
-        "top_stock": "科恒股份"
+        "change": 0.88,
+        "turnover": "2129.6亿",
+        "top_stock": "中金黄金"
       }
     ],
     "losers": [
       {
-        "name": "通信/电子",
-        "change": -4.57,
-        "turnover": "1977.5亿",
-        "top_stock": "欣旺达"
-      },
-      {
         "name": "军工",
-        "change": -3.89,
-        "turnover": "1169.3亿",
-        "top_stock": "华自科技"
+        "change": -1.14,
+        "turnover": "1749.6亿",
+        "top_stock": "海南橡胶"
       },
       {
-        "name": "医药",
-        "change": -2.14,
-        "turnover": "1139.6亿",
-        "top_stock": "润都股份"
+        "name": "通信/电子",
+        "change": -1.11,
+        "turnover": "3136.3亿",
+        "top_stock": "元隆雅图"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": -0.13,
+        "turnover": "5389.9亿",
+        "top_stock": "科恒股份"
       },
       {
         "name": "其他",
-        "change": -1.93,
-        "turnover": "12220.8亿",
-        "top_stock": "广汇能源"
+        "change": 0.34,
+        "turnover": "19957.8亿",
+        "top_stock": "七 匹 狼"
       },
       {
-        "name": "地产/基建",
-        "change": -1.75,
-        "turnover": "92.3亿",
-        "top_stock": "敦煌种业"
+        "name": "医药",
+        "change": 0.42,
+        "turnover": "1754.3亿",
+        "top_stock": "润都股份"
       }
     ]
   },
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "农业 surge 2026-10-09",
-    "消费 drop 2026-10-09",
-    "资源/有色 drop 2026-10-09",
-    "金融 drop 2026-10-09",
-    "光伏/新能源 drop 2026-10-09"
+    "资源/有色 surge 2026-10-09",
+    "地产/基建 surge 2026-10-09",
+    "消费 surge 2026-10-09",
+    "金融 surge 2026-10-09"
   ],
   "correlation": [],
   "watchlist": {
