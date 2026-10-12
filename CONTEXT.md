@@ -43,6 +43,8 @@ _Avoid_: 用「history 文件」「历史文件」指代 SQLite 长表。
 
 **自选股（watchlist）**:
 用户配置的标的列表（≤20 个），存储一律用 **Yahoo 代码格式**（A 股也映射成 Yahoo 格式），但 A 股实际经 AkShare 取数。
+A 股 ETF 走**三源链**（东财 → 新浪 → 腾讯，见 `_etf_series`）+ **腾讯实时行情**补当日 bar（`_etf_quote`），深市指数走新浪指数接口，序列日期为**北京交易日**；
+美股/ETF 走 Yahoo（`_fetch_yahoo_watch`），序列日期为**美东日期**（其日线时间戳取开盘时刻，比北京日期早一天）。
 
 **基准（last_values）**:
 `data/last_values.json`，涨跌幅的比较基准（上一交易日收盘）。它是缓存，不是历史——历史在 SQLite 长表里。

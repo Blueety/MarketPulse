@@ -901,3 +901,67 @@
   （入口文件存在 + 导出的就是 `web.app.app` 本体）与
   `test_deploy_start_commands_reference_an_importable_module`（三个配置里的 `uvicorn X:Y`
   必须真能 import）。
+
+## 本地开发：Yahoo / BLS 直连被拒，必须走本机代理（2026-10-06）
+
+- **症状**：本机直连 `query1/query2.finance.yahoo.com` 得 **429/403**、`api.bls.gov` 的
+  POST 得 **403**；连带 `/api/macro` 从 ~198KB 掉到 **1337B**、`/api/econ` 降级、
+  `/api/cn/quotes` 20s 超时返回空态。⚠️ **所有接口仍然返回 200**（降级路径是好的），
+  所以"curl 通了"完全看不出来——必须核对体积或关键键。
+- **实测对照**（上海移动家宽 `183.253.110.243`，无代理直连 vs `-x http://127.0.0.1:7890`）：
+
+  | 目标 | 直连 | 走 Clash 7890 |
+  |---|---|---|
+  | BLS publicAPI v2（POST） | 403（410B 错误页） | **200（3023B 真数据）** |
+  | Yahoo chart | 429 | 429（限流，不是被墙） |
+  | `/api/macro` | 1337B（空态） | **198606B（全量）** |
+  | `/api/econ/cn`（AkShare） | 16255B ✅ | 16255B ✅（Clash 规则把国内域名走直连） |
+
+- **结论**：本地起服务要带 `HTTP_PROXY`/`HTTPS_PROXY=http://127.0.0.1:7890`。这不是新事实
+  ——`src/git_ops.py` 给 `git push` 注入的就是**同一个** Clash 代理，只是 web 取数这条路
+  一直没人给它带。
+- 一键脚本 `start_local.py` 已自动化：探测 `7890/7891/7897/10809/1080` → 命中才注入 env
+  （并设 `NO_PROXY=127.0.0.1,localhost`）→ 挑空闲端口 → 就绪后开浏览器。验收判据：
+  `/api/macro > 100KB` 且 `/api/latest` 有数据。
+
+## 自选股 ETF 主路（东财）静默失败两周，实际全靠 Yahoo+代理供数（2026-10-12）
+
+- **症状**：看板「自选列表」10 只 ETF 全显示「数据暂缺」，只有中证白酒（399997.SZ）有值。
+- **第一层定位**：`/api/watchlist` 是**逐字渲染快照**的 —— `web/app.py:_load_watchlist` 在
+  「快照 symbol 列表 == config」时**不重新取数**。所以先看快照本身：
+  `git show 18db987:data/watchlist.json` → `values` 只有 `{"399997.SZ": 6229.22}`（15:16 那份），
+  而 09:46 / 11:45 两份都是 11 个键 ⇒ 是**这一份**掉了，不是长期状态。
+- **真正的根因**：`_fetch_a_share_watch` 的 ETF 分支主路 `fund_etf_hist_em`（东财
+  `push2his.eastmoney.com`）**自 2026-09-30 起每次失败**（直连 `RemoteDisconnected`、经 Clash
+  `ProxyError`），且被 `except Exception: series = []` **静默吞掉**；回退 Yahoo 又必须走 Clash
+  （见上一条 2026-10-06）⇒ 10 只 ETF 实际全靠 Yahoo+代理供数，代理一抖（15:22 cron 自述
+  「10只行业ETF 因 Yahoo 连接被重置获取失败 + GitHub push TLS 握手失败」）就整片空。
+- **判据（怎么反推数据来自哪个源）**：`data/watchlist.json` 里 ETF 序列长度恒 **483/484**
+  （= Yahoo `range_="2y"` 量级，东财路会被 `series[-45:]` 截成 45），而走新浪指数路的
+  399997.SZ 恒为 **45**；且 ETF 末点是**美东日期**（北京 10-12 那场 → `2026-10-11`），
+  399997 是北京日期。两个信号同时指向 Yahoo 分支 —— **不用猜，先看序列长度与日期口径**。
+- **修法**：ETF 加国内直连源（`_etf_series`：东财 → 新浪 `fund_etf_hist_sina` → 腾讯
+  `stock_zh_a_hist_tx` → Yahoo），日期统一为**北京交易日**。
+- **另一个坑（换源时才发现）**：新浪/腾讯/东财的**历史文件都是盘后才更新**
+  （`hisdata_klc2/klc_kl.js`），盘中取不到当日 bar ⇒ 只换历史源会让 A 股午盘快照的「最新价」
+  退化成上一交易日收盘（旧 Yahoo 路给的是盘中实时价：11:45 快照 515300=1.354，既非 10-09
+  收盘 1.338 也非当日收盘 1.357）。故配套 `_etf_quote`（腾讯 `qt.gtimg.cn`，字段 `[3]` 当前价 /
+  `[30]` 时间戳；**不需要 Referer**，新浪 `hq.sinajs.cn` 不带 Referer 会 403）把当日 bar 补进序列。
+- **教训**：① 「主路失败静默降级」会让人误判数据源，**降级必须 `log.warning` 留痕**；
+  ② 本机代理（Clash `127.0.0.1:7890`）只影响 `requests` 走不走代理，**国内源不经代理也能通**
+  —— 给关键卡片配一个国内源，比让整条链路吊在代理上稳。
+- **残留缺口**（本次未改）：`analyzer.save_watchlist_snapshot` 只在 values 全 None 时拒绝写盘，
+  1/11 的部分成功会**覆盖**完整快照 ⇒ 看板仍可能出现「部分行数据暂缺」（修法：部分成功时按
+  标的合并进旧快照）。
+
+## 测试里写死月份 = 定时炸弹（2026-10-12）
+
+- **症状**：`tests/test_storage.py::TestMonthlyBackup::test_export_current_month_overwrites_history_month_frozen`
+  进入 2026-10 后开始红：`assert 'frozen' == 'written'`。用例把 `2026-09` 当"当月"，而
+  `storage.export_monthly_backups` 的 `current_month = datetime.now().strftime("%Y-%m")` 已是
+  `2026-10` ⇒ 9 月降级为历史月（冻结），"当月覆盖"那条断言就挂。**红得与本次改动毫无关系**
+  —— 见到"凭空的红"先怀疑时钟，再怀疑代码（`git stash` 掉自己的改动单跑一次即可定性）。
+- **规矩**：按月/按日的用例一律用 `tests/test_storage.py` 里既有的 `_month_str(offset)`（相对本月，
+  专门为"跨月不腐烂"写的），日期拼成 `f"{_month_str(-1)}-15"`；**不要写死月份**。
+- **修完要验红不空转**：把被测的判定条件临时改成恒假（如 `if ... and False:`）跑一次，用例必须变红
+  —— 否则它只是"跟着实现走"的同义反复。本次实测：改后 45 passed，注入 `and False` → `- frozen + written` 1 failed。

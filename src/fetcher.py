@@ -598,16 +598,84 @@ def _fetch_yahoo_watch(symbol: str, range_: str = "2y") -> tuple[float, list]:
     return float(value), series
 
 
+def _etf_series(code: str, symbol: str, start: str, end: str) -> list:
+    """ETF 日线序列：东财 → 新浪 → 腾讯 逐个降级；全失败抛最后异常（调用方回退 Yahoo）。
+
+    2026-10-12 加新浪/腾讯两源：东财 `push2his.eastmoney.com` 自 2026-09-30 起每次失败
+    （直连 RemoteDisconnected、经本机 Clash 亦 ProxyError），10 只自选 ETF 实际全靠 Yahoo
+    供数 —— 而 Yahoo 在本机必须走 Clash 代理（`docs/pitfalls.md` 2026-10-06），代理一抖
+    （2026-10-12 15:16 快照：Yahoo 连接被重置）自选股 10 行全部「数据暂缺」。新浪/腾讯均为
+    国内直连源、含当日收盘，不依赖代理。
+
+    列名映射：东财 `日期`/`收盘`，新浪与腾讯 `date`/`close`；日期一律输出**北京交易日**
+    （`%Y-%m-%d`）。Yahoo 回退的序列是**美东日期**（其日线时间戳取开盘时刻，差一天），
+    故同一标的换源时末点日期会前移一天 —— 北京口径与 `stock_zh_index_daily` 路线一致，
+    且与 history 行对齐更好（自选股相关性实测 r 由 0~-0.4/n=13 变为 0.4~0.9/n=15）。
+    """
+    import akshare as ak
+    prefixed = ("sh" if symbol.endswith(".SS") else "sz") + code
+    sources = (
+        ("东财", "日期", "收盘", lambda: ak.fund_etf_hist_em(
+            symbol=code, period="daily", start_date=start, end_date=end, adjust="")),
+        ("新浪", "date", "close", lambda: ak.fund_etf_hist_sina(symbol=prefixed)),
+        ("腾讯", "date", "close", lambda: ak.stock_zh_a_hist_tx(
+            symbol=prefixed, start_date=start, end_date=end, adjust="")),
+    )
+    last_exc: Exception | None = None
+    for name, date_col, close_col, load in sources:
+        try:
+            df = load()
+            out = []
+            for _, row in df.iterrows():
+                d = row[date_col]
+                d_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
+                out.append((d_str, float(row[close_col])))
+            if out:
+                return out
+            exc = ValueError(f"{name} 返回空序列")
+        except Exception as e:  # 单源失败不中断，降级下一源（东财静默失败曾藏了两周）
+            exc = e
+        log.warning("自选股 ETF %s 走 %s 失败，降级下一源: %s", symbol, name, exc)
+        last_exc = exc
+    raise last_exc if last_exc is not None else RuntimeError(f"ETF {symbol} 无可用数据源")
+
+
+def _etf_quote(symbol: str) -> tuple[str, float] | None:
+    """ETF 实时行情（腾讯 `qt.gtimg.cn`）：返回 (北京日期, 当前价)；格式异常/失败返回 None。
+
+    历史文件（新浪 `hisdata_klc2/klc_kl.js`）**盘后才更新**，盘中取不到当日 bar ⇒ 用它把当日价
+    补进序列，否则 A 股午盘快照的「最新价」会退化成上一交易日收盘（改源前走 Yahoo 时是盘中价）。
+    非交易日返回上一交易日的日期与收盘价，与历史末点同日 ⇒ 调用方按「同日覆盖」处理。
+    字段（`~` 分隔）：[1] 名称 / [3] 当前价 / [4] 昨收 / [30] 时间戳 `YYYYMMDDHHMMSS`。
+    """
+    prefixed = ("sh" if symbol.endswith(".SS") else "sz") + symbol[:-3]
+    try:
+        resp = _SESSION.get(f"https://qt.gtimg.cn/q={prefixed}", timeout=TIMEOUT)
+        resp.raise_for_status()
+        resp.encoding = "gbk"  # 名称是 GBK；这里只用数字字段与时间戳
+        fields = resp.text.split('"')[1].split("~")
+        ts = fields[30]
+        price = float(fields[3])
+        if len(ts) != 14 or not ts.isdigit() or price <= 0:
+            return None
+        return (f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", price)
+    except Exception as exc:
+        log.warning("自选股 %s 实时行情取数失败: %s", symbol, exc)
+        return None
+
+
 def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
     """取 A 股/ETF/深指(.SS/.SZ) 当日收盘价 + 近 ~45 交易日序列。
 
-    路由（2026-09-17 自选股扩展，实测取证）：
-    - ETF（代码前缀 51/56/58/15）→ 东财 `fund_etf_hist_em`：新浪 `stock_zh_a_daily` 的 klc 接口
-      对 ETF 已返回不可解码内容（JSONDecodeError，连既有 515300 都挂），东财 8/8 成功且含当日收盘；
+    路由（ETF 三源链 + 实时行情 2026-10-12；其余为 2026-09-17 自选股扩展，实测取证）：
+    - ETF（代码前缀 51/56/58/15）→ `_etf_series`：东财 `fund_etf_hist_em` → 新浪
+      `fund_etf_hist_sina` → 腾讯 `stock_zh_a_hist_tx` 逐个降级（东财 2026-09-30 起不可达，
+      新浪 `stock_zh_a_daily` 的 klc 接口对 ETF 返回不可解码内容，故不进链）；
+      随后 `_etf_quote` 用当日实时价覆盖/追加末点（历史文件盘后才更新）；
     - 深市指数（39 开头，如 399997 中证白酒）→ 新浪 `stock_zh_index_daily`（个股接口不含指数，
-      index_zh_a_hist 的东财源本机被拒）；
+      index_zh_a_hist 的东财源本机被拒；**无实时覆盖** ⇒ 午盘显示上一交易日收盘，既有行为）；
     - 其余个股 → 新浪 `stock_zh_a_daily`（原有路径），失败回退 Yahoo。
-    返回 (value, [(date, close), ...])。
+    返回 (value, [(date, close), ...])；A 股各源均为北京交易日（Yahoo 回退为美东日期）。
     """
     import akshare as ak
     code = symbol[:-3]  # 去掉 .SS / .SZ
@@ -616,11 +684,15 @@ def _fetch_a_share_watch(symbol: str) -> tuple[float, list]:
     series: list = []
     try:
         if code[:2] in ("51", "56", "58", "15"):
-            # ETF：东财基金历史（含当日收盘；日期列为 str）
-            df = ak.fund_etf_hist_em(symbol=code, period="daily",
-                                     start_date=start, end_date=end, adjust="")
-            for _, row in df.iterrows():
-                series.append((str(row["日期"])[:10], float(row["收盘"])))
+            # ETF：东财 → 新浪 → 腾讯（见 _etf_series）；三源全失败 → 外层 except → 回退 Yahoo
+            series = _etf_series(code, symbol, start, end)
+            # 历史文件盘后才更新 ⇒ 用实时行情补当日 bar（同日以行情为准，盘中即最新价）
+            quote = _etf_quote(symbol)
+            if quote and (not series or quote[0] >= series[-1][0]):
+                if series and quote[0] == series[-1][0]:
+                    series[-1] = quote
+                else:
+                    series.append(quote)
         elif code.startswith("39"):
             # 深市指数：新浪指数接口（全量历史，截尾）
             df = ak.stock_zh_index_daily(symbol="sz" + code)

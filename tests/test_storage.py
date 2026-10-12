@@ -189,18 +189,21 @@ class TestMonthlyBackup:
         assert aug["month"] == "2026-08" and aug["record_count"] == 1
         assert aug["records"] == [["2026-08-31", "gspc", 1.0, None]]
 
-    def test_export_current_month_overwrites_history_month_frozen(self, db, tmp_path, monkeypatch):
+    def test_export_current_month_overwrites_history_month_frozen(self, db, tmp_path):
         bdir = tmp_path / "backup"
-        st.upsert_history_rows(_rows([("2026-08-31", 1.0), ("2026-09-01", 2.0)]))
+        # ⚠️ 月份必须相对运行时刻推导：写死 2026-08/2026-09 时，"当月"一进入 2026-10 就变历史月
+        # ⇒ `actions[cur] == "frozen"`，用例跨月腐烂（2026-10-12 实测踩中）。
+        prev, cur = _month_str(-1), _month_str(0)
+        st.upsert_history_rows(_rows([(f"{prev}-15", 1.0), (f"{cur}-01", 2.0)]))
         st.export_monthly_backups(backup_dir=bdir)
-        # 历史月数据在 DB 内被改写 → 重导出时 8 月文件冻结不更新；当月文件覆盖
-        st.upsert_history_rows(_rows([("2026-08-31", 99.0)]), preserve_existing=True)
-        st.upsert_history_rows(_rows([("2026-09-02", 3.0)]))
+        # 历史月数据在 DB 内被改写 → 重导出时历史月文件冻结不更新；当月文件覆盖
+        st.upsert_history_rows(_rows([(f"{prev}-15", 99.0)]), preserve_existing=True)
+        st.upsert_history_rows(_rows([(f"{cur}-02", 3.0)]))
         rep = self._hist(st.export_monthly_backups(backup_dir=bdir))
         actions = {r["month"]: r["action"] for r in rep}
-        assert actions["2026-08"] == "frozen"
-        assert actions["2026-09"] == "written"
-        sep = json.loads((bdir / "history_2026-09.json").read_text(encoding="utf-8"))
+        assert actions[prev] == "frozen"
+        assert actions[cur] == "written"
+        sep = json.loads((bdir / f"history_{cur}.json").read_text(encoding="utf-8"))
         assert sep["record_count"] == 2   # 当月覆盖为最新 2 行
 
     def test_export_missing_historical_month_selfheals(self, db, tmp_path):
