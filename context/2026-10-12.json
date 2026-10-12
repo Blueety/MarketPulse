@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3811.1051,
-      "change_pct": -0.07043384885794994,
+      "value": 3809.0794,
+      "change_pct": -0.12354897343228476,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 12588.626,
-      "change_pct": -0.42107734480168957,
+      "value": 12512.096,
+      "change_pct": -1.0264472200209862,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3033.186,
-      "change_pct": -0.3334828403708395,
+      "value": 3004.814,
+      "change_pct": -1.2657495806409804,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3811.9043,
       3813.7913,
       3813.7913,
-      3811.1051
+      3809.0794
     ],
     "sz": [
       13516.969,
@@ -307,7 +307,7 @@
       12620.897,
       12641.858,
       12641.858,
-      12588.626
+      12512.096
     ],
     "cyb": [
       3286.546,
@@ -339,7 +339,7 @@
       3036.657,
       3043.335,
       3043.335,
-      3033.186
+      3004.814
     ],
     "gld": [
       406.77,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "农业",
-        "change": 0.49,
-        "turnover": "144.0亿",
-        "top_stock": "金健米业"
-      },
-      {
-        "name": "医药",
-        "change": 0.3,
-        "turnover": "376.3亿",
-        "top_stock": "海欣股份"
-      },
-      {
         "name": "消费",
-        "change": 0.26,
-        "turnover": "31.1亿",
-        "top_stock": "汇嘉时代"
+        "change": 0.34,
+        "turnover": "92.0亿",
+        "top_stock": "大豪科技"
       },
       {
         "name": "金融",
-        "change": 0.12,
-        "turnover": "361.3亿",
+        "change": -0.27,
+        "turnover": "1099.6亿",
+        "top_stock": "宇通客车"
+      },
+      {
+        "name": "其他",
+        "change": -0.9,
+        "turnover": "10354.1亿",
         "top_stock": "宇通客车"
       },
       {
         "name": "光伏/新能源",
-        "change": -0.06,
-        "turnover": "1190.2亿",
-        "top_stock": "时代万恒"
+        "change": -0.91,
+        "turnover": "3250.4亿",
+        "top_stock": "长城电工"
+      },
+      {
+        "name": "医药",
+        "change": -0.95,
+        "turnover": "930.9亿",
+        "top_stock": "海欣股份"
       }
     ],
     "losers": [
       {
+        "name": "农业",
+        "change": -2.67,
+        "turnover": "327.5亿",
+        "top_stock": "隆鑫通用"
+      },
+      {
         "name": "资源/有色",
-        "change": -1.63,
-        "turnover": "101.2亿",
-        "top_stock": "冠农股份"
+        "change": -2.61,
+        "turnover": "288.3亿",
+        "top_stock": "金瑞矿业"
+      },
+      {
+        "name": "地产/基建",
+        "change": -2.25,
+        "turnover": "96.0亿",
+        "top_stock": "融发核电"
       },
       {
         "name": "通信/电子",
-        "change": -1.48,
-        "turnover": "511.9亿",
+        "change": -1.73,
+        "turnover": "1570.6亿",
         "top_stock": "鹏鼎控股"
       },
       {
         "name": "军工",
-        "change": -1.26,
-        "turnover": "267.3亿",
-        "top_stock": "中船科技"
-      },
-      {
-        "name": "地产/基建",
-        "change": -0.97,
-        "turnover": "39.7亿",
-        "top_stock": "融发核电"
-      },
-      {
-        "name": "其他",
-        "change": -0.53,
-        "turnover": "3616.0亿",
-        "top_stock": "宇通客车"
+        "change": -1.68,
+        "turnover": "798.3亿",
+        "top_stock": "ST联光"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "农业 surge 2026-10-12",
-    "医药 surge 2026-10-12",
     "消费 surge 2026-10-12",
-    "金融 surge 2026-10-12",
-    "光伏/新能源 drop 2026-10-12"
+    "金融 drop 2026-10-12",
+    "其他 drop 2026-10-12",
+    "光伏/新能源 drop 2026-10-12",
+    "医药 drop 2026-10-12"
   ],
   "correlation": [],
   "watchlist": {
