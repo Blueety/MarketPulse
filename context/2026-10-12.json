@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3809.0794,
-      "change_pct": -0.12354897343228476,
+      "value": 3797.2424,
+      "change_pct": -0.433922537921773,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 12512.096,
-      "change_pct": -1.0264472200209862,
+      "value": 12384.869,
+      "change_pct": -2.0328420078757374,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 3004.814,
-      "change_pct": -1.2657495806409804,
+      "value": 2963.824,
+      "change_pct": -2.612627265812011,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3811.9043,
       3813.7913,
       3813.7913,
-      3809.0794
+      3797.2424
     ],
     "sz": [
       13516.969,
@@ -307,7 +307,7 @@
       12620.897,
       12641.858,
       12641.858,
-      12512.096
+      12384.869
     ],
     "cyb": [
       3286.546,
@@ -339,7 +339,7 @@
       3036.657,
       3043.335,
       3043.335,
-      3004.814
+      2963.824
     ],
     "gld": [
       406.77,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "消费",
-        "change": 0.34,
-        "turnover": "92.0亿",
+        "change": 0.48,
+        "turnover": "145.1亿",
         "top_stock": "大豪科技"
       },
       {
         "name": "金融",
-        "change": -0.27,
-        "turnover": "1099.6亿",
-        "top_stock": "宇通客车"
+        "change": -0.57,
+        "turnover": "1761.0亿",
+        "top_stock": "凤凰传媒"
       },
       {
         "name": "其他",
-        "change": -0.9,
-        "turnover": "10354.1亿",
+        "change": -1.49,
+        "turnover": "16707.6亿",
         "top_stock": "宇通客车"
       },
       {
         "name": "光伏/新能源",
-        "change": -0.91,
-        "turnover": "3250.4亿",
-        "top_stock": "长城电工"
+        "change": -1.77,
+        "turnover": "4868.4亿",
+        "top_stock": "时代万恒"
       },
       {
         "name": "医药",
-        "change": -0.95,
-        "turnover": "930.9亿",
+        "change": -1.79,
+        "turnover": "1365.5亿",
         "top_stock": "海欣股份"
       }
     ],
     "losers": [
       {
+        "name": "资源/有色",
+        "change": -3.75,
+        "turnover": "454.5亿",
+        "top_stock": "闽东电力"
+      },
+      {
         "name": "农业",
-        "change": -2.67,
-        "turnover": "327.5亿",
+        "change": -2.9,
+        "turnover": "446.6亿",
         "top_stock": "隆鑫通用"
       },
       {
-        "name": "资源/有色",
-        "change": -2.61,
-        "turnover": "288.3亿",
-        "top_stock": "金瑞矿业"
+        "name": "通信/电子",
+        "change": -2.87,
+        "turnover": "2429.0亿",
+        "top_stock": "硕贝德"
       },
       {
         "name": "地产/基建",
-        "change": -2.25,
-        "turnover": "96.0亿",
-        "top_stock": "融发核电"
-      },
-      {
-        "name": "通信/电子",
-        "change": -1.73,
-        "turnover": "1570.6亿",
-        "top_stock": "鹏鼎控股"
+        "change": -2.77,
+        "turnover": "137.7亿",
+        "top_stock": "海南橡胶"
       },
       {
         "name": "军工",
-        "change": -1.68,
-        "turnover": "798.3亿",
-        "top_stock": "ST联光"
+        "change": -2.55,
+        "turnover": "1273.1亿",
+        "top_stock": "隆鑫通用"
       }
     ]
   },
