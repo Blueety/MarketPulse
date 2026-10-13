@@ -2,60 +2,60 @@
   "date": "2026-10-12",
   "items": [
     {
-      "title": "财报季乐观预期与中东风险交织，美股指涨跌互现，存储芯片股普跌，油价走高，黄金小幅下跌",
+      "title": "美两党参议员联手叫板俄柴油协议，特朗普宣布能源停火数小时后乌电厂和采气设施遭袭",
+      "url": "https://wallstreetcn.com/articles/3783480",
+      "source": "华尔街见闻",
+      "published": "2026-10-13",
+      "summary": "美国总统特朗普试图通过放宽俄罗斯柴油进口限制压低美国燃料成本、推动俄乌重返谈判桌，却在华盛顿和战场上同时遭遇阻力"
+    },
+    {
+      "title": "出货量暴跌20%！全球手机市场创十四年来最惨第三季度",
+      "url": "https://wallstreetcn.com/articles/3783481",
+      "source": "华尔街见闻",
+      "published": "2026-10-13",
+      "summary": "全球智能手机市场正经历2012年以来最严峻的第三季度"
+    },
+    {
+      "title": "华尔街见闻早餐FM-Radio | 2026年10月13日",
+      "url": "https://wallstreetcn.com/articles/3783479",
+      "source": "华尔街见闻",
+      "published": "2026-10-13",
+      "summary": "华见早安之声 要闻精选 中国财政部 宣布， 自2027年4月1日起新能源汽车增值税出口退税率由13%下调至9%，同步取消电子烟设备装置等产品出口退税"
+    },
+    {
+      "title": "美国要取消发行20年期国债？法巴：或引发市场恐慌，花旗：布局20年期跑赢10年期",
+      "url": "https://wallstreetcn.com/articles/3783472",
+      "source": "华尔街见闻",
+      "published": "2026-10-13",
+      "summary": "美国财政部正面临一个关键抉择，是否削减甚至取消2020年重启的20年期国债发行"
+    },
+    {
+      "title": "财报季乐观预期与中东风险交织，美股指涨跌互现，存储芯片股重挫，油价走高，黄金下跌",
       "url": "https://wallstreetcn.com/articles/3783408",
       "source": "华尔街见闻",
-      "published": "2026-10-12",
+      "published": "2026-10-13",
       "summary": "市场正权衡企业财报季的乐观预期与中东局势升级的风险"
     },
     {
-      "title": "节后债市的三个边际变化",
-      "url": "https://wallstreetcn.com/articles/3783435",
+      "title": "零跑欧洲成绩单亮眼，纯电动车占销量九成",
+      "url": "https://wallstreetcn.com/articles/3783477",
       "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "国庆节后三个交易日，债市延续走强，各期限债券收益率普遍下行"
+      "published": "2026-10-13",
+      "summary": "零跑欧洲拓展超预期，纯电动车占比九成"
     },
     {
-      "title": "博通CEO：许多AI投资者如同赌场赌徒，AI发展最大制约因素是资本",
-      "url": "https://wallstreetcn.com/articles/3783458",
+      "title": "抵押贷款利率重返7%，美国成屋待售签约量跌至近十二年低点",
+      "url": "https://wallstreetcn.com/articles/3783475",
       "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "AI基础设施投资热潮持续升温，但随着融资成本上升、投资回报的不确定性加大，资本正逐渐取代芯片和电力供应，成为制约AI行业进一步扩张的关键因素"
+      "published": "2026-10-13",
+      "summary": "美国楼市正承受新一轮利率冲击"
     },
     {
-      "title": "宏观投资者失去最后一块指路牌：石油与债券的联动悄然瓦解",
-      "url": "https://wallstreetcn.com/articles/3783456",
+      "title": "伊朗打击“违规”船升级，霍尔木兹输油承压，多艘空载超级油轮避开波斯湾",
+      "url": "https://wallstreetcn.com/articles/3783471",
       "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "债券市场的急速抛售正在动摇宏观投资者的信心，而令他们更为不安的，是一个沿用多年的交易锚点正在失效"
-    },
-    {
-      "title": "CW激光器放量，源杰科技Q3净利最高预增660%，营收冲击7亿元关口！",
-      "url": "https://wallstreetcn.com/articles/3783454",
-      "source": "财报见闻",
-      "published": "2026-10-12",
-      "summary": "A股光芯片巨头源杰科技于10月13日披露2026年三季度业绩预告，交出一份令市场瞩目的成绩单"
-    },
-    {
-      "title": "印度9月CPI升至近两年高位，食品与能源通胀支撑央行紧缩",
-      "url": "https://wallstreetcn.com/articles/3783449",
-      "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "印度通胀压力再度升温，食品价格上涨、卢比贬值与国际油价走高共同加大了物价上行风险，也为印度储备银行（RBI）继续加息提供了依据"
-    },
-    {
-      "title": "沙特拟将输油管道能力扩至1000万桶/日，天然气管道或临时转用输油",
-      "url": "https://wallstreetcn.com/articles/3783450",
-      "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "沙特阿拉伯正加速推进输油管道扩容计划， 力求在两到三年内将通往波斯湾以外目的地的管道输送能力提升至每日1000万桶"
-    },
-    {
-      "title": "大摩Wilson：债市已在替美联储“加息”，美股反弹还看两大信号",
-      "url": "https://wallstreetcn.com/articles/3783447",
-      "source": "华尔街见闻",
-      "published": "2026-10-12",
-      "summary": "债券市场的剧烈波动正在悄然承担起美联储的紧缩职能，这一罕见格局为股市走向带来了新的解读框架"
+      "published": "2026-10-13",
+      "summary": "伊朗持续打击所谓“违规”船只，正给霍尔木兹海峡原油运输带来新的压力"
     }
   ]
 }
