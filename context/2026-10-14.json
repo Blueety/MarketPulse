@@ -2,13 +2,13 @@
   "date": "2026-10-14",
   "indices": {
     "GSPC": {
-      "value": 7780.05,
-      "change_pct": -0.32541365328071586,
+      "value": 7733.96,
+      "change_pct": -0.9158985068125449,
       "status": "下跌趋势"
     },
     "IXIC": {
-      "value": 27085.264,
-      "change_pct": -0.4378559629000985,
+      "value": 26831.406,
+      "change_pct": -1.3710071686985772,
       "status": "下跌趋势"
     },
     "SH": {
@@ -211,7 +211,7 @@
       7811.54,
       7807.24,
       7805.45,
-      7780.05
+      7733.96
     ],
     "ixic": [
       26421.412,
@@ -243,7 +243,7 @@
       27366.17,
       27245.902,
       27204.38,
-      27085.264
+      26831.406
     ],
     "sh": [
       3940.5509,
@@ -407,8 +407,17 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "GSPC",
+        "current": 7733.96,
+        "previous": 7805.45,
+        "change_pct": -0.92,
+        "threshold": 0.8650098358536759,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "GSPC drop 2026-10-14",
     "消费 drop 2026-10-14",
     "金融 drop 2026-10-14",
     "医药 drop 2026-10-14",
-    "其他 drop 2026-10-14",
-    "军工 drop 2026-10-14"
+    "其他 drop 2026-10-14"
   ],
   "correlation": [],
   "watchlist": {
