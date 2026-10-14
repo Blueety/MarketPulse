@@ -3,52 +3,52 @@
   "indices": {
     "GSPC": {
       "value": 7805.45,
-      "change_pct": -0.02292743658450315,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "IXIC": {
       "value": 27204.38,
-      "change_pct": -0.15239723023299873,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "SH": {
       "value": 3800.8644,
-      "change_pct": 0.0953850088685369,
-      "status": "连涨1日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "SZ": {
       "value": 12353.699,
-      "change_pct": -0.2516780758843721,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "CYB": {
       "value": 2958.344,
-      "change_pct": -0.1848962691441873,
-      "status": "连跌2日"
+      "change_pct": 0.0,
+      "status": "连跌1日"
     },
     "VIX": {
       "value": 15.27,
-      "change_pct": 0.3944773175542322,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "VXN": {
       "value": 20.84,
-      "change_pct": 1.411192214111918,
+      "change_pct": 0.0,
       "status": "警惕"
     },
     "MOVE": {
       "value": 101.0918,
-      "change_pct": 2.658887924162343,
+      "change_pct": 0.0,
       "status": "警惕"
     },
-    "GLD": {
-      "value": 381.67,
-      "change_pct": -0.12560512887608566,
-      "status": "连跌2日"
+    "GCF": {
+      "value": 4183.3,
+      "change_pct": null,
+      "status": "数据积累中"
     },
     "BTC": {
-      "value": 83147.3,
-      "change_pct": 1.6536399481091095,
+      "value": 83602.23,
+      "change_pct": 0.5471374295978257,
       "status": "连涨1日"
     }
   },
@@ -341,37 +341,37 @@
       2963.824,
       2958.344
     ],
-    "gld": [
-      null,
-      399.72,
-      403.35,
-      396.36,
-      398.77,
-      392.84,
-      394.15,
-      391.74,
-      398.36,
-      null,
-      401.17,
-      398.38,
-      400.07,
-      392.88,
-      391.69,
-      null,
-      393.41,
-      377.91,
-      382.89,
-      380.84,
-      382.76,
+    "gcf": [
       null,
       null,
       null,
-      375.88,
-      378.62,
       null,
-      384.58,
-      382.15,
-      381.67
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      4183.3
     ],
     "btc": [
       null,
@@ -403,7 +403,7 @@
       null,
       83683.55,
       81794.71,
-      83147.3
+      83602.23
     ]
   },
   "breach": {
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "军工",
-        "change": 2.13,
-        "turnover": "1629.4亿",
-        "top_stock": "光智科技"
+        "change": 2.31,
+        "turnover": "1122.0亿",
+        "top_stock": "航发科技"
       },
       {
         "name": "地产/基建",
-        "change": 1.35,
-        "turnover": "124.6亿",
-        "top_stock": "中兴商业"
+        "change": 1.42,
+        "turnover": "73.7亿",
+        "top_stock": "统一股份"
       },
       {
         "name": "通信/电子",
-        "change": 0.74,
-        "turnover": "2653.2亿",
-        "top_stock": "元隆雅图"
+        "change": 0.65,
+        "turnover": "585.7亿",
+        "top_stock": "综艺股份"
       },
       {
         "name": "资源/有色",
-        "change": 0.7,
-        "turnover": "433.7亿",
-        "top_stock": "云南锗业"
+        "change": 0.56,
+        "turnover": "251.7亿",
+        "top_stock": "北方稀土"
       },
       {
-        "name": "农业",
-        "change": 0.23,
-        "turnover": "351.7亿",
-        "top_stock": "统一股份"
+        "name": "金融",
+        "change": 0.16,
+        "turnover": "1420.0亿",
+        "top_stock": "精达股份"
       }
     ],
     "losers": [
       {
         "name": "医药",
-        "change": -1.07,
-        "turnover": "1365.1亿",
+        "change": -0.73,
+        "turnover": "817.5亿",
         "top_stock": "海欣股份"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.8,
-        "turnover": "4899.6亿",
-        "top_stock": "德尔未来"
+        "name": "消费",
+        "change": -0.48,
+        "turnover": "102.0亿",
+        "top_stock": "金种子酒"
       },
       {
-        "name": "消费",
-        "change": -0.35,
-        "turnover": "174.2亿",
-        "top_stock": "金种子酒"
+        "name": "农业",
+        "change": -0.09,
+        "turnover": "172.6亿",
+        "top_stock": "统一股份"
       },
       {
         "name": "其他",
-        "change": 0.09,
-        "turnover": "17739.5亿",
-        "top_stock": "金种子酒"
+        "change": -0.02,
+        "turnover": "10007.9亿",
+        "top_stock": "航发动力"
       },
       {
-        "name": "金融",
-        "change": 0.19,
-        "turnover": "1902.8亿",
-        "top_stock": "精达股份"
+        "name": "光伏/新能源",
+        "change": 0.05,
+        "turnover": "2090.1亿",
+        "top_stock": "广汇能源"
       }
     ]
   },
@@ -547,7 +547,7 @@
     "地产/基建 surge 2026-10-13",
     "通信/电子 surge 2026-10-13",
     "资源/有色 surge 2026-10-13",
-    "农业 surge 2026-10-13"
+    "金融 surge 2026-10-13"
   ],
   "correlation": [
     {
