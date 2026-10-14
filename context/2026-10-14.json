@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3801.1287,
-      "change_pct": 0.0069536813783800284,
-      "status": "连涨2日"
+      "value": 3767.2271,
+      "change_pct": -0.884990793146945,
+      "status": "连跌1日"
     },
     "SZ": {
-      "value": 12290.586,
-      "change_pct": -0.5108834204233177,
+      "value": 12110.591,
+      "change_pct": -1.967896417097423,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2924.386,
-      "change_pct": -1.1478719175322438,
+      "value": 2866.763,
+      "change_pct": -3.0956846127428093,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3813.7913,
       3797.2424,
       3800.8644,
-      3801.1287
+      3767.2271
     ],
     "sz": [
       13703.208,
@@ -307,7 +307,7 @@
       12641.858,
       12384.869,
       12353.699,
-      12290.586
+      12110.591
     ],
     "cyb": [
       3359.716,
@@ -339,7 +339,7 @@
       3043.335,
       2963.824,
       2958.344,
-      2924.386
+      2866.763
     ],
     "gcf": [
       null,
@@ -413,65 +413,65 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "军工",
-        "change": 0.32,
-        "turnover": "850.9亿",
-        "top_stock": "久之洋"
-      },
-      {
-        "name": "金融",
-        "change": 0.24,
-        "turnover": "990.2亿",
-        "top_stock": "中海油服"
-      },
-      {
         "name": "消费",
-        "change": 0.2,
-        "turnover": "96.2亿",
+        "change": -0.25,
+        "turnover": "159.0亿",
         "top_stock": "迎驾贡酒"
       },
       {
+        "name": "金融",
+        "change": -0.45,
+        "turnover": "1665.6亿",
+        "top_stock": "中海油服"
+      },
+      {
         "name": "医药",
-        "change": -0.02,
-        "turnover": "636.6亿",
+        "change": -1.23,
+        "turnover": "1055.1亿",
         "top_stock": "广生堂"
       },
       {
         "name": "其他",
-        "change": -0.13,
-        "turnover": "9123.8亿",
-        "top_stock": "华能国际"
+        "change": -1.26,
+        "turnover": "15441.1亿",
+        "top_stock": "七 匹 狼"
+      },
+      {
+        "name": "军工",
+        "change": -1.31,
+        "turnover": "1383.9亿",
+        "top_stock": "久之洋"
       }
     ],
     "losers": [
       {
         "name": "光伏/新能源",
-        "change": -1.09,
-        "turnover": "2403.9亿",
-        "top_stock": "小崧股份"
-      },
-      {
-        "name": "地产/基建",
-        "change": -0.69,
-        "turnover": "57.1亿",
-        "top_stock": "ST洲际"
+        "change": -2.77,
+        "turnover": "3982.8亿",
+        "top_stock": "时代万恒"
       },
       {
         "name": "通信/电子",
-        "change": -0.56,
-        "turnover": "1182.4亿",
-        "top_stock": "元隆雅图"
+        "change": -2.32,
+        "turnover": "2061.1亿",
+        "top_stock": "科泰电源"
+      },
+      {
+        "name": "地产/基建",
+        "change": -1.99,
+        "turnover": "98.7亿",
+        "top_stock": "ST洲际"
       },
       {
         "name": "资源/有色",
-        "change": -0.32,
-        "turnover": "182.5亿",
-        "top_stock": "晋控煤业"
+        "change": -1.93,
+        "turnover": "333.1亿",
+        "top_stock": "闽东电力"
       },
       {
         "name": "农业",
-        "change": -0.27,
-        "turnover": "173.8亿",
+        "change": -1.5,
+        "turnover": "281.9亿",
         "top_stock": "金健米业"
       }
     ]
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "军工 surge 2026-10-14",
-    "金融 surge 2026-10-14",
-    "消费 surge 2026-10-14",
+    "消费 drop 2026-10-14",
+    "金融 drop 2026-10-14",
     "医药 drop 2026-10-14",
-    "其他 drop 2026-10-14"
+    "其他 drop 2026-10-14",
+    "军工 drop 2026-10-14"
   ],
   "correlation": [],
   "watchlist": {
