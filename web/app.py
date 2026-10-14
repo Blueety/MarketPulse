@@ -293,7 +293,7 @@ def _build_history_payload(days: int = 30, symbols: str | None = None,
     """展开为 Chart.js 友好结构：dates + N 组 series（key=小写 symbol）。
 
     每个序列归一化为相对基准百分比（窗口首个非空值 = 100），另附 change_7d
-    （窗口涨跌幅，键名保留向后兼容）与 raw（等长原始值，GLD 已 ×10，与图线一致）。
+    （窗口涨跌幅，键名保留向后兼容）与 raw（等长原始值）。
     过滤：显式 start_date/end_date 优先（日期字符串比较）；否则按交易日条数取最近 days 条
     （记录数不足时全取）。
     """
@@ -318,9 +318,6 @@ def _build_history_payload(days: int = 30, symbols: str | None = None,
     for sym in _resolve_symbols(symbols):  # SYMBOLS 注册表序
         key = sym.lower()
         raw = [r.get(key) for r in records]
-        # GLD 价格乘以10，显示接近实际金价（美元/盎司）
-        if key == "gld":
-            raw = [v * 10 if v is not None else v for v in raw]
         values, change_7d = _normalize_series(raw)
         series.append({
             "key": key,

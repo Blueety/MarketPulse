@@ -67,7 +67,7 @@ def _load_history_from_path(path: Path) -> list[dict]:
         return []
     if not isinstance(data, list):
         return []
-    keys = ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb", "gld", "btc")
+    keys = ("vix", "vxn", "move", "gspc", "ixic", "sh", "sz", "cyb", "gcf", "btc")
     return [
         {"date": str(rec.get("date", "")), **{k: rec.get(k) for k in keys}}
         for rec in data

@@ -24,7 +24,7 @@ from scripts import backtest as bt
 # 与 test_phase25 一致的 10 标的基准值（保证 build_statuses / generate_context 覆盖全部 SYMBOLS）
 _VALUES = {
     "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 200.0, "BTC": 60000.0,
+    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GCF": 200.0, "BTC": 60000.0,
 }
 @pytest.fixture
 def clean_thresholds(monkeypatch):

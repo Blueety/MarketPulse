@@ -244,9 +244,9 @@ class TestGenerateContextAggregated:
         monkeypatch.setattr(al, "ALERTS_LOG", tmp_path / "alerts.log")
 
         values = {"GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 252.30, "BTC": 65000.00}
+                  "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GCF": 252.30, "BTC": 65000.00}
         last = {"GSPC": 4400.0, "IXIC": 17000.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
-                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0, "GLD": 250.10, "BTC": 64000.00}
+                "VIX": 20.0, "VXN": 18.0, "MOVE": 75.0, "GCF": 250.10, "BTC": 64000.00}
         sector_heat = (
             [{"name": "光伏/新能源", "change": 4.0, "turnover": "600.0亿", "top_stock": "宁德时代"}],
             [{"name": "农业", "change": -3.0, "turnover": "50.0亿", "top_stock": "牧原股份"}],

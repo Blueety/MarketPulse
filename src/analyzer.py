@@ -721,7 +721,7 @@ def _upsert_history_rows_selfheal(rows, preserve_existing: bool) -> None:
     raise last_lock
 
 def load_history() -> list[dict]:
-    """读取历史记录 [{date, gspc, ixic, sh, sz, cyb, vix, vxn, move, gld, btc}]；
+    """读取历史记录 [{date, gspc, ixic, sh, sz, cyb, vix, vxn, move, gcf, btc}]；
     DB 缺失 / 损坏 → 空历史（容错纪律不变）。三十一期起改读 SQLite：永久保留（无 90 天裁剪）、
     date 升序由 storage.query_history 保证、None 语义（休市/未收盘）保留。"""
     return rows_to_records(query_history())
@@ -744,7 +744,7 @@ def append_history(record: dict, merge_existing: bool = False) -> None:
 
 def merge_history(date: str, values: dict) -> None:
     """按 date 合并写当日记录：仅把 values 中非 None 且属历史键的字段并入该行（preserve
-    upsert，不整行覆盖）；空 updates → 空操作。市场子集（sh/sz/cyb 或 gspc/ixic 或 gld/btc）
+    upsert，不整行覆盖）；空 updates → 空操作。市场子集（sh/sz/cyb 或 gspc/ixic 或 gcf/btc）
     并入互不抹除；同日重复合并幂等（长表主键天然去重）；三十一期起永久保留不裁剪。"""
     updates = {
         k.lower(): v

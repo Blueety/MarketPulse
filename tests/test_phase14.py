@@ -361,7 +361,7 @@ def test_daily_report_image_failure_exit_zero(monkeypatch, tmp_path):
     import daily_report as dr
 
     monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (
-        {s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]}, {}))
+        {s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GCF", "BTC"]}, {}))
     monkeypatch.setattr(dr, "fetch_sector_heat", lambda: ([], []))
     monkeypatch.setattr(dr, "fetch_us_sector_heat", lambda: ([], []))
     monkeypatch.setattr(dr, "load_last_values", lambda: {})

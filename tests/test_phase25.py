@@ -16,7 +16,7 @@ import daily_report as dr
 # 与 daily_report.main() 取数一致的 10 标的基准值（GSPC/IXIC 为判定符号集）
 _VALUES = {
     "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 200.0, "BTC": 60000.0,
+    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GCF": 200.0, "BTC": 60000.0,
 }
 
 

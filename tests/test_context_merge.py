@@ -29,7 +29,7 @@ CN_SYMS = ("SH", "SZ", "CYB")
 # 10 标的基准值（保证 build_statuses / generate_context 覆盖全部 SYMBOLS）
 FULL_VALUES = {
     "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3120.0, "SZ": 10100.0, "CYB": 2210.0,
-    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GLD": 252.30, "BTC": 65000.00,
+    "VIX": 21.0, "VXN": 19.0, "MOVE": 78.0, "GCF": 252.30, "BTC": 65000.00,
 }
 US_VALUES = {"GSPC": 4510.0, "IXIC": 17600.0}
 US_LAST = {"GSPC": 4500.0, "IXIC": 17500.0}
@@ -118,7 +118,7 @@ class TestMergeIndices:
             sector_heat=CN_SECTOR, merge=True,
         )
         data = _read(ctx_env)
-        for sym in ("GSPC", "IXIC", "VIX", "VXN", "MOVE", "GLD", "BTC"):
+        for sym in ("GSPC", "IXIC", "VIX", "VXN", "MOVE", "GCF", "BTC"):
             assert data["indices"][sym] == first["indices"][sym]
         assert data["indices"]["SH"]["value"] == CN_VALUES["SH"]
 

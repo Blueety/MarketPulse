@@ -375,14 +375,14 @@ def test_load_latest_context_all_corrupt(tmp_path, monkeypatch):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     hist = [
-        {"date": "2026-08-03", "gspc": 100.0, "ixic": 200.0, "sh": 3000.0, "sz": 12000.0, "cyb": 3500.0, "vix": 17.0, "vxn": 23.0, "move": 70.0, "gld": 420.0, "btc": 76000.0},
-        {"date": "2026-08-04", "gspc": 101.0, "ixic": 202.0, "sh": 3010.0, "sz": 12050.0, "cyb": 3520.0, "vix": 18.0, "vxn": 23.5, "move": 71.0, "gld": 421.0, "btc": 76200.0},
-        {"date": "2026-08-05", "gspc": 102.0, "ixic": 205.0, "sh": 3020.0, "sz": 12100.0, "cyb": 3540.0, "vix": None, "vxn": 24.0, "move": 72.0, "gld": 423.0, "btc": 76300.0},
-        {"date": "2026-08-06", "gspc": 103.0, "ixic": 208.0, "sh": 3030.0, "sz": 12150.0, "cyb": 3560.0, "vix": 19.0, "vxn": 24.5, "move": 73.0, "gld": 424.0, "btc": 76400.0},
-        {"date": "2026-08-07", "gspc": 104.0, "ixic": 210.0, "sh": 3040.0, "sz": 12200.0, "cyb": 3580.0, "vix": 20.0, "vxn": 25.0, "move": 74.0, "gld": 425.0, "btc": 76500.0},
-        {"date": "2026-08-10", "gspc": 105.0, "ixic": 212.0, "sh": 3050.0, "sz": 12250.0, "cyb": 3600.0, "vix": 21.0, "vxn": 25.5, "move": 75.0, "gld": 426.0, "btc": 76600.0},
-        {"date": "2026-08-11", "gspc": 106.0, "ixic": 214.0, "sh": 3060.0, "sz": 12300.0, "cyb": 3620.0, "vix": 22.0, "vxn": 26.0, "move": 76.0, "gld": 427.0, "btc": 76700.0},
-        {"date": "2026-08-12", "gspc": 107.0, "ixic": 216.0, "sh": 3070.0, "sz": 12350.0, "cyb": 3640.0, "vix": 23.0, "vxn": 26.5, "move": 77.0, "gld": 428.0, "btc": 76800.0},
+        {"date": "2026-08-03", "gspc": 100.0, "ixic": 200.0, "sh": 3000.0, "sz": 12000.0, "cyb": 3500.0, "vix": 17.0, "vxn": 23.0, "move": 70.0, "gcf": 420.0, "btc": 76000.0},
+        {"date": "2026-08-04", "gspc": 101.0, "ixic": 202.0, "sh": 3010.0, "sz": 12050.0, "cyb": 3520.0, "vix": 18.0, "vxn": 23.5, "move": 71.0, "gcf": 421.0, "btc": 76200.0},
+        {"date": "2026-08-05", "gspc": 102.0, "ixic": 205.0, "sh": 3020.0, "sz": 12100.0, "cyb": 3540.0, "vix": None, "vxn": 24.0, "move": 72.0, "gcf": 423.0, "btc": 76300.0},
+        {"date": "2026-08-06", "gspc": 103.0, "ixic": 208.0, "sh": 3030.0, "sz": 12150.0, "cyb": 3560.0, "vix": 19.0, "vxn": 24.5, "move": 73.0, "gcf": 424.0, "btc": 76400.0},
+        {"date": "2026-08-07", "gspc": 104.0, "ixic": 210.0, "sh": 3040.0, "sz": 12200.0, "cyb": 3580.0, "vix": 20.0, "vxn": 25.0, "move": 74.0, "gcf": 425.0, "btc": 76500.0},
+        {"date": "2026-08-10", "gspc": 105.0, "ixic": 212.0, "sh": 3050.0, "sz": 12250.0, "cyb": 3600.0, "vix": 21.0, "vxn": 25.5, "move": 75.0, "gcf": 426.0, "btc": 76600.0},
+        {"date": "2026-08-11", "gspc": 106.0, "ixic": 214.0, "sh": 3060.0, "sz": 12300.0, "cyb": 3620.0, "vix": 22.0, "vxn": 26.0, "move": 76.0, "gcf": 427.0, "btc": 76700.0},
+        {"date": "2026-08-12", "gspc": 107.0, "ixic": 216.0, "sh": 3070.0, "sz": 12350.0, "cyb": 3640.0, "vix": 23.0, "vxn": 26.5, "move": 77.0, "gcf": 428.0, "btc": 76800.0},
     ]
     monkeypatch.setattr(st, "DB_PATH", tmp_path / "test-history.db")
     st.init_db()
@@ -605,10 +605,10 @@ def test_api_history_combined(client):
 
 def test_api_history_raw_values(client):
     data = client.get("/api/history").json()
-    gld = next(s for s in data["series"] if s["key"] == "gld")
-    # 08-03 gld 历史 420.0 → raw 已 ×10 = 4200.0；与 dates 等长
-    assert gld["raw"][0] == 4200.0
-    assert len(gld["raw"]) == len(data["dates"])
+    gcf = next(s for s in data["series"] if s["key"] == "gcf")
+    # 08-03 gcf 历史 420.0 → raw 为原生 COMEX 报价（不再 ×10）；与 dates 等长
+    assert gcf["raw"][0] == 420.0
+    assert len(gcf["raw"]) == len(data["dates"])
 
 
 # ---- _resolve_symbols 纯函数 ----

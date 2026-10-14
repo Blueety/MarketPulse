@@ -157,7 +157,7 @@ class TestHistory:
         self._set_file(tmp_path, monkeypatch)
         an.append_history({"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5})
         data = an.load_history()
-        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5, "gspc": None, "ixic": None, "sh": None, "sz": None, "cyb": None, "gld": None, "btc": None}
+        assert data[0] == {"date": "2026-08-01", "vix": 22.3, "vxn": 26.1, "move": 72.5, "gspc": None, "ixic": None, "sh": None, "sz": None, "cyb": None, "gcf": None, "btc": None}
 
     def test_same_date_overrides(self, tmp_path, monkeypatch):
         self._set_file(tmp_path, monkeypatch)
@@ -269,7 +269,7 @@ class TestWatchlistSnapshot:
 def _wl_hist(dates, gspc):
     return [{"date": d, "vix": 20.0, "vxn": 18.0, "move": 75.0,
              "gspc": g, "ixic": g * 4, "sh": 3000.0, "sz": 10000.0, "cyb": 2200.0,
-             "gld": 200.0, "btc": 60000.0} for d, g in zip(dates, gspc)]
+             "gcf": 200.0, "btc": 60000.0} for d, g in zip(dates, gspc)]
 
 
 def _wl_series(dates, fn):

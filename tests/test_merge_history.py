@@ -27,7 +27,7 @@ class TestMergeHistory:
         assert row["date"] == "2026-09-03"
         assert row["sh"] == 3100.0 and row["sz"] == 10000.0 and row["cyb"] == 2200.0
         # 其余历史键置 None
-        for k in ("gspc", "ixic", "vix", "vxn", "move", "gld", "btc"):
+        for k in ("gspc", "ixic", "vix", "vxn", "move", "gcf", "btc"):
             assert row[k] is None
 
     def test_merge_updates_existing_row_keeps_other_keys(self, tmp_path, monkeypatch):

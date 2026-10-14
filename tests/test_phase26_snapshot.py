@@ -132,7 +132,7 @@ def test_render_snapshot_none_label(monkeypatch):
     assert "休市" not in out_us
 
     # alt：None → 数据暂缺
-    alt_syms = ["GLD", "BTC"]
+    alt_syms = ["GCF", "BTC"]
     out_alt = rep.render_snapshot(
         date="2026-09-04",
         values={s: None for s in alt_syms},

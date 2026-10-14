@@ -34,7 +34,7 @@ MARKET_CHART_TIMEOUT = 5  # 分市场趋势图限时（秒），超时跳过该�
 MARKET_CHART_PANELS = {
     "us": [("gspc", "GSPC", "#2b6de8"), ("ixic", "IXIC", "#1a9e6c")],
     "cn": [("sh", "SH", "#d1495b"), ("sz", "SZ", "#e07600"), ("cyb", "CYB", "#7b5ce0")],
-    "alt": [("gld", "GLD", "#d4a017"), ("btc", "BTC", "#f7931a")],
+    "alt": [("gcf", "GCF", "#d4a017"), ("btc", "BTC", "#f7931a")],
 }
 MARKET_CHART_TITLES = {
     "us": "US Major Indices — 30-Day Trend",
@@ -145,7 +145,7 @@ def render_report(date, values, changes, statuses, summary, has_history, trend_c
 
 ![A股大盘近30日趋势]({cn_trend_chart})
 """
-    # 十期：另类资产板块（GLD/BTC）—— 不参与告警、复用大盘四档趋势标签；值缺失 → 获取失败
+    # 十期：另类资产板块（GCF/BTC）—— 不参与告警、复用大盘四档趋势标签；值缺失 → 获取失败
     alts_rows = []
     for sym in alts_syms:
         meta = SYMBOLS[sym]
@@ -1041,7 +1041,7 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "sh": [r["sh"] for r in history],
             "sz": [r["sz"] for r in history],
             "cyb": [r["cyb"] for r in history],
-            "gld": [r["gld"] for r in history],
+            "gcf": [r["gcf"] for r in history],
             "btc": [r["btc"] for r in history],
         },
         "breach": {

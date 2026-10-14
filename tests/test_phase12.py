@@ -229,7 +229,7 @@ class TestDailyReportWiring:
         sentinel = [{"a": "VIX", "b": "GSPC", "pair": "x", "r": -0.5, "n": 10}]
 
         def fake_fetch_all(market=None):
-            return ({s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GLD", "BTC"]}, {})
+            return ({s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GCF", "BTC"]}, {})
 
         def fake_compute(history, pairs=None, window=None):
             return sentinel

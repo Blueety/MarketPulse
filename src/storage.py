@@ -32,7 +32,7 @@ DB_PATH = DATA_DIR / "marketpulse.db"
 DEFAULT_BACKUP_DIR = DATA_DIR / "backup"
 
 # 与 analyzer._HISTORY_KEYS 同源（测试锁定同步）；顺序仅作文档用途，存储/读取按名取值
-HISTORY_KEYS = ("gspc", "ixic", "sh", "sz", "cyb", "vix", "vxn", "move", "gld", "btc")
+HISTORY_KEYS = ("gspc", "ixic", "sh", "sz", "cyb", "vix", "vxn", "move", "gcf", "btc")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS history (
