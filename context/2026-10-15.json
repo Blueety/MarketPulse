@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3710.0797,
-      "change_pct": -1.5169619054821593,
+      "value": 3692.652,
+      "change_pct": -1.979575375214306,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 11868.32,
-      "change_pct": -2.0004886631874585,
+      "value": 11773.455,
+      "change_pct": -2.7838112937675823,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2797.105,
-      "change_pct": -2.4298485783442825,
+      "value": 2768.634,
+      "change_pct": -3.4229896227905794,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3797.2424,
       3800.8644,
       3767.2271,
-      3710.0797
+      3692.652
     ],
     "sz": [
       13723.322,
@@ -307,7 +307,7 @@
       12384.869,
       12353.699,
       12110.591,
-      11868.32
+      11773.455
     ],
     "cyb": [
       3354.969,
@@ -339,7 +339,7 @@
       2963.824,
       2958.344,
       2866.763,
-      2797.105
+      2768.634
     ],
     "gcf": [
       null,
@@ -407,72 +407,81 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "SH",
+        "current": 3692.652,
+        "previous": 3767.2271,
+        "change_pct": -1.98,
+        "threshold": 1.5622393071486673,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
       {
         "name": "消费",
-        "change": 0.91,
-        "turnover": "53.2亿",
-        "top_stock": "皇台酒业"
+        "change": 0.68,
+        "turnover": "167.9亿",
+        "top_stock": "尖峰集团"
       },
       {
         "name": "医药",
-        "change": 0.06,
-        "turnover": "342.9亿",
-        "top_stock": "百花医药"
+        "change": -1.0,
+        "turnover": "867.6亿",
+        "top_stock": "尖峰集团"
       },
       {
         "name": "金融",
-        "change": -0.75,
-        "turnover": "429.6亿",
+        "change": -1.13,
+        "turnover": "1213.9亿",
         "top_stock": "宇通客车"
       },
       {
         "name": "其他",
-        "change": -1.79,
-        "turnover": "3990.3亿",
+        "change": -2.19,
+        "turnover": "10512.1亿",
         "top_stock": "金种子酒"
       },
       {
-        "name": "农业",
-        "change": -2.14,
-        "turnover": "77.2亿",
-        "top_stock": "隆鑫通用"
+        "name": "地产/基建",
+        "change": -2.81,
+        "turnover": "64.0亿",
+        "top_stock": "万通发展"
       }
     ],
     "losers": [
       {
-        "name": "通信/电子",
-        "change": -2.84,
-        "turnover": "554.1亿",
-        "top_stock": "雪人集团"
-      },
-      {
         "name": "光伏/新能源",
-        "change": -2.83,
-        "turnover": "1025.9亿",
+        "change": -3.41,
+        "turnover": "2623.4亿",
         "top_stock": "佛塑科技"
       },
       {
-        "name": "资源/有色",
-        "change": -2.82,
-        "turnover": "117.9亿",
-        "top_stock": "闽东电力"
-      },
-      {
         "name": "军工",
-        "change": -2.69,
-        "turnover": "355.6亿",
-        "top_stock": "中船科技"
+        "change": -3.28,
+        "turnover": "956.8亿",
+        "top_stock": "天通股份"
       },
       {
-        "name": "地产/基建",
-        "change": -2.47,
-        "turnover": "26.6亿",
-        "top_stock": "万通发展"
+        "name": "通信/电子",
+        "change": -3.08,
+        "turnover": "1406.0亿",
+        "top_stock": "东方嘉盛"
+      },
+      {
+        "name": "农业",
+        "change": -2.94,
+        "turnover": "202.6亿",
+        "top_stock": "隆鑫通用"
+      },
+      {
+        "name": "资源/有色",
+        "change": -2.92,
+        "turnover": "291.4亿",
+        "top_stock": "闽东电力"
       }
     ]
   },
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "SH drop 2026-10-15",
     "消费 surge 2026-10-15",
-    "医药 surge 2026-10-15",
+    "医药 drop 2026-10-15",
     "金融 drop 2026-10-15",
-    "其他 drop 2026-10-15",
-    "农业 drop 2026-10-15"
+    "其他 drop 2026-10-15"
   ],
   "correlation": [],
   "watchlist": {
