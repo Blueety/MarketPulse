@@ -2,13 +2,13 @@
   "date": "2026-10-14",
   "indices": {
     "GSPC": {
-      "value": 7733.96,
-      "change_pct": -0.9158985068125449,
+      "value": 7718.94,
+      "change_pct": -1.10832815532737,
       "status": "下跌趋势"
     },
     "IXIC": {
-      "value": 26831.406,
-      "change_pct": -1.3710071686985772,
+      "value": 26692.87,
+      "change_pct": -1.8802486952468758,
       "status": "下跌趋势"
     },
     "SH": {
@@ -27,29 +27,29 @@
       "status": "下跌趋势"
     },
     "VIX": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 16.87,
+      "change_pct": 10.478061558611666,
+      "status": "平静"
     },
     "VXN": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 21.14,
+      "change_pct": 1.4395393474088325,
+      "status": "警惕"
     },
     "MOVE": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 99.0643,
+      "change_pct": -2.0056028283204013,
+      "status": "平静"
     },
     "GCF": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 4129.0,
+      "change_pct": -1.29801831090288,
+      "status": "连跌1日"
     },
     "BTC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 81586.59,
+      "change_pct": -2.410988319330716,
+      "status": "连跌1日"
     }
   },
   "history_30d": {
@@ -115,7 +115,7 @@
       14.84,
       15.21,
       15.27,
-      null
+      16.87
     ],
     "vxn": [
       21.71,
@@ -147,7 +147,7 @@
       20.55,
       20.55,
       20.84,
-      null
+      21.14
     ],
     "move": [
       76.1433,
@@ -179,7 +179,7 @@
       98.474,
       98.4735,
       101.0918,
-      null
+      99.0643
     ],
     "gspc": [
       7673.52,
@@ -211,7 +211,7 @@
       7811.54,
       7807.24,
       7805.45,
-      7733.96
+      7718.94
     ],
     "ixic": [
       26421.412,
@@ -243,7 +243,7 @@
       27366.17,
       27245.902,
       27204.38,
-      26831.406
+      26692.87
     ],
     "sh": [
       3940.5509,
@@ -371,7 +371,7 @@
       null,
       null,
       4183.3,
-      null
+      4129.0
     ],
     "btc": [
       78475.77,
@@ -403,7 +403,7 @@
       83683.55,
       81794.71,
       83602.23,
-      null
+      81586.59
     ]
   },
   "breach": {
@@ -411,10 +411,26 @@
     "indices": [
       {
         "name": "GSPC",
-        "current": 7733.96,
+        "current": 7718.94,
         "previous": 7805.45,
-        "change_pct": -0.92,
+        "change_pct": -1.11,
         "threshold": 0.8650098358536759,
+        "level": "WARN"
+      },
+      {
+        "name": "IXIC",
+        "current": 26692.87,
+        "previous": 27204.38,
+        "change_pct": -1.88,
+        "threshold": 1.3887360930708996,
+        "level": "WARN"
+      },
+      {
+        "name": "VIX",
+        "current": 16.87,
+        "previous": 15.27,
+        "change_pct": 10.48,
+        "threshold": 8.412478485869332,
         "level": "WARN"
       }
     ]
@@ -447,8 +463,8 @@
       },
       {
         "name": "军工",
-        "change": -1.31,
-        "turnover": "1383.9亿",
+        "change": -1.3,
+        "turnover": "1369.1亿",
         "top_stock": "久之洋"
       }
     ],
@@ -486,22 +502,221 @@
     ]
   },
   "us_sector_heat": {
-    "gainers": [],
-    "losers": []
+    "gainers": [
+      {
+        "name": "医疗健康 (XLV)",
+        "change": 2.53,
+        "turnover": "$20.6亿",
+        "top_stock": "XLV"
+      },
+      {
+        "name": "必需消费 (XLP)",
+        "change": 2.22,
+        "turnover": "$12.3亿",
+        "top_stock": "XLP"
+      },
+      {
+        "name": "能源 (XLE)",
+        "change": 0.64,
+        "turnover": "$17.0亿",
+        "top_stock": "XLE"
+      },
+      {
+        "name": "原材料 (XLB)",
+        "change": -0.1,
+        "turnover": "$4.4亿",
+        "top_stock": "XLB"
+      },
+      {
+        "name": "公用事业 (XLU)",
+        "change": -0.36,
+        "turnover": "$14.8亿",
+        "top_stock": "XLU"
+      }
+    ],
+    "losers": [
+      {
+        "name": "科技 (XLK)",
+        "change": -2.98,
+        "turnover": "$22.7亿",
+        "top_stock": "XLK"
+      },
+      {
+        "name": "通信服务 (XLC)",
+        "change": -1.3,
+        "turnover": "$7.5亿",
+        "top_stock": "XLC"
+      },
+      {
+        "name": "工业 (XLI)",
+        "change": -0.97,
+        "turnover": "$18.1亿",
+        "top_stock": "XLI"
+      },
+      {
+        "name": "房地产 (XLRE)",
+        "change": -0.81,
+        "turnover": "$3.2亿",
+        "top_stock": "XLRE"
+      },
+      {
+        "name": "可选消费 (XLY)",
+        "change": -0.77,
+        "turnover": "$9.3亿",
+        "top_stock": "XLY"
+      }
+    ]
   },
   "search_keywords": [
     "GSPC drop 2026-10-14",
+    "IXIC drop 2026-10-14",
+    "VIX surge 2026-10-14",
     "消费 drop 2026-10-14",
-    "金融 drop 2026-10-14",
-    "医药 drop 2026-10-14",
-    "其他 drop 2026-10-14"
+    "金融 drop 2026-10-14"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.75,
+      "n": 18
+    },
+    {
+      "a": "MOVE",
+      "b": "VIX",
+      "pair": "MOVE（债市波动） ↔ VIX（恐慌指数）",
+      "r": 0.54,
+      "n": 18
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "红利低波ETF",
+        "value": 1.365,
+        "change_pct": 1.19,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.08,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "399997.SZ",
+        "label": "中证白酒",
+        "value": 6187.521,
+        "change_pct": -0.41,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.47,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "515880.SS",
+        "label": "通信ETF国泰",
+        "value": 0.548,
+        "change_pct": -4.2,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.61,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512010.SS",
+        "label": "医药ETF易方达",
+        "value": 0.374,
+        "change_pct": -0.53,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.46,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "515790.SS",
+        "label": "光伏ETF华泰柏瑞",
+        "value": 0.738,
+        "change_pct": -1.86,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.91,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512200.SS",
+        "label": "南方中证全指房地产ETF",
+        "value": 1.218,
+        "change_pct": -1.62,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.71,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159732.SZ",
+        "label": "消费电子ETF华夏",
+        "value": 1.112,
+        "change_pct": -2.88,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.86,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159852.SZ",
+        "label": "软件ETF嘉实",
+        "value": 0.628,
+        "change_pct": -1.72,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.64,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "513130.SS",
+        "label": "恒生科技ETF华泰柏瑞",
+        "value": 0.518,
+        "change_pct": 1.57,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.36,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512480.SS",
+        "label": "半导体ETF国联安",
+        "value": 0.858,
+        "change_pct": -3.16,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.57,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159813.SZ",
+        "label": "半导体ETF鹏华",
+        "value": 0.603,
+        "change_pct": -3.21,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.72,
+          "n": 16
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
-      "avg_r": null
+      "avg_r": 0.44
     }
   }
 }
