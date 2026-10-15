@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3692.652,
-      "change_pct": -1.979575375214306,
+      "value": 3707.476,
+      "change_pct": -1.5860764008625854,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 11773.455,
-      "change_pct": -2.7838112937675823,
+      "value": 11816.788,
+      "change_pct": -2.42600051475605,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2768.634,
-      "change_pct": -3.4229896227905794,
+      "value": 2783.175,
+      "change_pct": -2.915762481935191,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3797.2424,
       3800.8644,
       3767.2271,
-      3692.652
+      3707.476
     ],
     "sz": [
       13723.322,
@@ -307,7 +307,7 @@
       12384.869,
       12353.699,
       12110.591,
-      11773.455
+      11816.788
     ],
     "cyb": [
       3354.969,
@@ -339,7 +339,7 @@
       2963.824,
       2958.344,
       2866.763,
-      2768.634
+      2783.175
     ],
     "gcf": [
       null,
@@ -411,9 +411,9 @@
     "indices": [
       {
         "name": "SH",
-        "current": 3692.652,
+        "current": 3707.476,
         "previous": 3767.2271,
-        "change_pct": -1.98,
+        "change_pct": -1.59,
         "threshold": 1.5622393071486673,
         "level": "WARN"
       }
@@ -423,65 +423,65 @@
     "gainers": [
       {
         "name": "消费",
-        "change": 0.68,
-        "turnover": "167.9亿",
-        "top_stock": "尖峰集团"
-      },
-      {
-        "name": "医药",
-        "change": -1.0,
-        "turnover": "867.6亿",
+        "change": 0.71,
+        "turnover": "257.7亿",
         "top_stock": "尖峰集团"
       },
       {
         "name": "金融",
-        "change": -1.13,
-        "turnover": "1213.9亿",
+        "change": -1.1,
+        "turnover": "2130.1亿",
         "top_stock": "宇通客车"
       },
       {
+        "name": "医药",
+        "change": -1.2,
+        "turnover": "1337.3亿",
+        "top_stock": "尖峰集团"
+      },
+      {
         "name": "其他",
-        "change": -2.19,
-        "turnover": "10512.1亿",
+        "change": -2.33,
+        "turnover": "18197.7亿",
         "top_stock": "金种子酒"
       },
       {
-        "name": "地产/基建",
-        "change": -2.81,
-        "turnover": "64.0亿",
-        "top_stock": "万通发展"
+        "name": "农业",
+        "change": -3.01,
+        "turnover": "317.5亿",
+        "top_stock": "隆鑫通用"
       }
     ],
     "losers": [
       {
-        "name": "光伏/新能源",
-        "change": -3.41,
-        "turnover": "2623.4亿",
-        "top_stock": "佛塑科技"
-      },
-      {
         "name": "军工",
-        "change": -3.28,
-        "turnover": "956.8亿",
+        "change": -3.96,
+        "turnover": "1636.7亿",
         "top_stock": "天通股份"
       },
       {
-        "name": "通信/电子",
-        "change": -3.08,
-        "turnover": "1406.0亿",
-        "top_stock": "东方嘉盛"
+        "name": "地产/基建",
+        "change": -3.7,
+        "turnover": "100.3亿",
+        "top_stock": "*ST华西"
       },
       {
-        "name": "农业",
-        "change": -2.94,
-        "turnover": "202.6亿",
-        "top_stock": "隆鑫通用"
+        "name": "光伏/新能源",
+        "change": -3.49,
+        "turnover": "4492.9亿",
+        "top_stock": "佛塑科技"
       },
       {
         "name": "资源/有色",
-        "change": -2.92,
-        "turnover": "291.4亿",
-        "top_stock": "闽东电力"
+        "change": -3.48,
+        "turnover": "481.7亿",
+        "top_stock": "北方稀土"
+      },
+      {
+        "name": "通信/电子",
+        "change": -3.27,
+        "turnover": "2481.9亿",
+        "top_stock": "东方嘉盛"
       }
     ]
   },
@@ -492,8 +492,8 @@
   "search_keywords": [
     "SH drop 2026-10-15",
     "消费 surge 2026-10-15",
-    "医药 drop 2026-10-15",
     "金融 drop 2026-10-15",
+    "医药 drop 2026-10-15",
     "其他 drop 2026-10-15"
   ],
   "correlation": [],
