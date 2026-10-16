@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3742.6561,
-      "change_pct": 0.948896230211606,
+      "value": 3716.2842,
+      "change_pct": 0.23757942060852025,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 11957.074,
-      "change_pct": 1.1871753982554316,
-      "status": "连涨1日"
+      "value": 11802.459,
+      "change_pct": -0.12125968579617172,
+      "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2809.899,
-      "change_pct": 0.960198334635792,
-      "status": "连涨1日"
+      "value": 2772.384,
+      "change_pct": -0.3877226548815711,
+      "status": "下跌趋势"
     },
     "VIX": {
       "value": null,
@@ -275,7 +275,7 @@
       3800.8644,
       3767.2271,
       3707.476,
-      3742.6561
+      3716.2842
     ],
     "sz": [
       13617.67,
@@ -307,7 +307,7 @@
       12353.699,
       12110.591,
       11816.788,
-      11957.074
+      11802.459
     ],
     "cyb": [
       3338.422,
@@ -339,7 +339,7 @@
       2958.344,
       2866.763,
       2783.175,
-      2809.899
+      2772.384
     ],
     "gcf": [
       null,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "军工",
-        "change": 4.02,
-        "turnover": "1169.5亿",
+        "change": 2.23,
+        "turnover": "1832.8亿",
         "top_stock": "晨曦航空"
       },
       {
         "name": "农业",
-        "change": 2.75,
-        "turnover": "207.6亿",
+        "change": 1.13,
+        "turnover": "313.5亿",
         "top_stock": "海南橡胶"
       },
       {
         "name": "资源/有色",
-        "change": 2.19,
-        "turnover": "261.5亿",
+        "change": 0.91,
+        "turnover": "408.4亿",
         "top_stock": "宏达股份"
       },
       {
-        "name": "地产/基建",
-        "change": 2.17,
-        "turnover": "62.6亿",
-        "top_stock": "海南橡胶"
+        "name": "消费",
+        "change": 0.85,
+        "turnover": "242.7亿",
+        "top_stock": "尖峰集团"
       },
       {
-        "name": "医药",
-        "change": 1.83,
-        "turnover": "1022.8亿",
-        "top_stock": "尖峰集团"
+        "name": "金融",
+        "change": 0.75,
+        "turnover": "1887.9亿",
+        "top_stock": "中鼎股份"
       }
     ],
     "losers": [
       {
-        "name": "消费",
-        "change": 0.97,
-        "turnover": "146.6亿",
-        "top_stock": "巨力索具"
-      },
-      {
-        "name": "金融",
-        "change": 1.42,
-        "turnover": "1099.2亿",
-        "top_stock": "中鼎股份"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": 1.52,
-        "turnover": "2453.8亿",
-        "top_stock": "万丰奥威"
+        "name": "医药",
+        "change": -1.65,
+        "turnover": "1833.8亿",
+        "top_stock": "尖峰集团"
       },
       {
         "name": "通信/电子",
-        "change": 1.59,
-        "turnover": "1352.0亿",
+        "change": -0.34,
+        "turnover": "2181.9亿",
         "top_stock": "东方嘉盛"
       },
       {
+        "name": "光伏/新能源",
+        "change": -0.06,
+        "turnover": "4007.4亿",
+        "top_stock": "万丰奥威"
+      },
+      {
+        "name": "地产/基建",
+        "change": 0.16,
+        "turnover": "100.8亿",
+        "top_stock": "海南橡胶"
+      },
+      {
         "name": "其他",
-        "change": 1.74,
-        "turnover": "9982.8亿",
+        "change": 0.55,
+        "turnover": "16627.3亿",
         "top_stock": "海螺水泥"
       }
     ]
@@ -484,8 +484,8 @@
     "军工 surge 2026-10-16",
     "农业 surge 2026-10-16",
     "资源/有色 surge 2026-10-16",
-    "地产/基建 surge 2026-10-16",
-    "医药 surge 2026-10-16"
+    "消费 surge 2026-10-16",
+    "金融 surge 2026-10-16"
   ],
   "correlation": [],
   "watchlist": {
