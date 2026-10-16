@@ -2,14 +2,14 @@
   "date": "2026-10-15",
   "indices": {
     "GSPC": {
-      "value": 7731.98,
-      "change_pct": 0.16893511285228235,
-      "status": "连涨1日"
+      "value": null,
+      "change_pct": null,
+      "status": "未开盘"
     },
     "IXIC": {
-      "value": 26636.084,
-      "change_pct": -0.21273845787283296,
-      "status": "下跌趋势"
+      "value": null,
+      "change_pct": null,
+      "status": "未开盘"
     },
     "SH": {
       "value": 3707.476,
@@ -456,7 +456,7 @@
       {
         "name": "军工",
         "change": -3.96,
-        "turnover": "1636.7亿",
+        "turnover": "1631.5亿",
         "top_stock": "天通股份"
       },
       {
@@ -496,12 +496,149 @@
     "医药 drop 2026-10-15",
     "其他 drop 2026-10-15"
   ],
-  "correlation": [],
+  "correlation": [
+    {
+      "a": "VIX",
+      "b": "GSPC",
+      "pair": "VIX（恐慌指数） ↔ 标普500",
+      "r": -0.78,
+      "n": 19
+    },
+    {
+      "a": "IXIC",
+      "b": "CYB",
+      "pair": "纳斯达克 ↔ 创业板指",
+      "r": 0.55,
+      "n": 26
+    }
+  ],
   "watchlist": {
-    "stocks": [],
+    "stocks": [
+      {
+        "symbol": "515300.SS",
+        "label": "红利低波ETF",
+        "value": 1.361,
+        "change_pct": -0.29,
+        "corr": {
+          "benchmark": "SH",
+          "r": -0.14,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "399997.SZ",
+        "label": "中证白酒",
+        "value": 6264.521,
+        "change_pct": 1.24,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.43,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "515880.SS",
+        "label": "通信ETF国泰",
+        "value": 0.521,
+        "change_pct": -4.93,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.68,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512010.SS",
+        "label": "医药ETF易方达",
+        "value": 0.377,
+        "change_pct": 0.8,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.45,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "515790.SS",
+        "label": "光伏ETF华泰柏瑞",
+        "value": 0.714,
+        "change_pct": -3.25,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.92,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512200.SS",
+        "label": "南方中证全指房地产ETF",
+        "value": 1.178,
+        "change_pct": -3.28,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.72,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159732.SZ",
+        "label": "消费电子ETF华夏",
+        "value": 1.074,
+        "change_pct": -3.42,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.89,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159852.SZ",
+        "label": "软件ETF嘉实",
+        "value": 0.62,
+        "change_pct": -1.27,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.67,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "513130.SS",
+        "label": "恒生科技ETF华泰柏瑞",
+        "value": 0.501,
+        "change_pct": -3.28,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.27,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "512480.SS",
+        "label": "半导体ETF国联安",
+        "value": 0.84,
+        "change_pct": -2.1,
+        "corr": {
+          "benchmark": "SH",
+          "r": 0.65,
+          "n": 16
+        }
+      },
+      {
+        "symbol": "159813.SZ",
+        "label": "半导体ETF鹏华",
+        "value": 0.592,
+        "change_pct": -1.82,
+        "corr": {
+          "benchmark": "SZ",
+          "r": 0.76,
+          "n": 16
+        }
+      }
+    ],
     "portfolio_risk": {
       "high": false,
-      "avg_r": null
+      "avg_r": 0.44
     }
   }
 }
