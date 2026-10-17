@@ -1016,3 +1016,15 @@
 - **已落**：`web/static/dom-write-guard.js`（方案 ③ 检测 + 方案 ① 修回替换语义；6 页 head 里**最先**执行 ⇒ 首帧前就能认出；晚改写与克隆型在 `DOMContentLoaded` +1.5s 复查），标记 `<html data-dom-write-patched>` / `data-dom-write-repaired` / `data-dom-write-repair-failed` / `data-dom-write-dup-ids`；验收 `tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py`（四例 × chromium+firefox：干净环境不得误报 / 前置注入必须被认出**且连点 3 次刷新后概览恒为 6 小卡** / 克隆注入必须被认出 / 描述符被锁时优雅降级）。⚠️ 新增静态资源必须登记 `web/app.py` 的 `_ASSET_FILES`，否则改它不换 `?v=`，验收会吃旧副本。
 - **修写入语义要「先清空再委派」，不要「从干净 realm 取原生访问器覆盖回去」**（2026-10-17 实测否掉）：内容脚本 `all_frames` 是常见配置 ⇒ 新 iframe 的 realm **同样被改写**，取回的「原生」就是被改写的那一个；更糟的是跨 realm 委派会把页面**写崩** —— 注入层开始抛 `Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'`，于是「修」比「不修」更坏。正确做法：给命中的 setter 套一层 `set(v){ while(this.firstChild) this.removeChild(this.firstChild); return 原setter.call(this,v); }` —— 不依赖干净 realm、不跨 realm、把「前置插入/追加」都抹平，且只在探针命中时安装（干净环境零改动）。**判据要钉用户可见症状**（连点 3 次刷新后概览仍 6 小卡），不是「标记出现了」。
 - **静态排查的边界（别重复踩）**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）会超时；Firefox 的 `storage/default/` 按**每个源一个目录**铺开（含用户打开过的本地 html 路径），全量扫同样超时 —— 要查用户脚本得先按 UUID 定位到具体扩展的 `idb`。已知会 hook 同族 API 的扩展：AdGuard（`vendors/tsurlfilter.js` 的 `prevent-innerHTML` scriptlet，语义是**吞掉写入**，与「重复」不符）、Mira Translator（双语模式**克隆块**并 `insertAdjacentElement('afterend')` 插在原文之后）。
+
+## 前端验收 verify_ui 的「crosshair 组」会随机红（2026-10-17 实测）
+
+- **`CS-8`（多宽度吸附精度）/`CS-8b`（不再跟手）/`CS-2b`（同 x 吸住）会随机红，且与哨兵无关**：用
+  `page.route("**/dom-write-guard.js*", abort)` 把哨兵整条拦掉再连跑 3 次，红的那几条**一模一样**
+  （`CS-8 375 档` 3/3 红、`CS-8b` 2/3 红、`CS-2b` 3/3 绿）；带哨兵时同样是这一组在红 ⇒ 抖动来自**前置状态**
+  （同一页里先跑过的滚动/视口/其它断言改变画布几何与数据点位置；`CS-8b` 的判据 `max|$crossY − mouseY| > 20` 实测只有 18.1，属**临界**）。
+- **判回归的正确姿势**：只跑那一组、**连跑 3 次**（做法：`import verify_ui`，起本地服务后直接调
+  `assert_crosshair_snap(page)`，见 `tasks/2026-10-17-dom-write-hardening/journal.md` §7）。连跑里**同样的断言随机红** ⇒ 抖动；
+  **每次都红同一条**才去查代码。
+- 所以**别只看最后一次全量 `verify_ui` 的 FAIL 数**：同一天里它先是两次 690/0 全绿，随后又出现 1 条 crosshair 红。
+  读 `%TEMP%\marketpulse-verify\verify-report.json` 的 `failures` 列表 + 上面的复现，再决定动不动代码。

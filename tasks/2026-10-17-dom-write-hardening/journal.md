@@ -98,6 +98,13 @@
   `fb046d3`（哨兵 + 免疫）已推送，**约 15s 后**线上即生效（timer 拉取），**无需重启**（模板 Jinja `auto_reload` 默认 True；静态资源按请求读）。
 - 验收（本机 curl）：`/` 首页含 `dom-write-guard` **1** 处（原 0）、`/static/dom-write-guard.js` **200**（原 404）、
   **6 个页面全部包含**该脚本、指纹 `?v=1792217399`。
+- 真浏览器验收（Playwright，`ignore_https_errors=True`，chromium + firefox 各一遍，脚本在 `%TEMP%`）：
+  `hasGuard=true`；`patched/repaired/repair-failed/dup-ids` 全为 `null`（干净环境**零副作用**）；页面内探针 `writeSemantics='b'`（正常替换语义）；
+  KPI 4 张 / 概览 6 小卡；液态玻璃 `glassEngine=frost`、`skinReady=1`；**零 `[dom-write]` warn、零 pageerror**。
+- Railway 线：`b6dcb73` 把「Railway 决定下线」写进 `docs/deploy-ecs.md §4`（现状 404 `Application not found` + 关停步骤 + 仓库侧为何保留 `app.py`/三处配置）。
+  ⚠️ **关停本身我做不了**：本机无 Railway CLI / `~/.railway` token / `RAILWAY_*` 环境变量 ⇒ 需要账号侧操作（Railway dashboard 删服务 + GitHub App 撤仓库授权）。
+- **加固版（`fb385b8`）同样一条龙验过**：线上 `/static/dom-write-guard.js` 的 sha256 == 本地 `01e7b9bb…`（推送后约 **195s** 生效），
+  真浏览器（chromium + firefox 各一遍）`hasGuard=true`、四个 `data-dom-write-*` 标记全 `null`、页面探针 `'b'`、概览 **6** 小卡、零 warn / 零 pageerror。
 
 ## 7. 部署后仍重复 ⇒ 持续复核（C5/C6）与「不许更糟」还原
 
@@ -137,13 +144,11 @@
 ⇒ 本节的 C5/C6 修复（112/0 全绿）修的是机制 (A) 的真实故障模式，**不解决用户当前这条**；用户当前这条的正解 = 关掉/排除该扩展。
 两种机制的判别命令与本次实测数据已写进 `docs/pitfalls.md`（「两种机制 + 一条命令分清」）。
 
-## 8. 涉及的 ADR
-- 真浏览器验收（Playwright，`ignore_https_errors=True`，chromium + firefox 各一遍，脚本在 `%TEMP%`）：
-  `hasGuard=true`；`patched/repaired/repair-failed/dup-ids` 全为 `null`（干净环境**零副作用**）；页面内探针 `writeSemantics='b'`（正常替换语义）；
-  KPI 4 张 / 概览 6 小卡；液态玻璃 `glassEngine=frost`、`skinReady=1`；**零 `[dom-write]` warn、零 pageerror**。
-- Railway 线：`b6dcb73` 把「Railway 决定下线」写进 `docs/deploy-ecs.md §4`（现状 404 `Application not found` + 关停步骤 + 仓库侧为何保留 `app.py`/三处配置）。
-  ⚠️ **关停本身我做不了**：本机无 Railway CLI / `~/.railway` token / `RAILWAY_*` 环境变量 ⇒ 需要账号侧操作（Railway dashboard 删服务 + GitHub App 撤仓库授权）。
+**门禁结果（2026-10-17）**：`pytest` **869 passed** ✓；`verify_ui` 首跑 **1 条 FAIL**（`CS-2b`，crosshair 吸附组）——
+复现证明是**该组固有抖动、与哨兵无关**：把哨兵用 `page.route(..., abort)` 整条拦掉再连跑 3 次，红的是同一组
+（`CS-8 375 档` 3/3 红、`CS-8b` 2/3 红、`CS-2b` 3/3 绿）；带哨兵时同样是这一组在红。
+⇒ 判定与复现姿势写进 `docs/pitfalls.md`（「前端验收 verify_ui 的 crosshair 组会随机红」）。
 
-## 7. 涉及的 ADR
+## 8. 涉及的 ADR
 
 无。三条准入不齐（改动易撤销：一个 `<script>` 标签 + 一个自包含文件），决策记在本 journal 与 `docs/pitfalls.md`。
