@@ -980,6 +980,36 @@
 
 ## 前端「内容重复」的取证与哨兵（2026-10-17）
 
+- **两种机制会产生几乎相同的症状，必须先分清（2026-10-17 实测踩过：先入为主认定是「写入语义被改写」，结果线上那台根本不是）**：
+  **(A) 写入语义被改写**（`el.innerHTML = x` 变成「前置插入」）—— 症状：旧内容在后、**初始占位符/骨架屏被顶到最后**、同屏出现两个不同时刻的值；
+  **(B) 第三方脚本克隆 DOM 块并插在原文之后**（翻译类扩展的双语模式就是这么做）—— 症状：**活的那份在最前、冻结的旧副本堆在后面**，
+  骨架屏同样会在末尾（那是最早那份副本）。
+  **一条命令分清**（在出问题的页面控制台跑）：
+  ```js
+  JSON.stringify({setter:String(Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML').set).slice(0,60),
+    dup:Object.entries([...document.querySelectorAll('[id]')].reduce((a,e)=>(a[e.id]=(a[e.id]||0)+1,a),{})).filter(([,n])=>n>1),
+    mini:document.querySelectorAll('#overview-body .mini-card').length})
+  ```
+  `setter` 含 `native code` + `dup` 为空 + `mini` = 12（应 6）⇒ **机制 (B)**，本站代码与哨兵都无责，去查翻译/脚本类扩展；
+  `setter` 不含 `native code` ⇒ 机制 (A)，哨兵会认出来并修回。**实测线上那台（2026-10-17）就是 (B)**：
+  `setter` 是 `function innerHTML() { [native code] }`、`dup=[]`、`mini=12`，`<html>` 上没有任何 `data-dom-write-*` 标记
+  ⇒ 哨兵安静是对的（它只管机制 (A)）。**肇事线索**：`ypud1q61.default-release` 里 **Mira Translator 3.5.8.8000 的 updateDate = 2026-10-16 19:30**，
+  正是重复第一次出现的当天；它的双语模式 `cloneNode` + `insertAdjacentElement('afterend')`（源码 18 处）与 (B) 的形态完全吻合。
+  ⚠️ 这类扩展**不会**留下重复 id（克隆的是 `.mini-card` 这类无 id 的子元素，不是带 id 的容器）⇒ 别拿「有没有重复 id」当唯一判据。
+  **进一步取证（2026-10-17 实测）**：把 `mira-translator-v2@davidbai.com.xpi` 解包看代码 ——
+  `content.js` 里 `defineProperty` 命中 **0 次**（⇒ 它**不**改 `innerHTML`/`textContent` 的 setter，与「setter 仍是 native」的实测吻合），
+  而 `cloneNode(true)` + `insertAdjacentElement("afterend", …)` 成片出现，插入物自带 `mira-ext-paragraph-translation`(118)/`mira-ext-*-wrapper`/`data-mira-processing` 等标记。
+  ⇒ 与机制 (B) 完全吻合；且该 xpi 的文件时间 = **2026-10-16 19:30**（当天唯一被更新的扩展）。
+  **要一次点name**：在页面里钩住插入 API，让下一次重复自己报出调用栈（栈里会直接出现 `moz-extension://<uuid>/content.js`）：
+  ```js
+  (() => { const t = document.getElementById('overview-body'), n0 = t.childNodes.length;
+    const w = (p, k) => { const o = p[k]; p[k] = function (...a) { const r = o.apply(this, a);
+      if (t.contains(this) || this === t) if (t.childNodes.length > n0) console.warn('[who-inserts] ' + k, new Error('s').stack);
+      return r; }; };
+    w(Node.prototype, 'insertBefore'); w(Node.prototype, 'appendChild');
+    w(Element.prototype, 'insertAdjacentElement'); w(Element.prototype, 'insertAdjacentHTML');
+    console.log('[who-inserts] 钩子已装，等下一次重复（刷新或等自动刷新）…'); })();
+  ```
 - **页面出现「同一块内容重复 2~5 份、且后几份是旧值」时，先怀疑第三方改写了 DOM 写入语义，不要先查本站渲染代码**：本站全仓（含 git 历史）零 `cloneNode`、零原型改写，前端唯一的 `insertBefore` 是液态玻璃引擎 `inject()` 插两个**空** div（`.lg-inner` / `.lg-clone`）；6 种浏览器配置 + 压力测试（6 次刷新 / 切范围 / 切主题 / 改窗口 / 切 tab）下 DOM 恒为单份。⇒ 定性靠下面三条**取证签名**，不靠「看起来像」。
 - **签名（任一即可定性）**：① 复制件落在**正常排版节距**上、互不重叠、把卡片外框撑高 ⇒ 真实 DOM 节点，不是绘制假影；② **初始占位符（`—`）与骨架屏被顶到最后**、且 `getElementById` 命中的是**第一个**副本 ⇒ 写入被「前置化」，或节点被「克隆前置」（后者同时留下**重复 id**）；③ 同一元素同屏出现**两个不同时刻的值**（如 `北京时间 14:45` 紧跟 `14:44`）—— 布局重复与绘制假影都做不到这件事。
 - **量法**：`el.innerHTML = 'aaa'; el.innerHTML = 'b'` 后读回 —— 原生得 `'b'`，被前置化得 `'baaa'`（探针用**游离节点**，不触发布局）。比「源码里有没有 `defineProperty`」可靠：压缩/间接实现会漏源码特征，行为探针不会。命中后**把被改写 setter 的源码片段打进 console**（`Function.prototype.toString.call(descriptor.set)`）—— 片段通常直接点名肇事扩展/用户脚本。
