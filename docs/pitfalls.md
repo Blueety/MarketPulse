@@ -1026,5 +1026,5 @@
 - **判回归的正确姿势**：只跑那一组、**连跑 3 次**（做法：`import verify_ui`，起本地服务后直接调
   `assert_crosshair_snap(page)`，见 `tasks/2026-10-17-dom-write-hardening/journal.md` §7）。连跑里**同样的断言随机红** ⇒ 抖动；
   **每次都红同一条**才去查代码。
-- 所以**别只看最后一次全量 `verify_ui` 的 FAIL 数**：同一天里它先是两次 690/0 全绿，随后又出现 1 条 crosshair 红。
+- 所以**别只看最后一次全量 `verify_ui` 的 FAIL 数**：同一天里它先是两次 690/0 全绿，随后又出现 1 条 crosshair 红，**再复跑又是 `ALL PASSED (10 SKIPPED)`**。
   读 `%TEMP%\marketpulse-verify\verify-report.json` 的 `failures` 列表 + 上面的复现，再决定动不动代码。

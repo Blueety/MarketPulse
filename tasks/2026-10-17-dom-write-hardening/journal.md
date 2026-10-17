@@ -148,6 +148,7 @@
 复现证明是**该组固有抖动、与哨兵无关**：把哨兵用 `page.route(..., abort)` 整条拦掉再连跑 3 次，红的是同一组
 （`CS-8 375 档` 3/3 红、`CS-8b` 2/3 红、`CS-2b` 3/3 绿）；带哨兵时同样是这一组在红。
 ⇒ 判定与复现姿势写进 `docs/pitfalls.md`（「前端验收 verify_ui 的 crosshair 组会随机红」）。
+**复跑结果：`ALL PASSED (10 SKIPPED)`** ✓（10 条 SKIP 全是上游 macro/econ 不可用，非回归）⇒ 抖动结论成立。
 
 ## 8. 涉及的 ADR
 
