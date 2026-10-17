@@ -1,0 +1,7 @@
+# 服务器侧文本资产必须 LF。
+#
+# 本仓库 core.autocrlf=true ⇒ Windows 检出时 `.sh` / `.service` / `.conf` 会被写成 CRLF，
+# 传到 Linux 后 shell 脚本直接报 `bad interpreter: /usr/bin/env bash^M`，
+# systemd 单元里的路径也可能带尾随 \r。属性优先于 core.autocrlf，这里钉死。
+*.sh        text eol=lf
+deploy/**   text eol=lf
