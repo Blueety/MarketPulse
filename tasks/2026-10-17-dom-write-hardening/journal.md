@@ -1,0 +1,97 @@
+# Journal · 2026-10-17 DOM 写入语义哨兵（方案 ③）
+
+## 1. 目标与结论
+
+用户报「首页会显示重复」。取证链（只读分析 → 机制确认）结论：**本仓没有产生重复的代码路径**，
+重复来自**页面里的 DOM 写入语义被第三方脚本改写**（`el.innerHTML = x` / `el.textContent = x`
+不再替换，而是「前置插入、旧内容留下」）。用户拍板处置顺序：**先 0（定位注入源）→ 再 ③（只检测）**，
+随后追加 **①（让本仓免疫）**。本任务最终落地 **③ + ①**：哨兵在首帧前认出这类改写（含**肇事 setter 的
+源码片段**，用于点名），并把写入语义**修回替换**（页面不再累积重复）；修不动时如实打标记、优雅降级。
+
+### 1.1 取证链（为什么能排除本仓）
+
+| 证据 | 读数 |
+|---|---|
+| 全仓 + git 历史有无克隆/原型改写 | 零 `cloneNode`、零 `defineProperty(...prototype...)`；前端唯一 `insertBefore` 是引擎 `inject()` 插两个**空** div（`.lg-inner` / `.lg-clone`，后者 `display:none`） |
+| 6 种浏览器配置实测（无头/有头 × DPR1/2 × 1440/2560 × frost/refract，含滚动/6 次刷新/切范围/切主题/改窗口/切 tab） | DOM 恒为单份：概览 6 小卡、板块 5 行、1 个风险偏好块、1 个日期 chip、**0 个重复 id**、`lg-inner=lg-clone=12` |
+| 用户截图的三条签名 | ① 复制件落在**正常排版节距**上、互不重叠、把卡片外框撑高（⇒ 真实 DOM 节点，非绘制假影）；② 日期 chip = `2026-10-16 周五`×4 + 末尾仍是初始占位 `—`，`#overview-body` = 4 组真实卡 + 最后 1 组**骨架屏**（首次渲染的产物）；③ `北京时间 14:45` 紧跟 `14:44`（同屏两个时刻 ⇒ 布局重复与绘制假影都做不到） |
+| 机制复现 | 同一份代码 + 把 setter 改成「前置插入」语义跑一遍 ⇒ **逐项复现**上述形态（日期 ×4+`—`、板块 25 行、4 组+骨架、风险偏好 ×4） |
+
+### 1.2 步骤 0：静态排查注入源（结论 + 边界）
+
+| 嫌疑 | 结论 |
+|---|---|
+| omp/hapi 本体（`/d/hapi` 的 `cli` / `hub`） | **排除**：无 `addInitScript` / `evaluateOnNewDocument` / 原型改写，且 `cli hub` 内零 `innerHTML` |
+| Firefox 扩展 **Long Screenshot** | **排除**：MV2 遗留实现，靠 `ctx.drawWindow` 截图，不碰 DOM |
+| Firefox 扩展 **AdGuard** | **不符**：`vendors/tsurlfilter.js` 的 `prevent-innerHTML` scriptlet 确实重定义 `Element.prototype.innerHTML`，但语义是**吞掉写入**（`return` 不写），不会产生「重复」 |
+| Firefox 扩展 **Mira Translator**（2026-10-16 19:30 装，与截图同期） | **存疑**：双语模式会**克隆块**并以 `insertAdjacentElement('afterend')` 插到原文之后（18 处 `afterend`）；但插入位置在原文**之后**，与「旧值被顶到最后」的签名不完全吻合 |
+| **Tampermonkey 用户脚本** | **未能穷举**：Firefox 的 `storage/default/` 按源一目录铺开，全量扫描两次都超时（300s/240s 被杀）；要查得先按 UUID 定位到具体扩展的 `idb` |
+| cua-driver / cua | 只有 pid 文件与界面覆盖层，未见页面注入 |
+
+⇒ 静态侧只能把范围收窄到「翻译/脚本类扩展」，**无法闭合**。故把识别能力做进 ③ 的哨兵：
+它跑在**出问题的那台环境里**，命中时把**被改写 setter 的源码片段**打进 console —— 片段通常直接点名肇事者。
+
+## 2. 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| `web/static/dom-write-guard.js` | **新增**（哨兵：行为探针 + 写入语义修复 + 重复 id 检查；只在探针命中时安装包装 ⇒ 干净环境零改动；永不抛错） |
+| `web/templates/{index,macro,macro_cn,timeline,backtest,settings}.html` | head 里各 +1 行 `<script src="/static/dom-write-guard.js?v={{ asset_v }}">`（meta 之后、主题内联脚本之前） |
+| `web/app.py` | `_ASSET_FILES` +`"dom-write-guard.js"`（不登记 ⇒ 改它不换 `?v=`，验收吃旧副本） |
+| `tasks/2026-10-17-dom-write-hardening/{plan.md,verify_dom_write_guard.py,journal.md}` | **新增**（计划 / 验收回路 / 本日志） |
+| `docs/pitfalls.md` | +1 节「前端『内容重复』的取证与哨兵（2026-10-17）」 |
+
+哨兵设计要点（详见文件头注释）：
+
+- **行为探针**而不是源码特征：`el.innerHTML = 'aaa'` 再 `= 'b'`，读回应为 `'b'`（被前置化则 `'baaa'`）。探针用**游离节点** ⇒ 不触发布局、不影响页面。
+- **两轮检测**：head 里**最先**执行（抓 `document_start` 注入）+ `DOMContentLoaded` +1.5s 复查（抓晚改写与克隆型；复查也会再修一次）。
+- **证据（点名肇事者）**：`console.warn('[dom-write] …')`（含 API 名、实测行为、**当前 setter 的源码片段**）+ `<html data-dom-write-patched="…">`。
+- **① 免疫 = 修回「替换语义」**（不是取回原生 setter）：给命中的 setter 套一层
+  `set(v){ while(this.firstChild) this.removeChild(this.firstChild); return 原setter.call(this,v); }`
+  ⇒ 对方是「前置插入」还是「追加」都被抹平；标记 `data-dom-write-repaired` / `data-dom-write-repair-failed`。
+- **为什么不用「从干净 realm 取原生访问器覆盖回去」（第一版实现，实测否掉）**：内容脚本的 `all_frames`
+  是常见配置 ⇒ 新 iframe 的 realm 同样被改写，取回的「原生」就是被改写的那一个（本仓验收里 Playwright 的
+  `add_init_script` 正是「注进所有 frame」的行为）；更糟的是跨 realm 委派会把页面**写崩** —— 实测注入层开始抛
+  `insertBefore: parameter 1 is not of type 'Node'`，于是「修」比「不修」更坏。
+- **已知盲点**（写在文件头）：被改写的是 `insertAdjacentHTML` / `appendChild` 这类**方法**时探针看不到；
+  对方把描述符设成 non-configurable 时修不动（如实报 `repair-failed`，页面降级为「仍会重复但可用」）。
+
+## 3. 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py`（闸门 A 主回路） | **修前红**：PASS 5 / FAIL 6（哨兵未落地，C2/C3 全红）；**③ 后绿**：chromium + firefox **52 / 0**；**① 后绿**：chromium + firefox **74 / 0**，exit 0 |
+| ↳ 关键判据（C2，两引擎） | `patched` ✓ · warn 含被改写 setter 的**源码片段** ✓ · `repaired` ✓ · 页面内探针回到 `'b'` ✓ · **连点 3 次刷新后概览恒为 6 小卡（用户可见症状消失）** ✓ · 零 pageerror ✓ |
+| ↳ 优雅降级（C4，两引擎） | 描述符被锁（`configurable:false`）⇒ `patched` + `repair-failed` + 页面照常渲染（6 小卡）+ 零 pageerror ✓ |
+| `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | **PASS 690 / FAIL 0 / SKIP 10**，`ALL PASSED (10 SKIPPED)`；SKIP 全部是 `上游 macro=DOWN econ=DOWN`（`HTTP 403`，本机无代理的既有行为），与本次改动无关 |
+| `venv/Scripts/python -m pytest tests/ -q` | **869 passed**，12 warnings（既有的 matplotlib tight_layout 警告） |
+| `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 无输出（闸门 B ✓） |
+| `git status --short` | 仅本次预期文件 + 一个**既有的**未跟踪 `_wd_check.py`（4 行时区探针，非本次产生，按闸门 B 应由其作者删除） |
+
+验收四例（`verify_dom_write_guard.py`，每例都在 chromium 与 firefox 各跑一遍）：
+
+- **C1 干净环境 ×6 页**：无 `patched` / `repaired` / `dupIds`、无 warn、无 pageerror（不得误报）—— 这一条同时验证 6 个模板的接线。
+- **C2 前置语义注入**：见上表关键判据。**「连点 3 次刷新后仍 6 小卡」是用户可见症状的回归护栏**（未修复时该断言实测为 24 张）。
+- **C3 克隆型注入**：`data-dom-write-dup-ids="1"` ✓ + warn 说明重复 id 的后果（`getElementById` 只命中第一个副本 ⇒ 其余副本冻结在旧值）✓。
+- **C4 锁死描述符**：见上表优雅降级。
+
+## 4. 遇到的问题
+
+1. **「③ 只点名不修复」的断言一开始写成了 `miniCards > 6`**（靠「多次渲染会累积」）⇒ 在该验收窗口内只落了 1~2 次渲染，读数恒为 6，红。改成**直接探针**（在页面里连写两次读回 `baaa`）后与渲染次数解耦。
+2. **静态排查两次超时**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）300s 被杀；扫 Firefox `storage/default/` 240s 被杀。教训写进 pitfalls（先按 UUID 定位到具体扩展再扫）。
+3. `verify_ui.py` 报 10 条 SKIP：不是回归，是上游不可用（`macro=DOWN econ=DOWN`）——按 `docs/commands.md` 的口径，SKIP ≠ 通过，已按提示先查上游。
+4. **① 的第一版实现（从同源空白 iframe 的 realm 取原生访问器覆盖回去）被验收否掉**：Playwright 的 `add_init_script` 注进**所有 frame** ⇒ 新 iframe 的 realm 同样被改写，取回的「原生」就是被改写的那一个；且跨 realm 委派让注入层开始抛
+   `insertBefore: parameter 1 is not of type 'Node'`（页面从「重复」变成「报错」）。改用「先清空子节点、再委派给当前 setter」后两引擎全绿 —— **这条弯路写进了 `docs/pitfalls.md`**（`all_frames` 是常见配置，别指望有干净 realm）。
+5. 一次验收因 uvicorn 未在 30s 内就绪而中断（`wait_ready` 超时）⇒ 已把就绪超时放宽到 60s，并把 uvicorn 的 stdout/stderr 落 `%TEMP%` 日志、失败时打印尾部（下次同类失败可直接归因，不用猜）。
+
+## 5. 下次注意什么
+
+- 哨兵**必须**留在 head 里最先的位置：`document_start` 阶段注入的脚本只在首帧前能被抓到；晚改写靠 `DOMContentLoaded` +1.5s 复查兜底。
+- 新增静态资源**必须**登记 `web/app.py` 的 `_ASSET_FILES`，否则 `?v=` 不变、验收吃旧副本。
+- 报告「第三方改写了页面」这类问题时，要给**可复现的判据**（行为探针 + 源码片段 + 三条签名），不要只说「像是扩展干的」—— 本任务的 C2 就是那条回路。
+- **判据要钉用户可见症状**：「标记出现了」只证明检测生效；`连点 3 次刷新后概览仍 6 小卡` 才证明免疫生效（未修复时该断言实测为 24 张）。
+- 方案 ②（160 个写入点改用 `replaceChildren`）**未做**：① 的「先清空再委派」已覆盖本场景且改动面小得多；只有哪天连 `insertAdjacentHTML` 这类**方法**也被改写，才需要上 ②（真免疫，不依赖任何原型包装）。
+
+## 6. 涉及的 ADR
+
+无。三条准入不齐（改动易撤销：一个 `<script>` 标签 + 一个自包含文件），决策记在本 journal 与 `docs/pitfalls.md`。

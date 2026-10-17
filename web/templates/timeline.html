@@ -6,6 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <!-- DOM 写入语义哨兵（2026-10-17，方案 ③）：只检测、不修改；head 里最先执行 ⇒ 首次渲染前就能认出被改写的写入语义 -->
+  <script src="/static/dom-write-guard.js?v={{ asset_v }}"></script>
   <title>市场日历 · MarketPulse</title>
   <script>
     // ⚠️ 与 macro.html / macro_cn.html 的 head 内联脚本**同源**（D1 修复版：显式应用存储到的主题值，
