@@ -2,6 +2,13 @@
   "date": "2026-10-17",
   "items": [
     {
+      "title": "IMF警告日本可能需要更快加息，全球债市再添压力？",
+      "url": "https://wallstreetcn.com/articles/3783840",
+      "source": "华尔街见闻",
+      "published": "2026-10-17",
+      "summary": "国际货币基金组织罕见地为日本货币政策正常化背书，并警告若通胀超预期，日本央行可能需要加快加息步伐"
+    },
+    {
       "title": "AI融资成本攀升：Anthropic拟向黑石提供超10%收益率",
       "url": "https://wallstreetcn.com/articles/3783838",
       "source": "华尔街见闻",
@@ -49,13 +56,6 @@
       "source": "华尔街见闻",
       "published": "2026-10-17",
       "summary": "AI基础设施融资风险与能源价格骤升同步爆发，令华尔街本周承受双重冲击"
-    },
-    {
-      "title": "卢比单周涨2%创七个月最大，贸易逆差却扩大至302亿美元，印度央行护盘资金已动用约一半",
-      "url": "https://wallstreetcn.com/articles/3783824",
-      "source": "华尔街见闻",
-      "published": "2026-10-17",
-      "summary": "印度卢比录得七个月最大单周涨幅，政策干预提振但持续性存疑"
     }
   ]
 }
