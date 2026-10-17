@@ -177,10 +177,20 @@ else
   PASS="$(python3 -c 'import secrets;print(secrets.token_urlsafe(16))')"
   cat > "$APP_DIR/.env" <<EOF
 # MarketPulse Web 看板环境（systemd EnvironmentFile 注入；应用只读进程环境，不解析本文件）
-# ⚠️ 以下三个「不要设置」：MP_AUTH_DISABLED=1 会关闭全站鉴权；RAILWAY_ENVIRONMENT 会让设置页变只读；
-#    MP_SKIP_RESTORE=1 会跳过空库恢复。
+#
+# 2026-10-17 用户决定：**去掉登录、打开即看**，但把设置页锁成只读。
+#   MP_AUTH_DISABLED=1      关闭全站鉴权 ⇒ 任何人可直接查看（凭据行保留，随时可恢复）
+#   RAILWAY_ENVIRONMENT=1   复用应用自带的只读开关 ⇒ POST /api/settings 返回 403，config.json 不可被匿名改写
+#                           （本机不是 Railway；全仓只有 src/settings_store.is_readonly() 读它，无其它副作用。
+#                             副作用仅一处：页面只读提示文案写的是「Railway 临时文件系统」，语义不准）
+#
+# 恢复「需要登录」：把 MP_AUTH_DISABLED 改成 0（或删掉该行）→ systemctl restart marketpulse
+# 恢复「可在页面改设置」：删掉 RAILWAY_ENVIRONMENT 行 → systemctl restart marketpulse（不推荐：公网匿名可写）
+# ⚠️ MP_SKIP_RESTORE=1 不要设置（会跳过空库恢复链）。
 MP_AUTH_USER=marketpulse
 MP_AUTH_PASS=$PASS
+MP_AUTH_DISABLED=1
+RAILWAY_ENVIRONMENT=1
 EOF
   chmod 600 "$APP_DIR/.env"
   ok "已生成随机口令（16 位，未打印）"

@@ -80,9 +80,10 @@ curl -sk -u "$USER:$PASS" -o /dev/null -w '%{http_code}\n' https://123.60.176.21
 | 约束 | 原因 / 现象 |
 |---|---|
 | **Basic Auth 凭据只从进程环境读**（应用不解析 `.env`） | 所以必须由 systemd `EnvironmentFile` 注入；手工前台跑要自己 `export MP_AUTH_USER/MP_AUTH_PASS` |
-| **不要设 `MP_AUTH_DISABLED=1`** | 会关闭全站鉴权 |
-| **不要设 `RAILWAY_ENVIRONMENT`** | 设置页会变成只读（403），保存阈值失败 |
-| **不要设 `MP_SKIP_RESTORE`** | 会跳过空库恢复链（`data/backup/` → DB） |
+| **`MP_AUTH_DISABLED=1`** | 关闭全站 Basic Auth ⇒ 打开即看（2026-10-17 用户决定，**已启用**；凭据行保留，改回 `0` 即恢复登录） |
+| **`RAILWAY_ENVIRONMENT=1`** | 复用应用自带的只读开关 ⇒ 设置页只读、`POST /api/settings` 403（**已启用**：公网匿名可写是实测风险，见下）。副作用：只读提示文案写的是「Railway 临时文件系统」，语义不准。全仓只有 `src/settings_store.is_readonly()` 读它 |
+| **`MP_SKIP_RESTORE=1`** | **不要设**：会跳过空库恢复链（`data/backup/` → DB） |
+| 公网匿名可写（实测） | 鉴权关闭后，无凭据 `POST /api/settings` 曾返回 `{"saved":true}` 并在服务器生成 `config.json.bak-*` ⇒ **必须**同时设 `RAILWAY_ENVIRONMENT=1` 锁只读；锁后复测 403 且 `config.json` mtime 不变 |
 | **换 `marketpulse.db` 必须先清 `-wal`/`-shm`** | 旧 WAL 与新库不配对，轻则读到旧数据、重则 `database disk image is malformed`；应用对 `data/` 只读，删 WAL 不丢数据（已由 `marketpulse-pull` 强制执行） |
 | **`config.json` 不在仓库里** | 被 `.gitignore` 排除 ⇒ 每次重装/换机都要手工 scp 一份；设置页改的是服务器本地那份，`git pull` 不会覆盖它 |
 | **别用 `cp -a "$SRC"/. "$DST"/` 铺代码** | 它会把**源目录自身**的属性（如 `mktemp` 的 `drwx------ root`）套到目标目录 ⇒ 服务用户连目录都进不去，报 `sudo: unable to execute .../venv/bin/pip: Permission denied`。用 `tar -c -C SRC . \| tar -x -C DST` |
