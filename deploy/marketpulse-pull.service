@@ -1,0 +1,12 @@
+[Unit]
+Description=MarketPulse: pull latest data from GitHub (data/ context/ alerts/)
+Documentation=https://github.com/Blueety/MarketPulse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/local/bin/marketpulse-pull

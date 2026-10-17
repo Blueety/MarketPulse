@@ -965,3 +965,13 @@
   专门为"跨月不腐烂"写的），日期拼成 `f"{_month_str(-1)}-15"`；**不要写死月份**。
 - **修完要验红不空转**：把被测的判定条件临时改成恒假（如 `if ... and False:`）跑一次，用例必须变红
   —— 否则它只是"跟着实现走"的同义反复。本次实测：改后 45 passed，注入 `and False` → `- frozen + written` 1 failed。
+
+## 部署到自有 ECS（2026-10-17，实测）
+
+- **`cp -a "$SRC"/. "$DST"/` 会把源目录自身的属性套到目标目录**：`mktemp -d` 的 `drwx------ root` 套到 `/srv/marketpulse` 后，服务用户连目录都穿不过去，报 `sudo: unable to execute .../venv/bin/pip: Permission denied`（看着像 pip 的问题，实为父目录缺 `x`）。铺代码用 `tar -c -C "$SRC" . | tar -x -C "$DST"`，并在建目录时就 `chown` + `chmod 755`；venv 也交给服务用户创建。
+- **nginx 1.24（Ubuntu 24.04）不认识独立的 `http2 on;`**：报 `[emerg] unknown directive "http2"` ⇒ 必须写 `listen 8443 ssl http2;`（nginx ≥1.25.1 也接受旧写法）。闸门 = `nginx -t` 失败回滚 conf，不会留半成品。
+- **大陆 ECS 上 github.com:443 与 raw.githubusercontent.com 超时，但 22 端口、api.github.com、codeload.github.com 可达**（实测）⇒ `git clone https://` 不可用；增量更新走 **SSH deploy key**，首次落地用 codeload tar 包（无需凭据）。⚠️ tar 包 **2 MB/次** ⇒ 别用它做每 5 分钟轮询（≈17 GB/月，占流量包 100 GB 的 17%）。
+- **服务器到 Yahoo / BLS 是 403**（`query1/query2.finance.yahoo.com`、`api.bls.gov`；AkShare 国内源正常）⇒ `/api/macro`、`/api/econ`、`/api/cn/quotes` 的 `cny` 在服务器上必然为空，前端显示「数据未接入」。**判据**：`journalctl -u marketpulse` 里成串 `自选股 X 获取失败: HTTP 403`。修法是「快照文件优先」（照 `/api/watchlist` 的既有模式），不是给服务器找代理。
+- **换 SQLite 库必须先清 `-wal`/`-shm`**：`git pull` 换掉 `data/marketpulse.db` 后旧 WAL 与新库不配对（可能 `database disk image is malformed`）⇒ 拉取脚本固定「DB 哈希变了 → `rm -f *.db-wal *.db-shm` → `systemctl restart`」。应用对 `data/` 只读，删 WAL 不丢数据。
+- **Basic Auth 凭据只从进程环境读**（应用不解析 `.env`）⇒ 必须靠 systemd `EnvironmentFile=`；手工前台跑要自己 export。另外**别设** `RAILWAY_ENVIRONMENT`（设置页变只读 403）/ `MP_AUTH_DISABLED`（全站无鉴权）/ `MP_SKIP_RESTORE`（跳过空库恢复）。
+- **Windows 上 `ssh -f -N -L` 不会真正后台化**（本机 omp 的 daemon broker 也不可用）⇒ 远程浏览器验收改成「同一命令内 `ssh -N -L ... &` → 跑 Playwright → `kill`」，验完即关，别留常驻隧道。

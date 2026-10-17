@@ -1,0 +1,37 @@
+[Unit]
+Description=MarketPulse web dashboard (uvicorn on 127.0.0.1:__APP_PORT__)
+Documentation=https://github.com/Blueety/MarketPulse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__
+
+# ⚠️ Basic Auth 凭据只从**进程环境**读（应用不解析 .env 文件）⇒ 必须由 systemd 注入。
+#    手工前台跑时要自己 export：MP_AUTH_USER=... MP_AUTH_PASS=... venv/bin/uvicorn web.app:app
+EnvironmentFile=__APP_DIR__/.env
+Environment=PYTHONUNBUFFERED=1
+
+# 端口只绑 127.0.0.1：对外一律走 nginx（8443 自签 HTTPS）
+ExecStart=__APP_DIR__/venv/bin/uvicorn web.app:app --host 127.0.0.1 --port __APP_PORT__ --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+# 2 GiB 机器：给应用一个上限，避免 akshare/pandas 的峰值把 sshd 一起挤进 OOM
+MemoryMax=1G
+
+# 加固：应用只需要写自己的目录（config.json + config.json.bak-* + data/ 的 WAL）
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__APP_DIR__
+
+[Install]
+WantedBy=multi-user.target

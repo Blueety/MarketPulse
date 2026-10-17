@@ -1,0 +1,13 @@
+[Unit]
+Description=MarketPulse: 每 5 分钟拉取一次数据
+Documentation=https://github.com/Blueety/MarketPulse
+
+[Timer]
+# 本机 Hermes 的 auto-push 也是 */5 ⇒ 同频即可，不必更快
+OnCalendar=*:0/5
+AccuracySec=30s
+Persistent=false
+Unit=marketpulse-pull.service
+
+[Install]
+WantedBy=timers.target
