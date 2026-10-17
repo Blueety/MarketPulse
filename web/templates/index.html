@@ -44,16 +44,10 @@
     // ⚠️ 不能用 `@supports (backdrop-filter: url(#x))`：Firefox 上它返回 true 但不渲染（会误判成 Chromium）。
     (function () {
       try {
-        var forced = window.__MP_FORCE_ENGINE;
-        if (forced === 'refract' || forced === 'frost') {
-          document.documentElement.dataset.glassEngine = forced;
-          return;
-        }
-        var probe = document.createElement('div');
-        probe.style.backdropFilter = 'url(#lg-probe)';
-        var acceptsUrl = String(probe.style.backdropFilter).indexOf('url') >= 0;
+        // 默认磨砂档（frost）：refract 只在显式强制时使用 —— 理由见 skin.js 同处注释
+        // （refract 的 SVG 位移滤镜在 Chromium 下滚动/跑马灯逐帧重滤，实测把帧率压到 ~10fps）。
         document.documentElement.dataset.glassEngine =
-          (!!window.chrome && acceptsUrl) ? 'refract' : 'frost';
+          window.__MP_FORCE_ENGINE === 'refract' ? 'refract' : 'frost';
       } catch (e) {
         document.documentElement.dataset.glassEngine = 'frost';
       }

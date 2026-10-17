@@ -95,6 +95,7 @@ function mountOne(el) {
       // 「挂载完毕」只在**最后一个任务真的出队之后**成立（本任务此刻还没出队 ⇒ 不能放在 try 里判）
       if (!state.pending && !queue.length) {
         document.documentElement.dataset.skinReady = '1';   // 验收等待点（I13：玻璃是异步出现的）
+        applyReducedTransparency();                          // 引擎写完内联后再压一层（见该函数注释）
       }
     }
   });
@@ -102,6 +103,30 @@ function mountOne(el) {
 
 function mountAll(root) {
   hosts(root).forEach(mountOne);
+}
+
+/* ── 无障碍：prefers-reduced-transparency 下把 backdrop-filter 真正关掉 ──
+   套件的兜底规则（`liquid-skin.css` 的 `[data-liquid-skin] .lg-inner { backdrop-filter: none !important }`）
+   在**磨砂档**下会被引擎自己注入的 CSS 压掉：实测 computed 仍是 `blur(16px) saturate(1.6) …`，
+   只有 background 那条生效（`verify_skin.py` 的 LG-5c 就是这么红的）。
+   层叠里内联 + `!important` 优先级最高 ⇒ 这里直接写内联，稳；关掉时把引擎原本写的值原样还回去
+   （**不带** `!important` —— 带上会压过滚动降级那条 `!important` 规则）。 */
+const _rtSaved = new WeakMap();
+const _rtQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-transparency: reduce)') : null;
+
+function applyReducedTransparency() {
+  const off = !!(_rtQuery && _rtQuery.matches);
+  document.querySelectorAll('.lg-inner').forEach((el) => {
+    if (off) {
+      if (!_rtSaved.has(el)) _rtSaved.set(el, el.style.getPropertyValue('backdrop-filter'));
+      el.style.setProperty('backdrop-filter', 'none', 'important');
+    } else if (_rtSaved.has(el)) {
+      const prev = _rtSaved.get(el);
+      _rtSaved.delete(el);
+      if (prev) el.style.setProperty('backdrop-filter', prev);
+      else el.style.removeProperty('backdrop-filter');
+    }
+  });
 }
 
 /* ── 滚动降级：滚动期间给 <html> 加 .is-scrolling（套件 CSS 借此再降一档）──
@@ -127,6 +152,7 @@ window.mpSkin = {
   /** 渲染批次后重挂（`innerHTML` 重建的容器：KPI 卡 / 自选表 / 概览迷你卡 …） */
   remount(root) {
     mountAll(root);
+    applyReducedTransparency();
     return state;
   },
 };
@@ -137,9 +163,11 @@ import(ENGINE_URL)
     engine = mod;
     const html = document.documentElement;
     const forced = window.__MP_FORCE_ENGINE;
-    const real = forced === 'frost' || forced === 'refract'
-      ? forced
-      : (mod.supportsBackdropFilter() ? 'refract' : 'frost');
+    // 默认一律走磨砂档（frost）：refract 的 `backdrop-filter: url(#lg-N)` 是 SVG 位移滤镜，
+    // Chromium 下滚动 / 跑马灯逐帧重滤会把帧率压到 ~10fps（实测滚动中位帧间隔 69–104ms，
+    // frost 6.9ms；Firefox 本来就拿不到 `window.chrome` ⇒ 恒 frost）。需要折射时用
+    // `window.__MP_FORCE_ENGINE='refract'` 显式开启（`verify_skin.py --engine=refract` 即走这条）。
+    const real = forced === 'refract' ? 'refract' : 'frost';
     const prev = html.dataset.glassEngine;
     html.dataset.glassEngine = real;
     state.mode = real;
@@ -150,6 +178,12 @@ import(ENGINE_URL)
     const start = () => {
       mountAll();
       bindScrollDegrade();
+      applyReducedTransparency();
+      if (_rtQuery) {
+        const onRt = () => applyReducedTransparency();
+        if (_rtQuery.addEventListener) _rtQuery.addEventListener('change', onRt);
+        else if (_rtQuery.addListener) _rtQuery.addListener(onRt);   // 老 Safari
+      }
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
     else start();

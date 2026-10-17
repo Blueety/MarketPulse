@@ -42,3 +42,19 @@
 - 给 `window` 加 `scroll` 监听必须用 **capture**，且必须**排除元素级滚动**（本站有两处每秒 60 次的程序化 `scrollTop` 写入）。
 - 帧率类指标的统计窗口要以「首个/末个视口 `scroll` 事件」为边界，否则数字完全失真（本次踩了 3 次）。
 - 无 ADR：改动是一个选择器 + 一个事件选项，易撤销、无真实取舍。
+
+## 8. 追加：默认引擎改 frost（用户拍板 A 方案，同日）
+
+修完滚动降级后用户改选 **A**：Chromium 也一律走 frost（永久放弃折射，换取"任何情况下都不重滤 SVG 位移滤镜"）。
+落地：
+- `web/static/skin.js`：`const real = forced === 'refract' ? 'refract' : 'frost'`（refract 仅显式强制时启用）。
+- `web/templates/index.html`：首帧前落定 `data-glass-engine` 的内联脚本同步改成只认显式强制
+  （其余 5 页不挂皮肤，无此脚本 —— 皮肤仅首页，见文件头）。
+- 连带修一个**切到 frost 才暴露的既有无障碍缺陷**：套件 `prefers-reduced-transparency: reduce` 的
+  `backdrop-filter: none !important` 被引擎注入的 CSS 压掉（实测 computed 仍是 `blur(16px)…`，只有 background 生效；
+  refract 档下它反而生效 ⇒ 该冲突只在 frost 档可见，`verify_skin.py` 的 LG-5c 就是这条）。
+  改为在 `skin.js` 里用**内联 + `!important`**（层叠最高优先级）写 `none`，并把引擎原值存 WeakMap、关闭偏好时原样还回
+  （还回时**不带** `!important`，否则会压过滚动降级那条规则）。
+
+**验证**：`pytest` **877 passed**（+8 例）· `verify_skin.py --engine=frost` **64 PASSED / 1 SKIPPED**（LG-5c 转绿）·
+`verify_skin.py --engine=refract` **61 PASSED / 2 SKIPPED**（折射回归覆盖保留）· 滚动降级回路 **ALL PASSED**（中位 6.9ms）。

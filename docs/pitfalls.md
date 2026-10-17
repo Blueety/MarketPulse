@@ -1071,3 +1071,26 @@ refract 引擎下中位帧间隔 **69–104ms**（≈10–14fps、>50ms 帧占 7
 - **比对「线上静态资源是否已更新」时先归一化 CRLF**：仓库工作区是 CRLF、ECS 上的 checkout 是 LF，
   直接比 sha256/字节数会**假红**（实测 `mp-skin.css` 本地 16699B / 线上 16487B，差的就是 212 个 CRLF）。
   用 `b.replace(b"\r\n", b"\n")` 后再比；顺带一提 `web/static/skin.js` 恰好是 LF，所以它一比就中。
+
+## 部署：**只有静态资源热更新，Python 代码要等重启**（2026-10-17 实测）
+
+`deploy/marketpulse-pull.sh`（每 5 分钟 `git pull --ff-only`）**只在 `data/marketpulse.db` 的 sha256 变化时才
+`systemctl restart marketpulse`**。于是：
+- `web/templates/*.html`、`web/static/**`（含 `skin.js` / `mp-skin.css`）：Jinja `auto_reload` + 静态按请求读 ⇒ **push 后 ≤5 分钟自动生效**（实测 195s / 225s）。
+- `web/app.py`、`src/**`、根目录脚本：**旧进程继续跑旧代码**，直到某次 DB 变更触发重启（DB 每天至少变一次 ⇒ 最迟一天内生效；快照 cron 也会写 DB）。改完 Python 逻辑后若想立刻生效，只能 `ssh root@<host> 'systemctl restart marketpulse'`。
+判据：`/api/...` 的返回仍是旧行为、而页面上的 JS/CSS 已经是新的 ⇒ 就是这个情况。
+
+## 引擎默认档位：frost（2026-10-17，用户拍板 A 方案）
+
+`skin.js` 原先用引擎的 `supportsBackdropFilter()`（`!!window.chrome && CSSOM 接受 url()`）自动选档 ⇒ Chromium 恒 refract。
+refract 的滚动/跑马灯开销实测把帧率压到 ~10fps（见上一节）⇒ **默认改为 frost**（`const real = forced === 'refract' ? 'refract' : 'frost'`），
+refract 只在 `window.__MP_FORCE_ENGINE='refract'` 时启用（`verify_skin.py --engine=refract` 即走这条，保留折射的回归覆盖）；
+6 个模板里那行「首帧前落定 `data-glass-engine`」的内联脚本同步改成只认显式强制。
+
+⚠️ 切到 frost 后暴露一个**既有的层叠冲突**：套件的无障碍兜底
+`@media (prefers-reduced-transparency: reduce) { [data-liquid-skin] .lg-inner { backdrop-filter: none !important } }`
+会被**引擎自己注入的 CSS** 压掉（实测 computed 仍是 `blur(16px) saturate(1.6)…`，只有 background 生效；
+refract 档下它反而生效，所以这个冲突只在 frost 档可见 —— `verify_skin.py` LG-5c 就是这条）。
+修法用**内联 + `!important`**（层叠最高优先级）：`skin.js` 的 `applyReducedTransparency()` 在引擎挂载完成后给
+每个 `.lg-inner` 写内联 `backdrop-filter: none !important`，并把引擎原本的值存进 WeakMap、关闭偏好时原样还回去
+（还回去时**不带** `!important`，否则会压过滚动降级那条规则）。
