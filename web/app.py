@@ -30,9 +30,10 @@ from src.analyzer import ALERTS_DIR as _ALERTS_DIR
 from src.analyzer import _pearson, _returns      # 宏观相关性复用（2026-09-14）
 from src.analyzer import classify_move, classify_vix
 from src.analyzer import CONTEXT_DIR as _CONTEXT_DIR
+from src.analyzer import load_macro_snapshot
 from src.analyzer import load_watchlist_snapshot
 from src.analyzer import reload_config_snapshots as _reload_config
-from src.config import load_config
+from src.config import load_config, load_macro_stocks
 
 # 三十三期：资讯快照（Hermes 侧 tavily 搜索后落盘，契约见 docs/architecture.md 决策行；
 # 定义在使用方 web.app——monkeypatch 打这里，测试隔离不依赖真实 data/ 文件）
@@ -712,14 +713,6 @@ def _load_watchlist() -> dict:
 
 # ---- 宏观标的（美元指数 / 10Y 美债 / 原油；实时取数，零写盘）----
 
-# 内置默认标的（宏观为只读行情，无「未配置即隐藏」语义）：env MACRO_STOCKS > config.json macro.stocks > 此默认
-_MACRO_DEFAULT: list[dict] = [
-    {"symbol": "DX-Y.NYB", "label": "美元指数"},
-    {"symbol": "^TNX", "label": "10Y美债"},
-    {"symbol": "CL=F", "label": "原油"},
-    {"symbol": "GC=F", "label": "黄金COMEX"},   # 三十四期：黄金报价位 GLD×10 → COMEX 期货
-]
-
 # 宏观 TTL：2026-09-14 由 90s 提到 **300s**。理由：本端点数据量扩了 3 倍（range 2y→5y，
 # 实测 trend.dates 400 → 1258），90s TTL 下用户隔 90 秒刷新就吃一次 ~2.2s 冷启动；
 # 而宏观页的 5Y 序列是给 1M~5Y 时间范围用的，秒级刷新对它没有价值。
@@ -739,60 +732,46 @@ _econ_cache: dict = {"ts": 0.0, "payload": None}
 _econ_lock = threading.Lock()
 
 
-def _load_macro_stocks() -> list[dict]:
-    """宏观标的配置：env MACRO_STOCKS（JSON）> config.json 的 macro.stocks > 内置默认。
-
-    非法 JSON / 非列表 / 空列表 / 读取异常 → 内置默认（保证端点开箱可用）。
-    仅保留含 symbol 的 dict 项。
-    """
-    def _normalize(items) -> list[dict]:
-        if not isinstance(items, list):
-            return []
-        return [it for it in items if isinstance(it, dict) and it.get("symbol")]
-
-    raw = os.environ.get("MACRO_STOCKS")
-    if raw:
-        try:
-            data = json.loads(raw)
-        except (json.JSONDecodeError, TypeError) as exc:
-            log.warning("MACRO_STOCKS 环境变量解析失败，回退内置默认: %s", exc)
-            return list(_MACRO_DEFAULT)
-        picked = _normalize(data)
-        return picked or list(_MACRO_DEFAULT)
-    try:
-        cfg = load_config()
-    except Exception as exc:
-        log.warning("宏观配置读取失败，回退内置默认: %s", exc)
-        return list(_MACRO_DEFAULT)
-    picked = _normalize((cfg.get("macro") or {}).get("stocks"))
-    return picked or list(_MACRO_DEFAULT)
-
-
-def _load_macro() -> dict:
-    """实时取宏观标的 + 派生宏观环境 / 相关性 / 历史三态分布（复用自选股取数链路）。
-
-    取数失败降级空结构（HTTP 200，不 500）。派生三键（`regime` / `correlation` /
-    `history_regime`）全部是**内存纯计算**，零落盘 —— 与 trend 合并成一份响应，
-    避免前端多次取数与口径漂移。
-    """
-    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
-    stocks = _load_macro_stocks()
-    if not stocks:
-        return empty
-    try:
-        # 2026-09-14：宏观页需要 5Y（trend.dates ≈ 1260 点）。range 必须传参 ——
-        # 改 _fetch_yahoo_watch 的默认值会连带把 /api/watchlist 也拉成 5y（它只要 30 天）。
-        values, series, _errors = fetch_watchlist(stocks, range_="5y")
-        payload = _build_watchlist_payload(stocks, values, series, tail=1260)  # 5Y 全量，下游各自截取
-    except Exception as exc:
-        log.warning("宏观标的取数失败，降级空结构: %s", exc)
-        return empty
+def _macro_with_derived(payload: dict) -> dict:
+    """宏观三键派生（`regime` / `correlation` / `history_regime`）—— 纯内存计算，零落盘；
+    快照与实时取数两条路共用，避免口径漂移。"""
     records = _last_records(_MACRO_RECORDS)
     indices = (_compute_latest(records) or (None, []))[1]
     payload["regime"] = _compute_macro_regime(indices, records, payload.get("trend") or {})
     payload["correlation"] = compute_macro_correlation(payload.get("trend") or {})
     payload["history_regime"] = _macro_history_regime(records)
     return payload
+
+
+def _load_macro() -> dict:
+    """宏观标的：**快照文件优先**（报告链路落盘，请求路径零联网），无快照 / 配置比对失败 /
+    快照构建异常时回退实时取数（慢但正确，防改配置后展示旧标的）。
+
+    为什么必须文件化：服务器到 Yahoo 是 403（见 docs/pitfalls.md），线上实时取数必然为空、
+    首页 4 张宏观卡与宏观页显示「数据未接入」。取数失败降级空结构（HTTP 200，不 500）。
+    """
+    empty = {"stocks": [], "trend": {"dates": [], "series": []}}
+    stocks = load_macro_stocks()
+    if not stocks:
+        return empty
+    snap = load_macro_snapshot()
+    if snap and ([s.get("symbol") for s in snap["stocks"]] == [s.get("symbol") for s in stocks]):
+        try:
+            # 5Y 全量，下游各自截取（宏观页 1M~5Y 范围切换用）
+            payload = _build_watchlist_payload(snap["stocks"], snap["values"], snap["series"], tail=1260)
+            payload["as_of"] = snap.get("saved_at")   # 数据时点标注
+            return _macro_with_derived(payload)
+        except Exception as exc:
+            log.warning("宏观快照构建失败，回退实时取数: %s", exc)
+    try:
+        # 2026-09-14：宏观页需要 5Y（trend.dates ≈ 1260 点）。range 必须传参 ——
+        # 改 _fetch_yahoo_watch 的默认值会连带把 /api/watchlist 也拉成 5y（它只要 30 天）。
+        values, series, _errors = fetch_watchlist(stocks, range_="5y")
+        payload = _build_watchlist_payload(stocks, values, series, tail=1260)
+    except Exception as exc:
+        log.warning("宏观标的取数失败，降级空结构: %s", exc)
+        return empty
+    return _macro_with_derived(payload)
 
 
 # ---- 宏观环境（2026-09-14 宏观页 /macro 专用）----

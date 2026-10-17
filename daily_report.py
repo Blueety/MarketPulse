@@ -23,9 +23,10 @@ from src.analyzer import (
     load_history,
     load_last_values,
     save_last_values,
+    save_macro_snapshot,
     save_watchlist_snapshot,
 )
-from src.config import load_config
+from src.config import load_config, load_macro_stocks
 from src.fetcher import SYMBOLS, fetch_all, fetch_sector_heat, fetch_us_sector_heat, fetch_watchlist
 from src.news_fetcher import search_news
 from src.news_saver import save_news
@@ -151,6 +152,14 @@ def main() -> int:
                     log.info("自选股快照已更新: data/watchlist.json")
             except Exception as exc:
                 log.warning("自选股快照写入失败，不影响日报: %s", exc)
+            # 三十七期：宏观快照（线上 /api/macro 只能靠它 —— 服务器到 Yahoo 是 403，见 pitfalls）
+            try:
+                m_stocks = load_macro_stocks()
+                m_values, m_series, _m_errors = fetch_watchlist(m_stocks, range_="5y")
+                if save_macro_snapshot(m_stocks, m_values, m_series):
+                    log.info("宏观快照已更新: data/macro.json")
+            except Exception as exc:
+                log.warning("宏观快照写入失败，不影响日报: %s", exc)
             wl_data = [
                 {"symbol": it["symbol"], "label": it.get("label", it["symbol"]),
                  "series": wl_series.get(it["symbol"])}

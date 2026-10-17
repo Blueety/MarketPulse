@@ -19,7 +19,6 @@ from web.app import (
     _load_alerts,
     _load_latest_context,
     _load_macro,
-    _load_macro_stocks,
     _load_sector_heat,
     _load_watchlist,
     _normalize_series,
@@ -27,7 +26,9 @@ from web.app import (
     _resolve_symbols,
     _sector_payload,
 )
+from src import config as cfg_mod
 from src import storage as st
+from src.config import load_macro_stocks as _load_macro_stocks
 from src.fetcher import SYMBOLS
 
 
@@ -50,6 +51,7 @@ def _reset_watch_cache(monkeypatch):
     web.app._cn_quotes_cache["ts"] = 0.0
     web.app._cn_quotes_cache["payload"] = None
     monkeypatch.setattr(web.app, "load_watchlist_snapshot", lambda: None)
+    monkeypatch.setattr(web.app, "load_macro_snapshot", lambda: None)
     yield
 
 def make_alert(date: str) -> str:
@@ -807,7 +809,7 @@ def test_load_watchlist_config_raises(monkeypatch):
     """load_config 抛异常 → 视为无配置：hidden=true + 双空结构（不误报有配置）。"""
     def boom():
         raise RuntimeError("config unreadable")
-    monkeypatch.setattr(web.app, "load_config", boom)
+    monkeypatch.setattr(cfg_mod, "load_config", boom)
     out = _load_watchlist()
     assert out["hidden"] is True
     assert out == {"hidden": True, "stocks": [], "trend": {"dates": [], "series": []}}
@@ -987,20 +989,20 @@ def test_api_latest_us_sector_heat_degrades(tmp_path, monkeypatch):
 def test_load_macro_stocks_builtin_default(monkeypatch):
     """env 未设 / config 无 macro.stocks → 内置 4 标的（三十四期 +黄金 COMEX）。"""
     monkeypatch.delenv("MACRO_STOCKS", raising=False)
-    monkeypatch.setattr(web.app, "load_config", lambda: {})
+    monkeypatch.setattr(cfg_mod, "load_config", lambda: {})
     assert [s["symbol"] for s in _load_macro_stocks()] == ["DX-Y.NYB", "^TNX", "CL=F", "GC=F"]
 
 
 def test_load_macro_stocks_env_precedence(monkeypatch):
     """env MACRO_STOCKS 优先于 config.json。"""
     monkeypatch.setenv("MACRO_STOCKS", json.dumps([{"symbol": "GC=F", "label": "黄金期货"}]))
-    monkeypatch.setattr(web.app, "load_config", lambda: {"macro": {"stocks": [{"symbol": "ZZZ"}]}})
+    monkeypatch.setattr(cfg_mod, "load_config", lambda: {"macro": {"stocks": [{"symbol": "ZZZ"}]}})
     assert _load_macro_stocks() == [{"symbol": "GC=F", "label": "黄金期货"}]
 
 
 def test_load_macro_stocks_env_invalid_falls_back(monkeypatch):
     """env 非法 JSON / 非列表 / 全无效项 → 内置默认（不抛、不空）。"""
-    monkeypatch.setattr(web.app, "load_config", lambda: {})
+    monkeypatch.setattr(cfg_mod, "load_config", lambda: {})
     monkeypatch.setenv("MACRO_STOCKS", "{bad json")
     assert len(_load_macro_stocks()) == 4
     monkeypatch.setenv("MACRO_STOCKS", json.dumps("not-a-list"))
@@ -1026,6 +1028,41 @@ def test_load_macro_fetch_raises(monkeypatch):
     monkeypatch.setattr(web.app, "fetch_watchlist", boom)
     assert _load_macro() == {"stocks": [], "trend": {"dates": [], "series": []}}
 
+
+
+def test_load_macro_snapshot_preferred(monkeypatch):
+    """有快照且标的与配置一致 → 走快照（不联网），并带 as_of 数据时点。"""
+    stocks = [{"symbol": "GC=F", "label": "黄金COMEX"}]
+    monkeypatch.setattr(web.app, "load_macro_stocks", lambda: stocks)
+    monkeypatch.setattr(web.app, "load_macro_snapshot", lambda: {
+        "saved_at": "2026-10-17T22:22+08:00", "stocks": stocks,
+        "values": {"GC=F": 4181.1}, "series": {"GC=F": [["2026-10-16", 4181.1]]}})
+    monkeypatch.setattr(web.app, "fetch_watchlist",
+                        lambda *a, **k: pytest.fail("有快照时不应联网取数"))
+    out = _load_macro()
+    assert out["stocks"][0]["value"] == 4181.1
+    assert out["as_of"] == "2026-10-17T22:22+08:00"
+
+
+def test_load_macro_snapshot_symbol_drift_falls_back(monkeypatch):
+    """快照标的与配置不一致（改过 MACRO_STOCKS）→ 弃用快照、回退实时取数。"""
+    monkeypatch.setattr(web.app, "load_macro_stocks", lambda: [{"symbol": "ZZZ"}])
+    monkeypatch.setattr(web.app, "load_macro_snapshot", lambda: {
+        "saved_at": "x", "stocks": [{"symbol": "GC=F"}], "values": {"GC=F": 1.0}, "series": {}})
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda *a, **k: ({"ZZZ": 9.9}, {"ZZZ": [("d1", 9.9)]}, {}))
+    out = _load_macro()
+    assert out["stocks"][0]["symbol"] == "ZZZ" and out["stocks"][0]["value"] == 9.9
+    assert "as_of" not in out
+
+
+def test_load_macro_snapshot_broken_falls_back(monkeypatch):
+    """快照构建抛异常 → 回退实时取数（不 500、不空）。"""
+    stocks = [{"symbol": "GC=F"}]
+    monkeypatch.setattr(web.app, "load_macro_stocks", lambda: stocks)
+    monkeypatch.setattr(web.app, "load_macro_snapshot", lambda: {"stocks": stocks, "values": None, "series": None})
+    monkeypatch.setattr(web.app, "fetch_watchlist", lambda *a, **k: ({"GC=F": 1.5}, {"GC=F": [("d1", 1.5)]}, {}))
+    out = _load_macro()
+    assert out["stocks"][0]["value"] == 1.5
 
 def test_api_macro_endpoint(monkeypatch):
     """端点 200 + 形状（stocks[].symbol / value / change_pct）。"""

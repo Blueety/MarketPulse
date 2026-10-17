@@ -244,3 +244,43 @@ def load_config(path=None) -> dict:
             node = node[k]
         node[keys[-1]] = env_float(env_name, node[keys[-1]])
     return cfg
+
+
+# ---- 宏观标的（美元指数 / 10Y 美债 / 原油 / 黄金COMEX；三十七期从 web/app.py 迁来）----
+# 放在配置层的理由：**报告链路（写快照）与 web（读快照/兜底实时取数）必须用同一份清单**，
+# 否则两边漂移会出现「快照标的与端点标的对不上 ⇒ 快照被判定不匹配而弃用」。
+MACRO_DEFAULT: list[dict] = [
+    {"symbol": "DX-Y.NYB", "label": "美元指数"},
+    {"symbol": "^TNX", "label": "10Y美债"},
+    {"symbol": "CL=F", "label": "原油"},
+    {"symbol": "GC=F", "label": "黄金COMEX"},
+]
+
+
+def load_macro_stocks() -> list[dict]:
+    """宏观标的清单：env MACRO_STOCKS（JSON）> config.json macro.stocks > 内置默认。
+
+    非法 JSON / 非列表 / 空列表 / 读取异常 → 内置默认（保证端点开箱可用）。
+    仅保留含 symbol 的 dict 项。
+    """
+    def _normalize(items) -> list[dict]:
+        if not isinstance(items, list):
+            return []
+        return [it for it in items if isinstance(it, dict) and it.get("symbol")]
+
+    raw = os.environ.get("MACRO_STOCKS")
+    if raw:
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            log.warning("MACRO_STOCKS 环境变量解析失败，回退内置默认: %s", exc)
+            return list(MACRO_DEFAULT)
+        picked = _normalize(data)
+        return picked or list(MACRO_DEFAULT)
+    try:
+        cfg = load_config()
+    except Exception as exc:
+        log.warning("宏观配置读取失败，回退内置默认: %s", exc)
+        return list(MACRO_DEFAULT)
+    picked = _normalize((cfg.get("macro") or {}).get("stocks"))
+    return picked or list(MACRO_DEFAULT)

@@ -32,6 +32,7 @@ DATA_DIR = BASE_DIR / "data"
 LAST_VALUES_FILE = DATA_DIR / "last_values.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 WATCHLIST_FILE = DATA_DIR / "watchlist.json"   # 自选股快照（报告链路落盘，web 只读；三十期）
+MACRO_FILE = DATA_DIR / "macro.json"           # 宏观标的快照（同模式；三十七期）
 ALERTS_DIR = BASE_DIR / "alerts"
 ALERTS_LOG = DATA_DIR / "alerts.log"
 CONTEXT_DIR = BASE_DIR / "context"   # 四期：Hermes 上下文 JSON（generate_context 产出）
@@ -757,10 +758,13 @@ def merge_history(date: str, values: dict) -> None:
     _upsert_history_rows_selfheal(rows, preserve_existing=True)
 
 
-# ---- 自选股快照层（三十期：报告链路落盘，web 只读文件零联网）----
-def save_watchlist_snapshot(stocks_cfg: list[dict], values: dict, series: dict) -> bool:
-    """自选股快照落盘；存原始数据（加工留在 web 层）。stocks_cfg 空 / values 空 / 全 None
-    → 不写返回 False（merge_history「取数全失败→空操作」同款纪律，防垃圾覆盖昨日好快照）。
+# ---- 行情快照层（三十期自选股 / 三十七期宏观：报告链路落盘，web 只读文件零联网）----
+#
+# 为什么要文件化：服务器到 Yahoo 是 403（见 docs/pitfalls.md），web 端实时取数在线上必然为空，
+# 前端只能显示「数据未接入」。快照由**本机**（有代理）的报告链路落盘 → 入库 → 线上直接读文件。
+def _save_snapshot(path, stocks_cfg: list[dict], values: dict, series: dict) -> bool:
+    """快照落盘；存原始数据（加工留在 web 层）。stocks_cfg 空 / values 空 / 全 None
+    → 不写返回 False（merge_history「取数全失败→空操作」同款纪律，防垃圾覆盖上一份好快照）。
     series 的 (date, close) tuple 经 JSON 序列化自动变 list，读取端按 list 兼容。
     临时文件 + os.replace 原子写（save_history 同款）。"""
     if not stocks_cfg or not values or all(v is None for v in values.values()):
@@ -772,31 +776,48 @@ def save_watchlist_snapshot(stocks_cfg: list[dict], values: dict, series: dict) 
         "series": {k: [[d, v] for d, v in pts] for k, pts in series.items()},
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = WATCHLIST_FILE.with_name(WATCHLIST_FILE.name + ".tmp")
+    tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, WATCHLIST_FILE)
+    os.replace(tmp, path)
     return True
 
 
-def load_watchlist_snapshot() -> dict | None:
-    """读取自选股快照；文件缺失 / 坏 JSON / 非 dict / 缺 stocks|values|series 任一键 /
+def _load_snapshot(path, label: str) -> dict | None:
+    """读取快照；文件缺失 / 坏 JSON / 非 dict / 缺 stocks|values|series 任一键 /
     stocks 非 dict 列表 → 返回 None（容错纪律同 load_history）。"""
-    if not WATCHLIST_FILE.exists():
+    if not path.exists():
         return None
     try:
-        data = json.loads(WATCHLIST_FILE.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
-        log.warning("自选股快照读取失败，按无快照处理: %s", exc)
+        log.warning("%s读取失败，按无快照处理: %s", label, exc)
         return None
     if not isinstance(data, dict):
-        log.warning("自选股快照格式异常（非 dict），按无快照处理")
+        log.warning("%s格式异常（非 dict），按无快照处理", label)
         return None
     if any(k not in data for k in ("stocks", "values", "series")):
-        log.warning("自选股快照缺关键键，按无快照处理")
+        log.warning("%s缺关键键，按无快照处理", label)
         return None
     if (not isinstance(data["stocks"], list)
             or not isinstance(data["values"], dict)
             or not isinstance(data["series"], dict)):
-        log.warning("自选股快照键类型异常，按无快照处理")
+        log.warning("%s键类型异常，按无快照处理", label)
         return None
     return data
+
+
+# ⚠️ 两个包装必须在**调用时**读模块级路径常量（tests/conftest 用 monkeypatch 改 WATCHLIST_FILE/MACRO_FILE）
+def save_watchlist_snapshot(stocks_cfg: list[dict], values: dict, series: dict) -> bool:
+    return _save_snapshot(WATCHLIST_FILE, stocks_cfg, values, series)
+
+
+def load_watchlist_snapshot() -> dict | None:
+    return _load_snapshot(WATCHLIST_FILE, "自选股快照")
+
+
+def save_macro_snapshot(stocks_cfg: list[dict], values: dict, series: dict) -> bool:
+    return _save_snapshot(MACRO_FILE, stocks_cfg, values, series)
+
+
+def load_macro_snapshot() -> dict | None:
+    return _load_snapshot(MACRO_FILE, "宏观快照")

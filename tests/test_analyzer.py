@@ -373,3 +373,50 @@ class TestComputePortfolioCorrelation:
         hist = _wl_hist(dates, [100 + i for i in range(12)])
         out = an.compute_portfolio_correlation([], hist)
         assert out == {"stocks": [], "portfolio_risk": {"high": False, "avg_r": None}}
+
+class TestMacroSnapshot:
+    """宏观标的快照读写（三十七期：线上 /api/macro 靠它 —— 服务器到 Yahoo 是 403）。"""
+
+    STK = [{"symbol": "GC=F", "label": "黄金COMEX"}, {"symbol": "^TNX", "label": "10Y美债"}]
+
+    def _set_file(self, tmp_path, monkeypatch):
+        mf = tmp_path / "macro.json"
+        monkeypatch.setattr(an, "MACRO_FILE", mf)
+        return mf
+
+    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+        mf = self._set_file(tmp_path, monkeypatch)
+        series = {"GC=F": [("2026-10-15", 4180.0), ("2026-10-16", 4181.1)]}
+        assert an.save_macro_snapshot(self.STK, {"GC=F": 4181.1}, series) is True
+        assert mf.exists()
+        assert not mf.with_name("macro.json.tmp").exists()   # 原子写无残留
+        snap = an.load_macro_snapshot()
+        assert snap["stocks"] == self.STK
+        assert snap["series"]["GC=F"] == [["2026-10-15", 4180.0], ["2026-10-16", 4181.1]]
+        assert "T" in snap["saved_at"]
+
+    def test_save_all_none_returns_false(self, tmp_path, monkeypatch):
+        """取数全失败 → 不写（防垃圾覆盖上一份好快照）。"""
+        mf = self._set_file(tmp_path, monkeypatch)
+        assert an.save_macro_snapshot(self.STK, {"GC=F": None, "^TNX": None}, {}) is False
+        assert not mf.exists()
+
+    def test_load_broken_json_returns_none(self, tmp_path, monkeypatch):
+        mf = self._set_file(tmp_path, monkeypatch)
+        mf.write_text("{not json", encoding="utf-8")
+        assert an.load_macro_snapshot() is None
+
+    def test_load_missing_key_returns_none(self, tmp_path, monkeypatch):
+        mf = self._set_file(tmp_path, monkeypatch)
+        mf.write_text('{"stocks": []}', encoding="utf-8")
+        assert an.load_macro_snapshot() is None
+
+    def test_two_snapshot_files_are_independent(self, tmp_path, monkeypatch):
+        """两个快照各写各的文件，互不覆盖。"""
+        wf, mf = tmp_path / "watchlist.json", tmp_path / "macro.json"
+        monkeypatch.setattr(an, "WATCHLIST_FILE", wf)
+        monkeypatch.setattr(an, "MACRO_FILE", mf)
+        an.save_watchlist_snapshot([{"symbol": "A"}], {"A": 1.0}, {"A": [("d", 1.0)]})
+        an.save_macro_snapshot([{"symbol": "GC=F"}], {"GC=F": 2.0}, {"GC=F": [("d", 2.0)]})
+        assert an.load_watchlist_snapshot()["values"] == {"A": 1.0}
+        assert an.load_macro_snapshot()["values"] == {"GC=F": 2.0}

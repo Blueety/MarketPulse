@@ -106,6 +106,25 @@ _SESSION = requests.Session()
 # pool_connections 同步放大以覆盖 query1/query2 双主机轮换。
 _SESSION.mount("https://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
 _SESSION.mount("http://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
+# 2026-10-17（三十七期）：把**系统代理**显式装到 Session 上。
+# 坑：Windows 上若环境里只设了 `NO_PROXY`（Clash 之类会设），`urllib.request.getproxies()` 的实现是
+# `getproxies_environment() or getproxies_registry()` —— env 返回非空字典（哪怕只有 no_proxy）就
+# **不再读注册表**，于是系统代理对 requests 完全失效；实测同一台机：直连 Yahoo 403、
+# 显式带 proxies 走 127.0.0.1:7890 得 200。env 里已有 http(s)_proxy 时不覆盖。
+def _system_proxies() -> dict:
+    import urllib.request as _ur
+    try:
+        env = _ur.getproxies_environment()
+        if env.get("http") or env.get("https"):
+            return {}
+        reg = _ur.getproxies_registry()
+    except Exception:
+        return {}
+    return {k: v for k, v in reg.items() if k in ("http", "https") and v}
+
+
+_SESSION.proxies.update(_system_proxies())
+
 # 二十六期：浏览器 UA + Accept json，降低 Yahoo 反爬 403 概率
 _SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
