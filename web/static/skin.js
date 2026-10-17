@@ -110,11 +110,16 @@ function mountAll(root) {
 function bindScrollDegrade() {
   const html = document.documentElement;
   let timer = 0;
-  window.addEventListener('scroll', () => {
+  // ⚠️ 必须用 capture：视口滚动的 scroll 事件在 document 上派发、**不冒泡**，气泡阶段的
+  // window 监听收不到（实测：真实滚动 50 次事件、气泡阶段 0 次触发；合成 dispatchEvent 才触发）。
+  // ⚠️ 同时必须排除元素级滚动：资讯/告警卡的无缝滚动每秒写 60 次 scrollTop，会派发元素级
+  // scroll 事件，capture 监听会一并收到 —— 若让它触发降级，玻璃会在跑马灯运行时被永久降级。
+  window.addEventListener('scroll', (e) => {
+    if (e.target !== document && e.target !== document.scrollingElement) return;
     if (!html.classList.contains('is-scrolling')) html.classList.add('is-scrolling');
     clearTimeout(timer);
     timer = setTimeout(() => html.classList.remove('is-scrolling'), 200);
-  }, { passive: true });
+  }, { passive: true, capture: true });
 }
 
 window.mpSkin = {

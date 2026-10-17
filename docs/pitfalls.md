@@ -1050,3 +1050,20 @@
   浏览器实例，被切走那页的 `document.hasFocus()` 仍是 `true`）⇒ 直接 `window.dispatchEvent(new Event('blur'/'focus'))`
   才是可靠触发（浏览器真失焦发的就是这两个事件）。另外**被遮挡的窗口** rAF 会被压到 ~1fps
   （soak 里量到 `p50=1000ms`、9 帧/30s 是节流不是卡顿）⇒ 帧率类指标必须在可见且聚焦的窗口上量。
+
+## Chromium 下「玻璃皮肤滚动掉帧」：refract 引擎 + 两条失效的降级钩子（2026-10-17）
+
+**症状**：Chrome/Edge 打开首页滚动明显掉帧（Firefox 正常）。实测（有头 Edge、真实滚动手势、**只统计滚动窗口内的帧**）：
+refract 引擎下中位帧间隔 **69–104ms**（≈10–14fps、>50ms 帧占 73%）；同一份代码强制 frost、或把皮肤整个关掉 ⇒ **6.9ms / 0–1%**。
+
+**根因链（三条，缺一条都不成立）**：
+1. **引擎选择**：`skin.js` 用引擎的 `supportsBackdropFilter()`（= `!!window.chrome && CSSOM 接受 url()`）选档 ⇒ **Chromium 恒走 refract**（`backdrop-filter: url(#lg-N)` = SVG `feDisplacementMap` 位移滤镜，12 个玻璃面在滚动时逐帧重滤）；Firefox 拿不到 `window.chrome` ⇒ 恒走 frost（普通 blur，便宜）⇒ 这就是「只有 Chrome/Edge 卡」。
+2. **套件的滚动降级规则在本应用里永不匹配**：套件写 `html.is-scrolling [data-liquid-skin] .lg-inner`（把 `data-liquid-skin` 当**后代**），而宿主按套件文档把该属性挂在 `<html>` 自身上 ⇒ 规则失效（实测：`is-scrolling` 已置位、`.lg-inner` 计算值仍是 `url("#lg-N")`）。宿主补丁层 `mp-skin.css §8` 用 `html.is-scrolling[data-liquid-skin] .lg-inner` 补一条 —— 作者 `!important` **能**压过引擎写在 `.lg-inner` 上的内联样式（实测）。补守卫 `@media (prefers-reduced-transparency: no-preference)`：补丁选择器（0,2,1）比套件的无障碍兜底（0,1,1）更具体，不守卫会在滚动期压掉「减少透明」偏好。
+3. **`skin.js` 的滚动监听挂在气泡阶段**：视口滚动的 `scroll` 事件在 `document` 上派发、**不冒泡** ⇒ 真实滚动时监听**一次都不触发**（实测：捕获阶段收到 206 次、气泡阶段 0 次）。而 `window.dispatchEvent(new Event('scroll'))` 这种合成事件**会**触发 ⇒ 极易误判为「监听已生效」。改成 `{ passive: true, capture: true }`。
+
+**改的时候踩到的三个坑（务必保留）**：
+- **capture 会把元素级滚动也收进来**：资讯/告警卡的无缝滚动每秒写 60 次 `scrollTop`，会派发**元素级** `scroll` 事件 ⇒ 若不排除（`e.target !== document && e.target !== document.scrollingElement` 就 return），玻璃会被**永久降级**；实测未排除时中位帧间隔反而飙到 **1006ms**（class 反复翻转 ⇒ 每翻一次重建滤镜）。
+- **测量窗口必须只取「真实滚动窗口」**：把滚动前后的空闲一起统计，覆盖率会算成 6–13%、掉帧率算成 46–73%（**全是假的**）；以首个/末个视口 `scroll` 事件为边界后为 **91% / 7ms / 1%**。
+- **输入方式决定事件形态**：`page.mouse.wheel` 是「一跳一跳」的（事件成簇、簇间 >200ms，会把降级状态打成 5% 覆盖率的假红）；`Input.synthesizeScrollGesture` 才给连续事件流 ⇒ 判「降级是否稳定」必须用后者。
+
+**验收回路**：`tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py`（D1 静止保留折射 / D2 滚动降级成 blur / D2b 降级覆盖率 ≥90% / D3 中位帧间隔 ≤20ms 且 >50ms 占比 ≤5% / D4 只跑跑马灯不降级 / D5 零 pageerror；`--url https://…` 可直接打线上）。

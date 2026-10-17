@@ -188,3 +188,25 @@ html[data-skin-degraded='1'] #trend,
 html[data-skin-degraded='1'] #alerts {
   background: var(--glass-bg-strong);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §8 滚动期降级（宿主选择器修正）
+   ──────────────────────────────────────────────────────────────────────────
+   套件那条降级规则写作 `html.is-scrolling [data-liquid-skin] .lg-inner` —— 把
+   `data-liquid-skin` 当**后代**找；而宿主按套件文档把它挂在 `<html>` 自身上（见 §1），
+   于是那条规则在本应用里**永远匹配不到**（实测：`is-scrolling` 已置位，`.lg-inner` 的计算值
+   仍是 `url("#lg-N")`）。
+   后果只出现在 Chromium：`backdrop-filter: url(#…)` 走 SVG 位移滤镜，滚动时 12 个面逐帧重滤
+   ⇒ 帧间隔 6.9ms → ~100ms（≈10fps，即「Chrome/Edge 首页滚动掉帧」；Firefox 拿不到
+   `window.chrome`、恒走磨砂档，所以不卡）。补上能匹配的选择器后实测回到 6.9ms。
+   两条注意：
+     ① 作者 `!important` 能压过引擎写在 `.lg-inner` 上的内联样式（实测，勿删 `!important`）；
+     ② 本选择器（0,2,1）比套件的无障碍兜底 `[data-liquid-skin] .lg-inner`（0,1,1）更具体，
+        不加守卫会在滚动期压掉「减少透明」偏好 ⇒ 用 no-preference 守卫。
+   `.is-scrolling` 由 skin.js 置位、停滚 200ms 后移除（capture 阶段监听，见 skin.js）。
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-transparency: no-preference) {
+  html.is-scrolling[data-liquid-skin] .lg-inner {
+    backdrop-filter: blur(var(--lg-tune-degrade-blur, 12px)) saturate(140%) !important;
+  }
+}
