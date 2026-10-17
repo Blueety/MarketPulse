@@ -51,6 +51,25 @@ ssh -t root@123.60.176.219 'PUBLIC_IP=123.60.176.219 bash ~/install-server.sh'
 
 ## 2. 日常运维
 
+### 2.1 更新代码（改了 `web/`、`src/`、模板之后怎么上线）
+
+```bash
+# 本机（仓库根）：源码**不在**自动推送白名单（白名单只有 data/ context/ alerts/）⇒ 必须手动提交
+git add <改动文件> && git commit -m "..." && git push origin master
+# 之后无需任何服务器操作：marketpulse-pull.timer 每 5 分钟 `git pull --ff-only origin master`（**整仓**）
+```
+
+- **不需要重启服务**：模板由 Jinja `Environment(loader=FileSystemLoader(...))` 提供，`auto_reload` 默认 `True` ⇒ 模板改动下一次请求即生效；
+  静态资源（`web/static/**`）按请求读 + `_RevalidateStatic` 一律 `no-cache` + `?v=` 取 `_ASSET_FILES` 的最大 mtime ⇒ 浏览器必然拿到新副本。
+- 只有 **`data/marketpulse.db` 的 sha256 变了**才会「清 `-wal`/`-shm` + `systemctl restart marketpulse`」（`marketpulse-pull` 里写死）。
+- 想立刻上线（不等那 5 分钟）：`ssh root@<ECS> 'sudo -u marketpulse /usr/local/bin/marketpulse-pull'`。
+- 上线验收（本机即可，鉴权已关）：
+
+```bash
+curl -sk https://123.60.176.219:8443/ | grep -c <你新增的静态资源名>       # 期望 ≥1
+curl -sk -o /dev/null -w '%{http_code}\n' https://123.60.176.219:8443/static/<你新增的资源>  # 期望 200
+```
+
 ```bash
 sudo cat /srv/marketpulse/.env          # 看 Basic Auth 用户名/口令
 sudo nano /srv/marketpulse/.env         # 改口令后必须重启

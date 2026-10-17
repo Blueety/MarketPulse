@@ -1,4 +1,4 @@
-# Journal · 2026-10-17 DOM 写入语义哨兵（方案 ③）
+# Journal · 2026-10-17 DOM 写入语义哨兵（方案 ③ 检测 + 方案 ① 免疫）
 
 ## 1. 目标与结论
 
@@ -92,6 +92,18 @@
 - **判据要钉用户可见症状**：「标记出现了」只证明检测生效；`连点 3 次刷新后概览仍 6 小卡` 才证明免疫生效（未修复时该断言实测为 24 张）。
 - 方案 ②（160 个写入点改用 `replaceChildren`）**未做**：① 的「先清空再委派」已覆盖本场景且改动面小得多；只有哪天连 `insertAdjacentHTML` 这类**方法**也被改写，才需要上 ②（真免疫，不依赖任何原型包装）。
 
-## 6. 涉及的 ADR
+## 6. 部署与线上验收（2026-10-17）
+
+- 线上 = **华为云 ECS**（`https://123.60.176.219:8443/`，systemd + nginx + 每 5 分钟 `git pull --ff-only` **整仓**）⇒ 本次只需 `commit + push`：
+  `fb046d3`（哨兵 + 免疫）已推送，**约 15s 后**线上即生效（timer 拉取），**无需重启**（模板 Jinja `auto_reload` 默认 True；静态资源按请求读）。
+- 验收（本机 curl）：`/` 首页含 `dom-write-guard` **1** 处（原 0）、`/static/dom-write-guard.js` **200**（原 404）、
+  **6 个页面全部包含**该脚本、指纹 `?v=1792217399`。
+- 真浏览器验收（Playwright，`ignore_https_errors=True`，chromium + firefox 各一遍，脚本在 `%TEMP%`）：
+  `hasGuard=true`；`patched/repaired/repair-failed/dup-ids` 全为 `null`（干净环境**零副作用**）；页面内探针 `writeSemantics='b'`（正常替换语义）；
+  KPI 4 张 / 概览 6 小卡；液态玻璃 `glassEngine=frost`、`skinReady=1`；**零 `[dom-write]` warn、零 pageerror**。
+- Railway 线：`b6dcb73` 把「Railway 决定下线」写进 `docs/deploy-ecs.md §4`（现状 404 `Application not found` + 关停步骤 + 仓库侧为何保留 `app.py`/三处配置）。
+  ⚠️ **关停本身我做不了**：本机无 Railway CLI / `~/.railway` token / `RAILWAY_*` 环境变量 ⇒ 需要账号侧操作（Railway dashboard 删服务 + GitHub App 撤仓库授权）。
+
+## 7. 涉及的 ADR
 
 无。三条准入不齐（改动易撤销：一个 `<script>` 标签 + 一个自包含文件），决策记在本 journal 与 `docs/pitfalls.md`。
