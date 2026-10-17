@@ -991,16 +991,20 @@
     mini:document.querySelectorAll('#overview-body .mini-card').length})
   ```
   `setter` 含 `native code` + `dup` 为空 + `mini` = 12（应 6）⇒ **机制 (B)**，本站代码与哨兵都无责，去查翻译/脚本类扩展；
-  `setter` 不含 `native code` ⇒ 机制 (A)，哨兵会认出来并修回。**实测线上那台（2026-10-17）就是 (B)**：
+  `setter` 不含 `native code` ⇒ 机制 (A)，哨兵会认出来并修回。**实测线上那台（2026-10-17）就是 (B)，已结案：肇事扩展 = PopUpOFF（逐个禁用确认，关掉即恢复 6 张）**：
   `setter` 是 `function innerHTML() { [native code] }`、`dup=[]`、`mini=12`，`<html>` 上没有任何 `data-dom-write-*` 标记
   ⇒ 哨兵安静是对的（它只管机制 (A)）。**肇事线索**：`ypud1q61.default-release` 里 **Mira Translator 3.5.8.8000 的 updateDate = 2026-10-16 19:30**，
-  正是重复第一次出现的当天；它的双语模式 `cloneNode` + `insertAdjacentElement('afterend')`（源码 18 处）与 (B) 的形态完全吻合。
+  正是重复第一次出现的当天；它的双语模式 `cloneNode` + `insertAdjacentElement('afterend')`（源码 18 处）与 (B) 的形态完全吻合。**但它不是本案元凶**（实测元凶 = PopUpOFF）：同形态的候选不止一个，别停在「最像」的那个，按上面的三条路收敛。
   ⚠️ 这类扩展**不会**留下重复 id（克隆的是 `.mini-card` 这类无 id 的子元素，不是带 id 的容器）⇒ 别拿「有没有重复 id」当唯一判据。
+
+- **「只在线上出现」≠ 部署引入的**（2026-10-17 实测）：内容脚本按**源**匹配 —— 只匹配 `https://<线上 host>` 而不匹配 `127.0.0.1` 的扩展，切到线上地址后才第一次有机会动手。判据：**同一份代码 + 同一线上地址，在没有扩展的 Firefox（Playwright）里仍是 6 张小卡**；本次推送的哨兵 / 模板里那一行 `<script>` / 滚动省电都不可能增加节点（而且重复在推送之前的截图里就存在）。
+- **页面世界的钩子看不见「隔离世界」的改写（2026-10-17 实验证明，别再走这条弯路）**：写一个 MV3 内容脚本克隆 `#overview-body` 的卡片，同时用 `add_init_script` 装同款钩子 ⇒ 卡片 **6 → 12**，钩子**一条都没记录**，连内容脚本自己的 `console.log` 都不出现在页面控制台。原因：内容脚本有**自己的一套 `Element.prototype`**，DOM 是同一个、方法不是。⇒ **「计数翻倍 + 钩子零命中」就是隔离世界改写的指纹**。
+  **能看见的三条路**：① Firefox **DOM 断点**（检查器右键节点 → Break on… → 子树修改）—— 它**能**在隔离世界里停住，调用栈里会出现 `moz-extension://<uuid>/…`；② **疑难解答模式**（`about:support`）或**隐私窗口**（默认不让扩展运行）一键确认「是不是扩展」；③ 逐个禁用**会跑内容脚本**的扩展 —— 先查 `extensions.json` 里 `content_scripts.matches` 是否含 `<all_urls>`/本站（本例候选只剩 AdGuard / PopUpOFF / Consent-O-Matic，实测是 **PopUpOFF**）。
   **进一步取证（2026-10-17 实测）**：把 `mira-translator-v2@davidbai.com.xpi` 解包看代码 ——
   `content.js` 里 `defineProperty` 命中 **0 次**（⇒ 它**不**改 `innerHTML`/`textContent` 的 setter，与「setter 仍是 native」的实测吻合），
   而 `cloneNode(true)` + `insertAdjacentElement("afterend", …)` 成片出现，插入物自带 `mira-ext-paragraph-translation`(118)/`mira-ext-*-wrapper`/`data-mira-processing` 等标记。
   ⇒ 与机制 (B) 完全吻合；且该 xpi 的文件时间 = **2026-10-16 19:30**（当天唯一被更新的扩展）。
-  **要一次点name**：在页面里钩住插入 API，让下一次重复自己报出调用栈（栈里会直接出现 `moz-extension://<uuid>/content.js`）：
+  **⚠️ 下面这条「钩插入 API」的片段对隔离世界无效**（2026-10-17 实验证明：内容脚本用自己 realm 的方法，页面钩子看不到；保留仅作对照）：
   ```js
   (() => { const t = document.getElementById('overview-body'), n0 = t.childNodes.length;
     const w = (p, k) => { const o = p[k]; p[k] = function (...a) { const r = o.apply(this, a);
@@ -1015,7 +1019,7 @@
 - **量法**：`el.innerHTML = 'aaa'; el.innerHTML = 'b'` 后读回 —— 原生得 `'b'`，被前置化得 `'baaa'`（探针用**游离节点**，不触发布局）。比「源码里有没有 `defineProperty`」可靠：压缩/间接实现会漏源码特征，行为探针不会。命中后**把被改写 setter 的源码片段打进 console**（`Function.prototype.toString.call(descriptor.set)`）—— 片段通常直接点名肇事扩展/用户脚本。
 - **已落**：`web/static/dom-write-guard.js`（方案 ③ 检测 + 方案 ① 修回替换语义；6 页 head 里**最先**执行 ⇒ 首帧前就能认出；晚改写与克隆型在 `DOMContentLoaded` +1.5s 复查），标记 `<html data-dom-write-patched>` / `data-dom-write-repaired` / `data-dom-write-repair-failed` / `data-dom-write-dup-ids`；验收 `tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py`（四例 × chromium+firefox：干净环境不得误报 / 前置注入必须被认出**且连点 3 次刷新后概览恒为 6 小卡** / 克隆注入必须被认出 / 描述符被锁时优雅降级）。⚠️ 新增静态资源必须登记 `web/app.py` 的 `_ASSET_FILES`，否则改它不换 `?v=`，验收会吃旧副本。
 - **修写入语义要「先清空再委派」，不要「从干净 realm 取原生访问器覆盖回去」**（2026-10-17 实测否掉）：内容脚本 `all_frames` 是常见配置 ⇒ 新 iframe 的 realm **同样被改写**，取回的「原生」就是被改写的那一个；更糟的是跨 realm 委派会把页面**写崩** —— 注入层开始抛 `Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'`，于是「修」比「不修」更坏。正确做法：给命中的 setter 套一层 `set(v){ while(this.firstChild) this.removeChild(this.firstChild); return 原setter.call(this,v); }` —— 不依赖干净 realm、不跨 realm、把「前置插入/追加」都抹平，且只在探针命中时安装（干净环境零改动）。**判据要钉用户可见症状**（连点 3 次刷新后概览仍 6 小卡），不是「标记出现了」。
-- **静态排查的边界（别重复踩）**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）会超时；Firefox 的 `storage/default/` 按**每个源一个目录**铺开（含用户打开过的本地 html 路径），全量扫同样超时 —— 要查用户脚本得先按 UUID 定位到具体扩展的 `idb`。已知会 hook 同族 API 的扩展：AdGuard（`vendors/tsurlfilter.js` 的 `prevent-innerHTML` scriptlet，语义是**吞掉写入**，与「重复」不符）、Mira Translator（双语模式**克隆块**并 `insertAdjacentElement('afterend')` 插在原文之后）。
+- **静态排查的边界（别重复踩）**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）会超时；Firefox 的 `storage/default/` 按**每个源一个目录**铺开（含用户打开过的本地 html 路径），全量扫同样超时 —— 要查用户脚本得先按 UUID 定位到具体扩展的 `idb`。已知会 hook 同族 API 的扩展：AdGuard（`vendors/tsurlfilter.js` 的 `prevent-innerHTML` scriptlet，语义是**吞掉写入**，与「重复」不符）、**PopUpOFF**（2026-10-17 实测元凶：隔离世界内容脚本克隆卡片）、Mira Translator（双语模式**克隆块**并 `insertAdjacentElement('afterend')` 插在原文之后）。
 
 ## 前端验收 verify_ui 的「crosshair 组」会随机红（2026-10-17 实测）
 
