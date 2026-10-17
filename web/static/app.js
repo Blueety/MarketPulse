@@ -407,6 +407,8 @@ var NEWS_SCROLL_PX_PER_SEC = 16;   // 两卡共用同一速度（待目视定稿
 function makeAutoScroller(bodyId, itemSel) {
   var st = {
     raf: 0, last: 0, period: 0, paused: false, bound: false,
+    // 窗口是否聚焦（`document.hasFocus()` 只在创建时取一次，之后由 focus/blur 事件维护）
+    focused: document.hasFocus ? document.hasFocus() : true,
     // ★ 浮点累加位置。**绝不能写 `el.scrollTop += 增量`**：该容器 scrollTop 读回来是整数，
     // 当每帧增量 <1px（如 16px/s ÷ 60fps = 0.27px）时小数部分每帧都被取整抹掉 → 位置永远停在 0
     // （60fps 下看起来「完全不动」）；低帧率下则变成 1~2px 一格一跳（观感卡顿）。
@@ -430,9 +432,13 @@ function makeAutoScroller(bodyId, itemSel) {
   }
 
   function step(now) {
-    st.raf = requestAnimationFrame(step);
     var e = el();
     if (!e) { stop(); return; }
+    // ★ 窗口失焦（页面挂在副屏/旁边没点它）或标签不可见时**把 rAF 本身停掉**，而不是只跳过推进：
+    //   实测「只跳过 scrollTop 写入」CPU 仍有 ~8% 单核 —— 一直挂着的 rAF 会让浏览器一直保持 60fps 活跃
+    //   （合成器不进入 idle）；彻底停掉后 ≈0%。恢复聚焦/可见时由 focus/visibilitychange 重启。
+    if (!st.focused || document.hidden) { st.raf = 0; st.last = 0; return; }
+    st.raf = requestAnimationFrame(step);
     var dt = (now - st.last) / 1000;
     st.last = now;
     if (st.paused || dt <= 0) return;
@@ -477,7 +483,15 @@ function makeAutoScroller(bodyId, itemSel) {
     });
     document.addEventListener('visibilitychange', function () {            // 后台标签页不空转
       st.paused = document.hidden;
-      if (!document.hidden) { st.last = performance.now(); syncFromEl(); }
+      if (!document.hidden) { st.last = performance.now(); syncFromEl(); if (!st.raf) start(); }
+    });
+    // 窗口失焦（切到别的应用 / 挂在副屏没点它）：停推进（见 step() 里的说明）
+    window.addEventListener('blur', function () { st.focused = false; });
+    window.addEventListener('focus', function () {
+      st.focused = true;
+      st.last = performance.now();                 // ★ 重置时间基准，避免恢复瞬间跳很远
+      syncFromEl();                                // ★ 失焦期间可能被重渲染改过位置 → 对齐
+      if (!st.raf) start();                        // ★ 失焦时 step() 把 rAF 停了 ⇒ 这里重启
     });
   }
 

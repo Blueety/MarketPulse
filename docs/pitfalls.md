@@ -1028,3 +1028,21 @@
   **每次都红同一条**才去查代码。
 - 所以**别只看最后一次全量 `verify_ui` 的 FAIL 数**：同一天里它先是两次 690/0 全绿，随后又出现 1 条 crosshair 红，**再复跑又是 `ALL PASSED (10 SKIPPED)`**。
   读 `%TEMP%\marketpulse-verify\verify-report.json` 的 `failures` 列表 + 上面的复现，再决定动不动代码。
+
+## 常驻 rAF / 定时器：只「跳过工作」不够，必须停调度（2026-10-17）
+
+- **现象**：用户报「用 Edge 开着看板特别卡」。定位到 `web/static/app.js` 的无缝滚动（`requestAnimationFrame` +
+  每帧写 `scrollTop`，16px/s）：窗口**可见但未聚焦**（挂在副屏/旁边没点它）时仍以 60fps 跑，
+  空闲时持续吃 **12–15% 单核**（主线程 5.7%）。
+- **只跳过推进 ≠ 省钱**：第一版把失焦判断加进「跳过本帧」里 ⇒ 位移停了，但 CPU 仍有 **~8%** ——
+  挂着的 rAF 会让浏览器一直保持 60fps 活跃（合成器不 idle）。**必须 `st.raf = 0` 停掉调度**，并在
+  `focus` / `visibilitychange(可见)` 时重启（重启前重置时间基准 + 对齐当前位置）。
+- **为什么「火狐不卡、Edge 卡」**：Chromium 对「可见但未聚焦」的窗口仍按 60fps 跑 rAF；
+  Firefox 会把后台窗口的 rAF 压到 ~1fps。所以只处理 `document.hidden` 的写法在 Chromium 上是**漏的**。
+- **量法**（有头浏览器，页面空闲、不动鼠标）：CDP `SystemInfo.getProcessInfo` 汇总本实例**所有进程**的
+  `cpuTime`（含渲染/GPU 进程）差分 ÷ 秒数；主线程用 `Performance.getMetrics().TaskDuration` 同法差分。
+  二分判据：**把 `window.requestAnimationFrame` 换成 `() => 0` 后 CPU 是否归零** —— 归零即锁定 rAF 循环。
+- **验证失焦路径的坑**：Playwright 的 `bring_to_front()` **不会**让另一个窗口真的失焦（两个 context、甚至两个
+  浏览器实例，被切走那页的 `document.hasFocus()` 仍是 `true`）⇒ 直接 `window.dispatchEvent(new Event('blur'/'focus'))`
+  才是可靠触发（浏览器真失焦发的就是这两个事件）。另外**被遮挡的窗口** rAF 会被压到 ~1fps
+  （soak 里量到 `p50=1000ms`、9 帧/30s 是节流不是卡顿）⇒ 帧率类指标必须在可见且聚焦的窗口上量。
