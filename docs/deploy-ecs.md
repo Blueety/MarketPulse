@@ -93,12 +93,27 @@ curl -sk -u "$USER:$PASS" -o /dev/null -w '%{http_code}\n' https://123.60.176.21
 | **pip 直连 pypi.org 8 s/请求** | 用清华镜像（实测 1.04 s） |
 | **Yahoo 数据在服务器上取不到** | 实测 `query1/query2.finance.yahoo.com` 无 UA 429、带 UA 403 ⇒ `/api/macro`、`/api/watchlist` 快照缺失时的实时回退、盘中实时价会降级；DB/context 驱动的页面不受影响。要救就给应用设 `HTTPS_PROXY`（需要服务器可达的代理） |
 
-## 4. 与 Railway 的关系
+## 4. 与 Railway 的关系（2026-10-17：Railway 线**决定下线**）
 
-两处**并存**，互不影响：
+**现状（2026-10-17 实测）**：`marketpulse-blue.up.railway.app` 探活返回
+`404 {"status":"error","code":404,"message":"Application not found"}`（Railway 边缘说这个应用不存在）；
+最近若干提交在 GitHub 上也**没有任何 Railway 部署状态**（`/commits/<sha>/status` → `statuses: 0`）
+⇒ Railway 那份实际已经不可用，线上以本文档的 ECS 部署为准。
 
-- Railway 仍从 GitHub 自动部署（`app.py` 转发入口那条纪律继续有效，别删根目录 `app.py`）；
-- ECS 这份是 systemd + nginx 的独立部署，**不参与 Railway 的部署流程**，也不要求仓库里加任何 CI 配置。
+**关停步骤**（需要账号操作，仓库侧改不了）：
+
+1. Railway dashboard → 该项目 → Settings → Danger zone → **Delete Service / Delete Project**（不可逆；释放域名与用量）；
+2. GitHub → Settings → Applications → **Railway** → Configure → Repository access → 把 `Blueety/MarketPulse` 移出（或直接 Uninstall）⇒ 之后 push 不会再触发 Railway 部署；
+3. 顺手在 Railway → Account → Tokens 里撤销遗留 token。
+
+**仓库里这几处一律保留，不要「顺手清理」**：
+
+| 文件 | 为什么留着 |
+|---|---|
+| 根目录 `app.py` | 它是 Railway 的入口（线上启动命令是 `uvicorn app:app`）。2026-09-24 有人把它当「误放的实验文件」挪走 ⇒ **每一次部署都失败**（线上 502 `Application failed to respond`），而本地 `uvicorn web.app:app` + 全部门禁全绿、**本地测试发现不了**。删它同样会炸掉任何**遗留的**自动部署（服务可能只是探活不可达，不代表 Railway 侧已彻底不存在） |
+| `railway.toml` / `Procfile` / `railpack.json` | 惰性配置（线上生效的是 dashboard 侧的启动命令）；删掉并不能「关掉 Railway」，反而会让护栏测试 `tests/test_web.py::test_deploy_start_commands_reference_an_importable_module` 失去输入 |
+
+ECS 这份是 systemd + nginx 的独立部署，**不参与 Railway 的部署流程**，也不要求仓库里加任何 CI 配置。
 
 ## 5. 切真证书（域名备案后）
 
