@@ -103,6 +103,7 @@ PROBE = r"""
   repaired: document.documentElement.getAttribute('data-dom-write-repaired'),
   repairFailed: document.documentElement.getAttribute('data-dom-write-repair-failed'),
   dupIds: document.documentElement.getAttribute('data-dom-write-dup-ids'),
+  guardError: document.documentElement.getAttribute('data-dom-write-guard-error'),
   miniCards: document.querySelectorAll('#overview-body .mini-card').length,
   bodyChildren: document.body.children.length,
   // 免疫判据：连写两次应只剩最后一次（原生语义）
@@ -112,7 +113,8 @@ PROBE = r"""
 
 
 def run_case(browser, url: str, name: str, init_script: str | None,
-             page_url: str | None = None, refreshes: int = 0) -> tuple[dict, list[str], dict]:
+             page_url: str | None = None, refreshes: int = 0,
+             late_script: str | None = None, late_delay_ms: int = 0) -> tuple[dict, list[str], dict]:
     ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
     page = ctx.new_page()
     logs: list[str] = []
@@ -125,6 +127,12 @@ def run_case(browser, url: str, name: str, init_script: str | None,
     probe = page.evaluate(PROBE)
     print(f"\n--- {name} ---")
     print("   probe:", probe)
+    if late_script:                      # C5/C6：**晚改写** —— 在哨兵最后一轮（+1.5s）之后才改写入语义
+        if late_delay_ms:
+            page.wait_for_timeout(late_delay_ms)
+        page.evaluate(late_script)
+        page.wait_for_timeout(400)
+        print("   after late patch:", page.evaluate(PROBE))
     after = probe
     if refreshes:                        # 触发多轮渲染：症状（累积）在未免疫时必然出现
         for _ in range(refreshes):
@@ -179,6 +187,7 @@ def main() -> int:
                     check(probe["patched"] is None, f"C1[{tag}] 无 data-dom-write-patched", probe["patched"])
                     check(probe["repaired"] is None, f"C1[{tag}] 无 data-dom-write-repaired", probe["repaired"])
                     check(probe["dupIds"] is None, f"C1[{tag}] 无 data-dom-write-dup-ids", probe["dupIds"])
+                    check(probe["guardError"] is None, f"C1[{tag}] 哨兵自身无异常", probe["guardError"])
                     check(not warns, f"C1[{tag}] 无 [dom-write] warn / 无 pageerror", warns[:1])
                     if path == "":
                         check(probe["miniCards"] == 6, f"C1[{tag}] 页面正常（概览 6 小卡）", probe["miniCards"])
@@ -192,6 +201,7 @@ def main() -> int:
                 check(probe["repaired"] == "innerHTML,textContent", f"C2[{engine}] 写入语义修回替换（repaired）", probe["repaired"])
                 check(probe["writeSemantics"] == "b", f"C2[{engine}] 免疫判据（连写两次只剩最后一次）", probe["writeSemantics"])
                 check(after["miniCards"] == 6, f"C2[{engine}] 连点 3 次刷新后概览恒为 6 小卡（症状消失）", after["miniCards"])
+                check(after["guardError"] is None, f"C2[{engine}] 哨兵自身无异常", after["guardError"])
                 check(not [w for w in warns if w.startswith("pageerror")], f"C2[{engine}] 零 pageerror",
                       [w for w in warns if w.startswith("pageerror")][:1])
 
@@ -200,13 +210,36 @@ def main() -> int:
                 dup = int(probe["dupIds"] or 0)
                 check(dup > 0, f"C3[{engine}] 标记重复 id 数 > 0", probe["dupIds"])
                 check(any("重复 id" in w for w in warns), f"C3[{engine}] warn 说明重复 id", len(warns))
+                check(probe["guardError"] is None, f"C3[{engine}] 哨兵自身无异常", probe["guardError"])
 
                 # ── C4 锁死描述符：恢复必须失败且不炸页面 ────────────────────────
                 probe, warns, _ = run_case(browser, url, f"[{engine}] C4 锁死描述符", PATCH_LOCKED)
                 check(probe["patched"] == "innerHTML", f"C4[{engine}] 认出 innerHTML 被改写", probe["patched"])
                 check(probe["repairFailed"] == "innerHTML", f"C4[{engine}] 如实报修复失败", probe["repairFailed"])
                 check(probe["miniCards"] == 6, f"C4[{engine}] 页面照常渲染（优雅降级）", probe["miniCards"])
+                check(probe["guardError"] is None, f"C4[{engine}] 哨兵自身无异常", probe["guardError"])
                 check(not [w for w in warns if w.startswith("pageerror")], f"C4[{engine}] 零 pageerror",
+                      [w for w in warns if w.startswith("pageerror")][:1])
+
+                # ── C5 晚改写：在哨兵最后一轮（+1.5s）**之后**才改写入语义 ────────
+                # 线上症状复现路径：用户浏览器里的注入脚本在 idle 阶段才跑 ⇒ 首帧检查扑空 ⇒ 之后每轮渲染都前置插入。
+                probe, warns, after = run_case(browser, url, f"[{engine}] C5 晚改写", None,
+                                               late_script=PATCH_PREPEND, refreshes=3)
+                check(after["patched"] == "innerHTML,textContent", f"C5[{engine}] 晚改写仍被认出", after["patched"])
+                check(after["repaired"] == "innerHTML,textContent", f"C5[{engine}] 晚改写仍被修回（repaired）", after["repaired"])
+                check(after["writeSemantics"] == "b", f"C5[{engine}] 修回后写入语义=替换", after["writeSemantics"])
+                check(after["miniCards"] == 6, f"C5[{engine}] 晚改写后连点 3 次刷新概览恒为 6 小卡", after["miniCards"])
+                check(after["guardError"] is None, f"C5[{engine}] 哨兵自身无异常", after["guardError"])
+                check(not [w for w in warns if w.startswith("pageerror")], f"C5[{engine}] 零 pageerror",
+                      [w for w in warns if w.startswith("pageerror")][:1])
+
+                # ── C6 修回之后**再次**被覆盖（改写层比哨兵晚跑第二次）───────────
+                probe, warns, after = run_case(browser, url, f"[{engine}] C6 修回后再被覆盖", PATCH_PREPEND,
+                                               late_script=PATCH_PREPEND, refreshes=3)
+                check(after["writeSemantics"] == "b", f"C6[{engine}] 再被覆盖后写入语义仍为替换", after["writeSemantics"])
+                check(after["miniCards"] == 6, f"C6[{engine}] 再被覆盖后连点 3 次刷新概览恒为 6 小卡", after["miniCards"])
+                check(after["guardError"] is None, f"C6[{engine}] 哨兵自身无异常", after["guardError"])
+                check(not [w for w in warns if w.startswith("pageerror")], f"C6[{engine}] 零 pageerror",
                       [w for w in warns if w.startswith("pageerror")][:1])
 
                 browser.close()

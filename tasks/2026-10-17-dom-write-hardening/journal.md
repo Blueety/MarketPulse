@@ -98,6 +98,46 @@
   `fb046d3`（哨兵 + 免疫）已推送，**约 15s 后**线上即生效（timer 拉取），**无需重启**（模板 Jinja `auto_reload` 默认 True；静态资源按请求读）。
 - 验收（本机 curl）：`/` 首页含 `dom-write-guard` **1** 处（原 0）、`/static/dom-write-guard.js` **200**（原 404）、
   **6 个页面全部包含**该脚本、指纹 `?v=1792217399`。
+
+## 7. 部署后仍重复 ⇒ 持续复核（C5/C6）与「不许更糟」还原
+
+**现象**：部署后用户浏览器里仍重复（截图：概览 6 小卡 → 真卡重复 + 末尾骨架）。线上侧已排除：
+`dom-write-guard.js` 线上哈希与本地**逐字节一致**（`7bc327d3…`）、是 head 里第一个 `<script>`、6 页都带它、干净环境真浏览器验收零副作用。
+
+**闸门 A（先红）**：验收加 C5/C6，对「只做首帧 +1.5s 两次检查」的版本实测 —— C5（晚改写，即哨兵最后一轮**之后**才改写入语义）
+`patched=None`、探针 `'baaa'`、连点 3 次刷新后概览 **24** 小卡（6 → 24，与截图同形）；C6（修回后**再次**被覆盖）探针 `''`。⇒ 两条都红。
+
+**修法**：④ 持续复核（setter 身份比对做廉价判据；3s 心跳 + DOM 变化 400ms 节流 + visibilitychange）。
+
+**过程中两个真实教训**（都已进 `docs/pitfalls.md`）：
+
+1. **strict 模式 + 顶层 try/catch = 静默死亡**：watch 状态变量漏声明 ⇒ `ReferenceError` ⇒ 整段复核被外层 catch 吞掉，
+   验收表现为 C3/C5/C6 红而页面零报错（最难查的一种）。⇒ 外层 catch 现在写 `data-dom-write-guard-error` + `console.error`，
+   验收每例都断言该标记为空。
+2. **`<template>` 必须特判**：模板内容在 `.content`，元素 childNodes 恒空；改写层又常拿「当前 setter」当解析器
+   （`const t = document.createElement('template'); 当前setter.call(t, v); 用 t.content`）⇒ 委派链落到模板上时，
+   对方的 `this.insertBefore(t.content, this.firstChild)` 会把内容**丢空**（Chromium 实测 `t.content.childNodes.length === 0`），
+   页面渲染成空白（比「重复」更糟）。⇒ 包装里模板一律绕开委派、用 `DOMParser` 自己解析填 `.content`；
+   并且**修完复核不达标就还原**成动手前的描述符 + 停止再尝试该 API（「不许更糟」）。
+
+**肇事者线索（静态排查结论）**：`ypud1q61.default-release` 里活跃扩展的 **updateDate** 与症状出现时间高度吻合 ——
+**Mira Translator - Web Translation 3.5.8.8000，2026-10-16 19:30 更新**（重复第一次出现就在 10-16 当天）；
+其次 AdGuard 5.5.3.5（10-14 更新，其 `prevent-innerHTML` scriptlet 语义是「吞掉写入」，与「重复」不符）。
+另：hapi（`/d/hapi`）源码与 dist 里**没有**任何原型 setter 改写（只找到 e2e 的 `addInitScript` 与自家 UI 的 `cloneNode`）。
+
+**用户侧实测（决定性，2026-10-17）**：在出问题的页面跑三行判据，得到
+
+```json
+{"mark":{"theme":"light","liquidSkin":"","glassEngine":"frost","skinMounted":"16","skinReady":"1"},
+ "dup":[],"mini":12,"setter":"function innerHTML() { [native code] }"}
+```
+
+⇒ **`innerHTML` setter 是原生的、没有重复 id、但 `#overview-body` 有 12 张卡（应 6）** ⇒ 线上那台**不是机制 (A)「写入语义被改写」**，
+而是 **(B) 有脚本克隆 DOM 块插在原文之后**（本站代码与哨兵都无责；`<html>` 上没有任何 `data-dom-write-*` 标记 = 哨兵安静，这是正确行为）。
+⇒ 本节的 C5/C6 修复（112/0 全绿）修的是机制 (A) 的真实故障模式，**不解决用户当前这条**；用户当前这条的正解 = 关掉/排除该扩展。
+两种机制的判别命令与本次实测数据已写进 `docs/pitfalls.md`（「两种机制 + 一条命令分清」）。
+
+## 8. 涉及的 ADR
 - 真浏览器验收（Playwright，`ignore_https_errors=True`，chromium + firefox 各一遍，脚本在 `%TEMP%`）：
   `hasGuard=true`；`patched/repaired/repair-failed/dup-ids` 全为 `null`（干净环境**零副作用**）；页面内探针 `writeSemantics='b'`（正常替换语义）；
   KPI 4 张 / 概览 6 小卡；液态玻璃 `glassEngine=frost`、`skinReady=1`；**零 `[dom-write]` warn、零 pageerror**。

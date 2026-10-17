@@ -41,6 +41,8 @@
     var html = document.documentElement;
     var foundReported = false;
     var outcomeReported = false;
+    var prevDesc = {};                                        // API → 我们动手之前的描述符（供还原）
+    var giveUp = { innerHTML: 0, textContent: 0 };            // API → 「修了更糟」次数（≥2 不再尝试）
 
     function isNative(fn) {
       try { return typeof fn === 'function' && nativeToString.call(fn).indexOf('[native code]') >= 0; }
@@ -98,26 +100,53 @@
     }
 
     /** 方案 ①（语义修复）：先清空子节点，再交给**当前**的 setter —— 抹平「前置插入/追加」，回到替换语义。
-        只用 `firstChild` / `removeChild`：比 `replaceChildren` 更不容易被同族改写波及。 */
+        只用 `firstChild` / `removeChild` / `appendChild`：比 `replaceChildren` 更不容易被同族改写波及。
+
+        ⚠️ **`<template>` 必须特判**（2026-10-17 实测）：模板的内容在 `.content` 里，元素本身 childNodes 恒为空，
+        所以「清空 + 委派」对模板是错的 —— 更要命的是**改写层自己会拿当前 setter 当解析器**
+        （`const t = document.createElement('template'); 当前setter.call(t, v); 用 t.content`），
+        于是委派链落到模板上、对方的 `this.insertBefore(t.content, this.firstChild)` 会把内容**丢空**
+        （Chromium 实测：`t.content.childNodes.length === 0`）⇒ 页面渲染成空白（比「重复」更糟）。
+        故模板一律**绕开委派**：自己用 `DOMParser` 解析（不经过被改写的 `innerHTML`）再填进 `.content`。 */
     function repairWrite(entry) {
       var cur = null;
       try { cur = Object.getOwnPropertyDescriptor(entry.host, entry.name); } catch (e) {}
       if (!cur || typeof cur.set !== 'function') return false;
       var delegate = cur.set, getter = cur.get;
+      prevDesc[entry.name] = cur;                 // 记下「我们动手之前」的描述符，供修不动时还原
       try {
         Object.defineProperty(entry.host, entry.name, {
           configurable: true,
           enumerable: cur.enumerable,
           get: getter,
           set: function (v) {
-            try { while (this.firstChild) this.removeChild(this.firstChild); } catch (e2) { /* 清不掉就照旧委派 */ }
+            var text = v == null ? '' : String(v);
+            try {                                  // ① 模板：content 才是它的内容
+              if (this && this.content && this.content.nodeType === 11) {
+                var doc = new DOMParser().parseFromString(text, 'text/html');
+                var src = doc.body ? doc.body.childNodes : null;
+                while (this.content.firstChild) this.content.removeChild(this.content.firstChild);
+                if (src) { while (src.length) this.content.appendChild(src[0]); }
+                return;
+              }
+            } catch (e2) { /* 模板路径失败就退回常规委派 */ }
+            try { while (this.firstChild) this.removeChild(this.firstChild); } catch (e3) { /* 清不掉就照旧委派 */ }
             return delegate.call(this, v);
           }
         });
         return true;
-      } catch (e3) {
+      } catch (e4) {
         return false;
       }
+    }
+
+    /** 不许更糟：修完复核仍不达标 ⇒ 把描述符还原成「我们动手之前」的那个，并停止再尝试该 API。 */
+    function revertWrite(name) {
+      var prev = prevDesc[name];
+      if (!prev) return;
+      try {
+        Object.defineProperty(name === 'innerHTML' ? Element.prototype : Node.prototype, name, prev);
+      } catch (e) { /* 还原不了就只能保持现状（页面仍可用） */ }
     }
 
     function warnOutcome(ok, failed, still) {
@@ -137,11 +166,12 @@
     }
 
     function guard() {
-      var bad = detectBad();
+      var bad = detectBad().filter(function (x) { return giveUp[x.name] < 2; });   // 已证明「修了更糟」的 API 不再动
       if (!bad.length) return;
       var names = bad.map(function (x) { return x.name; }).join(',');
+      var isRepeat = foundReported;               // 之前已认出过一次 ⇒ 这次是「再次覆盖」
       html.setAttribute('data-dom-write-patched', names);
-      warnFound(bad);
+      if (!isRepeat) warnFound(bad);
 
       var ok = [], failed = [];
       for (var i = 0; i < bad.length; i++) {
@@ -150,11 +180,23 @@
       var still = detectBad().map(function (x) { return x.name; });   // 修完复核：仍被改写 ⇒ 如实报失败
       if (ok.length && !still.length) {
         html.setAttribute('data-dom-write-repaired', ok.join(','));
+        for (var j = 0; j < ok.length; j++) giveUp[ok[j]] = 0;
       } else {
+        /* 不许更糟：修完仍不达标（常见于「对方把当前 setter 当解析器、链到我们的包装上」这种二次覆盖）
+           ⇒ 把描述符还原成动手前的那个（页面继续「重复」但不再被我们弄坏），并停止再尝试该 API。 */
+        for (var k = 0; k < ok.length; k++) { giveUp[ok[k]] = giveUp[ok[k]] + 1; revertWrite(ok[k]); }
         html.removeAttribute('data-dom-write-repaired');
         html.setAttribute('data-dom-write-repair-failed', (still.length ? still : failed).join(','));
       }
-      warnOutcome(ok, failed, still);
+      if (isRepeat) {
+        if (extraReports < 3) {
+          extraReports++;
+          console.warn('[dom-write] 改写层**再次**覆盖写入语义（' + names + '）—— 已' + (still.length ? '尝试' : '') + '再次修回'
+            + (still.length ? '但失败' : '') + '。\n  说明对方会周期性重装钩子；上面第一次输出里的 setter 源码片段即肇事者。');
+        }
+      } else {
+        warnOutcome(ok, failed, still);
+      }
     }
 
     function dupIdReport() {
@@ -165,23 +207,70 @@
       }
       if (!dup) return;
       html.setAttribute('data-dom-write-dup-ids', String(dup));
+      if (dup === lastDupCount) return;            // 同一批重复不重复刷屏（心跳会周期性调用本函数）
+      lastDupCount = dup;
       console.warn('[dom-write] 检测到 ' + dup + ' 个重复 id（正常应为 0）——典型来源：第三方脚本克隆节点并插进文档。'
         + '\n  后果：document.getElementById 命中的是**第一个**副本 ⇒ 页面脚本的更新只写进那个副本，'
         + '其余副本冻结在旧值（表现即「同一块内容重复出现、且后几份是旧数据」）。');
     }
 
-    guard();                            // ① + ②：首帧前 —— 在 document_start 改写的注入脚本，这里就能认出并修回
+    /* ── 持续复核（2026-10-17 线上补）─────────────────────────────────────────
+       为什么必须持续复核：改写层不一定在首帧前跑 —— 实测（验收 C5）**idle 阶段才跑的注入**
+       会让首帧检查完全扑空，之后每轮渲染都「前置插入」（连点 3 次刷新：概览 6 → 24 小卡，
+       与线上截图同形）；对方也可能在我们修回之后**再次**覆盖（C6）。
+       廉价判据 = **setter 身份比对**（2 次 `getOwnPropertyDescriptor`，不做 toString）；身份变了
+       才跑完整行为探针 + 重新修回。三路触发：3s 心跳（抓 idle 才跑的改写）、DOM 变化（前 90s，
+       400ms 节流）、切回标签页（visibilitychange）。 */
+    var lastSeen = { innerHTML: null, textContent: null };   // 上一次评估后的 setter 身份（= 我们自己装的包装）
+    var extraReports = 0;                                    // 「再次覆盖」告警次数上限
+    var lastDupCount = -1;                                   // 重复 id 上次上报值（同值不刷屏）
 
-    function lateCheck() {              // ③：晚改写 / 克隆型
-      guard();
+    function currentSetter(host, name) {
+      try { var d = Object.getOwnPropertyDescriptor(host, name); return (d && d.set) || null; } catch (e) { return null; }
+    }
+    function remember() {
+      lastSeen.innerHTML = currentSetter(Element.prototype, 'innerHTML');
+      lastSeen.textContent = currentSetter(Node.prototype, 'textContent');
+    }
+    function recheck(force) {
+      var a = currentSetter(Element.prototype, 'innerHTML');
+      var b = currentSetter(Node.prototype, 'textContent');
+      if (force || a !== lastSeen.innerHTML || b !== lastSeen.textContent) guard();
+      remember();
       dupIdReport();
     }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () { setTimeout(lateCheck, 1500); });
-    } else {
-      setTimeout(lateCheck, 1500);
+
+    guard();                            // ① + ②：首帧前 —— 在 document_start 改写的注入脚本，这里就能认出并修回
+    remember();
+    dupIdReport();
+
+    setInterval(function () { recheck(false); }, 3000);
+
+    var lastTick = 0;
+    function throttled() {              // MutationObserver 在每轮渲染时都会触发 ⇒ 400ms 节流
+      var now = Date.now();
+      if (now - lastTick < 400) return;
+      lastTick = now;
+      recheck(false);
     }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { recheck(true); });
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) recheck(true); });
+    try {
+      var obs = new MutationObserver(throttled);
+      obs.observe(document.documentElement || document, { childList: true, subtree: true });
+      setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 90000);   // 之后交给心跳
+    } catch (e) { /* 观察不到也不影响心跳那条路 */ }
   } catch (e) {
-    /* 哨兵自身绝不把异常抛给页面 */
+    /* 哨兵自身绝不把异常抛给页面；但**必须留痕** —— 静默失败会让「没认出改写」与「自己坏了」
+       无法区分。2026-10-17 实测踩过：watch 状态漏声明 ⇒ strict 模式抛 ReferenceError ⇒
+       整段持续复核被这层 catch 吞掉，验收表现为 C3/C5/C6 红而页面零报错（最难查的一种）。 */
+    try {
+      document.documentElement.setAttribute('data-dom-write-guard-error',
+        String(e && e.message ? e.message : e).slice(0, 140));
+      console.error('[dom-write] 哨兵自身出错（已降级为不干预）: ' + (e && e.message ? e.message : e));
+    } catch (e2) { /* 连留痕都失败就彻底放弃 */ }
   }
 })();

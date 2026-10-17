@@ -126,3 +126,33 @@ venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py       
 venv/Scripts/python -m pytest tests/ -q
 grep -rn "\[DEBUG-" --include=*.py --include=*.js .
 ```
+
+---
+
+## 追加 2（同日，线上复现后）：持续复核 —— 改写层在哨兵**之后**才跑
+
+**现象**：`fb046d3` 部署上线后，用户浏览器里**仍然重复**（截图：概览 6 小卡 → 真卡重复 + 末尾骨架、板块表 5 行 → 11 行）。
+
+**线上侧已排除**（实测）：`/static/dom-write-guard.js` 的 sha256 与本地**逐字节一致**（`7bc327d3…`）、
+它是首页 head 里**第一个** `<script>`、6 个页面都带它、干净环境真浏览器（chromium+firefox）验收零副作用、零 pageerror。
+⇒ 哨兵确实在跑，但**没抓到**那层改写。
+
+**闸门 A（已实跑，先红）**：`verify_dom_write_guard.py` 新增两例，对「只做首帧 +1.5s 两次检查」的版本实测：
+
+- **C5 晚改写**（在哨兵最后一轮 **+1.5s 之后**才改写入语义）：`patched=None`（完全没认出）、页面探针 `'baaa'`、
+  连点 3 次刷新后 `#overview-body .mini-card` = **24**（6 → 24，与用户截图同形）⇒ 4 条断言全红。
+- **C6 修回后再次被覆盖**：`writeSemantics=''`、标记停在旧值 ⇒ 红。
+
+⇒ 结论：**「首帧 + 1.5s」两次检查必然漏掉 idle 阶段才跑的注入脚本**（用户浏览器里那层正是如此；
+内容脚本按 `document_start` 注入的话首帧就能抓到，抓不到说明它更晚），而且对方第二次覆盖时我们不会重新修回。
+
+**修法**（`web/static/dom-write-guard.js` ④ 持续复核）：廉价判据 = **setter 身份比对**
+（2 次 `getOwnPropertyDescriptor`，不做 `toString`）；身份变了才跑完整行为探针 + 重新修回。
+三路触发：**3s 心跳**（抓 idle 才跑的改写）、**DOM 变化**（前 90s，400ms 节流）、**切回标签页**（visibilitychange）。
+另外：再次覆盖时额外 warn 一条（最多 3 次，点名「对方会周期性重装钩子」）；重复 id 的 warn 同值不重复刷屏。
+
+**判据**：C5/C6 变绿（`patched`/`repaired` 有值 + 连点 3 次刷新仍 6 小卡），C1–C4 不回归。
+
+**仍未覆盖**（若线上标记显示 `data-dom-write-repair-failed` 才需要上）：对方把描述符锁成 non-configurable ⇒
+原型层修不动，只能走方案 ②（把 71 个 `innerHTML=` + 88 个 `textContent=` 换成不依赖 setter 语义的
+`replaceChildren` 写法）。
