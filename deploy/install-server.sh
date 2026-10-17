@@ -102,22 +102,30 @@ fi
 
 if [ "$KEY_OK" = "1" ]; then
   if [ -d "$APP_DIR/.git" ]; then
-    sudo -u "$APP_USER" env GIT_SSH_COMMAND="$GIT_SSH" git -C "$APP_DIR" pull --ff-only -q
-    ok "git pull 完成（$(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --short HEAD)）"
+    # 显式给远端+分支：`git init`+`fetch`+`reset` 建立的工作区**没有上游追踪**，
+    # 裸 `git pull` 会报 "There is no tracking information for the current branch"（2026-10-17 实测）
+    sudo -u "$APP_USER" env GIT_SSH_COMMAND="$GIT_SSH" git -C "$APP_DIR" pull --ff-only -q origin "$BRANCH" \
+      || warn "git pull 未成功（本地有改动或非快进）—— 继续用当前工作区"
+    sudo -u "$APP_USER" git -C "$APP_DIR" branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
+    ok "git 工作区已更新（$(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --short HEAD)）"
   else
     sudo -u "$APP_USER" git -C "$APP_DIR" init -q -b "$BRANCH"
     sudo -u "$APP_USER" git -C "$APP_DIR" remote add origin "git@github.com:$REPO.git" 2>/dev/null || true
     sudo -u "$APP_USER" env GIT_SSH_COMMAND="$GIT_SSH" git -C "$APP_DIR" fetch -q origin "$BRANCH"
     # --hard 只覆盖被跟踪文件；venv/ 与 .env 未跟踪 ⇒ 不受影响
     sudo -u "$APP_USER" git -C "$APP_DIR" reset --hard -q "origin/$BRANCH"
-    ok "已建立 git 工作区（$(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --short HEAD)）"
+    # 必须显式建立上游，否则之后的 `git pull` 无从判断要合并谁
+    sudo -u "$APP_USER" git -C "$APP_DIR" branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
+    ok "已建立 git 工作区（$(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --short HEAD)，上游 origin/$BRANCH）"
   fi
 else
   TMP="$(mktemp -d)"
-  trap 'rm -rf "$TMP"' EXIT
-  curl -fsSL --max-time 180 -o "$TMP/mp.tar.gz" "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" \
+  TARBALL="$(mktemp --suffix=.tar.gz)"
+  trap 'rm -rf "$TMP" "$TARBALL"' EXIT
+  # 压缩包必须落在 $TMP **之外**：落在里面会被下面那条 tar 管道一起复制进站点目录（实测残留 mp.tar.gz）
+  curl -fsSL --max-time 180 -o "$TARBALL" "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" \
     || die "codeload 下载失败（网络受限？）"
-  tar -xzf "$TMP/mp.tar.gz" -C "$TMP" --strip-components=1
+  tar -xzf "$TARBALL" -C "$TMP" --strip-components=1
   # 用 tar 管道而不是 `cp -a "$TMP"/. "$APP_DIR"/`：后者会把**源目录自身**的属性
   # （mktemp 的 drwx------ root）套到目标目录上 ⇒ $APP_DIR 变成 700 root，服务用户连目录都进不去
   # （2026-10-17 实测踩到：sudo: unable to execute .../venv/bin/pip: Permission denied）

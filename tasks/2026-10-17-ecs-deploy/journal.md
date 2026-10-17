@@ -63,6 +63,33 @@
 1. 华为云控制台 → 安全组 → 入方向 → 放行 **TCP 8443**（协议端口栏只填数字）。
 2. GitHub → 仓库 Settings → Deploy keys → 添加脚本打印的公钥（只读）→ 重跑 `install-server.sh` 即切换为 git 增量拉取。
 
+## 追加（同日）：deploy key 到位 → 切换 git 通道 → 公网验收
+
+用户完成两步后复跑安装脚本（幂等），并修掉两个切换过程中暴露的缺陷：
+
+| 缺陷 | 现象 | 修法 |
+|---|---|---|
+| **`git init`+`fetch`+`reset` 建立的工作区没有上游追踪** | `marketpulse-pull` 报 `There is no tracking information for the current branch`；timer 每 5 分钟失败一次（14:10 那次实拍） | 安装脚本显式 `git branch --set-upstream-to=origin/$BRANCH`；拉取脚本改成 `git pull --ff-only origin "$(git rev-parse --abbrev-ref HEAD)"`，不依赖 tracking 配置 |
+| **codeload tar 包落在 `mktemp -d` 目录里**，被随后的 tar 管道一起复制进站点根 | `/srv/marketpulse/mp.tar.gz` 残留（`git status` 多出 1 个未跟踪文件） | 压缩包改到 `mktemp --suffix=.tar.gz`（目录之外）+ `trap` 清理；并清掉服务器上那份残留 |
+
+### 复验（全部实跑）
+
+| # | 验证 | 结果 |
+|---|---|---|
+| 1 | 上游追踪 | `* master 00fbfed [origin/master]` ✓ |
+| 2 | 手动拉取 | `无数据变化`，`exit=0` ✓ |
+| 3 | systemd 路径（timer 实际调用的那条） | `Result=success`、`ExecMainStatus=0` ✓；timer 下次触发 14:15 |
+| 4 | sudoers 放行的重启（数据变更分支的关键一步） | `sudo -u marketpulse sudo -n systemctl restart marketpulse` **可用**；重启后 `active`、`/healthz` 200 ✓ |
+| 5 | 工作树 | `git status --porcelain` **0 行**（venv/.env/config.json 未跟踪且保留）✓ |
+| 6 | **公网可达**（安全组已放行 8443） | TCP 8443 开放（25 ms）；`https://123.60.176.219:8443/healthz` → **200**（0.115 s）、`/` → **401** ✓ |
+| 7 | **公网真浏览器**（`https://123.60.176.219:8443/`，自签已忽略） | `title=MarketPulse 市场看板`、`isSecureContext=true`、40 卡、5 canvas、**TTFB 251 ms / load 1070 ms**、24 个资源 / 325 KB、`failedRequests: 0`、页面含真实数据；截图 `tmp/mp-public.png` |
+| 8 | 唯一的控制台错误 | `/favicon.ico` **404**（应用没有该路由，浏览器自动请求）⇒ 纯装饰性问题，修法：加 `/favicon.ico` 路由或 `static/favicon.ico` + `<link rel=icon>` |
+
+### 顺带发现
+
+- nginx access.log 里有境外扫描器 `184.105.247.198` 探测 `/favicon.ico`（13:23，当时是 8080 上的 Todo）⇒ 端口暴露在公网必然被扫，`/` 有 401 兜底即可，不必紧张；但也说明**别关鉴权**。
+- 服务器只开了 8443 与 8080 两个站点端口，`/healthz` 故意免鉴权（给探活/监控用），其余全部走 Basic Auth。
+
 ## 涉及的 ADR
 
 无新增（三条准入不齐：决策可撤销、无背景不困惑、非真实取舍）。部署形态记录在 `docs/deploy-ecs.md`。

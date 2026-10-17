@@ -24,7 +24,9 @@ fi
 export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
 before=$(sha256sum "$DB" 2>/dev/null | awk '{print $1}' || echo none)
-if ! git pull --ff-only --quiet; then
+# 显式给远端+分支：不依赖上游追踪配置（手工 `git init` 建立的工作区默认没有 tracking，
+# 裸 `git pull` 会报 "There is no tracking information for the current branch" —— 2026-10-17 实测）
+if ! git pull --ff-only --quiet origin "$(git rev-parse --abbrev-ref HEAD)"; then
   echo "git pull 失败（网络不通 / deploy key 被撤 / 本地有改动导致非快进）" >&2
   exit 1
 fi

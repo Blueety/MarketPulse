@@ -975,3 +975,5 @@
 - **换 SQLite 库必须先清 `-wal`/`-shm`**：`git pull` 换掉 `data/marketpulse.db` 后旧 WAL 与新库不配对（可能 `database disk image is malformed`）⇒ 拉取脚本固定「DB 哈希变了 → `rm -f *.db-wal *.db-shm` → `systemctl restart`」。应用对 `data/` 只读，删 WAL 不丢数据。
 - **Basic Auth 凭据只从进程环境读**（应用不解析 `.env`）⇒ 必须靠 systemd `EnvironmentFile=`；手工前台跑要自己 export。另外**别设** `RAILWAY_ENVIRONMENT`（设置页变只读 403）/ `MP_AUTH_DISABLED`（全站无鉴权）/ `MP_SKIP_RESTORE`（跳过空库恢复）。
 - **Windows 上 `ssh -f -N -L` 不会真正后台化**（本机 omp 的 daemon broker 也不可用）⇒ 远程浏览器验收改成「同一命令内 `ssh -N -L ... &` → 跑 Playwright → `kill`」，验完即关，别留常驻隧道。
+- **`git init` + `git fetch` + `git reset --hard` 建立的工作区没有上游追踪**：之后裸 `git pull` 报 `There is no tracking information for the current branch`（实测：定时任务每 5 分钟失败一次）。必须 `git branch --set-upstream-to=origin/<branch> <branch>`；更稳的写法是拉取命令**显式带远端与分支**（`git pull --ff-only origin "$(git rev-parse --abbrev-ref HEAD)"`），不依赖 tracking 配置。**判据**：`git branch -vv` 里分支名后面没有 `[origin/xxx]`。
+- **`mktemp -d` 里放的东西会被后续 tar 管道一起搬走**：把 codeload 压缩包下到 `$TMP` 内，`tar -c -C "$TMP" . | tar -x -C "$APP_DIR"` 就把 `mp.tar.gz` 复制进了站点根（`git status` 多一个未跟踪文件）。临时下载物一律放 `$TMP` **之外**（`mktemp --suffix=.tar.gz`）+ `trap` 清理。
