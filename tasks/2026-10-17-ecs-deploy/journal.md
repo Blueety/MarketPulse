@@ -114,6 +114,7 @@
 | 1 | 无凭据访问（服务器侧与外网侧各一遍） | `/healthz`、`/`、`/api/latest`、`/api/watchlist`、`/settings` **全部 200** ✓（不再弹登录框） |
 | 2 | `GET /api/settings` | `readonly: true` + 只读原因 ✓ |
 | 3 | 匿名 `POST /api/settings` | **403**，且 `config.json` 的 mtime **未变化**（未被写入）✓ |
+| 4 | **真浏览器、零凭据**（`https://123.60.176.219:8443/`） | HTTP **200**、无登录弹框、看板正常渲染（40 卡 / 5 canvas / 真实数据）；`/settings` 页面 200、**保存按钮 `disabled=true`**、页面文案出现「线上（Railway）只读展示」✓；`failedRequests: 0`；截图 `tmp/mp-noauth.png` |
 
 ### 已知副作用（应用文案，未改代码）
 
