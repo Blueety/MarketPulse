@@ -1067,3 +1067,7 @@ refract 引擎下中位帧间隔 **69–104ms**（≈10–14fps、>50ms 帧占 7
 - **输入方式决定事件形态**：`page.mouse.wheel` 是「一跳一跳」的（事件成簇、簇间 >200ms，会把降级状态打成 5% 覆盖率的假红）；`Input.synthesizeScrollGesture` 才给连续事件流 ⇒ 判「降级是否稳定」必须用后者。
 
 **验收回路**：`tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py`（D1 静止保留折射 / D2 滚动降级成 blur / D2b 降级覆盖率 ≥90% / D3 中位帧间隔 ≤20ms 且 >50ms 占比 ≤5% / D4 只跑跑马灯不降级 / D5 零 pageerror；`--url https://…` 可直接打线上）。
+
+- **比对「线上静态资源是否已更新」时先归一化 CRLF**：仓库工作区是 CRLF、ECS 上的 checkout 是 LF，
+  直接比 sha256/字节数会**假红**（实测 `mp-skin.css` 本地 16699B / 线上 16487B，差的就是 212 个 CRLF）。
+  用 `b.replace(b"\r\n", b"\n")` 后再比；顺带一提 `web/static/skin.js` 恰好是 LF，所以它一比就中。
