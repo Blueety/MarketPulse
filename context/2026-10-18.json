@@ -3,53 +3,53 @@
   "indices": {
     "GSPC": {
       "value": 7659.44,
-      "change_pct": null,
+      "change_pct": 0.0,
       "status": "连涨2日"
     },
     "IXIC": {
       "value": 26140.033,
-      "change_pct": null,
+      "change_pct": 0.0,
       "status": "下跌趋势"
     },
     "SH": {
       "value": 3716.2842,
-      "change_pct": 0.23757942060852025,
-      "status": "连涨2日"
+      "change_pct": 0.0,
+      "status": "连涨1日"
     },
     "SZ": {
       "value": 11802.459,
-      "change_pct": -0.12125968579617172,
+      "change_pct": 0.0,
       "status": "下跌趋势"
     },
     "CYB": {
       "value": 2772.384,
-      "change_pct": -0.3877226548815711,
+      "change_pct": 0.0,
       "status": "下跌趋势"
     },
     "VIX": {
       "value": 19.99,
-      "change_pct": null,
+      "change_pct": 0.0,
       "status": "平静"
     },
     "VXN": {
       "value": 27.13,
-      "change_pct": null,
+      "change_pct": 0.0,
       "status": "警惕"
     },
     "MOVE": {
-      "value": 101.1029,
-      "change_pct": null,
+      "value": 101.103,
+      "change_pct": 9.890913118131013e-05,
       "status": "警惕"
     },
     "GCF": {
-      "value": 4181.1,
-      "change_pct": null,
-      "status": "连跌1日"
+      "value": 4202.8,
+      "change_pct": 0.5190021764607357,
+      "status": "连涨1日"
     },
     "BTC": {
-      "value": 81096.75,
-      "change_pct": null,
-      "status": "连跌1日"
+      "value": 82012.38,
+      "change_pct": 1.1290588093850922,
+      "status": "连涨1日"
     }
   },
   "history_30d": {
@@ -179,7 +179,7 @@
       99.0643,
       null,
       null,
-      101.1029
+      101.103
     ],
     "gspc": [
       7656.98,
@@ -371,7 +371,7 @@
       4129.0,
       null,
       null,
-      4181.1
+      4202.8
     ],
     "btc": [
       77267.73,
@@ -403,7 +403,7 @@
       81586.59,
       null,
       null,
-      81096.75
+      82012.38
     ]
   },
   "breach": {
