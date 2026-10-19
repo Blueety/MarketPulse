@@ -2,13 +2,13 @@
   "date": "2026-10-19",
   "indices": {
     "GSPC": {
-      "value": 7693.83,
-      "change_pct": 0.44898843779702335,
+      "value": 7715.72,
+      "change_pct": 0.7347795661301696,
       "status": "连涨1日"
     },
     "IXIC": {
-      "value": 26390.299,
-      "change_pct": 0.9574050652499161,
+      "value": 26548.236,
+      "change_pct": 1.5616009360049443,
       "status": "连涨1日"
     },
     "SH": {
@@ -211,7 +211,7 @@
       7731.98,
       7748.49,
       7659.44,
-      7693.83
+      7715.72
     ],
     "ixic": [
       26186.414,
@@ -243,7 +243,7 @@
       26636.084,
       26597.201,
       26140.033,
-      26390.299
+      26548.236
     ],
     "sh": [
       3885.3328,
@@ -407,8 +407,17 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "IXIC",
+        "current": 26548.236,
+        "previous": 26140.033,
+        "change_pct": 1.56,
+        "threshold": 1.3887360930708996,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "IXIC surge 2026-10-19",
     "军工 surge 2026-10-19",
     "医药 surge 2026-10-19",
     "消费 surge 2026-10-19",
-    "金融 surge 2026-10-19",
-    "其他 surge 2026-10-19"
+    "金融 surge 2026-10-19"
   ],
   "correlation": [],
   "watchlist": {
