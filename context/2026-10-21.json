@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3723.9518,
-      "change_pct": -0.30568856036338377,
+      "value": 3713.0277,
+      "change_pct": -0.5981388084030353,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 11764.971,
-      "change_pct": -0.30775449124630716,
+      "value": 11704.354,
+      "change_pct": -0.8214017281161763,
       "status": "连跌2日"
     },
     "CYB": {
-      "value": 2709.957,
-      "change_pct": -1.0676828259898992,
+      "value": 2694.713,
+      "change_pct": -1.6241950669592498,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3716.2842,
       3730.92,
       3735.3704,
-      3723.9518
+      3713.0277
     ],
     "sz": [
       13454.743,
@@ -307,7 +307,7 @@
       11802.459,
       11817.423,
       11801.29,
-      11764.971
+      11704.354
     ],
     "cyb": [
       3311.474,
@@ -339,7 +339,7 @@
       2772.384,
       2746.291,
       2739.203,
-      2709.957
+      2694.713
     ],
     "gcf": [
       null,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 1.59,
-        "turnover": "192.3亿",
-        "top_stock": "统一股份"
-      },
-      {
-        "name": "地产/基建",
-        "change": 1.1,
-        "turnover": "54.0亿",
+        "change": 1.01,
+        "turnover": "283.8亿",
         "top_stock": "统一股份"
       },
       {
         "name": "通信/电子",
-        "change": 0.94,
-        "turnover": "1640.0亿",
+        "change": 0.62,
+        "turnover": "2436.5亿",
         "top_stock": "通宇通讯"
       },
       {
+        "name": "地产/基建",
+        "change": 0.52,
+        "turnover": "81.8亿",
+        "top_stock": "统一股份"
+      },
+      {
         "name": "军工",
-        "change": 0.94,
-        "turnover": "936.6亿",
+        "change": 0.37,
+        "turnover": "1403.3亿",
         "top_stock": "东安动力"
       },
       {
         "name": "医药",
-        "change": 0.63,
-        "turnover": "817.4亿",
-        "top_stock": "百济神州"
+        "change": -0.02,
+        "turnover": "1219.9亿",
+        "top_stock": "海正药业"
       }
     ],
     "losers": [
       {
         "name": "光伏/新能源",
-        "change": -1.11,
-        "turnover": "2639.6亿",
+        "change": -1.88,
+        "turnover": "4085.0亿",
         "top_stock": "浙数文化"
       },
       {
         "name": "消费",
-        "change": -0.47,
-        "turnover": "112.4亿",
-        "top_stock": "巨力索具"
+        "change": -1.42,
+        "turnover": "194.2亿",
+        "top_stock": "顺鑫农业"
       },
       {
         "name": "金融",
-        "change": -0.16,
-        "turnover": "981.8亿",
+        "change": -0.69,
+        "turnover": "1579.8亿",
         "top_stock": "航天信息"
       },
       {
         "name": "其他",
-        "change": 0.26,
-        "turnover": "9509.6亿",
+        "change": -0.27,
+        "turnover": "14882.1亿",
         "top_stock": "海正药业"
       },
       {
         "name": "资源/有色",
-        "change": 0.41,
-        "turnover": "216.8亿",
+        "change": -0.04,
+        "turnover": "340.2亿",
         "top_stock": "云南锗业"
       }
     ]
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "农业 surge 2026-10-21",
-    "地产/基建 surge 2026-10-21",
     "通信/电子 surge 2026-10-21",
+    "地产/基建 surge 2026-10-21",
     "军工 surge 2026-10-21",
-    "医药 surge 2026-10-21"
+    "医药 drop 2026-10-21"
   ],
   "correlation": [],
   "watchlist": {
