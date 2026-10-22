@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3684.8435,
-      "change_pct": -0.7590624761565917,
+      "value": 3679.8569,
+      "change_pct": -0.8933625784693141,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 11571.755,
-      "change_pct": -1.1329031914106509,
+      "value": 11496.072,
+      "change_pct": -1.7795258072337803,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2644.496,
-      "change_pct": -1.8635379723183914,
+      "value": 2620.041,
+      "change_pct": -2.77105576734888,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3730.92,
       3735.3704,
       3713.0277,
-      3684.8435
+      3679.8569
     ],
     "sz": [
       13409.908,
@@ -307,7 +307,7 @@
       11817.423,
       11801.29,
       11704.354,
-      11571.755
+      11496.072
     ],
     "cyb": [
       3298.31,
@@ -339,7 +339,7 @@
       2746.291,
       2739.203,
       2694.713,
-      2644.496
+      2620.041
     ],
     "gcf": [
       null,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
-        "name": "地产/基建",
-        "change": -0.01,
-        "turnover": "16.4亿",
-        "top_stock": "统一股份"
-      },
-      {
-        "name": "军工",
-        "change": -0.21,
-        "turnover": "270.3亿",
+        "name": "金融",
+        "change": -0.54,
+        "turnover": "956.1亿",
         "top_stock": "航天信息"
       },
       {
-        "name": "资源/有色",
-        "change": -0.22,
-        "turnover": "63.8亿",
-        "top_stock": "中国稀土"
+        "name": "消费",
+        "change": -0.6,
+        "turnover": "109.8亿",
+        "top_stock": "汇嘉时代"
+      },
+      {
+        "name": "地产/基建",
+        "change": -1.02,
+        "turnover": "52.0亿",
+        "top_stock": "北大荒"
       },
       {
         "name": "农业",
-        "change": -0.26,
-        "turnover": "59.3亿",
-        "top_stock": "统一股份"
+        "change": -1.06,
+        "turnover": "190.5亿",
+        "top_stock": "隆基绿能"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.48,
-        "turnover": "756.0亿",
-        "top_stock": "长城电工"
+        "name": "军工",
+        "change": -1.11,
+        "turnover": "927.1亿",
+        "top_stock": "湖南天雁"
       }
     ],
     "losers": [
       {
-        "name": "消费",
-        "change": -1.03,
-        "turnover": "36.6亿",
-        "top_stock": "巨力索具"
+        "name": "通信/电子",
+        "change": -2.35,
+        "turnover": "1297.3亿",
+        "top_stock": "元隆雅图"
       },
       {
         "name": "医药",
-        "change": -0.99,
-        "turnover": "211.7亿",
-        "top_stock": "中源协和"
+        "change": -1.95,
+        "turnover": "725.5亿",
+        "top_stock": "上海谊众"
       },
       {
-        "name": "通信/电子",
-        "change": -0.73,
-        "turnover": "431.3亿",
-        "top_stock": "硕贝德"
+        "name": "资源/有色",
+        "change": -1.44,
+        "turnover": "214.6亿",
+        "top_stock": "杉杉股份"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": -1.38,
+        "turnover": "2373.0亿",
+        "top_stock": "长城电工"
       },
       {
         "name": "其他",
-        "change": -0.65,
-        "turnover": "2880.8亿",
-        "top_stock": "中工国际"
-      },
-      {
-        "name": "金融",
-        "change": -0.58,
-        "turnover": "274.0亿",
-        "top_stock": "航天信息"
+        "change": -1.16,
+        "turnover": "9520.7亿",
+        "top_stock": "*ST启环"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
+    "金融 drop 2026-10-22",
+    "消费 drop 2026-10-22",
     "地产/基建 drop 2026-10-22",
-    "军工 drop 2026-10-22",
-    "资源/有色 drop 2026-10-22",
     "农业 drop 2026-10-22",
-    "光伏/新能源 drop 2026-10-22"
+    "军工 drop 2026-10-22"
   ],
   "correlation": [],
   "watchlist": {
