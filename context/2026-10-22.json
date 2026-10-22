@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3679.8569,
-      "change_pct": -0.8933625784693141,
+      "value": 3658.0256,
+      "change_pct": -1.4813274891539365,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 11496.072,
-      "change_pct": -1.7795258072337803,
+      "value": 11357.319,
+      "change_pct": -2.965007722767099,
       "status": "下跌趋势"
     },
     "CYB": {
-      "value": 2620.041,
-      "change_pct": -2.77105576734888,
+      "value": 2576.901,
+      "change_pct": -4.371968369173279,
       "status": "下跌趋势"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3730.92,
       3735.3704,
       3713.0277,
-      3679.8569
+      3658.0256
     ],
     "sz": [
       13409.908,
@@ -307,7 +307,7 @@
       11817.423,
       11801.29,
       11704.354,
-      11496.072
+      11357.319
     ],
     "cyb": [
       3298.31,
@@ -339,7 +339,7 @@
       2746.291,
       2739.203,
       2694.713,
-      2620.041
+      2576.901
     ],
     "gcf": [
       null,
@@ -407,72 +407,89 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "SZ",
+        "current": 11357.319,
+        "previous": 11704.354,
+        "change_pct": -2.97,
+        "threshold": 2.9321384276952474,
+        "level": "WARN"
+      },
+      {
+        "name": "CYB",
+        "current": 2576.901,
+        "previous": 2694.713,
+        "change_pct": -4.37,
+        "threshold": 4.119629506974958,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
       {
-        "name": "金融",
-        "change": -0.54,
-        "turnover": "956.1亿",
-        "top_stock": "航天信息"
-      },
-      {
         "name": "消费",
-        "change": -0.6,
-        "turnover": "109.8亿",
+        "change": -1.26,
+        "turnover": "199.9亿",
         "top_stock": "汇嘉时代"
       },
       {
+        "name": "金融",
+        "change": -1.35,
+        "turnover": "1735.2亿",
+        "top_stock": "大秦铁路"
+      },
+      {
+        "name": "其他",
+        "change": -2.41,
+        "turnover": "15953.3亿",
+        "top_stock": "山东墨龙"
+      },
+      {
         "name": "地产/基建",
-        "change": -1.02,
-        "turnover": "52.0亿",
-        "top_stock": "北大荒"
+        "change": -2.42,
+        "turnover": "101.7亿",
+        "top_stock": "华天科技"
       },
       {
-        "name": "农业",
-        "change": -1.06,
-        "turnover": "190.5亿",
-        "top_stock": "隆基绿能"
-      },
-      {
-        "name": "军工",
-        "change": -1.11,
-        "turnover": "927.1亿",
-        "top_stock": "湖南天雁"
+        "name": "光伏/新能源",
+        "change": -2.81,
+        "turnover": "4010.7亿",
+        "top_stock": "长城电工"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -2.35,
-        "turnover": "1297.3亿",
+        "change": -3.6,
+        "turnover": "2575.1亿",
         "top_stock": "元隆雅图"
       },
       {
         "name": "医药",
-        "change": -1.95,
-        "turnover": "725.5亿",
-        "top_stock": "上海谊众"
+        "change": -3.47,
+        "turnover": "1254.0亿",
+        "top_stock": "尖峰集团"
       },
       {
         "name": "资源/有色",
-        "change": -1.44,
-        "turnover": "214.6亿",
-        "top_stock": "杉杉股份"
+        "change": -3.0,
+        "turnover": "404.4亿",
+        "top_stock": "西藏天路"
       },
       {
-        "name": "光伏/新能源",
-        "change": -1.38,
-        "turnover": "2373.0亿",
-        "top_stock": "长城电工"
+        "name": "军工",
+        "change": -2.89,
+        "turnover": "1494.4亿",
+        "top_stock": "湖南天雁"
       },
       {
-        "name": "其他",
-        "change": -1.16,
-        "turnover": "9520.7亿",
-        "top_stock": "*ST启环"
+        "name": "农业",
+        "change": -2.82,
+        "turnover": "289.9亿",
+        "top_stock": "隆基绿能"
       }
     ]
   },
@@ -481,11 +498,11 @@
     "losers": []
   },
   "search_keywords": [
-    "金融 drop 2026-10-22",
+    "SZ drop 2026-10-22",
+    "CYB drop 2026-10-22",
     "消费 drop 2026-10-22",
-    "地产/基建 drop 2026-10-22",
-    "农业 drop 2026-10-22",
-    "军工 drop 2026-10-22"
+    "金融 drop 2026-10-22",
+    "其他 drop 2026-10-22"
   ],
   "correlation": [],
   "watchlist": {
