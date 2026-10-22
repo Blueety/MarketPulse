@@ -2,14 +2,14 @@
   "date": "2026-10-22",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7685.26,
+      "change_pct": -0.9270133308925788,
+      "status": "连跌1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 26272.455,
+      "change_pct": -1.6118200385823815,
+      "status": "连跌1日"
     },
     "SH": {
       "value": 3658.0256,
@@ -211,7 +211,7 @@
       7690.73,
       7712.57,
       7757.17,
-      null
+      7685.26
     ],
     "ixic": [
       26418.299,
@@ -243,7 +243,7 @@
       26430.887,
       26424.816,
       26702.857,
-      null
+      26272.455
     ],
     "sh": [
       3875.6044,
@@ -410,6 +410,22 @@
     "triggered": true,
     "indices": [
       {
+        "name": "GSPC",
+        "current": 7685.26,
+        "previous": 7757.17,
+        "change_pct": -0.93,
+        "threshold": 0.8650098358536759,
+        "level": "WARN"
+      },
+      {
+        "name": "IXIC",
+        "current": 26272.455,
+        "previous": 26702.857,
+        "change_pct": -1.61,
+        "threshold": 1.3887360930708996,
+        "level": "WARN"
+      },
+      {
         "name": "SZ",
         "current": 11357.319,
         "previous": 11704.354,
@@ -498,11 +514,11 @@
     "losers": []
   },
   "search_keywords": [
+    "GSPC drop 2026-10-22",
+    "IXIC drop 2026-10-22",
     "SZ drop 2026-10-22",
     "CYB drop 2026-10-22",
-    "消费 drop 2026-10-22",
-    "金融 drop 2026-10-22",
-    "其他 drop 2026-10-22"
+    "消费 drop 2026-10-22"
   ],
   "correlation": [],
   "watchlist": {
