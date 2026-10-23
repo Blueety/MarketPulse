@@ -12,19 +12,19 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3614.1231,
-      "change_pct": -1.2001692935117827,
-      "status": "下跌趋势"
+      "value": 3690.4753,
+      "change_pct": 0.8870823648691829,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 11175.853,
-      "change_pct": -1.597789055674146,
-      "status": "下跌趋势"
+      "value": 11673.826,
+      "change_pct": 2.7868108661912165,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": 2521.769,
-      "change_pct": -2.1394690754514847,
-      "status": "下跌趋势"
+      "value": 2684.097,
+      "change_pct": 4.159880414497894,
+      "status": "连涨1日"
     },
     "VIX": {
       "value": null,
@@ -275,7 +275,7 @@
       3735.3704,
       3713.0277,
       3658.0256,
-      3614.1231
+      3690.4753
     ],
     "sz": [
       13640.873,
@@ -307,7 +307,7 @@
       11801.29,
       11704.354,
       11357.319,
-      11175.853
+      11673.826
     ],
     "cyb": [
       3372.676,
@@ -339,7 +339,7 @@
       2739.203,
       2694.713,
       2576.901,
-      2521.769
+      2684.097
     ],
     "gcf": [
       null,
@@ -407,72 +407,81 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "CYB",
+        "current": 2684.097,
+        "previous": 2576.901,
+        "change_pct": 4.16,
+        "threshold": 4.119629506974958,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
       {
-        "name": "消费",
-        "change": 0.51,
-        "turnover": "168.2亿",
-        "top_stock": "古井贡酒"
+        "name": "通信/电子",
+        "change": 2.56,
+        "turnover": "3431.6亿",
+        "top_stock": "赛意信息"
       },
       {
-        "name": "金融",
-        "change": -0.4,
-        "turnover": "1205.9亿",
-        "top_stock": "燕京啤酒"
+        "name": "消费",
+        "change": 2.34,
+        "turnover": "285.7亿",
+        "top_stock": "金徽酒"
+      },
+      {
+        "name": "光伏/新能源",
+        "change": 2.28,
+        "turnover": "5064.0亿",
+        "top_stock": "先导智能"
       },
       {
         "name": "地产/基建",
-        "change": -1.21,
-        "turnover": "105.5亿",
-        "top_stock": "大名城"
+        "change": 2.21,
+        "turnover": "152.1亿",
+        "top_stock": "派斯林"
       },
       {
         "name": "医药",
-        "change": -1.52,
-        "turnover": "780.2亿",
+        "change": 2.14,
+        "turnover": "1389.3亿",
         "top_stock": "海辰药业"
-      },
-      {
-        "name": "资源/有色",
-        "change": -1.62,
-        "turnover": "302.0亿",
-        "top_stock": "西藏天路"
       }
     ],
     "losers": [
       {
-        "name": "通信/电子",
-        "change": -3.98,
-        "turnover": "1735.7亿",
-        "top_stock": "良信股份"
+        "name": "农业",
+        "change": 0.88,
+        "turnover": "301.7亿",
+        "top_stock": "统一股份"
       },
       {
-        "name": "军工",
-        "change": -3.71,
-        "turnover": "1008.6亿",
-        "top_stock": "航天晨光"
-      },
-      {
-        "name": "光伏/新能源",
-        "change": -2.8,
-        "turnover": "2804.1亿",
-        "top_stock": "大港股份"
+        "name": "资源/有色",
+        "change": 1.59,
+        "turnover": "505.4亿",
+        "top_stock": "云南锗业"
       },
       {
         "name": "其他",
-        "change": -1.98,
-        "turnover": "11627.6亿",
-        "top_stock": "山西汾酒"
+        "change": 1.8,
+        "turnover": "21124.6亿",
+        "top_stock": "歌尔股份"
       },
       {
-        "name": "农业",
-        "change": -1.81,
-        "turnover": "183.6亿",
-        "top_stock": "统一股份"
+        "name": "军工",
+        "change": 1.84,
+        "turnover": "1807.0亿",
+        "top_stock": "东土科技"
+      },
+      {
+        "name": "金融",
+        "change": 1.97,
+        "turnover": "2257.1亿",
+        "top_stock": "歌尔股份"
       }
     ]
   },
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "CYB surge 2026-10-23",
+    "通信/电子 surge 2026-10-23",
     "消费 surge 2026-10-23",
-    "金融 drop 2026-10-23",
-    "地产/基建 drop 2026-10-23",
-    "医药 drop 2026-10-23",
-    "资源/有色 drop 2026-10-23"
+    "光伏/新能源 surge 2026-10-23",
+    "地产/基建 surge 2026-10-23"
   ],
   "correlation": [],
   "watchlist": {
