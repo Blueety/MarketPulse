@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3683.918,
-      "change_pct": -0.17768172029223284,
-      "status": "连跌1日"
+      "value": 3697.5199,
+      "change_pct": 0.1908859815428034,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 11551.721,
-      "change_pct": -1.045972417269193,
+      "value": 11534.379,
+      "change_pct": -1.194526969992514,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 2639.85,
-      "change_pct": -1.6484873683775325,
+      "value": 2638.231,
+      "change_pct": -1.7088056057586585,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3658.0256,
       3690.4753,
       3690.4753,
-      3683.918
+      3697.5199
     ],
     "sz": [
       13730.021,
@@ -307,7 +307,7 @@
       11357.319,
       11673.826,
       11673.826,
-      11551.721
+      11534.379
     ],
     "cyb": [
       3399.59,
@@ -339,7 +339,7 @@
       2576.901,
       2684.097,
       2684.097,
-      2639.85
+      2638.231
     ],
     "gcf": [
       null,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "消费",
-        "change": 1.4,
-        "turnover": "137.9亿",
+        "change": 1.68,
+        "turnover": "240.0亿",
         "top_stock": "皇台酒业"
       },
       {
-        "name": "农业",
-        "change": 0.06,
-        "turnover": "155.1亿",
-        "top_stock": "中坚科技"
-      },
-      {
         "name": "金融",
-        "change": -0.03,
-        "turnover": "1067.6亿",
+        "change": 0.21,
+        "turnover": "1859.5亿",
         "top_stock": "中海油服"
       },
       {
+        "name": "农业",
+        "change": 0.2,
+        "turnover": "239.6亿",
+        "top_stock": "中坚科技"
+      },
+      {
         "name": "医药",
-        "change": -0.27,
-        "turnover": "761.8亿",
-        "top_stock": "健康元"
+        "change": -0.04,
+        "turnover": "1225.9亿",
+        "top_stock": "海辰药业"
       },
       {
         "name": "其他",
-        "change": -0.54,
-        "turnover": "10506.1亿",
+        "change": -0.64,
+        "turnover": "17423.2亿",
         "top_stock": "保利发展"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": -2.36,
-        "turnover": "277.1亿",
+        "change": -2.99,
+        "turnover": "424.9亿",
         "top_stock": "全新好"
       },
       {
         "name": "通信/电子",
-        "change": -2.15,
-        "turnover": "1720.3亿",
-        "top_stock": "中科创达"
+        "change": -2.85,
+        "turnover": "2805.1亿",
+        "top_stock": "泉阳泉"
       },
       {
         "name": "军工",
-        "change": -1.21,
-        "turnover": "831.3亿",
-        "top_stock": "ST联光"
+        "change": -1.67,
+        "turnover": "1344.6亿",
+        "top_stock": "隆鑫通用"
       },
       {
         "name": "光伏/新能源",
-        "change": -1.13,
-        "turnover": "2447.1亿",
+        "change": -1.52,
+        "turnover": "3981.1亿",
         "top_stock": "亿纬锂能"
       },
       {
         "name": "地产/基建",
-        "change": -0.84,
-        "turnover": "77.0亿",
+        "change": -0.92,
+        "turnover": "112.3亿",
         "top_stock": "大名城"
       }
     ]
@@ -482,8 +482,8 @@
   },
   "search_keywords": [
     "消费 surge 2026-10-26",
+    "金融 surge 2026-10-26",
     "农业 surge 2026-10-26",
-    "金融 drop 2026-10-26",
     "医药 drop 2026-10-26",
     "其他 drop 2026-10-26"
   ],
