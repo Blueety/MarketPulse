@@ -433,7 +433,7 @@
       {
         "name": "金融",
         "change": -1.49,
-        "turnover": "1726.0亿",
+        "turnover": "1725.1亿",
         "top_stock": "万华化学"
       },
       {
@@ -446,8 +446,8 @@
     "losers": [
       {
         "name": "军工",
-        "change": -3.8,
-        "turnover": "1286.1亿",
+        "change": -3.81,
+        "turnover": "1276.2亿",
         "top_stock": "金盾股份"
       },
       {
