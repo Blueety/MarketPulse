@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3654.4983,
-      "change_pct": -0.7326097073583913,
+      "value": 3647.1171,
+      "change_pct": -0.933105753895907,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 11242.378,
-      "change_pct": -2.0116740074091037,
+      "value": 11180.889,
+      "change_pct": -2.547610815169753,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 2555.077,
-      "change_pct": -3.0242982283016286,
+      "value": 2539.044,
+      "change_pct": -3.6328166512320035,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3697.5199,
       3648.301,
       3681.4691,
-      3654.4983
+      3647.1171
     ],
     "sz": [
       13316.969,
@@ -307,7 +307,7 @@
       11534.379,
       11245.731,
       11473.181,
-      11242.378
+      11180.889
     ],
     "cyb": [
       3288.948,
@@ -339,7 +339,7 @@
       2638.231,
       2548.149,
       2634.76,
-      2555.077
+      2539.044
     ],
     "gcf": [
       null,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "消费",
-        "change": -0.12,
-        "turnover": "40.1亿",
-        "top_stock": "舍得酒业"
+        "change": 0.17,
+        "turnover": "127.4亿",
+        "top_stock": "山西汾酒"
       },
       {
-        "name": "医药",
-        "change": -0.23,
-        "turnover": "254.5亿",
-        "top_stock": "成都先导"
-      },
-      {
-        "name": "农业",
-        "change": -0.41,
-        "turnover": "49.0亿",
-        "top_stock": "节能铁汉"
+        "name": "军工",
+        "change": -0.68,
+        "turnover": "1187.2亿",
+        "top_stock": "航天晨光"
       },
       {
         "name": "金融",
-        "change": -0.69,
-        "turnover": "331.5亿",
-        "top_stock": "山西焦煤"
+        "change": -0.88,
+        "turnover": "1069.7亿",
+        "top_stock": "南京银行"
       },
       {
-        "name": "地产/基建",
-        "change": -0.93,
-        "turnover": "25.2亿",
-        "top_stock": "黑牡丹"
+        "name": "农业",
+        "change": -1.37,
+        "turnover": "138.9亿",
+        "top_stock": "节能铁汉"
+      },
+      {
+        "name": "医药",
+        "change": -1.46,
+        "turnover": "705.6亿",
+        "top_stock": "佰仁医疗"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -2.7,
-        "turnover": "555.4亿",
-        "top_stock": "中航光电"
+        "change": -3.48,
+        "turnover": "1612.8亿",
+        "top_stock": "信维通信"
       },
       {
         "name": "光伏/新能源",
-        "change": -1.98,
-        "turnover": "740.6亿",
-        "top_stock": "五洲新春"
-      },
-      {
-        "name": "军工",
-        "change": -1.81,
-        "turnover": "317.8亿",
-        "top_stock": "龙溪股份"
-      },
-      {
-        "name": "其他",
-        "change": -1.15,
-        "turnover": "3272.6亿",
-        "top_stock": "华域汽车"
+        "change": -2.56,
+        "turnover": "2175.5亿",
+        "top_stock": "海力风电"
       },
       {
         "name": "资源/有色",
-        "change": -1.07,
-        "turnover": "60.3亿",
+        "change": -2.09,
+        "turnover": "187.4亿",
         "top_stock": "昊华能源"
+      },
+      {
+        "name": "地产/基建",
+        "change": -1.78,
+        "turnover": "67.2亿",
+        "top_stock": "黑牡丹"
+      },
+      {
+        "name": "其他",
+        "change": -1.57,
+        "turnover": "9979.1亿",
+        "top_stock": "山西汾酒"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "消费 drop 2026-10-29",
-    "医药 drop 2026-10-29",
-    "农业 drop 2026-10-29",
+    "消费 surge 2026-10-29",
+    "军工 drop 2026-10-29",
     "金融 drop 2026-10-29",
-    "地产/基建 drop 2026-10-29"
+    "农业 drop 2026-10-29",
+    "医药 drop 2026-10-29"
   ],
   "correlation": [],
   "watchlist": {
