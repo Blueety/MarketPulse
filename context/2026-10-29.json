@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3647.1171,
-      "change_pct": -0.933105753895907,
+      "value": 3651.4337,
+      "change_pct": -0.8158536492945101,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 11180.889,
-      "change_pct": -2.547610815169753,
+      "value": 11138.198,
+      "change_pct": -2.9197046573221512,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 2539.044,
-      "change_pct": -3.6328166512320035,
+      "value": 2517.588,
+      "change_pct": -4.447160272662407,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3697.5199,
       3648.301,
       3681.4691,
-      3647.1171
+      3651.4337
     ],
     "sz": [
       13316.969,
@@ -307,7 +307,7 @@
       11534.379,
       11245.731,
       11473.181,
-      11180.889
+      11138.198
     ],
     "cyb": [
       3288.948,
@@ -339,7 +339,7 @@
       2638.231,
       2548.149,
       2634.76,
-      2539.044
+      2517.588
     ],
     "gcf": [
       null,
@@ -407,71 +407,80 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "CYB",
+        "current": 2517.588,
+        "previous": 2634.76,
+        "change_pct": -4.45,
+        "threshold": 4.119629506974958,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
       {
         "name": "消费",
-        "change": 0.17,
-        "turnover": "127.4亿",
+        "change": 0.39,
+        "turnover": "216.5亿",
         "top_stock": "山西汾酒"
       },
       {
-        "name": "军工",
-        "change": -0.68,
-        "turnover": "1187.2亿",
-        "top_stock": "航天晨光"
-      },
-      {
         "name": "金融",
-        "change": -0.88,
-        "turnover": "1069.7亿",
-        "top_stock": "南京银行"
+        "change": -0.64,
+        "turnover": "1830.4亿",
+        "top_stock": "山西焦煤"
       },
       {
         "name": "农业",
-        "change": -1.37,
-        "turnover": "138.9亿",
-        "top_stock": "节能铁汉"
+        "change": -1.04,
+        "turnover": "234.0亿",
+        "top_stock": "扬农化工"
       },
       {
         "name": "医药",
-        "change": -1.46,
-        "turnover": "705.6亿",
-        "top_stock": "佰仁医疗"
+        "change": -1.33,
+        "turnover": "1138.0亿",
+        "top_stock": "通化东宝"
+      },
+      {
+        "name": "军工",
+        "change": -1.33,
+        "turnover": "1734.1亿",
+        "top_stock": "航天晨光"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -3.48,
-        "turnover": "1612.8亿",
-        "top_stock": "信维通信"
+        "change": -4.55,
+        "turnover": "2583.5亿",
+        "top_stock": "中航光电"
       },
       {
         "name": "光伏/新能源",
-        "change": -2.56,
-        "turnover": "2175.5亿",
+        "change": -3.21,
+        "turnover": "3598.2亿",
         "top_stock": "海力风电"
       },
       {
-        "name": "资源/有色",
-        "change": -2.09,
-        "turnover": "187.4亿",
-        "top_stock": "昊华能源"
-      },
-      {
         "name": "地产/基建",
-        "change": -1.78,
-        "turnover": "67.2亿",
+        "change": -3.0,
+        "turnover": "103.1亿",
         "top_stock": "黑牡丹"
       },
       {
+        "name": "资源/有色",
+        "change": -2.35,
+        "turnover": "319.2亿",
+        "top_stock": "昊华能源"
+      },
+      {
         "name": "其他",
-        "change": -1.57,
-        "turnover": "9979.1亿",
+        "change": -1.76,
+        "turnover": "16534.7亿",
         "top_stock": "山西汾酒"
       }
     ]
@@ -481,8 +490,8 @@
     "losers": []
   },
   "search_keywords": [
+    "CYB drop 2026-10-29",
     "消费 surge 2026-10-29",
-    "军工 drop 2026-10-29",
     "金融 drop 2026-10-29",
     "农业 drop 2026-10-29",
     "医药 drop 2026-10-29"
