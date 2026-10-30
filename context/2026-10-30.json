@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3612.9456,
-      "change_pct": -1.0540544663319515,
+      "value": 3640.5386,
+      "change_pct": -0.29837868889691693,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 10947.261,
-      "change_pct": -1.7142539574175275,
+      "value": 11073.079,
+      "change_pct": -0.5846457389247398,
       "status": "连跌2日"
     },
     "CYB": {
-      "value": 2449.276,
-      "change_pct": -2.713390753371892,
+      "value": 2487.908,
+      "change_pct": -1.1789061593874888,
       "status": "连跌2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3648.301,
       3681.4691,
       3651.4337,
-      3612.9456
+      3640.5386
     ],
     "sz": [
       13316.969,
@@ -307,7 +307,7 @@
       11245.731,
       11473.181,
       11138.198,
-      10947.261
+      11073.079
     ],
     "cyb": [
       3288.948,
@@ -339,7 +339,7 @@
       2548.149,
       2634.76,
       2517.588,
-      2449.276
+      2487.908
     ],
     "gcf": [
       null,
@@ -413,66 +413,66 @@
   "sector_heat": {
     "gainers": [
       {
+        "name": "医药",
+        "change": 2.43,
+        "turnover": "823.7亿",
+        "top_stock": "皓元医药"
+      },
+      {
         "name": "消费",
-        "change": 1.03,
-        "turnover": "58.6亿",
-        "top_stock": "迎驾贡酒"
+        "change": 1.67,
+        "turnover": "185.5亿",
+        "top_stock": "皇台酒业"
       },
       {
         "name": "地产/基建",
-        "change": -0.28,
-        "turnover": "23.6亿",
+        "change": 1.04,
+        "turnover": "61.9亿",
         "top_stock": "派斯林"
       },
       {
         "name": "农业",
-        "change": -0.54,
-        "turnover": "56.8亿",
+        "change": 0.44,
+        "turnover": "145.3亿",
         "top_stock": "一拖股份"
       },
       {
         "name": "金融",
-        "change": -0.67,
-        "turnover": "405.6亿",
+        "change": 0.07,
+        "turnover": "1160.8亿",
         "top_stock": "软控股份"
-      },
-      {
-        "name": "其他",
-        "change": -1.0,
-        "turnover": "3830.4亿",
-        "top_stock": "ST易购"
       }
     ],
     "losers": [
       {
-        "name": "资源/有色",
-        "change": -2.14,
-        "turnover": "62.0亿",
-        "top_stock": "平煤股份"
-      },
-      {
         "name": "通信/电子",
-        "change": -2.04,
-        "turnover": "637.5亿",
-        "top_stock": "星星科技"
+        "change": -0.94,
+        "turnover": "1629.5亿",
+        "top_stock": "泉阳泉"
       },
       {
         "name": "光伏/新能源",
-        "change": -1.91,
-        "turnover": "828.5亿",
+        "change": -0.43,
+        "turnover": "2291.1亿",
         "top_stock": "永福股份"
       },
       {
         "name": "军工",
-        "change": -1.28,
-        "turnover": "488.2亿",
+        "change": -0.43,
+        "turnover": "1215.7亿",
         "top_stock": "上海沪工"
       },
       {
-        "name": "医药",
-        "change": -1.04,
-        "turnover": "243.0亿",
-        "top_stock": "皓元医药"
+        "name": "资源/有色",
+        "change": -0.31,
+        "turnover": "201.1亿",
+        "top_stock": "云南锗业"
+      },
+      {
+        "name": "其他",
+        "change": -0.13,
+        "turnover": "10416.1亿",
+        "top_stock": "泸州老窖"
       }
     ]
   },
@@ -481,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
+    "医药 surge 2026-10-30",
     "消费 surge 2026-10-30",
-    "地产/基建 drop 2026-10-30",
-    "农业 drop 2026-10-30",
-    "金融 drop 2026-10-30",
-    "其他 drop 2026-10-30"
+    "地产/基建 surge 2026-10-30",
+    "农业 surge 2026-10-30",
+    "金融 surge 2026-10-30"
   ],
   "correlation": [],
   "watchlist": {
