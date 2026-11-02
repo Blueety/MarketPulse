@@ -145,6 +145,18 @@
 - **Hermes weixin 出站不可靠**：发送报告成功但对方收不到，用 QQBot 作为推送通道。
 - **星期错标根因在 Hermes 侧 cron prompt**：看板/报告「周X」标注错位（如周六标成周五）根因是 Hermes cron prompt 用北京时间算「今天/星期」而数据按美东日期归档；仓库脚本从不标星期、无时区转换逻辑，无法在代码层代改。应对：Hermes prompt 内统一用 `TZ=America/New_York date` 取美东日期与星期（关联 二十六期日期错位坑 L16）。
 
+### Windows 上 `bash xxx.sh` 根本没跑到脚本（2026-11-02 实测）
+
+- **现象**: 输出一串 `?????`（本次是 13 个问号 + `\r\r\n`），退出码 1——看着像「脚本有违规」，其实命令压根没执行到脚本
+- **原因**: PATH 里排第一的 `bash.exe` 是 `C:\Windows\System32\bash.exe`（WSL 的桩），它不认识 Windows 路径，直接吐一条本地化错误（在非中文代码页里退化成 `?`）。`which bash` 就能验
+- **解决**: 用 Git 自带的 sh/bash —— `sh scripts/check-gates.sh`（同名桩没顶掉它），或显式 `D:/Claude/Git/usr/bin/bash.exe scripts/xxx.sh`（**Windows 形式路径**；`/d/Claude/...` 在本机 omp shell 里报 `command not found`）。要跑需要 bash 4 关联数组的脚本（如脚手架更新器），走后者
+
+### Git Bash 里 PATH 少了 `/usr/bin` 会让 `find` 撞到 Windows 的 `find.exe`
+
+- **现象**: 脚本输出 `FIND: 参数格式不正确`，随后逻辑判空、报「找不到能对上的版本」
+- **原因**: MSYS 的 `find` 在 `/usr/bin`，PATH 里 `C:\WINDOWS\system32` 排前面时 Windows 的 `find.exe`（字符串查找工具）先命中
+- **解决**: 显式前置 —— `bash -c 'export PATH="/d/Claude/Git/usr/bin:/usr/bin:$PATH"; bash scripts/xxx.sh'`
+
 ## 历史教训
 
 | 日期 | 问题 | 根因 | 修复方式 |

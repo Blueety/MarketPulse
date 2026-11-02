@@ -35,15 +35,24 @@
 - `docs/adr/`: 决策记录（为什么这么做）。
 - `docs/agents/`: 角色提示词和流程细则（任务分级 / 架构师 / 执行者）。
 - `tasks/`: 任务目录和交接记录。
-- `skills/`: 可复用流程（bug-fix / pre-review / research / tdd 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
+- `skills/`: 可复用流程（bug-fix / pre-review / research / tdd / refactor / receiving-review / self-audit 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
+- `.githooks/pre-commit` + `scripts/check-gates.sh`（+ `.awk`）: 提交前闸门（随脚手架落地，**当前未启用**：`core.hooksPath` 为空 —— 首次安装时存量违规 914 条，本轮把 `docs/architecture.md` 模块表的 6 条清掉后剩 908，全部是旧任务文件；清零前启用会拦掉每次提交）。手动跑 `sh scripts/check-gates.sh`。
+- `.scaffold-version`: 脚手架同步基线（由**仓库外**的脚手架工具 `D:/Obsidianhouse/AISTUDY/project-scaffold/project-scaffold/scripts/scaffold-update.sh` 写入，本仓库没有这个脚本；**要提交**，否则下次同步只能按内容猜基线）。
 
 ## Required Reading
 
-- 任何任务开始前先读 `docs/agents/任务分级.md`，并在只读分析末尾按格式声明档位（一行）。
-- 修改前先读 `docs/architecture.md`。
-- 改行为前先读 `docs/commands.md`。
-- 复杂任务先读当前 `tasks/` 下的任务文件。
-- 修 bug：`skills/bug-fix/SKILL.md`（闸门 A）；写测试：`skills/tdd/SKILL.md`（seam 先确认）；提交前审查：`skills/pre-review/SKILL.md`（双轴）；要查外部一手事实（AkShare/BLS 接口口径、规范原文、第三方 API 行为）：`skills/research/SKILL.md`。
+- 任何任务开始前：`docs/agents/任务分级.md`，然后按格式声明档位。
+- 修改前：`docs/architecture.md`。
+- 改行为前：`docs/commands.md`。
+- 写代码时：用 `CONTEXT.md` 的词；术语冲突当场指出并更新它。
+- 复杂任务：当前 `tasks/<日期>-<简述>/` 下的 prd.md / plan.md / journal.md。
+- 修 bug：`skills/bug-fix/SKILL.md`（闸门 A：进入根因假设前先有一条能对这个 bug 变红的命令）。
+- 写测试：`skills/tdd/SKILL.md`（seam 先确认）。
+- 重构：`skills/refactor/SKILL.md`（先造行为安全网；行为一变就不是重构）。
+- 提交前审查：`skills/pre-review/SKILL.md`（T2 / T3 必须派**独立子 agent** 执行；本项目另加「独立期望值预言机」一节）。
+- 处理审查意见：`skills/receiving-review/SKILL.md`（每条发现落到「改 / 不改+理由 / 不接受+反证」）。
+- 外部一手事实挡住决策时：`skills/research/SKILL.md`（派后台子 agent，只认官方文档 / 源码 / 规范，落一份带引用的 md；本项目常见对象是 AkShare / BLS 接口口径、第三方 API 行为）。
+- 长期项目的定期走查：`skills/self-audit/SKILL.md`（T3 任务结束 / 每 10 个任务 / 用户说「查一下」时做，逐条实跑活文档）。
 - 已有决策看 `docs/adr/`，遵守其中仍然生效的决定。
 
 ## Commands（基于实际环境；所有命令在 venv 内执行）
@@ -55,35 +64,59 @@
 - Freeze: `venv/Scripts/pip freeze`
 - Lint / Typecheck / Build: 无（纯 Python 脚本项目，暂未配置）
 
+## 编码规范
+
+<!-- Standards 轴（skills/pre-review/SKILL.md）的「硬违规」只能引用写在这里的东西。
+     这一节留空，审查就只剩坏味道（判断题），报不出硬违规。
+     下面每条都是本仓库既有做法，新增约定必须同时有代码或测试兜底。 -->
+
+- **命名**：Python 模块/函数/变量 `snake_case`，常量 `UPPER_SNAKE`，类 `PascalCase`；前端 JS 函数与变量 `camelCase`，DOM id/class `kebab-case`；行情符号一律用 Yahoo 格式（A 股 `399006.SZ` / `.SS`，见 `src/fetcher.py` 的 `SYMBOLS`）；测试名写行为（`test_railway_entry_point_module_exposes_the_app`），不写实现细节。
+- **目录与文件组织**：一个文件一个职责，纯逻辑进 `src/`（可被测试直接导入、不联网不写盘），编排入口留在仓库根（`daily_report.py` / `snapshot_report.py`）；一次性脚本落 `tasks/<任务>/tmp/`（gitignore）或 `%TEMP%`，**不落仓库**；新增静态资源必须登记 `web/app.py` 的 `_ASSET_FILES` 才带 `?v=` 指纹。
+- **错误处理**：入口脚本对取数/网络失败**容错降级**（空数据 + `failed` 标记，退出码恒 0，绝不因上游挂掉而崩）；库函数与纯逻辑**抛异常**，由调用方决定降级；顶层容错之外不写裸 `except`（捕获要指定异常或写清为什么全捕获）；日志用 `print("[模块] …")` 前缀（如 `[auto-push]`、`[data-commit]`），不用 print 当调试残留。
+- **输入校验**：前端送来的东西一律不信任——`POST /api/settings` 在服务端做白名单 + 类型校验后才落盘（`src/settings_store.py`）；`config.json` 与环境变量同样过白名单，非法值回退内置默认。
+- **密钥**：**本仓库是 PUBLIC**。API key / token 只放本机 `.env`，读取统一走 `src/env_util.require_env`（缺失直接 raise，不静默退化成空串）；`tests/test_env_util.py` 会扫描硬编码凭据，失败信息只报 `文件:行号:变量名`。已提交过密钥的处理顺序是**先吊销/轮换，再清源码**。
+- **依赖**：不新增依赖，除非先说明理由并等确认；能用标准库就不引第三方（`src/storage.py` / `src/backtest.py` / `compute_correlation` 都是纯 stdlib）。
+- **测试**：`tests/test_*.py`，pytest 跑；测试必须**隔离**（`conftest.py` 里 `AUTO_PUSH=0`、临时 `DB_PATH`），monkeypatch 路径常量要打**使用方模块**（导入时绑定）；断言不变量与边界，不锁文案/数值快照；不联网、不写真实 `data/`；修 bug 的回归测试只在存在正确 seam 时写（`skills/tdd/SKILL.md`）。
+- **禁止**：在自动提交链路上用 `git add -A` / `git commit` 不带 pathspec（范围白名单见 Working Rules）；web 进程写 `data/` `alerts/` `context/`；改 `.env` 与生成物；用 `git commit --no-verify` 绕闸门；把 `[DEBUG-` 埋点留在提交里。
+
+<!-- 接口层面的约定（URL 命名 / HTTP 方法 / 状态码 / 错误响应结构 / 版本 / 分页）
+     写在 docs/architecture.md 的「接口契约 → 横切约定」，不在这里重复。 -->
+
 ## Working Rules
 
-- 复杂任务先只读分析，不要直接改。
-- 每次制定完计划后，将计划保存到 `tasks/<日期>-<简述>/plan.md`（日期用当天 `YYYY-MM-DD`，简述用简短英文描述，如 `2026-08-29-marketpulse/plan.md`）。
-  - 计划应包含：目标、涉及文件、实施步骤、验证命令、测试 seam、预估 diff 范围。
+- 先只读分析，再动手。不要把分析和实现混在一轮里。
+- 在只读分析末尾声明档位（一行）。**T0 / T1 是通知**——发完继续做，不等人回；**T2 / T3 的计划等你批准**（见 `docs/agents/任务分级.md` 的「人检查点与独立审查」），批准即授权这个规模，不再单独确认档位。用户一句话可覆盖档位（如「T3，我不确定根因」）。
+- 计划保存到 `tasks/<日期>-<简述>/plan.md`（日期用当天 `YYYY-MM-DD`，简述用简短英文，如 `2026-08-29-marketpulse/plan.md`）。
+  计划包含：目标、涉及文件、实施步骤、验证命令、测试 seam、预估 diff 范围。**只有 T0 可以不落盘**；T1 / T2 / T3 都要落——实施由执行者子 agent 做，它只认 `plan.md`，对话里的计划传不过去。
+- **派执行者子 agent 实施（T1 / T2 / T3）**：写计划的人不实施。由规划者派一个**全新的子 agent** 按 `docs/agents/执行者.md` 实施，输入只给 `prd.md` + `plan.md` + 规范文件（`AGENTS.md`、`docs/architecture.md`、`docs/commands.md`、`CONTEXT.md`、`docs/pitfalls.md`），**不给规划过程的对话**——给了，它继承规划时的结论，`plan.md` 就约束不住实施。子 agent 报的「已完成」由主线程重跑关键命令复核，不能直接采信。T0 免检：不写计划，也就没有可派的东西。
 - 保持 diff 最小，不重构无关代码。
 - 不引入新依赖，除非先说明理由并等待确认。
 - 不修改 `.env`、生产配置、生成文件。
+- **不可逆的外部动作一律先报告、等确认**，不管档位多低：部署到生产、花钱、删改数据、改权限与密钥、隐私数据的读写与对外传输、会改变第三方状态的对外请求、申请新账号或新服务。
 - **自动提交范围白名单**：`src/git_ops.py` 的自动提交只允许 `data/` `context/` `alerts/`（`_DATA_PATHS`），**禁止** `git add -A` / `--all` / `.`；`_has_changes` 与 `_commit` 必须**同范围**（否则源码 WIP 时误报 `Failed`）。🔴 **`git commit` 也必须带 pathspec**（2026-09-20 补）：`git commit` 不带 `-- <paths>` 提交的是**整个暂存区**，`git add <白名单>` 只能添加、无法排除 index 里已有的内容 ⇒ 别处 `git rm` / `git mv` 造成的**已暂存删除/重命名会被无差别带走**（实测事故 `6ec1562`）。护栏：`tests/test_phase26.py::test_commit_pathspec_isolates_unrelated_staged_changes`。`reports/` 被 `.gitignore` 排除 → 不得入列（否则 `git add` 直接 fatal，三入口数据提交全挂）。⚠️ 仓库外 Hermes cron「MarketPulse 自动推送GitHub」（`*/5`）**已改为 script 模式**（wrapper `D:\hermes\scripts\marketpulse_autopush.py` → `scripts/auto_commit_data.py`），范围由代码强制；**临时文件/半成品仍建议尽快 `git add <具体文件>` 收尾**，别把写了一半的东西留在工作区。
 - 需求不清楚时先问，不要猜。
 - 每完成一个逻辑步骤后运行验证命令，不接受"应该可以"——必须实际运行验证命令。
 - 如有失败，先解释原因再修复，不要绕过问题。
-- 验证通过后，运行 `git diff` 检查改动范围。
-- 任务完成后，提取可复用的规则（不是泛化建议），追加到 `docs/pitfalls.md` 或 `AGENTS.md`。
-- 每次任务完成后，将日志保存到 `tasks/<日期>-<简述>/journal.md`，内容包括：目标、改动文件清单、验证结果、遇到的问题、下次注意什么、涉及的 ADR 编号。这样下次会话接手时能快速了解上下文。
-- 只读分析末尾声明档位（一行，格式见 `docs/agents/任务分级.md`），等确认后再实施；用户一句话可覆盖档位（如「T3，我不确定根因」）。
 - 修 bug 时：进入根因假设前，必须有一条已经实跑过、能对**这个** bug 变红的命令（`skills/bug-fix/SKILL.md` 闸门 A）；拿不出这条命令就先停下说明试过什么、缺什么。本地门禁全绿不代表线上没事（见 `app.py` 那条事故）。
 - 写测试前：先书面列出要测的 seam 并等待确认（`skills/tdd/SKILL.md`）；修 bug 的回归测试只在存在正确 seam 时写。
-- 调试日志统一加 `[DEBUG-xxxx]` 前缀，提交前 grep 清干净；一次性原型 / 临时脚本一并删除（闸门 B）。注意本项目有 auto-push 白名单（见上），临时文件进白名单就会被自动推上去。
-- 提交前按 `skills/pre-review/SKILL.md` 出双轴报告（Standards / Spec 分别报告，不合并、不跨轴排序）。
-- 任务结束后：同时满足三条准入（难以撤销 + 没有背景会让人困惑 + 是真实取舍）的决策写进 `docs/adr/NNNN-slug.md`（编号取现有最大值 +1）；三条不齐不写。
+- 调试日志统一加 `[DEBUG-xxxx]` 前缀，提交前 grep 清干净。
+- 提交前闸门：`scripts/check-gates.sh` 检查 `[DEBUG-` 残留、`docs/architecture.md` 模块表与实际目录是否对得上、`plan.md` 的档位/类型/闸门 A 字段、`journal.md` 的章节与验证结果、切片文件字段、**T2 / T3 的 `review.md` 是否存在且填全**。启用后由 `.githooks/pre-commit` 跑 `--staged` 自动拦截；被拦下就按提示补内容，**不要**用 `git commit --no-verify` 绕过。手动检查：`sh scripts/check-gates.sh`（全量）/ `sh scripts/check-gates.sh --staged`（索引）——Windows 上别用 `bash`，它可能指向 WSL 的桩（见 `docs/pitfalls.md`）。
+- ⚠️ **钩子当前未启用**：`git config core.hooksPath` 为空（该设置存在 `.git/config`，clone 后不会跟着来，丢了钩子闸门就静默失效）。原因是 2026-11-02 首次安装时存量违规 **914 条**，全部是**旧任务缺新模板章节**（每个旧 `journal.md` 少「主要提交 / 雾区变化 / 一致性走查 / 结束状态 / 涉及的 ADR」，每个旧 `plan.md` 少「任务概要」等，各数十条）；`docs/architecture.md` 原有的 6 条（模块表第二列把说明文字/多个路径写进了路径格）已于同日清零，模块表路径现在一律单路径。清零前启用会让每次提交都被拦；治理路线见 `tasks/README.md` 的「闸门升级后的存量违规」。清零后再 `git config core.hooksPath .githooks`。
+- 提交前审查：T0 不审；T1 自己审；**T2 / T3 必须派一个全新的子 agent 审**（只给它 `prd.md`、`plan.md`、diff、相关规范，**不给它会话历史**），产出 `tasks/<日期>-<简述>/review.md`。轮次上限 2，超了升级给人。双轴报告（Standards / Spec 分别报告，不合并、不跨轴排序）。
+- 收到审查意见后按 `skills/receiving-review/SKILL.md` 逐条处理：改 / 不改+理由 / 不接受+反证，**没有第四种**；不能静默跳过任何一条。
+- 验证通过后，运行 `git diff` 检查改动范围。
+- 任务结束后：可复用的规则追加到 `docs/pitfalls.md`；符合 ADR 三条准入条件的决策写进 `docs/adr/NNNN-slug.md`。
+- 任务结束后：日志写进 `tasks/<日期>-<简述>/journal.md`，内容包括目标、主要提交的 SHA、改动文件清单、验证结果、遇到的问题、下次注意什么、涉及的 ADR 编号、下一步、结束状态。这样下次会话接手时能快速了解上下文。
 
 ## Done Means
 
 - 验收标准已满足。
 - 相关测试/checks 已运行或清楚标注未运行。
-- `[DEBUG-` 无残留，一次性脚本已删。
+- **声称完成前的四件事**都做了，或清楚标注未运行（见 `skills/pre-review/SKILL.md` 的「声称完成前」）：跑过相关测试 / 手动走过关键路径 / lint 与 typecheck（本项目未配置，见 Commands ⇒ 跳过并说明）/ 要改的文档已改。
+- `[DEBUG-` 无残留（提交时 `scripts/check-gates.sh` 会自动验）；**一次性脚本已删**（这一条机器验不了，靠自己看）。
 - 本次任务的经验/决策已落盘（`docs/pitfalls.md` / `docs/adr/`）。
 - diff 已摘要。
+- **T2 / T3**：`review.md` 已按 `skills/receiving-review/SKILL.md` 处理完——每条发现都有归类，没有一条被静默跳过，「审查者明确未判断的」已列出。
 - 风险和后续工作已列出。
 
 - `config.json` 的 `watchlist.stocks[]`：每项 `{symbol(必填), label(必填), cost?(可选, >0)}`；`cost` 用于首页自选卡的「持仓盈亏%」（设置页录入，存储层透传、零改动）。

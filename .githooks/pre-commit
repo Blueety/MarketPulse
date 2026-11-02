@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# 提交前闸门。检查脚本见 scripts/check-gates.sh。
+# 由 init 脚本通过 `git config core.hooksPath .githooks` 启用。
+#
+# 临时跳过：git commit --no-verify
+# 手动全量检查：scripts/check-gates.sh
+#
+exec "$(git -c core.quotepath=false rev-parse --show-toplevel)/scripts/check-gates.sh" --staged

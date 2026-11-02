@@ -27,14 +27,59 @@ Python 项目。每个交易日有多个运行点：
 | 报告渲染 | src/reporter.py | Markdown 日报 / 午盘快照渲染、趋势图（matplotlib 懒加载 + 15s 线程限时）、分市场趋势图（us 2×1 / cn 3×1 双图，5s 限时）、落盘、相关性分析章节与 context correlation 键（generate_context，原子写） |
 | 配置加载 | `src/config.py` | 阈值配置：config.json + 环境变量覆盖 + 内置默认三级（DEFAULTS/ENV_MAP/env_float/load_config），白名单校验，零依赖 |
 | 图片渲染 | `src/image_renderer.py` | 日报图片化：md 解析（日期 / 10 指数卡片 / 趋势图引用 / AI 解读章节）/ 告警附录块解析 / Jinja2 模板渲染 / Playwright 截图转 PNG（宽 600 自适应高、全链路容错，失败返回 None 不影响主流程；注意：15s 超时 / ≤800KB 尺寸守卫 / zoom 重试已在 a536888 删除，当前未实现） |
-| 报告输出 | `reports/YYYY-MM-DD.md`、`reports/snapshots/YYYY-MM-DD-{market}-{time}.md`、`reports/charts/YYYY-MM-DD{-trend,-us-trend,-cn-trend}.png`、`reports/images/YYYY-MM-DD.png` | 生成的 Markdown / 图片（日报趋势图统一用美东日期；图片为图片化推送产物，保留 .md 同时生成 .png） |
-| 告警输出 | `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）、`data/alerts.log` | 告警文件 / 当日去重标记（运行时生成，gitignore 排除） |
-| 数据持久化 | `data/last_values.json`（涨跌幅基准，运行时生成、gitignore 排除）、`data/marketpulse.db`（SQLite 长表 + 事件表，**入库** = 线上数据源）、`data/backup/`（按月备份，**入库** = 空库恢复链数据源） | 三十一期起 history 迁 SQLite 后：行情/事件在 `.db`，`.db` 与备份**都在 git 里**，其余运行产物（`last_values.json`/`alerts.log`）不入库 |
-| Web 看板 | `web/app.py`（FastAPI 应用 + 5 端点）、`web/templates/index.html`、`web/static/app.js`、`web/static/style.css`、`web/__init__.py` | 只读看板（**bento 栅格仪表盘**，2026-09-11 重构）：`.dash > .row-kpi/.row-main/.row-3/.row-news` 四视觉行（1920 档 5/2/3/4 列、1280 档 KPI 3 列与 row-main 堆叠、375 档单列 + 抽屉）；解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染 4 张 KPI 卡（含 sparkline）/ 趋势**四图合一 + 4 类别 tab**（单 `canvas#chart-main`，7D/30D/90D/1Y）/ 自选列表（CSS 迷你条）/ 市场概览 6 小卡 / A 股板块 Top5 / 美股行业板块横幅条 / 告警记录，另 3 个静态占位卡（`data-placeholder="1"`）；提供 `/api/history`（`days` 上限 **3650**）/ `/api/latest`（`sector_heat` + **`us_sector_heat`**）/ `/api/alerts` / `/api/watchlist`（实时取数，零写盘）/ **`/api/macro`**（env `MACRO_STOCKS` > `config.json` `macro.stocks` > 内置默认，TTL 90s）五个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
-| SQLite 存储 | `src/storage.py`（三十一期新建） | history 长表 (date, symbol, value, change) 的建表/upsert（preserve|overwrite 双模式）/范围查询/长宽互转/按月备份导出/空库恢复；WAL；标准库 sqlite3；`DB_PATH` 调用时属性查找（测试单点 patch，对"补丁打使用方"纪律的有意例外）；**2026-09-18 新增 `econ_events` / `econ_event_news` 两表**；**2026-09-19 结果值层**：`econ_events` +8 列（actual/forecast/previous/unit/importance/value_source/value_title/value_fetched_at，`_migrate_econ_events` 幂等 `ALTER TABLE ADD COLUMN` 补既有库）+ `update_econ_event_values()`（**只 UPDATE 不 INSERT** ⇒ 天然"不做历史回填"；每列 `COALESCE(新值, 既有值)` ⇒ preserve 语义，空值不抹已落库的值）；**2026-09-24：备份面扩到事件表** —— `export_monthly_backups()` 在 history 之后追加 `data/backup/econ_events.json`（**单文件全量**，同列表返回、`file` 名区分；空表时不覆盖已有备份），`restore_if_empty()` 从该文件恢复（**仅空表触发**、幂等、两表同批）；`.db` 与 `data/backup/` 都**入库**（tracked），纪律见「数据流」小节 |
-| 结果值层 | `src/econ_values.py`（2026-09-19 新建） | 事件行「实际 / 预期 / 前值」数值来源：TradingView 经济日历 JSON（`economic-calendar.tradingview.com/events`，零 key、零新依赖，需带 `Origin`/`Referer`）。**按月分段抓**（单请求 2000 上限，实测全年常年打满）；`kind -> headline` **精确标题**映射（PCE 有"首选/备选"两级、GDP 按骨架期次选 Adv/2nd Est/Final，**不按顺序取第一条**）；`date`(UTC) → **美东日期**做匹配键（零容差，实测过去事件 100% 命中）；同日同 kind 多行按「forecast 非空 > actual 非空 > previous 非空，再取较晚」择优并对并列记 warning；`unit` **可能是键缺失**⇒ `None`、不猜单位。**只算值不写库**（落库与 preserve 在 storage），失败返回空 + `failed` 记 `tradingview`（降级为"只有事件名"，不丢数据） |
+| 报告输出 | `reports/` | `reports/YYYY-MM-DD.md`、`reports/snapshots/YYYY-MM-DD-{market}-{time}.md`、`reports/charts/YYYY-MM-DD{-trend,-us-trend,-cn-trend}.png`、`reports/images/YYYY-MM-DD.png`：生成的 Markdown / 图片（日报趋势图统一用美东日期；图片为图片化推送产物，保留 .md 同时生成 .png） |
+| 告警输出 | `alerts/` | 告警文件 `alerts/YYYY-MM-DD-{type}.md`（type = close / a-share-midday / a-share-close / us-open / us-noon）+ `data/alerts.log` 当日去重标记（运行时生成，gitignore 排除） |
+| 数据持久化 | `data/` | `data/last_values.json`（涨跌幅基准，运行时生成、gitignore 排除）、`data/marketpulse.db`（SQLite 长表 + 事件表，**入库** = 线上数据源）、`data/backup/`（按月备份，**入库** = 空库恢复链数据源）：三十一期起 history 迁 SQLite 后：行情/事件在 `.db`，`.db` 与备份**都在 git 里**，其余运行产物（`last_values.json`/`alerts.log`）不入库 |
+| Web 看板 | `web/` | `web/app.py`（FastAPI 应用）、`web/templates/*.html`（6 页）、`web/static/*`（`app.js` / `style.css` / `skin/` 等）、`web/__init__.py`：只读看板（**bento 栅格仪表盘**，2026-09-11 重构）：`.dash > .row-kpi/.row-main/.row-3/.row-news` 四视觉行（1920 档 5/2/3/4 列、1280 档 KPI 3 列与 row-main 堆叠、375 档单列 + 抽屉）；解析 `data/history.json` / `context/*.json` / `alerts/*.md` 渲染 4 张 KPI 卡（含 sparkline）/ 趋势**四图合一 + 4 类别 tab**（单 `canvas#chart-main`，7D/30D/90D/1Y）/ 自选列表（CSS 迷你条）/ 市场概览 6 小卡 / A 股板块 Top5 / 美股行业板块横幅条 / 告警记录，另 3 个静态占位卡（`data-placeholder="1"`）；提供 `/api/history`（`days` 上限 **3650**）/ `/api/latest`（`sector_heat` + **`us_sector_heat`**）/ `/api/alerts` / `/api/watchlist`（实时取数，零写盘）/ **`/api/macro`**（env `MACRO_STOCKS` > `config.json` `macro.stocks` > 内置默认，TTL 90s）五个 JSON API；零侵入 `daily_report.py` / `snapshot_report.py` / `src/*`，进程绝不写任何数据文件 |
+| SQLite 存储 | `src/storage.py` | （三十一期新建）history 长表 (date, symbol, value, change) 的建表/upsert（preserve|overwrite 双模式）/范围查询/长宽互转/按月备份导出/空库恢复；WAL；标准库 sqlite3；`DB_PATH` 调用时属性查找（测试单点 patch，对"补丁打使用方"纪律的有意例外）；**2026-09-18 新增 `econ_events` / `econ_event_news` 两表**；**2026-09-19 结果值层**：`econ_events` +8 列（actual/forecast/previous/unit/importance/value_source/value_title/value_fetched_at，`_migrate_econ_events` 幂等 `ALTER TABLE ADD COLUMN` 补既有库）+ `update_econ_event_values()`（**只 UPDATE 不 INSERT** ⇒ 天然"不做历史回填"；每列 `COALESCE(新值, 既有值)` ⇒ preserve 语义，空值不抹已落库的值）；**2026-09-24：备份面扩到事件表** —— `export_monthly_backups()` 在 history 之后追加 `data/backup/econ_events.json`（**单文件全量**，同列表返回、`file` 名区分；空表时不覆盖已有备份），`restore_if_empty()` 从该文件恢复（**仅空表触发**、幂等、两表同批）；`.db` 与 `data/backup/` 都**入库**（tracked），纪律见「数据流」小节 |
+| 结果值层 | `src/econ_values.py` | （2026-09-19 新建）事件行「实际 / 预期 / 前值」数值来源：TradingView 经济日历 JSON（`economic-calendar.tradingview.com/events`，零 key、零新依赖，需带 `Origin`/`Referer`）。**按月分段抓**（单请求 2000 上限，实测全年常年打满）；`kind -> headline` **精确标题**映射（PCE 有"首选/备选"两级、GDP 按骨架期次选 Adv/2nd Est/Final，**不按顺序取第一条**）；`date`(UTC) → **美东日期**做匹配键（零容差，实测过去事件 100% 命中）；同日同 kind 多行按「forecast 非空 > actual 非空 > previous 非空，再取较晚」择优并对并列记 warning；`unit` **可能是键缺失**⇒ `None`、不猜单位。**只算值不写库**（落库与 preserve 在 storage），失败返回空 + `failed` 记 `tradingview`（降级为"只有事件名"，不丢数据） |
 | 回测 | `scripts/backtest.py` | 独立回测脚本：复用生产 `check_breach` 语义回放历史触发事件，统计告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率；只读 `data/history.json`，仅写 `reports/backtest_report.md`，不联网、零副作用 |
 | 自动提交推送 | `src/git_ops.py` | cron 入口（daily_report / snapshot_report / opening_analyzer）main() 末尾调用 `auto_commit_push(date, report_type)`：env `AUTO_PUSH` ≠ "0" 启用（`"0"` 关闭）；无改动（`git status --porcelain` 空）跳过、幂等；`git add -A` + `git commit -m "auto: {date} {type}"` + `git push origin master`（经 Clash 代理 `http://127.0.0.1:7890`，仅注入 push 子进程 env 副本）；失败仅记日志、退出码恒 0；纯 stdlib 零新依赖（二十六期） |
+
+## 接口契约
+
+本项目唯一的对外接口是 Web 看板（`web/app.py`，FastAPI）：**6 个页面路由 + `/healthz` + 12 个 `GET /api/*` + 1 个 `POST /api/settings`**（后者是唯一写入口）。
+
+### web/app.py
+
+- **操作**：
+  - 页面：`GET /` · `/macro` · `/macro/cn` · `/timeline` · `/backtest` · `/settings`
+  - 只读 API：`GET /api/history?days=N`（≤3650）· `/api/latest` · `/api/alerts` · `/api/watchlist` · `/api/news` · `/api/timeline?days=&future_days=` · `/api/backtest` · `/api/settings` · `/api/macro` · `/api/econ` · `/api/econ/cn?group=` · `/api/cn/quotes`
+  - 写 API：`POST /api/settings`（改阈值/动态参数/自选；白名单校验 → 备份 → 原子写 → `reload_config_snapshots()`）
+  - 探活：`GET /healthz`（**无鉴权**，200 = 活）
+- **不变量**：web 进程**绝不写** `data/` `alerts/` `context/`；唯一允许的写入是 `config.json`，且必须经 `src/settings_store.py` 的白名单路径（Railway 上连它也只读 ⇒ `POST /api/settings` 返回 403）。其余一切只读消费磁盘上的快照/历史/上下文。
+- **调用顺序**：无跨端点顺序依赖；`/api/econ`（6h）、`/api/econ/cn`（6h）、`/api/cn/quotes`（90s）、`/api/macro`（快照优先）有进程内 TTL 缓存，**失败不缓存**（中国宏观仅「全部失败」才不缓存）。
+- **错误模式**：上游取数失败一律**降级为空数据 + `failed` 标记**、HTTP 200，不抛 5xx；唯一 5xx 是未捕获异常。`/api/history` 的 `days` 越界 → 422（`Query(30, ge=1, le=3650)`）。鉴权见横切约定。
+- **必要配置**：`MP_AUTH_USER` / `MP_AUTH_PASS`（Basic Auth，`MP_AUTH_DISABLED=1` 关闭；两者缺失时 fail-open 并打 WARNING）；`MACRO_STOCKS` 或 `config.json` 的 `macro.stocks`。
+
+### 横切约定
+
+- **URL 命名**：小写 + 连字符，名词不用动词（`/api/history` 而非 `/api/getHistory`），分组过滤走查询参数（`?group=price`、`?days=90`）。
+- **HTTP 方法**：读用 `GET`；**唯一写入口是 `POST /api/settings`**（`/settings` 只有 `GET`，是页面路由）。没有 `PUT` / `PATCH` / `DELETE`。
+- **状态码**：200 成功；401 未认证（带 `WWW-Authenticate`）；403 只读环境拒绝写（Railway）；422 参数非法；5xx 仅未捕获异常。**不要把所有错误都返回 5xx**——取数失败是数据状态，用空数据 + `failed` 表达。
+- **错误响应**：FastAPI 默认 `{"detail": ...}`（`POST /api/settings` 另带 `ok=false` + 拒绝原因）；绝不返回调用栈或 SQL。
+- **响应结构**：保持同一端点族内一致（现有端点顶层既有裸数组 `/api/alerts`，也有对象 `/api/latest`）；新增端点跟随其所属族，不混用 `data` / `result` 外层。
+- **版本控制**：不做 `/v1/`（单页看板自消费，无外部调用方）。
+- **分页**：仅 `/api/history`（`days`）与 `/api/timeline`（`days` + `future_days`）截取窗口，其余端点无分页。
+
+## 数据模型
+
+实体都在 `data/marketpulse.db`（SQLite，**tracked ⇒ 入库即线上数据源**），由 `src/storage.py` 单点拥有写权限。
+
+| 实体 | 字段 | 关系 | 谁能写 | 谁能读 |
+|---|---|---|---|---|
+| `history` | `date` / `symbol` / `value` / `change`（复合主键 `date+symbol`） | 每个交易日的宽表被拆成长表；`symbol` 取值见 `src/fetcher.py` 的 `SYMBOLS` | `src/analyzer.py` 的 `append_history` / `merge_history` → `src/storage.py` 的 `upsert_history_rows`（preserve/overwrite 双模式）（调用方：日报告、回填脚本、快照） | 全部入口 + web |
+| `econ_events` | `date`+`kind`+`source` 复合主键；`title` / `agency` / `time_et` / `status` / `note` / `fetched_at` + 值层 8 列（`actual` / `forecast` / `previous` / `unit` / `importance` / `value_source` / `value_title` / `value_fetched_at`） | 一天多事件；`kind` 是事件族（非农/CPI/…） | `scripts/sync_econ_calendar` + `storage.update_econ_event_values`（**只 UPDATE 不 INSERT**） | web `/api/timeline`、`/api/econ` |
+| `econ_event_news` | `date`+`kind` 复合主键；`news_count` / `title` / `link` / `fetched_at` | 每事件一条新闻摘要 | sync 脚本 | web |
+| 备份文件 | `data/backup/history_YYYY-MM.json`（按月）+ `data/backup/econ_events.json`（事件表全量） | 空库恢复链的唯一数据源（`storage.restore_if_empty`） | `storage.export_monthly_backups` | 启动恢复 |
+
+### 字段类型约定
+
+- **日期**：一律 `TEXT`，`YYYY-MM-DD`，**已按所属市场时区归档**（A 股→上海、美股/另类→美东），库里不存裸时间戳。
+- **时间**：`time_et` 是美东本地时刻字符串；审计字段 `fetched_at` 存抓取时刻。
+- **数值**：`REAL`，`NULL` 表示「无数据」（休市/未收盘/未公布）**不是缺省值**，preserve 合并语义下 `None` 不覆盖既有值。
+- **枚举**：一律存字符串（`status` / `source` / `kind`），不存数字编码。
+- **主键**：复合业务键，无自增 id；不软删除（行情与事件都是历史事实）。
 
 ## 数据流
 
@@ -43,7 +88,7 @@ Yahoo Finance (^VIX, ^VXN) ──┐
                              ├──> daily_report.py ──> reports/YYYY-MM-DD.md ──> Hermes ──> QQ 推送
                                         ├──> reports/images/YYYY-MM-DD.png（图片化推送产物；Hermes 追加 AI 解读后经 scripts/render_report_image.py 重渲染含解读图）
                                         ├──> reports/charts/YYYY-MM-DD-trend.png（报告中引用）
-                                        ├──> data/history.json（按 date 追加/覆盖，90 天滚动）
+                                        ├──> data/marketpulse.db（history 长表，按 date 追加/覆盖；`data/history.json` 是 09-12 旧快照，仅 `--history` 演练用）
                                         ├──> data/last_values.json（今日值，次日作涨跌幅基准）
                                         └──> context/YYYY-MM-DD.json（indices + history_30d + breach + search_keywords）
                                               └──> Hermes 常规解读 /（异动日）tavily 搜索归因 ──> 追加日报 ──> QQ 推送
@@ -67,7 +112,7 @@ cron 自动提交：daily_report / snapshot_report / opening_analyzer 在 `main(
 | 数据源 | 三指数均用 Yahoo：^VIX / ^VXN / ^MOVE | FRED 公开 API 无 MOVE 序列；^MOVE 标名有误但数值真实（与 Investing.com 一致） | 2026-08-29 |
 | 时区 | 内部 UTC，报告显示美东日期 | 避免时区混淆导致日期错 | 2026-08-29 |
 | 容错 | 单数据源失败继续运行，不整体崩溃；任一指数取数失败在 history 中存 null | 一个源挂了不能吞掉整个日报；趋势图按 NaN 断点处理 | 2026-08-29 / 2026-09-01 |
-| 历史存储 | `data/history.json` 列表按 date 键追加/覆盖，仅保留最近 90 条，临时文件 + `os.replace` 原子写，损坏按空历史处理 | 趋势图数据来源；避免无限膨胀与半截写入 | 2026-09-01 |
+| 历史存储（已由三十一期 SQLite 化取代，见下一行） | 原 `data/history.json` 列表按 date 键追加/覆盖，仅保留最近 90 条，临时文件 + `os.replace` 原子写，损坏按空历史处理 | 趋势图数据来源；避免无限膨胀与半截写入 | 2026-09-01 |
 | 趋势图 | matplotlib（Agg 后端 + 懒加载）；Windows 无 SIGALRM，用 daemon 线程 `join(3)` 限时，超时跳过绘图、报告不产生死链 | 无头环境渲染；冷启动/渲染超时不中断整体流程 | 2026-09-01 |
 | 图表语言 | 趋势图标签一律英文（"VIX (30D)" / "VXN" / "MOVE" / "Date" / "Value"） | 中文字体跨平台渲染不一致（PRD 强制约束） | 2026-09-01 |
 | 告警基准 | 统一用 `data/last_values.json` 旧缓存；快照只读不写 history；收盘告警检查置于 save_last_values 之前 | 避免误用当日新缓存；多时点不并发写（已确认决策 1/决策 G） | 2026-09-01 |

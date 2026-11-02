@@ -46,12 +46,29 @@
 
 | 命令 | 用途 | 判据 |
 |---|---|---|
-| `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 调试埋点残留 | **必须无输出** |
+| `sh scripts/check-gates.sh --staged` | 提交前闸门（索引内容：闸门 B 的 `[DEBUG-` 残留、`docs/architecture.md` 模块表、任务文件字段、T2/T3 的 `review.md`） | **0 项违规**才提交；`git commit` 时的 pre-commit 钩子跑的就是它（⚠️ **钩子当前未启用**：`core.hooksPath` 为空，见 `AGENTS.md`） |
+| `sh scripts/check-gates.sh` | 同上，全仓库口径（在飞任务 + 全仓库闸门 B） | 存量违规基线 914 条（旧任务缺新模板章节为主），别拿它判单次改动 |
+| `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 调试埋点残留（`check-gates.sh` 的同一判据，手工版本） | **必须无输出** |
 | `git status --short` | 一次性原型 / 探针是否落进仓库 | 只应有本次任务预期的文件；探针脚本应落 `%TEMP%` |
 | `venv/Scripts/python -m pytest tests/ -v` | 完整测试套件 | 全绿（未跑的要在 journal 里标注原因） |
 | `git diff` | 改动范围 | 与计划里的「预估 diff 范围」一致 |
 
 ⚠️ 本项目有 auto-push 白名单（`data/` `context/` `alerts/`，见 `AGENTS.md`）：**临时文件一旦落进这三个目录就会被自动推上线上**，清理必须在提交前做完（旧账见 `tasks/2026-09-24-qa-bughunt/journal.md`）。
+
+## UI 变更怎么验
+
+「构建 + 手动看」是最弱的一档，本项目不停在这里——已有可机器判定的回路：
+
+| 手段 | 本项目落点 | 变红条件 |
+|---|---|---|
+| 截图/结构断言 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright 三视口） | 页面总高 / 栅格列数 / tab 切换 / 主题切换 / 抽屉任一不符 |
+| 尺寸一致 | 同上：**canvas 位图 == CSS 显示尺寸** | 位图被拉伸（DPR 处理回归） |
+| 对比度 | 同上：正文 ≥ 4.5:1 | 低于阈值 |
+| 溢出 | 同上：`scrollWidth > clientWidth` 三视口零横向溢出 | 出现横向滚动 |
+| 皮肤材质 | `tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py`（LG-1…LG-12，`--engine=frost` / `--headed`） | 玻璃染色 alpha 出 `[0.35,0.60]` / 滚动降级失效 |
+| 滚动性能 | `tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py` | 中位帧间隔 > 20ms / >50ms 占比 > 5% |
+
+**截图不需要 GUI**（Playwright 无头即可）；多模态模型只是「帮你发现该写什么断言」，不是断言本身，不能当闸门。
 
 ## 何时跑什么
 

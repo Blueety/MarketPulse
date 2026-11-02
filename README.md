@@ -5,6 +5,22 @@
 
 ![Architecture](docs/architecture-diagram.html)
 
+## 技术栈
+
+<!-- 「难换的」六项就算结论是「先不用」也写出来——那是决策，不是遗漏。
+     带锁定成本的选择（数据库、认证、部署）另按 ADR 三条准入进 docs/adr/。 -->
+
+- 数据库: SQLite（`data/marketpulse.db`，单文件；**tracked ⇒ 入库即线上数据源**）
+- 查询层: 手写 SQL（`src/storage.py`，无 ORM）
+- 认证与授权: Web 看板 HTTP Basic Auth（`MP_AUTH_USER` / `MP_AUTH_PASS`，`MP_AUTH_DISABLED=1` 关闭；Railway 侧配环境变量）；无多用户
+- 文件与对象存储: 无（报告/图表落 `reports/`，`.gitignore` 排除、不入库）
+- 缓存: 无独立缓存服务（进程内 TTL dict + `data/last_values.json` 涨跌幅基准）
+- 队列或后台任务: 无队列（Hermes cron / 系统 cron 定时触发 `daily_report.py` / `snapshot_report.py`）
+- 语言 / 框架: Python 3 + FastAPI（看板）/ matplotlib（图表）
+- 包管理: pip + `requirements.txt`（venv 内执行，见下）
+- 测试: pytest（`venv/Scripts/python -m pytest tests/ -v`）
+- 部署: Railway（启动命令 `uvicorn app:app`，push 即部署；入口见 `app.py`）
+
 ---
 
 ## ✨ 十五期能力一览
@@ -217,7 +233,29 @@ SOME_TOKEN = require_env("SOME_TOKEN")   # 缺失直接 raise（不静默退化�
 pytest tests/ -v
 ```
 
-当前：**281 测试通过**
+当前：**877 测试通过**（`venv/Scripts/python -m pytest tests/ -q`，2026-11-02）
+
+---
+
+## 🧭 开发约定
+
+完整规则在 `AGENTS.md`（流程真源），这里只列入口：
+
+- 修改前先读 `docs/architecture.md`；改行为前先读 `docs/commands.md`。
+- 动手前按 `docs/agents/任务分级.md` 声明档位（**T0 / T1 是通知，T2 / T3 的计划要批准**）。
+- 修 bug 走 `skills/bug-fix/SKILL.md`（闸门 A）；写测试走 `skills/tdd/SKILL.md`（seam 先确认）；重构走 `skills/refactor/SKILL.md`。
+- 提交前走 `skills/pre-review/SKILL.md`（Standards / Spec 双轴）；收到意见走 `skills/receiving-review/SKILL.md`。
+- 命名和描述用 `CONTEXT.md` 里的词。
+- 任务结束：规则进 `docs/pitfalls.md`、决策进 `docs/adr/`、日志进 `tasks/<日期>-<简述>/journal.md`。
+
+> ⚠️ 提交前闸门（`.githooks/pre-commit`）已随仓库落地，但**尚未启用**（`core.hooksPath` 为空）：
+> 首次安装时存量违规 914 条，清零前启用会让每次提交都被拦。治理路线见 `tasks/README.md`。
+
+## 📚 相关文档
+
+- [项目规范](AGENTS.md) · [领域词表](CONTEXT.md) · [架构说明](docs/architecture.md) · [命令说明](docs/commands.md)
+- [易错点](docs/pitfalls.md) · [决策记录](docs/adr/README.md) · [任务分级](docs/agents/任务分级.md)
+- [架构师角色](docs/agents/架构师.md) · [执行者角色](docs/agents/执行者.md)
 
 ---
 

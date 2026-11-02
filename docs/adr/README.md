@@ -27,7 +27,7 @@
 |---|---|
 | 实施步骤、文件清单 | `tasks/<日期>-<简述>/plan.md` |
 | 反复出现的坑 | `docs/pitfalls.md` |
-| 模块划分现状 | `docs/architecture.md` |
+| 架构现状（模块划分 / 接口契约 / 数据模型 / 数据流） | `docs/architecture.md`——那里只写「是什么」，理由写在这里 |
 | 术语定义 | `CONTEXT.md` |
 
 ## 格式
