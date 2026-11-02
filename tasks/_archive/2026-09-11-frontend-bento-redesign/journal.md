@@ -34,7 +34,7 @@
 | `web/templates/index.html` | 141 → 262 行 | bento 骨架 + 9 类模块 + 3 个 `data-placeholder` |
 | `web/static/style.css` | 475 → 约 520 行 | 卡片 token 重写 + 栅格 + 断点重写；删旧 `.chart-box`/`.lede-cell`/`.charts-grid` 等失效规则 |
 | `web/static/app.js` | 823 → 约 700 行 | 四图合一 + 6 小卡 + 迷你条 + 占位 + 修 C6；删分组可见集/指标 chips/表格排序 |
-| `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 新增 ≈380 行 | Playwright 验收脚本（**有意入库**，可复跑） |
+| `scripts/verify/verify_ui.py` | 新增 ≈380 行 | Playwright 验收脚本（**有意入库**，可复跑） |
 | `docs/pitfalls.md` | +17 行 | 新增「模块 web/（Bento 栅格重构）」章节 |
 | `seed_history.py` | 未动 | Step 10 未执行故未触及 |
 
@@ -44,7 +44,7 @@
 
 1. `venv/Scripts/python -m pytest tests/test_web.py -q` → **59 passed**（Step 1 后）
 2. `venv/Scripts/python -m pytest tests/ -q` → **459 passed, 0 failed**
-3. `venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` → **ALL PASSED**
+3. `venv/Scripts/python scripts/verify/verify_ui.py` → **ALL PASSED**
    - 三视口（1920×1080 / 1280×720 / 375×812，DPR=1）各 17 条：无横向溢出、canvas 位图==显示尺寸、卡片 token、KPI 4 张、概览 6 小卡、A股/美股板块有行、自选可见有行、3 占位文案、4 个 tab、`isWeekendDate` 三态、顶栏数据日
    - 1920 专项：`scrollHeight` **1235 ≤ 1240**（基线 **2632**，≈2.44 屏 → **1.14 屏**）、row-kpi 5 列 / row-main 2 列 / row-3 3 列 / row-news 4 列、主图容器 432px（40vh）、KPI ≥260×96、侧栏贴底、层级 100/60/55、市场状态+北京时间、主题切换（`data-theme`+`localStorage`+卡片底色三态）、**4 个 tab 逐个切换图表可用**、**console error = 0**
    - 1Y 档：canvas 尺寸仍一致、标签「近 1 年」

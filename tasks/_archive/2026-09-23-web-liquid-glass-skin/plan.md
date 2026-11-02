@@ -18,7 +18,7 @@
 | C4 | **面板必须给「看得见」的染色**，kit 默认窗口染色只有 .06 ⇒ 数据密集看板会变「几乎全透」，正文可读性受损。推荐 `color-mix(in srgb, var(--bg-elevated) 46%, transparent)`（实测整页可读、文字对比度肉眼无损）。 | `rec-full.png` vs `final-grid16-blur1.png`（后者过度通透，观感发飘） |
 | C5 | **材质成本实测**：真实 `/` 首页 13 个宿主（topbar + 4 kpi + 8 card）同步挂载共 **188.8ms**（单面 7–32.3ms），生成 13 棵 `<svg><filter>`。⇒ 必须走 `scheduleGlass` 分帧，首屏只挂静态壳。 | `window.__reskin`，`%TEMP%\skinspike` |
 | C6 | **宿主自带玻璃必须让位**：`.card`/`.kpi-card`/`.topbar` 今天都有 `backdrop-filter` + 白色填充；只关 `backdrop-filter` 不够——填充也要改（否则材质被自身白底盖住，实测卡内纹理留存直接归零）。 | spike 两轮对照（只关 blur vs 同时改填充） |
-| C7 | **`verify_ui.py`（5436 行）会被大面积打红**：钉死了卡片圆角/阴影/`box-sizing`（`:4882-4884`）、`scrollHeight ≤1240`（`:1035/:1321`）、canvas 位图==CSS 尺寸（`:4873/:879`）、`--text-muted == #8E9BAE`（`:1281`）、玻璃 alpha 区间（`:389-393`）、对比度 ≥4.5（`:3518-3524`）。换肤＝**先重写门禁再改样式**。 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` |
+| C7 | **`verify_ui.py`（5436 行）会被大面积打红**：钉死了卡片圆角/阴影/`box-sizing`（`:4882-4884`）、`scrollHeight ≤1240`（`:1035/:1321`）、canvas 位图==CSS 尺寸（`:4873/:879`）、`--text-muted == #8E9BAE`（`:1281`）、玻璃 alpha 区间（`:389-393`）、对比度 ≥4.5（`:3518-3524`）。换肤＝**先重写门禁再改样式**。 | `scripts/verify/verify_ui.py` |
 | C8 | **令牌作用域必须选 `[data-liquid-skin]`（(0,1,0)），不要用 `port-example` 的 `html[data-skin='liquid']`（(0,1,1)）**：后者会盖掉宿主已修的 `--text-muted`（`#6B7280`/`#8E9BAE`）。实测用前者时宿主值胜出。 | spike `getComputedStyle(documentElement).getPropertyValue('--text-muted')` → `#6B7280` |
 
 > 一句话：**换皮肤＝换背景（16px 方格纸）+ 引擎折射材质 + 面板染色 + 关掉宿主那层旧玻璃**；其中背景是新增工作量，也是「液态」成立的唯一前提。
@@ -130,7 +130,7 @@ body {
 | `web/static/skin/motion.css` | 套件过渡守卫（原样） |
 | `web/static/skin/mp-skin.css` | 宿主补丁层（放最后）：§3.2 的背景配方、面板染色、旧玻璃让位、内容层抬升（`.card > .skin-glass-body{z-index:4}`）、scrollbar 让位、`--lg-tune-*` 调参点 |
 | `web/static/skin.js` | 首帧前 `applyEngineMode()` + `scheduleGlass` 分帧挂载 + `.is-scrolling` + `window.mpSkin.remount(el)` |
-| `tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py` | 皮肤验收脚本（Playwright，自动挑空闲端口） |
+| `scripts/verify/verify_skin.py` | 皮肤验收脚本（Playwright，自动挑空闲端口） |
 
 ### 4.2 修改
 
@@ -141,7 +141,7 @@ body {
 | `web/static/style.css` | ① 令牌双轨（新增别名，**保留** `--text-muted` 原值）；② §3.2 背景配方；③ 宿主旧玻璃让位；④ 圆角阶梯对齐套件档位（12 → 16/24 待定，见 D-7） |
 | `web/static/app.js` | 主题初始化处同步 `data-liquid-skin`；渲染批次后调 `window.mpSkin?.remount(container)` |
 | `web/app.py` | `_ASSET_FILES`（`:216-217`）登记新增静态文件（否则无 `?v=` 指纹） |
-| `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 重写视觉数值断言 + 新增 `LG-*` 组（C7） |
+| `scripts/verify/verify_ui.py` | 重写视觉数值断言 + 新增 `LG-*` 组（C7） |
 | `docs/architecture.md`、`docs/frontend-structure.md` | 记录外部皮肤来源/版本、加载顺序契约、令牌映射、背景配方、禁改项 |
 
 **不碰**：`src/**`、`daily_report.py`、`snapshot_report.py`、`data/**`、`alerts/**`、`context/**`、API 响应契约。
@@ -185,9 +185,9 @@ body {
 ```bash
 venv/Scripts/python -m pytest tests/ -q                                   # 回归基线
 venv/Scripts/python -m uvicorn web.app:app --port 8123                    # 起服（每轮换端口，规避静态缓存）
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --engine=frost
+venv/Scripts/python scripts/verify/verify_ui.py
+venv/Scripts/python scripts/verify/verify_skin.py
+venv/Scripts/python scripts/verify/verify_skin.py --engine=frost
 ```
 > `SKIP` **不是绿灯**（未判定）；要「一条都不许未判定」加 `--strict`。
 
@@ -331,9 +331,9 @@ venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --engi
 ```bash
 venv/Scripts/python -m pytest tests/ -q
 venv/Scripts/python -m uvicorn web.app:app --port 8123          # 每轮换端口（memory #93）
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --engine=frost
+venv/Scripts/python scripts/verify/verify_ui.py
+venv/Scripts/python scripts/verify/verify_skin.py
+venv/Scripts/python scripts/verify/verify_skin.py --engine=frost
 ```
 
 ### 11.4 完成定义（DoD）

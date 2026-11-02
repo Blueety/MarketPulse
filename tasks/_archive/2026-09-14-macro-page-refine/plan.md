@@ -172,7 +172,7 @@ D1（深色失效）与 D2（标注造假）是**正确性问题**，必须在�
 | `web/templates/macro.html` | 改约 35 行 | ① **修 D1 主题内联脚本**（与首页对齐）② 二级/三级层级调整（模块合并、去 `mac-vars`/`mac-factors` 双层壳）③ 关系模块加「查看全部」④ 历史模块加"当前状态"行 |
 | `web/static/macro.js` | 改约 120 行 | ① **init 阶段应用主题**（D1）② 关系排序取 Top N + 折叠（D2）③ 主图 `borderWidth`/`borderColor` 分主次（D3）④ Y 轴按数据自适应（D4）⑤ 核心变量改行式渲染（D6）⑥ 因子加"市场影响"（D5）⑦ 历史"已持续 X 天" |
 | `web/static/style.css` | 追加/改约 90 行 | `.mac-*` 段：去边框区块、层级差异、紧凑表、关系折叠、375 主图高度 |
-| `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 扩展约 40 行 | 见 §6 K-5 |
+| `scripts/verify/verify_ui.py` | 扩展约 40 行 | 见 §6 K-5 |
 | `tasks/2026-09-14-macro-page-refine/plan.md` / `journal.md` | 新增 | 本文件 / 执行记录 |
 | `docs/pitfalls.md` | 追加 1 条 | 见 §7 |
 
@@ -186,7 +186,7 @@ D1（深色失效）与 D2（标注造假）是**正确性问题**，必须在�
 
 ```text
 venv/Scripts/python -m uvicorn web.app:app --port 8026
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py    # 记录 EXIT / 断言数
+venv/Scripts/python scripts/verify/verify_ui.py    # 记录 EXIT / 断言数
 venv/Scripts/python -m pytest tests/ -v
 ```
 ⚠️ 截图**必须显式设 `localStorage["mp-theme"]='dark'` 再 reload** —— 否则拿到的是浅色（本次踩过）。

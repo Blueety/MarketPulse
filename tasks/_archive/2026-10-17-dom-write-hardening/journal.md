@@ -60,10 +60,10 @@
 
 | 命令 | 结果 |
 |---|---|
-| `tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py`（闸门 A 主回路） | **修前红**：PASS 5 / FAIL 6（哨兵未落地，C2/C3 全红）；**③ 后绿**：chromium + firefox **52 / 0**；**① 后绿**：chromium + firefox **74 / 0**，exit 0 |
+| `scripts/verify/verify_dom_write_guard.py`（闸门 A 主回路） | **修前红**：PASS 5 / FAIL 6（哨兵未落地，C2/C3 全红）；**③ 后绿**：chromium + firefox **52 / 0**；**① 后绿**：chromium + firefox **74 / 0**，exit 0 |
 | ↳ 关键判据（C2，两引擎） | `patched` ✓ · warn 含被改写 setter 的**源码片段** ✓ · `repaired` ✓ · 页面内探针回到 `'b'` ✓ · **连点 3 次刷新后概览恒为 6 小卡（用户可见症状消失）** ✓ · 零 pageerror ✓ |
 | ↳ 优雅降级（C4，两引擎） | 描述符被锁（`configurable:false`）⇒ `patched` + `repair-failed` + 页面照常渲染（6 小卡）+ 零 pageerror ✓ |
-| `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | **PASS 690 / FAIL 0 / SKIP 10**，`ALL PASSED (10 SKIPPED)`；SKIP 全部是 `上游 macro=DOWN econ=DOWN`（`HTTP 403`，本机无代理的既有行为），与本次改动无关 |
+| `scripts/verify/verify_ui.py` | **PASS 690 / FAIL 0 / SKIP 10**，`ALL PASSED (10 SKIPPED)`；SKIP 全部是 `上游 macro=DOWN econ=DOWN`（`HTTP 403`，本机无代理的既有行为），与本次改动无关 |
 | `venv/Scripts/python -m pytest tests/ -q` | **869 passed**，12 warnings（既有的 matplotlib tight_layout 警告） |
 | `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 无输出（闸门 B ✓） |
 | `git status --short` | 仅本次预期文件 + 一个**既有的**未跟踪 `_wd_check.py`（4 行时区探针，非本次产生，按闸门 B 应由其作者删除） |

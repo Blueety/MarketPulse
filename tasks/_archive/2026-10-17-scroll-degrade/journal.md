@@ -27,7 +27,7 @@
 ## 4. 验证
 | 门禁 | 结果 |
 |---|---|
-| 新回路 `tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py`（本地） | **ALL PASSED** —— D1 静止保留折射 ✓ / D2 滚动降级成 blur ✓ / D2b 降级覆盖率 **91%** ✓ / D3a 中位 **7ms** ✓ / D3b >50ms 帧 **1%** ✓ / D4 只跑跑马灯不降级 ✓ / D5 零 pageerror ✓ |
+| 新回路 `scripts/verify/verify_scroll_degrade.py`（本地） | **ALL PASSED** —— D1 静止保留折射 ✓ / D2 滚动降级成 blur ✓ / D2b 降级覆盖率 **91%** ✓ / D3a 中位 **7ms** ✓ / D3b >50ms 帧 **1%** ✓ / D4 只跑跑马灯不降级 ✓ / D5 零 pageerror ✓ |
 | `verify_skin.py --headed` | **61 PASSED / 2 SKIPPED**（exit 0；两条 SKIP 是既有条件项） |
 | `verify_ui.py` | **ALL PASSED (10 SKIPPED)**（SKIP 全是上游 macro/econ 不可用） |
 | `pytest tests/ -q` | **869 passed** |

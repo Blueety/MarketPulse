@@ -1,6 +1,6 @@
 ---
 name: ui-verify-assertion
-description: 给 tasks/2026-09-11-frontend-bento-redesign/verify_ui.py 新增一组 UI 断言（含 mock 夹具）时用。覆盖：红→绿方法论、HEAD 隔离副本、完成标记判读、全量/基线集合比对、必踩的三个 Playwright mock 坑。
+description: 给 scripts/verify/verify_ui.py 新增一组 UI 断言（含 mock 夹具）时用。覆盖：红→绿方法论、HEAD 隔离副本、完成标记判读、全量/基线集合比对、必踩的三个 Playwright mock 坑。
 ---
 
 # 给共享验收脚本新增一组 UI 断言
@@ -20,7 +20,7 @@ description: 给 tasks/2026-09-11-frontend-bento-redesign/verify_ui.py 新增一
 # 建 HEAD 隔离副本（不动工作区；外部 cron 每几分钟提交 ⇒ git stash 不可靠）
 T="$TEMP/mp-base-xx"; rm -rf "$T"; mkdir -p "$T"; git archive HEAD | tar -x -C "$T"
 cp -r context/. "$T/context/"; cp -r data/. "$T/data/"
-cp tasks/2026-09-11-frontend-bento-redesign/verify_ui.py "$T/tasks/2026-09-11-frontend-bento-redesign/"
+cp scripts/verify/verify_ui.py "$T/tasks/_archive/2026-09-11-frontend-bento-redesign/"
 # venv 用 junction 指回（PowerShell: New-Item -ItemType Junction -Target D:\AGENT\MarketPulse\venv）
 ```
 
@@ -53,7 +53,7 @@ importlib 加载 `verify_ui` → 覆盖 `vu.ROOT` → 自己起 uvicorn（`vu.fr
 
 ```bash
 ./venv/Scripts/python.exe -m pytest tests/test_web.py -q            # V1
-PYTHONIOENCODING=utf-8 ./venv/Scripts/python.exe tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+PYTHONIOENCODING=utf-8 ./venv/Scripts/python.exe scripts/verify/verify_ui.py
 #   ⚠️ 前台 + 显式 timeout（~5 分钟）；后台跑会被 120s 上限掐断（日志 0 字节/截断）
 ```
 

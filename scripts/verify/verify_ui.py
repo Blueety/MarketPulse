@@ -1,7 +1,7 @@
 """Bento 看板 UI 验收脚本（Playwright + 真实渲染测量）。
 
 用法（项目根执行）：
-    venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+    venv/Scripts/python scripts/verify/verify_ui.py
 
 行为：
 - 自动挑一个**空闲端口**起 uvicorn（每次新端口 = 新 origin，规避 304/陈旧 CSS 造成的假阴性，

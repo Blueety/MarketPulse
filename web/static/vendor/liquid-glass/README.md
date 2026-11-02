@@ -10,7 +10,7 @@
 | `LICENSE-avenra-liquid-glass.txt` | 包内 `LICENSE` | MIT 文本（分发时保留的义务）；上游作者 DevSam7t3 |
 
 - 版本锁定：`1.2.0`（`web/static/skin/liquid-skin.css` 与 `skin-kit` 的类名契约按此版本对齐）。
-- 校验：入库副本与上游**逐字节一致**（md5 见 `tasks/2026-09-23-web-liquid-glass-skin/journal.md`）。
+- 校验：入库副本与上游**逐字节一致**（md5 见 `tasks/_archive/2026-09-23-web-liquid-glass-skin/journal.md`）。
 
 ## 刷新方法（升级引擎时）
 

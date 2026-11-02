@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """液态玻璃皮肤验收（第一期：`/` 首页）
 
-配套方案：`tasks/2026-09-23-web-liquid-glass-skin/plan.md` §6（验证命令与验收判据）。
-与 `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` 的分工：
+配套方案：`tasks/_archive/2026-09-23-web-liquid-glass-skin/plan.md` §6（验证命令与验收判据）。
+与 `scripts/verify/verify_ui.py` 的分工：
   · `verify_ui.py`   = **通用**看板门禁（布局/契约/canvas/主题/抽屉/console…），换肤后只把
                        视觉数值类断言按新皮肤重取；它不知道「皮肤」这回事。
   · 本文件            = **皮肤专项**门禁（LG-1…LG-10）：折射材质是否真的在、纹理是否真的被
@@ -11,10 +11,10 @@
                        对比度、背景配方。
 
 用法（在项目根，venv 内）：
-  venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py
-  venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --engine=frost
-  venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --only=LG-9,LG-10
-  venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --baseline <path.json>
+  venv/Scripts/python scripts/verify/verify_skin.py
+  venv/Scripts/python scripts/verify/verify_skin.py --engine=frost
+  venv/Scripts/python scripts/verify/verify_skin.py --only=LG-9,LG-10
+  venv/Scripts/python scripts/verify/verify_skin.py --baseline <path.json>
 
 退出码：有 FAIL → 1；仅 SKIP → 0（`--strict` 时 1）；全绿 → 0。
 `SKIP` = **该条未判定**（例如本机没有 Firefox 内核 / 该阶段尚未挂材质），**不是通过**。

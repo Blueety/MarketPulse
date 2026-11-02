@@ -2,7 +2,7 @@
    MarketPulse · DOM 写入语义哨兵 · web/static/dom-write-guard.js
    ----------------------------------------------------------------------------
    目的：**检测 + 修复写入语义**（2026-10-17；方案 ③ 检测 + 方案 ① 免疫。
-   背景见 tasks/2026-10-17-dom-write-hardening/{plan.md,journal.md}）。
+   背景见 tasks/_archive/2026-10-17-dom-write-hardening/{plan.md,journal.md}）。
 
    背景一句话：页面出现「内容重复」（同一块内容 2~5 份、后几份是**旧值**、原始占位符与骨架屏
    被顶到最后）时，根因不在本站代码 —— 是页面里的 DOM 写入语义被第三方脚本改写成了

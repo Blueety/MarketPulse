@@ -17,7 +17,7 @@
 | JS 框架 | **无框架、无构建**：原生 ES5 风格 IIFE + Chart.js 4.4.1（CDN）+ chartjs-plugin-zoom |
 | 前端总规模 | ≈ **6,100 行**（`style.css` 1074 + `app.js` 1229 + `macro.js` 722 + `macro_cn.js` 805 + **`timeline.js` 380** + `chart-crosshair.js` 262 + 模板 ~572 + `web/app.py` 1254（含后端） |
 | 主题 | 双主题（light / dark），CSS 自定义属性 token 驱动，`localStorage["mp-theme"]` 持久化 |
-| 验收 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，**5 视口**，退出码 0/1；断言组 `MX/NA/QM/UX/PW/TL`） |
+| 验收 | `scripts/verify/verify_ui.py`（Playwright，**5 视口**，退出码 0/1；断言组 `MX/NA/QM/UX/PW/TL`） |
 
 **请求拓扑**
 
@@ -274,7 +274,7 @@
 8. **`.h2-sub` 必须是 `h2` 内的行内 span**：`#us-sectors-asof` 放进 `h2` 之外会撑破 `scrollHeight ≤ 1240` 护栏。
 9. **`#lede` 用 `display:contents`**：不要让 JS 给它写样式（会破坏与 promo 同栅格）。
 10. **`renderSectorAsOf()` 必须在两个板块都渲染完后调用**（越权提前读 `_sectorAsOf` 会拿到半成品）。
-11. **验收脚本是唯一真源**：`venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（Playwright，5 视口 1920/1600/1280/900/375，自动挑空闲端口）。**不要以 `curl 200` 或肉眼看代替。**
+11. **验收脚本是唯一真源**：`venv/Scripts/python scripts/verify/verify_ui.py`（Playwright，5 视口 1920/1600/1280/900/375，自动挑空闲端口）。**不要以 `curl 200` 或肉眼看代替。**
 11b. **验收三态语义（2026-09-20 起）**：`PASS` / `FAIL` / `SKIP`。**`SKIP` 只表示"该条无法判定，因为上游不可用（独立直连探测确认）"，它既不是通过、也不是回归** —— 看到 SKIP 先查那行 `上游探测: macro=? econ=?`，**别去改前端代码**。反过来：上游**可用**时同样的失败仍然是 `FAIL`（所以 SKIP 不会掩盖真回归）。新写断言时默认 `deps=()`（永不 SKIP）；只有**确证依赖上游数据**才标 `deps=("macro"|"econ",)`，且**"空态也该成立"的断言不许标**（会变成掩盖 bug 的开关）。
 12. **不要用 `new Date("YYYY-MM-DD")`**：会有本地时区偏移，日期/星期一律走 `app.js:142` 的日期工具。
 18. **侧栏 navCount 写死在四处**（2026-09-20 起，值 = **12**；同日设置页把「设置」占位转正 ⇒ **navDisabled 断言 1 → 0**（`F-5`），跨页链接 5 → 6（`macroHrefs` 数组也要同改）：`verify_ui.py` 的 `F-5` / `CN-7` / `TL-9` / `AUTH-5`。加/删 nav 项必须**四处同改** —— 2026-09-20 加「阈值回测」时实测：plan 只列了三处，第四处 `AUTH-5`（同日鉴权任务里新加的 `d[nav] == 11`）**被漏掉**，若不同改会让该断言变红，且**看起来像「新页面改坏了侧栏」**、而不像「漏改断言」。
@@ -320,7 +320,7 @@
 
 ```bash
 # UI 验收（5 视口，退出码 0 = 全绿）
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+venv/Scripts/python scripts/verify/verify_ui.py
 
 # 后端契约测试
 venv/Scripts/python -m pytest tests/test_web.py -v
@@ -339,7 +339,7 @@ venv/Scripts/python -m uvicorn web.app:app --port 8000
 
 ## 11. 液态玻璃皮肤（2026-09-23，第一期**仅 `/`**）
 
-> 来源：`tasks/2026-09-23-web-liquid-glass-skin/{plan.md,journal.md}`（架构师方案 + 执行记录）。
+> 来源：`tasks/_archive/2026-09-23-web-liquid-glass-skin/{plan.md,journal.md}`（架构师方案 + 执行记录）。
 > 上游皮肤套件 `D:\AGENT\Todo\skin-kit` + `@avenra/liquid-glass@1.2.0`（MIT）——**引擎已 vendored 进仓**。
 
 ### 11.1 新增文件
@@ -354,7 +354,7 @@ venv/Scripts/python -m uvicorn web.app:app --port 8000
 | `web/static/skin/motion.css` | 减动效守卫（1.9 KB，原样） | |
 | `web/static/skin/mp-skin.css` | **宿主补丁层**（背景配方 / 面板染色 / 旧玻璃让位 / 内容抬层 / 滚动条让位） | **永远最后加载** |
 | `web/static/skin.js` | 皮肤运行时（ESM）：`applyEngineMode` 复核 + `scheduleGlass` 分帧 + `is-scrolling` + `window.mpSkin.remount` | |
-| `tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py` | 皮肤专项验收（`LG-1…LG-11`） | 折射类断言需 `--headed` |
+| `scripts/verify/verify_skin.py` | 皮肤专项验收（`LG-1…LG-11`） | 折射类断言需 `--headed` |
 
 ### 11.2 加载顺序（`index.html` `<head>`，硬契约）
 

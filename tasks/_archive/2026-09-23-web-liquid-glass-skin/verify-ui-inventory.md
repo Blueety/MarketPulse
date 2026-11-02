@@ -1,6 +1,6 @@
 # verify_ui.py 断言清点（S0 · 换肤前置门禁）
 
-> 目标文件：`tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（5436 行，只读清点，未修改任何文件）
+> 目标文件：`scripts/verify/verify_ui.py`（5436 行，只读清点，未修改任何文件）
 > 说明：本机无写工具（工具集仅 read/grep/glob/web_search/yield），故完整清单以本文件承载，请原样落盘为 `local://verify-ui-inventory.md`。
 
 ---

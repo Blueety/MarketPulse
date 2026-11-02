@@ -10,7 +10,7 @@
   C3 克隆型注入    —— 必须打 data-dom-write-dup-ids + 一条重复 id 的 warn
   C4 锁死描述符    —— 改不动时必须**不炸页面**：patched + repair-failed + 页面仍渲染、零 pageerror
 
-用法：venv/Scripts/python tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py
+用法：venv/Scripts/python scripts/verify/verify_dom_write_guard.py
 退出码：有 FAIL → 1，否则 0。
 """
 from __future__ import annotations

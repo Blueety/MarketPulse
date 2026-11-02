@@ -210,7 +210,7 @@
 - 用 §2 的实测数字作为「before」快照留档（截图 + JSON）。
 - **不引入前端测试框架**（无 npm 构建链；引入 vitest/playwright-test 属新依赖，违反 `AGENTS.md`）。UI 验收改用 Playwright 脚本 + 人工目视。
 - **临时产物落点纪律（见 R14，本会话已踩坑）**：
-  - 验证脚本**有意保留**在 `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（可复跑的验收工具，入库有益）。
+  - 验证脚本**有意保留**在 `scripts/verify/verify_ui.py`（可复跑的验收工具，入库有益）。
   - **截图 / 测量 JSON 一律写到系统临时目录**（`$env:TEMP`），**不要落在仓库内**，避免二进制入库。
   - 若确实落在仓库（如 `_dbg/`），**用完立即删除**；注意外部「每日数据更新」cron 会 `git add -A` 抢先提交。
 - **验证**：`venv/Scripts/python -m pytest tests/test_web.py -v` 全绿（后端契约未动）。
@@ -328,7 +328,7 @@ const PLACEHOLDERS = [
 
 ### Step 12 · 清理与记录
 
-- 保留 `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`（验收脚本，入库）；删除系统临时目录外的截图与 JSON。
+- 保留 `scripts/verify/verify_ui.py`（验收脚本，入库）；删除系统临时目录外的截图与 JSON。
 - 追加 `docs/pitfalls.md`：C2（canvas 位图/显示失配的量化判据）、C6（星期基准必须取数据日）、C7（context 有键但端点不暴露）、R14（auto-commit cron 会扫入临时产物）。
 - 写 `tasks/2026-09-11-frontend-bento-redesign/journal.md`。
 
@@ -464,7 +464,7 @@ venv/Scripts/python -c "import matplotlib; matplotlib.use('Agg')"
 | 修改（小） | `tests/test_web.py` | +≈25 行、改 1 处断言 |
 | 新增 | `tasks/2026-09-11-frontend-bento-redesign/plan.md` | 本文件 |
 | 可选修改 | `seed_history.py` | 仅在 Step 10 执行时；+≈8 行（helper + 时区 + range） |
-| 新增 | `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py` | 验收用 Playwright 脚本（有意入库，可复跑） |
+| 新增 | `scripts/verify/verify_ui.py` | 验收用 Playwright 脚本（有意入库，可复跑） |
 | 删除（补救，需人确认） | `_dbg/measure.py`、`_dbg/measure.json`、`_dbg/shot-*.png` | 本会话被 auto-cron 提交进 `a5329eb`/`a8a987e`，现工作区已删除但**未提交**，见 R14 |
 | 不动 | `.gitignore` | 不新增忽略规则（`_dbg/` 是既有受版本控制的调试夹具目录） |
 

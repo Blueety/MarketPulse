@@ -1,12 +1,12 @@
 """宏观页 refinement 的**快循环**验收（只跑 /macro 相关断言，复用 verify_ui.py 的实现）。
 
 用法（项目根执行）：
-    venv/Scripts/python tasks/2026-09-14-macro-page-refine/verify_refine_only.py
+    venv/Scripts/python scripts/verify/verify_refine_only.py
 
 ⚠️ 这是开发期快循环用的子集运行器（省掉首页 6 分钟的断言）：
-   - 断言实现**只有一份**，在 `tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`
+   - 断言实现**只有一份**，在 `scripts/verify/verify_ui.py`
      （`assert_macro_page` = MX-*，`assert_macro_refine` = M-*），本文件只负责起服务 + 调用。
-   - **定稿验收仍以完整脚本为准**：`venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`
+   - **定稿验收仍以完整脚本为准**：`venv/Scripts/python scripts/verify/verify_ui.py`
      （首页回归 M-10 只有完整跑才会覆盖）。
 """
 from __future__ import annotations
@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tasks" / "2026-09-11-frontend-bento-redesign"))
+# 子集运行器与 verify_ui.py 现在同目录（scripts/verify/），直接按脚本目录导入。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import verify_ui as V  # noqa: E402
 

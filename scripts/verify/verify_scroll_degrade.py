@@ -7,8 +7,8 @@
   D4 只跑跑马灯（不滚页面）时**不降级**：元素级 scroll 不得触发（否则玻璃被永久降级）
 
 用法：
-  venv/Scripts/python tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py            # 本地起服
-  venv/Scripts/python tasks/2026-10-17-scroll-degrade/verify_scroll_degrade.py --url https://…  # 打线上
+  venv/Scripts/python scripts/verify/verify_scroll_degrade.py            # 本地起服
+  venv/Scripts/python scripts/verify/verify_scroll_degrade.py --url https://…  # 打线上
 """
 import argparse
 import io

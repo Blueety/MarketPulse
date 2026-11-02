@@ -262,7 +262,7 @@ AUTO_PUSH=0 venv/Scripts/python daily_report.py        # 本地开发关自动�
 
 # 测试与验收
 venv/Scripts/python -m pytest tests/ -v                # 全量（27 个测试文件）
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+venv/Scripts/python scripts/verify/verify_ui.py
                                                        # Web UI 验收（Playwright，三视口，改前端必跑）
 
 # Web

@@ -25,7 +25,7 @@
 | `web/static/dom-write-guard.js` | **新增**（~90 行，经典脚本，零依赖） |
 | `web/templates/{index,macro,macro_cn,timeline,backtest,settings}.html` | head 里各加 1 行 `<script src="/static/dom-write-guard.js?v={{ asset_v }}">`（放在 meta 之后、主题内联脚本之前） |
 | `web/app.py` | `_ASSET_FILES` 加 `"dom-write-guard.js"`（否则改它不换 `?v=`，验证会吃旧副本） |
-| `tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py` | **新增**验收脚本（自动挑端口起 uvicorn + Playwright，三例） |
+| `scripts/verify/verify_dom_write_guard.py` | **新增**验收脚本（自动挑端口起 uvicorn + Playwright，三例） |
 
 ## 实施步骤
 
@@ -38,10 +38,10 @@
 
 ```bash
 # 闸门 A / 本任务主回路（红 → 绿）
-venv/Scripts/python tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py
+venv/Scripts/python scripts/verify/verify_dom_write_guard.py
 
 # 前端门禁（改了 web/templates 与 web/static ⇒ 必跑）
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+venv/Scripts/python scripts/verify/verify_ui.py
 
 # 后端契约
 venv/Scripts/python -m pytest tests/ -q
@@ -107,7 +107,7 @@ git status --short
 
 ### 验收（扩到四例，仍走闸门 A：注入环境 → 红/绿）
 
-`tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py`（chromium + firefox 两引擎）：
+`scripts/verify/verify_dom_write_guard.py`（chromium + firefox 两引擎）：
 
 - **C1** 干净环境 ×6 页：无 patched / repaired / dupIds、无 warn、无 pageerror（不得误报）。
 - **C2** 前置语义注入：`patched` ✓ + warn 含 setter 源码片段 ✓ + `repaired` ✓ +
@@ -121,8 +121,8 @@ git status --short
 ### 验证命令（追加 ① 后全量复跑）
 
 ```bash
-venv/Scripts/python tasks/2026-10-17-dom-write-hardening/verify_dom_write_guard.py   # 主回路
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py            # 改了 web/static ⇒ 必跑
+venv/Scripts/python scripts/verify/verify_dom_write_guard.py   # 主回路
+venv/Scripts/python scripts/verify/verify_ui.py            # 改了 web/static ⇒ 必跑
 venv/Scripts/python -m pytest tests/ -q
 grep -rn "\[DEBUG-" --include=*.py --include=*.js .
 ```

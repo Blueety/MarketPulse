@@ -17,7 +17,7 @@
 | S4 | 其余宿主 + KPI 动态重挂 + M1 伪影 | ✅ | 一次全绿：**51 PASS / 0 FAIL**（`--headed --min-hosts 12`，仅 LG-6/LG-11 为 SKIP） |
 | S5 | 门禁重写 + 文档 | 进行中 | 见 §6 |
 
-**新增产物**：`web/static/vendor/liquid-glass/*`（引擎，原样）、`web/static/skin/{tokens,liquid-skin,motion,mp-skin}.css`、`web/static/skin.js`、`tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py`。
+**新增产物**：`web/static/vendor/liquid-glass/*`（引擎，原样）、`web/static/skin/{tokens,liquid-skin,motion,mp-skin}.css`、`web/static/skin.js`、`scripts/verify/verify_skin.py`。
 
 ---
 
@@ -228,7 +228,7 @@ html[data-liquid-skin] body {
 | 命令 | 结果 |
 |---|---|
 | `venv/Scripts/python -m pytest tests/ -q` | **772 passed, 2 failed** → 其中 1 条是我的（`test_web.py::test_macro_page_renders` 顶栏 class 全等断言，已放宽为前缀）→ 修后 `pytest tests/test_web.py -q` **143 passed**；另 1 条 `tests/test_us_sector.py::TestFetchUsSectorHeat::test_volume_format` 是**既有红**（期望 `$1.2B`、实际 `$12.0亿`，`src/fetcher.py` 与测试都未被我改动 —— `git status` 可验），与本次换肤无关，未动 |
-| `venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --headed --min-hosts 12` | **51 PASS / 0 FAIL / 2 SKIP**（LG-6 需 `--engine=frost`、LG-11 只适用于接线阶段） |
+| `venv/Scripts/python scripts/verify/verify_skin.py --headed --min-hosts 12` | **51 PASS / 0 FAIL / 2 SKIP**（LG-6 需 `--engine=frost`、LG-11 只适用于接线阶段） |
 | `… verify_skin.py --engine=frost --only LG-6` | **2 PASS**（磨砂档 blur16/sat1.6/bri1.03） |
 | `… verify_ui.py` | **710 PASS / 0 FAIL / 0 SKIP（ALL PASSED）** —— 基线 704 PASS，新增的 6 条来自改写后的 `assert_glass`（宿主让位 / `.lg-inner` 单例 / 材质 / 圆角一致 / 染色区间 × 视口） |
 | `… verify_skin.py --headed --min-hosts 12`（最终） | **61 PASS / 0 FAIL / 2 SKIP**（LG-5 增补「引擎加载失败」第 4 态） |
@@ -236,16 +236,16 @@ html[data-liquid-skin] body {
 ### 9.4 最终验收快照（2026-09-23）
 
 ```text
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py
+venv/Scripts/python scripts/verify/verify_ui.py
   → PASS 710 / FAIL 0 / SKIP 0   ALL PASSED
 
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --headed --min-hosts 12
+venv/Scripts/python scripts/verify/verify_skin.py --headed --min-hosts 12
   → PASS 61 / FAIL 0 / SKIP 2    （SKIP = LG-6 需 --engine=frost；LG-11 只适用于接线阶段）
 
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --headed --only LG-5
+venv/Scripts/python scripts/verify/verify_skin.py --headed --only LG-5
   → PASS 6 / FAIL 0   （降级四态：reduced-motion / forced-colors / reduced-transparency / **引擎加载失败**）
 
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --engine=frost --only LG-6
+venv/Scripts/python scripts/verify/verify_skin.py --engine=frost --only LG-6
   → PASS 2 / FAIL 0
 
 venv/Scripts/python -m pytest tests/ -q
@@ -293,9 +293,9 @@ venv/Scripts/python -m pytest tests/ -q
 复跑：
 ```text
 venv/Scripts/python -m pytest tests/ -q                                         → 774 passed（原 1 条既有红已修，见 §11）
-venv/Scripts/python tasks/2026-09-23-web-liquid-glass-skin/verify_skin.py --headed --min-hosts 12
+venv/Scripts/python scripts/verify/verify_skin.py --headed --min-hosts 12
                                                                                 → 61 PASS / 0 FAIL / 2 SKIP
-venv/Scripts/python tasks/2026-09-11-frontend-bento-redesign/verify_ui.py        → 710 PASS / 0 FAIL / 0 SKIP
+venv/Scripts/python scripts/verify/verify_ui.py        → 710 PASS / 0 FAIL / 0 SKIP
 ```
 
 ---

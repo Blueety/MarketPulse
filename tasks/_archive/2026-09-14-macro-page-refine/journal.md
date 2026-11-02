@@ -2,8 +2,8 @@
 
 - **日期**：2026-09-14
 - **计划**：`tasks/2026-09-14-macro-page-refine/plan.md`
-- **改动文件**：`web/templates/macro.html`、`web/static/macro.js`、`web/static/style.css`（仅 `.mac-*` 段）、`tasks/2026-09-11-frontend-bento-redesign/verify_ui.py`
-- **新增文件**：本文件、`tasks/2026-09-14-macro-page-refine/verify_refine_only.py`（快循环子集运行器）
+- **改动文件**：`web/templates/macro.html`、`web/static/macro.js`、`web/static/style.css`（仅 `.mac-*` 段）、`scripts/verify/verify_ui.py`
+- **新增文件**：本文件、`scripts/verify/verify_refine_only.py`（快循环子集运行器）
 - **未改**：`web/app.py`、`src/*`、`index.html`、`/api/*` 契约、任何落盘（符合 plan §7）
 
 ---
@@ -125,7 +125,7 @@ regime cols: [587, 85, 675]  →  [212, 85, 1050]   （1396px 栅格；左列空
 
 **契约变更（非回归）**：`MX-9` 原断言「宏观关系 6 对」与新设计（默认 ≤3 + 折叠）冲突 → 改为「默认 2~3 条 + 「查看全部」可展开」+ 新增 `MX-9b`（展开后 6 对齐全）/`MX-9c`（每对结果可读）。这是**刻意的信息层级调整**，已在此记录。
 
-**快循环运行器**：`tasks/2026-09-14-macro-page-refine/verify_refine_only.py`（只跑 MX + M，约 2 分钟；断言实现只有一份，在 `verify_ui.py`）。定稿验收用完整脚本。
+**快循环运行器**：`scripts/verify/verify_refine_only.py`（只跑 MX + M，约 2 分钟；断言实现只有一份，在 `verify_ui.py`）。定稿验收用完整脚本。
 
 ---
 
