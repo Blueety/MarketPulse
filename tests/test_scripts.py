@@ -16,7 +16,8 @@ import scripts.backup_db as backup_db
 from src import storage
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ARCHIVED_MIGRATE = REPO_ROOT / "tasks" / "2026-09-24-qa-bughunt" / "legacy" / "migrate_to_sqlite.py"
+ARCHIVED_MIGRATE = (REPO_ROOT / "tasks" / "_archive" / "2026-09-24-qa-bughunt"
+                    / "legacy" / "migrate_to_sqlite.py")
 
 
 def _run(script: Path, *args: str) -> subprocess.CompletedProcess:

@@ -47,7 +47,7 @@
 | 命令 | 用途 | 判据 |
 |---|---|---|
 | `sh scripts/check-gates.sh --staged` | 提交前闸门（索引内容：闸门 B 的 `[DEBUG-` 残留、`docs/architecture.md` 模块表、任务文件字段、T2/T3 的 `review.md`） | **0 项违规**才提交；`git commit` 时的 pre-commit 钩子跑的就是它（⚠️ **钩子当前未启用**：`core.hooksPath` 为空，见 `AGENTS.md`） |
-| `sh scripts/check-gates.sh` | 同上，全仓库口径（在飞任务 + 全仓库闸门 B） | 存量违规基线 914 条（旧任务缺新模板章节为主），别拿它判单次改动 |
+| `sh scripts/check-gates.sh` | 同上，全仓库口径（在飞任务 + 全仓库闸门 B；`tasks/_archive/` 跳过） | 存量违规基线 **60** 条（全在留在 `tasks/` 的 5 个带验证脚本的目录里），别拿它判单次改动 |
 | `grep -rn "\[DEBUG-" --include=*.py --include=*.js .` | 调试埋点残留（`check-gates.sh` 的同一判据，手工版本） | **必须无输出** |
 | `git status --short` | 一次性原型 / 探针是否落进仓库 | 只应有本次任务预期的文件；探针脚本应落 `%TEMP%` |
 | `venv/Scripts/python -m pytest tests/ -v` | 完整测试套件 | 全绿（未跑的要在 journal 里标注原因） |

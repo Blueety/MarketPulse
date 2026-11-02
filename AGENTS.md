@@ -36,7 +36,7 @@
 - `docs/agents/`: 角色提示词和流程细则（任务分级 / 架构师 / 执行者）。
 - `tasks/`: 任务目录和交接记录。
 - `skills/`: 可复用流程（bug-fix / pre-review / research / tdd / refactor / receiving-review / self-audit 是脚手架 v2 的通用流程；hermes-cron-script / source-value-layer / ui-verify-assertion 是本项目专属）。
-- `.githooks/pre-commit` + `scripts/check-gates.sh`（+ `.awk`）: 提交前闸门（随脚手架落地，**当前未启用**：`core.hooksPath` 为空 —— 首次安装时存量违规 914 条，本轮把 `docs/architecture.md` 模块表的 6 条清掉后剩 908，全部是旧任务文件；清零前启用会拦掉每次提交）。手动跑 `sh scripts/check-gates.sh`。
+- `.githooks/pre-commit` + `scripts/check-gates.sh`（+ `.awk`）: 提交前闸门（随脚手架落地，**当前未启用**：`core.hooksPath` 为空 —— 首次安装时存量违规 914 条；2026-11-02 归档 94 个已收尾任务（`tasks/_archive/`）+ 清掉 `docs/architecture.md` 模块表的 6 条后剩 **60**，全部来自 5 个留在 `tasks/` 的目录（承载验证脚本，见 `tasks/README.md`）；清零前启用会拦掉每次提交）。手动跑 `sh scripts/check-gates.sh`。
 - `.scaffold-version`: 脚手架同步基线（由**仓库外**的脚手架工具 `D:/Obsidianhouse/AISTUDY/project-scaffold/project-scaffold/scripts/scaffold-update.sh` 写入，本仓库没有这个脚本；**要提交**，否则下次同步只能按内容猜基线）。
 
 ## Required Reading
@@ -101,7 +101,7 @@
 - 写测试前：先书面列出要测的 seam 并等待确认（`skills/tdd/SKILL.md`）；修 bug 的回归测试只在存在正确 seam 时写。
 - 调试日志统一加 `[DEBUG-xxxx]` 前缀，提交前 grep 清干净。
 - 提交前闸门：`scripts/check-gates.sh` 检查 `[DEBUG-` 残留、`docs/architecture.md` 模块表与实际目录是否对得上、`plan.md` 的档位/类型/闸门 A 字段、`journal.md` 的章节与验证结果、切片文件字段、**T2 / T3 的 `review.md` 是否存在且填全**。启用后由 `.githooks/pre-commit` 跑 `--staged` 自动拦截；被拦下就按提示补内容，**不要**用 `git commit --no-verify` 绕过。手动检查：`sh scripts/check-gates.sh`（全量）/ `sh scripts/check-gates.sh --staged`（索引）——Windows 上别用 `bash`，它可能指向 WSL 的桩（见 `docs/pitfalls.md`）。
-- ⚠️ **钩子当前未启用**：`git config core.hooksPath` 为空（该设置存在 `.git/config`，clone 后不会跟着来，丢了钩子闸门就静默失效）。原因是 2026-11-02 首次安装时存量违规 **914 条**，全部是**旧任务缺新模板章节**（每个旧 `journal.md` 少「主要提交 / 雾区变化 / 一致性走查 / 结束状态 / 涉及的 ADR」，每个旧 `plan.md` 少「任务概要」等，各数十条）；`docs/architecture.md` 原有的 6 条（模块表第二列把说明文字/多个路径写进了路径格）已于同日清零，模块表路径现在一律单路径。清零前启用会让每次提交都被拦；治理路线见 `tasks/README.md` 的「闸门升级后的存量违规」。清零后再 `git config core.hooksPath .githooks`。
+- ⚠️ **钩子当前未启用**：`git config core.hooksPath` 为空（该设置存在 `.git/config`，clone 后不会跟着来，丢了钩子闸门就静默失效）。首次安装时存量违规 914 条。2026-11-02 已清到 **60**：94 个已收尾任务移入 `tasks/_archive/`（全量自查跳过归档目录），`docs/architecture.md` 模块表的 6 条（路径格写了多路径/说明文字）改为单路径。**剩下的 60 条全部来自留在 `tasks/` 的 5 个目录**——它们承载仍在用的验证脚本（`verify_ui.py` / `verify_skin.py` / `verify_scroll_degrade.py` / `verify_dom_write_guard.py` / `verify_refine_only.py`，脚本用 `parents[2]` 定位仓库根，移进 `_archive/` 会失效），只缺新模板章节（`journal.md` 的「主要提交 / 雾区变化 / 一致性走查 / 结束状态 / 涉及的 ADR」、`plan.md` 的「任务概要」等）。两条路：原地回填（`tasks/README.md` 的「回填要标注来源」）或把脚本搬到 `scripts/verify/` 后再归档。清零前启用会让每次提交都被拦；治理路线见 `tasks/README.md` 的「闸门升级后的存量违规」。清零后再 `git config core.hooksPath .githooks`。
 - 提交前审查：T0 不审；T1 自己审；**T2 / T3 必须派一个全新的子 agent 审**（只给它 `prd.md`、`plan.md`、diff、相关规范，**不给它会话历史**），产出 `tasks/<日期>-<简述>/review.md`。轮次上限 2，超了升级给人。双轴报告（Standards / Spec 分别报告，不合并、不跨轴排序）。
 - 收到审查意见后按 `skills/receiving-review/SKILL.md` 逐条处理：改 / 不改+理由 / 不接受+反证，**没有第四种**；不能静默跳过任何一条。
 - 验证通过后，运行 `git diff` 检查改动范围。

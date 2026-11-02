@@ -65,7 +65,7 @@
 
 ## 下一步
 
-- **存量债清零**（908 条，全部是旧任务文件缺新模板章节）：这是独立任务，按 `tasks/README.md` 的「闸门升级后的存量违规」走——要么批量补章节，要么把已收尾的旧任务归档进 `tasks/_archive/`（闸门跳过归档目录）。
+- ~~**存量债清零**（908 条）~~ **已做归档一步**（2026-11-02 同日，见文末「追加」）：94 个已收尾任务移入 `tasks/_archive/`，剩 **60** 条全部来自留在 `tasks/` 的 5 个带验证脚本的目录。下一步二选一：原地回填那 5 个目录的 `journal.md` / `plan.md`，或把脚本搬到 `scripts/verify/`（`parents[2]` 数学不变）后再归档。
 - **上游缺陷 2 条**（报给 `project-scaffold`，本仓不本地改）：
   1. `scripts/check-gates.sh:228` 规模兜底按「**任一**候选任务声明 T2/T3」短路，且候选为空时退回所有在飞任务 ⇒ 一个只改代码的提交只要仓库里有任意 T2 任务就放行。判据应改成「**本次贵任**累计 `src/` 改动 ≥4 文件且该任务档位 < T2」。
   2. `scripts/check-gates.awk:453` 注释称 `field_filled` 管住「目标」，实际 `plan_check` 没有这条调用。
@@ -84,3 +84,10 @@
 ## 结束状态
 
 - **结束状态**: `DONE_WITH_CONCERNS`
+
+## 追加：归档已收尾任务（2026-11-02 同日）
+
+- **范围**：`tasks/` 下 100 个任务目录中，94 个移入 `tasks/_archive/`（`git mv` 语义的重命名提交 `1ba0da4`）。留在 `tasks/` 的 5 个：`2026-09-11-frontend-bento-redesign`、`2026-09-14-macro-page-refine`、`2026-09-23-web-liquid-glass-skin`、`2026-10-17-dom-write-hardening`、`2026-10-17-scroll-degrade` —— 它们承载仍在用的验证脚本，且脚本用 `parents[2]` 定位仓库根（`tasks/<dir>/x.py` → 仓库根），移进 `_archive/` 会变成 `tasks/`，直接失效。这走的是 `tasks/README.md` 里「只归档纯记录目录，回填还在用的目录」那条路。
+- **路径引用**：35 个文件把 `tasks/<任务>` 改写为 `tasks/_archive/<任务>`（`AGENTS.md`、`docs/*`、`web/*`、`src/*`、`scripts/*`、`tests/*` 里全是注释与 docstring，无逻辑改动）。`tests/test_scripts.py` 里 `ARCHIVED_MIGRATE` 是 `Path` 拼接（不是字符串），自动改写漏了它、跑到 1 failed —— 已单独修正并复跑。
+- **验证**：`sh scripts/check-gates.sh` 908 → **60**；`sh scripts/check-gates.sh --staged` 通过；`pytest tests/ -q` 全绿（877 passed）。
+- **注意**：`tasks/_archive/` 全量自查会跳过，但 `--staged` 不跳；显式点名 `sh scripts/check-gates.sh tasks/_archive/<任务>` 照查。
