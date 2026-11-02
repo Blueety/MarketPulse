@@ -1024,7 +1024,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .fr-assets { grid-column: 1 / -1; }
 }
 
-/* ===== 事件时间线页（/timeline）—— 2026-09-18（任务档 tasks/2026-09-18-event-timeline-page）=====
+/* ===== 事件时间线页（/timeline）—— 2026-09-18（任务档 tasks/_archive/2026-09-18-event-timeline-page）=====
    与宏观页同一"纸面感"取向：极浅背景 / 1px 细边框 / 低饱和。
    ⚠️ 只加 `.tl-*` 新类，**不改 `.mac-*` / `.cn-*`**（那两段被 /macro 与 /macro/cn 共享）。
    ⚠️ 颜色一律走 token（双主题自动跟随）；**不给事件染红绿** —— 红绿只用于"涨跌"这一类数字，
@@ -1113,7 +1113,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   border: 1px solid var(--border); border-radius: 8px; }
 .tl-more:hover { color: var(--text-primary); border-color: var(--text-muted); }
 
-/* ===== 阈值回测页（/backtest）—— 2026-09-20（任务档 tasks/2026-09-20-backtest-ui）=====
+/* ===== 阈值回测页（/backtest）—— 2026-09-20（任务档 tasks/_archive/2026-09-20-backtest-ui）=====
    与宏观页 / 时间线页同一"纸面感"取向：极浅背景 / 1px 细边框 / 低饱和。
    ⚠️ 只加 `.bt-*` 新类，**不改 `.mac-*` / `.cn-*` / `.tl-*` / `.dash-*` 任何既有声明**。
    ⚠️ 颜色一律走 token（双主题自动跟随）。
@@ -1199,7 +1199,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .bt-sub, .bt-cfg-line { font-size: 11px; }
 }
 
-/* ===== 设置页（/settings）—— 2026-09-20（任务档 tasks/2026-09-20-settings-page）=====
+/* ===== 设置页（/settings）—— 2026-09-20（任务档 tasks/_archive/2026-09-20-settings-page）=====
    ⚠️ 只加 `.st-*` 新类，不改任何既有声明。颜色一律走 token（双主题自动跟随）。
    ⚠️ 本页无涨跌数字 ⇒ **不使用 .up/.down 红绿**（口径与边界里也不做涨跌语义）。 */
 .st { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
@@ -1250,7 +1250,7 @@ body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
   .st-row .st-input { max-width: none; }
 }
 
-/* 组合盈亏（2026-09-20，tasks/2026-09-20-portfolio-pnl）：自选表第 6 列 + 卡头概览。
+/* 组合盈亏（2026-09-20，tasks/_archive/2026-09-20-portfolio-pnl）：自选表第 6 列 + 卡头概览。
    ⚠️ 只新增类，不改任何既有声明；颜色沿用本页既有 pos/neg（全站涨跌口径）。 */
 .watchlist-table .col-pnl { white-space: nowrap; }
 .watchlist-table td.pnl { font-variant-numeric: tabular-nums; }

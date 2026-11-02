@@ -235,7 +235,7 @@ def test_root_passed_as_cwd(monkeypatch, fake_git, tmp_path):
 
 # ---- 三十四期（2026-09-14）：自动提交范围收窄为路径白名单 ----
 # G1 内核：任何 cron 都不得把源码/测试/文档的半成品提交入库（原 `git add -A` 会扫走）。
-# 真实 git 行为证明见 tasks/2026-09-14-autopush-scope/plan.md §5.3 临时仓库冒烟。
+# 真实 git 行为证明见 tasks/_archive/2026-09-14-autopush-scope/plan.md §5.3 临时仓库冒烟。
 
 def test_add_uses_path_whitelist(monkeypatch, fake_git, tmp_path):
     """add 必须按白名单逐路径，且**全程不得出现 `-A` / `--all` / `.`**（本方案核心护栏）。"""
@@ -320,7 +320,7 @@ def test_ignored_only_change_skips(monkeypatch, fake_git, tmp_path):
 # 背景（2026-09-20 事故）：`git commit`（**不带 pathspec**）提交的是**整个暂存区**，
 # 而不是"刚 `git add` 的那些"。`git add <白名单>` 只能**添加**、无法**排除** index 里已有的内容
 # ⇒ 别处 `git rm` / `git mv` 造成的**已暂存删除/重命名**会被无差别带走。实测复现见
-# tasks/2026-09-20-autopush-pathspec-fix/plan.md §2.2。
+# tasks/_archive/2026-09-20-autopush-pathspec-fix/plan.md §2.2。
 
 def _real_git(root, *args) -> str:
     """在临时仓库里跑真 git（仅本组用例使用；夹具的初始提交才用 `-A`）。"""

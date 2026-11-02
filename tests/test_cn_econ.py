@@ -1,6 +1,6 @@
 """中国宏观（src/cn_econ_fetcher.py）单测 —— **不联网**，全部用 mock DataFrame / mock akshare。
 
-对照 `tasks/2026-09-14-cn-macro-page/plan.md` §Step 10 的 12 条用例。重点钉住三个纠正性
+对照 `tasks/_archive/2026-09-14-cn-macro-page/plan.md` §Step 10 的 12 条用例。重点钉住三个纠正性
 结论（C1 房价仅 2 城 / C2 增长轴取 PMI 水平 / 排序口径不统一）与「部分失败仍缓存」的
 端点语义 —— 这些是最容易被后人"顺手改坏"且**改坏后不报错**的地方。
 """

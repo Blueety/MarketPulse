@@ -119,7 +119,7 @@ class _RevalidateStatic(StaticFiles):
 app.mount("/static", _RevalidateStatic(directory=str(STATIC_DIR)), name="static")
 
 # ------------------------------------------------------------------ 访问控制（HTTP Basic Auth，2026-09-19）
-# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A）。零新依赖（stdlib `base64` + `hmac`）、
+# 任务档 tasks/_archive/2026-09-19-web-basic-auth/（方案 A）。零新依赖（stdlib `base64` + `hmac`）、
 # 零前端改动：Basic Auth 是**唯一**浏览器原生支持、且能一次性覆盖「页面导航 + 静态资源 + XHR」
 # 三类请求的方案 —— header 型 Token 在 `<a href="/macro">` 跳转时会直接失败。
 #
@@ -1103,7 +1103,7 @@ def api_news() -> dict:
     return _load_news()
 
 
-# ---- 事件时间线（2026-09-18，任务档 tasks/2026-09-18-event-timeline-page）----
+# ---- 事件时间线（2026-09-18，任务档 tasks/_archive/2026-09-18-event-timeline-page）----
 #
 # 数据来自 **db**（`econ_events` / `econ_event_news`，由 `scripts/sync_econ_calendar.py` 落盘）
 # + 既有 history 表 —— 本端点**不联网**，因此不会像 `/api/econ` 那样受上游抖动影响。

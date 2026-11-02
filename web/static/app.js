@@ -412,7 +412,7 @@ function makeAutoScroller(bodyId, itemSel) {
     // ★ 浮点累加位置。**绝不能写 `el.scrollTop += 增量`**：该容器 scrollTop 读回来是整数，
     // 当每帧增量 <1px（如 16px/s ÷ 60fps = 0.27px）时小数部分每帧都被取整抹掉 → 位置永远停在 0
     // （60fps 下看起来「完全不动」）；低帧率下则变成 1~2px 一格一跳（观感卡顿）。
-    // 实测证据见 tasks/2026-09-13-news-autoscroll/journal.md。
+    // 实测证据见 tasks/_archive/2026-09-13-news-autoscroll/journal.md。
     pos: 0,
   };
 

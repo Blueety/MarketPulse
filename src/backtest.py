@@ -1,6 +1,6 @@
 """回测纯统计逻辑（2026-09-20 从 `scripts/backtest.py` 搬迁；**唯一实现**）。
 
-任务档：`tasks/2026-09-20-backtest-ui/`
+任务档：`tasks/_archive/2026-09-20-backtest-ui/`
 
 **为什么搬到 `src/`**：回测结果现在要在看板上呈现（`GET /api/backtest`），而 `scripts/` 的定位是
 「独立入口脚本」（见 `AGENTS.md`）—— web 层不该 import 它。搬迁后 CLI（`scripts/backtest.py`）

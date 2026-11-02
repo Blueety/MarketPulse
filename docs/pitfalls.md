@@ -252,7 +252,7 @@
 - **BTC 的 Yahoo 日线含周末（7×24），不能作为「交易日」依据**：`BTC-USD` 近 1y 返回 **366 个自然日** bar（比 `^GSPC` 的 252 个交易日多 114 个）。直接用会写出 ~110 个「只有 `btc` 有值」的纯周末行 → 超出 `HISTORY_MAX` 被裁、偏离既有行的交易日口径、切断 `compute_correlation` 的收益链、夸大 `scripts/backtest.py` 的样本计数。**修法**：某天若除 `NON_TRADING_CALENDAR_SYMBOLS = {BTC}` 之外无任何标的有值 → 判为非交易日、整行丢弃（`backfill_history.py::plan_fills`，实测丢弃 104 行）。
 - **history 的日期口径是「按符号所属市场时区」，不是统一美东**：`analyzer.get_market_date` 中 `a-share → SHANGHAI_TZ`、`us → EASTERN_TZ`。Yahoo timestamp 转日期时若统一用美东，A 股（上证 09:30 北京 = 前一日 21:30 ET）会整体**早一天**、与既有行错位/重复。**抽查金标准**（回填后逐条核对）：`2025-12-25` 只有 `sh/sz/btc` 有值（美股圣诞休市）、`2026-01-02` 只有美股类有值（中国元旦假期延续）、`2026-02-17` 只有美股类有值（春节）、`2026-01-01` 整行不存在（中美双休，仅 BTC 有 bar 被丢弃）。
 - **既有行的 `None` 有真实语义，回填不得"补全"**：实测 90 行里 `vix 85/90`、`gld 83/90` 非空——空值本身就是休市/未收盘的记录（`2026-05-25` 美股键全空 = 阵亡将士纪念日；`2026-09-11` 的 `vix/gld/btc` 空 = 美股未收盘）。用 Yahoo 历史 bar 去填空会造出"休市日却有 VIX 值"的假数据。**回填只新增 date 不存在的行**（`backfill_history.py` 默认行为，并报告刻意跳过的键数）。
-- **~~`seed_history.py` 保留但勿再使用~~（2026-09-24 已删除）**：它曾因 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`（消费方按**大写 symbol** 取值 ⇒ 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全失效）、`append_history` 整行覆盖抹掉既有行非空值，被 `AGENTS.md` 标为「勿再使用」。**QA 缺陷轮 D-2 已把 `seed_history.py` / `seed_history_market.py` 从仓库根删除**（源码留档在 `tasks/2026-09-24-qa-bughunt/legacy/` 之外的 git 历史里，`legacy/README.md` 记录退役原因）。**为什么删而不是留**：仓库里同时存在"文档说危险"与"可一键执行"的脚本 = 一把上了膛的枪。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。
+- **~~`seed_history.py` 保留但勿再使用~~（2026-09-24 已删除）**：它曾因 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`（消费方按**大写 symbol** 取值 ⇒ 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全失效）、`append_history` 整行覆盖抹掉既有行非空值，被 `AGENTS.md` 标为「勿再使用」。**QA 缺陷轮 D-2 已把 `seed_history.py` / `seed_history_market.py` 从仓库根删除**（源码留档在 `tasks/_archive/2026-09-24-qa-bughunt/legacy/` 之外的 git 历史里，`legacy/README.md` 记录退役原因）。**为什么删而不是留**：仓库里同时存在"文档说危险"与"可一键执行"的脚本 = 一把上了膛的枪。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。
 - **CYB（`399006.SZ`）Yahoo 1y 覆盖缺口 → 改走 AkShare 补齐（已落地）**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 回填段 CYB 全空（`cyb 86/259`）。属**外部数据源缺口**（非本地 bug）。修法：A 股标的 Yahoo 返回 < `AKSHARE_FALLBACK_MIN=30` 天时改走 `ak.stock_zh_index_daily`。**四条纪律**：① 新浪源无 timeout → 必须 daemon 线程 + `join(AKSHARE_TIMEOUT=15s)`（复用 `fetch_sector_heat` 范式）；② AkShare 返回**全历史**（2010 起，3956 行）→ 窗口须按 Yahoo 序列最早日期裁剪，且**基准必须排除 7×24 标的**（BTC 的自然日会把窗口提前一天，造出「SH/SZ 为空但 CYB 有值」的错位首行）；③ ticker 换算 `000001.SS → sh000001`、`399006.SZ → sz399006`；④ 单标的失败不回退成 0 行（保留 Yahoo 结果并打印）。补齐后 `cyb 243/259` == `sh 243/259` == `sz 243/259`。**口径交叉验证**：AkShare 对 `2026-09-09/10/11` 的 CYB 收盘 `3354.969 / 3338.422 / 3322.039` 与既有 history 行**逐值相同**，可作正确性判据。
 - **补写既有行空缺的安全边界（仅限 AkShare 权威补数）**：通用回填**只新增 date 不存在的行**（既有 `None` 有休市/未收盘语义）；唯一例外是 AkShare 补的 A 股键，判据三条同时成立才写：① 该键当前为 `None`、② 该行有 `sh`/`sz` 同类非空（证明是 A 股交易日）、③ 只经 `merge_history` 写（只更新非 None 键、不整行覆盖、不新增日期行）。`--no-patch-existing` 可关闭。实测 157 个键补写：**非 cyb 键改动 0、非法覆盖 0、缺同类行的 0、`last_values.json` SHA256 未变**。
 - **回填后必须核对「既有行零改动」与「`last_values.json` 未被动」**：用回填前备份逐键比对（`r.get(k) is not None and a.get(k) != r[k]` → 应为 0 条），并对 `last_values.json` 取 SHA256 前后比对。仅看"行数变多/无报错"不足以证明回填安全。
@@ -320,7 +320,7 @@
 - **背景层数断言用 `>=N` 测不出新增层**：加纹理后 `bodyLayers 4 >= 2` 恒过，纹理漏加/放错层照样全绿（假绿）。新增层必须同时断言三件事：层数 `== N`、第一段（最上层）内容匹配（`/repeating-linear-gradient/`，专防放错层）、alpha 区间；且先跑红（改 CSS 前新断言必须 FAIL）证明断言在测东西。多主题页面注意：light 未同步时新断言要按主题门控（`assert_glass` 里 `if theme == "dark"`），否则 light 档假失败。
 - **任一 `--ambient-*` 变量置 `none` 会让背景全丢**：`background-image: <层>, none` 是非法值（`none` 不能作为多层背景列表中的一层）→ **整条声明被丢弃**，页面变纯色，不是只丢那一层；与 R21「CSS 变量未定义使整条声明 invalid」同属一类失效模式。要去掉某层就从列表里**删除**它。
 - **verify_ui 基线假阴性：Clash 注册表系统代理劫持 localhost 探测**：`wait_ready` 的 `urllib.request.urlopen` 在无代理 env 时仍读 Windows 注册表代理（`getproxies()` → Clash `127.0.0.1:7890`），Clash 对 localhost 转发瞬时异常 → 40s 内探不到 uvicorn，报「服务未就绪」EXIT=1，与页面无关（本次基线首跑即中招，复跑即绿）。应对：复跑；要根治就在探测处改用 `build_opener(urllib.request.ProxyHandler({}))`。另：`probe_texture.py` 是**自注入式标定工具**（`add_style_tag` 覆盖 `--ambient-*`、光斑用旧位置），只能标定参数、**不能验证已落地的生产 CSS**——验生产页面须另写不注入样式的测量脚本（本次落在 `%TEMP%`，不进仓库）。
-- **细纹理最终被用户目视否决（2026-09-12 收尾）**：alpha `.05→.04→.03` 两轮调淡仍「丑」→ 用户指令「只要把纹理去掉，其他不要改」→ **最终态 = 方案 H 三层光斑保留 + 纹理层移除**（dark 档 `--ambient-1`=首层光斑、`--ambient-2`=余下两层；verify_ui.py 回退基线版）。教训：①标定数据只保证「可辨」（.05≈峰谷差12、.022 不可见），不保证「好看」——观感取舍只能由用户看真页面定，逐档调淡救不了「样式本身不喜欢」；②用户「去掉 X」类指令要确认作用范围（本次「整体回退」一度连光斑也带回旧版，被用户纠正）。若重提细纹：工具/数据在 `tasks/2026-09-11-glassmorphism-fix/`，先红后绿断言范式在 `git show 2b012d4`。
+- **细纹理最终被用户目视否决（2026-09-12 收尾）**：alpha `.05→.04→.03` 两轮调淡仍「丑」→ 用户指令「只要把纹理去掉，其他不要改」→ **最终态 = 方案 H 三层光斑保留 + 纹理层移除**（dark 档 `--ambient-1`=首层光斑、`--ambient-2`=余下两层；verify_ui.py 回退基线版）。教训：①标定数据只保证「可辨」（.05≈峰谷差12、.022 不可见），不保证「好看」——观感取舍只能由用户看真页面定，逐档调淡救不了「样式本身不喜欢」；②用户「去掉 X」类指令要确认作用范围（本次「整体回退」一度连光斑也带回旧版，被用户纠正）。若重提细纹：工具/数据在 `tasks/_archive/2026-09-11-glassmorphism-fix/`，先红后绿断言范式在 `git show 2b012d4`。
 
 ## 模块 web/（图表悬停参考线 2026-09-12）
 
@@ -830,7 +830,7 @@
 
 ## 通用（QA 缺陷轮 F1 家族：容错边界，2026-09-24）
 
-`tasks/2026-09-24-qa-bughunt/`（16 条缺陷，5 条致命/严重）里有**一族**是同一个模式：
+`tasks/_archive/2026-09-24-qa-bughunt/`（16 条缺陷，5 条致命/严重）里有**一族**是同一个模式：
 **该宽的地方过宽、该窄的地方过窄**。修法原则（改容错代码前先对号入座）：
 
 1. **破坏性恢复只对"可证明不可恢复"的错误开放**。`sqlite3.OperationalError`（"database is locked"）
@@ -889,8 +889,8 @@
   `uvicorn web.app:app`、`pytest tests/`、`verify_ui.py` **全绿**——因为本地敲的是
   `web.app:app`，而**线上生效的命令是 `uvicorn app:app`**（落点 = 仓库根那个 3 行转发文件）。
 - **根因**：QA 轮把它当"误放的实验文件"随 `_dbg/`、`seed_history*.py` 一起清进
-  `tasks/2026-09-24-qa-bughunt/legacy/`。`app.py` 的 docstring 明写「Railway 入口文件」，
-  且 `tasks/20260901-railway-deploy-fix/plan.md` 记录过 `railway.toml` 的 startCommand
+  `tasks/_archive/2026-09-24-qa-bughunt/legacy/`。`app.py` 的 docstring 明写「Railway 入口文件」，
+  且 `tasks/_archive/20260901-railway-deploy-fix/plan.md` 记录过 `railway.toml` 的 startCommand
   **曾是** `uvicorn app:app` ⇒ 那是活的部署基础设施。
 - **🔧 定位手法（无需登录 Railway，可直接照搬）**：Railway 会把部署结果回写成
   **GitHub commit status**，公开仓库免鉴权可读 ⇒ 逐提交查询即可画出"哪一次提交开始失败"：

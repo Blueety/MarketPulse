@@ -1,6 +1,6 @@
 """RSS 宏观新闻抓取测试（三十四期）：解析 / HTML 清洗 / 来源剥离 / 白名单 / 去重 / 降级。
 
-对应 plan `tasks/2026-09-13-rss-macro-news/plan.md` R-6。
+对应 plan `tasks/_archive/2026-09-13-rss-macro-news/plan.md` R-6。
 **全部用 XML 夹具 + monkeypatch，不联网**（`fetch_rss` 的 XML 解析用假 requests.Response；
 合并逻辑直接替换 `fetch_rss`）。
 """

@@ -1,4 +1,4 @@
-/* 事件时间线页（/timeline）逻辑 —— 2026-09-18（任务档 tasks/2026-09-18-event-timeline-page）。
+/* 事件时间线页（/timeline）逻辑 —— 2026-09-18（任务档 tasks/_archive/2026-09-18-event-timeline-page）。
  *
  * 数据源（只读，零落盘）：
  *   /api/timeline?days=&future_days=  → { as_of, window, stats, sources, past[], upcoming[] }

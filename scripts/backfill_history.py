@@ -1,7 +1,7 @@
 """历史数据回填（Step 10）：把 `data/history.json` 补齐到近 1 年，供看板 1Y 视图使用。
 
 与早期一次性脚本 `seed_history.py` 的差异（⚠️ 后者已按 D-2 **删除**，见
-`tasks/2026-09-24-qa-bughunt/legacy/`；此处保留差异说明以解释"为什么当初要另写一个"）：
+`tasks/_archive/2026-09-24-qa-bughunt/legacy/`；此处保留差异说明以解释"为什么当初要另写一个"）：
 
 1. **走 `fetcher._yahoo_chart_get`**：query1/query2 双主机轮换，规避主机级 403/429
    （`docs/pitfalls.md`「Yahoo chart 需 query1/query2 双主机轮换」）。

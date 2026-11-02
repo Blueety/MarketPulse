@@ -1,7 +1,7 @@
 """经济事件日历落盘（P1 + P3 叙事层 + 结果值层）。
 
-任务档：`tasks/2026-09-18-event-timeline-page/`（plan §6.3）、
-`tasks/2026-09-19-timeline-event-values/`（plan 定稿，值层）。
+任务档：`tasks/_archive/2026-09-18-event-timeline-page/`（plan §6.3）、
+`tasks/_archive/2026-09-19-timeline-event-values/`（plan 定稿，值层）。
 
 ```bash
 python -m scripts.sync_econ_calendar                       # 抓两源 + 落盘 + 抓近期叙事层 + 结果值层 + **自动 commit/push**

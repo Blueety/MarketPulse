@@ -1,6 +1,6 @@
 # Task Handoff：波动率监控系统 MVP
 
-> 复制到 `tasks/2026-08-29-marketpulse/prd.md`，然后交给本地 Agent。
+> 复制到 `tasks/_archive/2026-08-29-marketpulse/prd.md`，然后交给本地 Agent。
 
 
 ## Goal

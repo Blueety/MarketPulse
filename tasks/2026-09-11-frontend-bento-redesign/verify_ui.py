@@ -1081,7 +1081,7 @@ def assert_fidelity(page, m: dict) -> None:
     # F-5 nav=12 项：7 个页内锚点 + 4 个**跨页链接**（/macro 全球 + /macro/cn 中国 + /timeline 市场日历
     #     + /backtest 阈值回测）+ 1 个占位（设置）。
     # ⚠️ 2026-09-19：`/timeline` 这一项**接手了 2026-09-12 起空着的同名占位项「市场日历」**
-    #    （原占位来历见 tasks/2026-09-12-visual-fidelity/plan.md §12 Q1）⇒ 占位删除、位置原地保留，
+    #    （原占位来历见 tasks/_archive/2026-09-12-visual-fidelity/plan.md §12 Q1）⇒ 占位删除、位置原地保留，
     #    navCount 12 → 11、navDisabled 2 → 1。**内部命名仍是 timeline**（路由/JS/断言前缀都不变）。
     # ⚠️ 2026-09-20：新增「阈值回测」（`/backtest`）⇒ navCount 11 → **12**、跨页链接 3 → **4**。
     #    🔴 **本断言有两处硬编码**：`navCount` 的值 **和** `macroHrefs` 的数组 —— 加 nav 项时**两处都要改**
@@ -2892,7 +2892,7 @@ NA_ASSET_CASES = [
 
 
 # ==================== QM 四象限矩阵（2026-09-18）====================
-# 任务档 tasks/2026-09-18-macro-quadrant-matrix。数据只有两个二元离散量
+# 任务档 tasks/_archive/2026-09-18-macro-quadrant-matrix。数据只有两个二元离散量
 # （inflation_axis / growth_axis）⇒ 2x2 矩阵 + 当前格高亮，位置本身就是信息。
 # 排列固定为教材口径（横轴通胀 左低右高 / 纵轴增长 上高下低），**渲染顺序 = 视觉顺序**：
 #   cells[0]=左上 复苏(goldilocks) / cells[1]=右上 再通胀(reflation)
@@ -3470,7 +3470,7 @@ def assert_macro_states(browser, url: str) -> None:
             ctx.close()
 
 
-# —— UX 前端体验走查整改（2026-09-17，任务档 tasks/2026-09-17-frontend-ux-audit-fixes）——
+# —— UX 前端体验走查整改（2026-09-17，任务档 tasks/_archive/2026-09-17-frontend-ux-audit-fixes）——
 # F1 浅色对比度 / F2 刷新反馈 + 首页失败条 / F3 主题初始化同源 / F4 抽屉滚动锁定 + 焦点管理
 # ⚠️ 判读必须以完成标记为准（本组的探针会打印 UX-COMPLETE；中途崩溃 = 结果无效）。
 
@@ -3709,7 +3709,7 @@ def assert_home_ux(browser, url: str) -> None:
 
 
 
-# —— PW 产线走查整改（2026-09-17，任务档 tasks/2026-09-17-production-walkthrough-fixes）——
+# —— PW 产线走查整改（2026-09-17，任务档 tasks/_archive/2026-09-17-production-walkthrough-fixes）——
 # G1 告警卡时间锚点 / G2 相关性空态文案 / G3 自选表头语义 / G4 趋势卡 loading-empty-failed 三态
 
 PW_ALERT_FIXTURE = [{
@@ -3893,7 +3893,7 @@ def assert_walkthrough(browser, url: str) -> None:
 
 
 # ============ TL 市场日历（/timeline，内部名 timeline / 事件时间线，2026-09-18）============
-# 任务档 tasks/2026-09-18-event-timeline-page（plan v3 定稿）。
+# 任务档 tasks/_archive/2026-09-18-event-timeline-page（plan v3 定稿）。
 # 页面 = 官方发布日历（骨架）× 行情（影响）× 新闻（叙事）；事件与行情**并列展示**、不构成因果。
 TL_KINDS = ("FOMC", "非农", "CPI", "PPI", "GDP", "PCE", "零售", "工业产出", "其他")
 # ⚠️ 上面这份枚举是**刻意第二份**（与 src/econ_calendar.KINDS 同源）：枚举本身由
@@ -4111,7 +4111,7 @@ def assert_timeline(browser, url: str) -> None:
 
 
 # ============ EV 结果值层（/timeline 的 实际/预期/前值，2026-09-19）============
-# 任务档 tasks/2026-09-19-timeline-event-values（plan 定稿，方案 A「骨架不动 + 值层 join」）。
+# 任务档 tasks/_archive/2026-09-19-timeline-event-values（plan 定稿，方案 A「骨架不动 + 值层 join」）。
 #
 # ⚠️ 断言分层（plan §7.2 把两层的判据写在一起了，实测只能这样落地）：
 #    本组（浏览器侧）只能验**页面能看见的**：键透传、三方计数、真实数据、无 0/None 混淆、
@@ -4161,7 +4161,7 @@ def _ev_mk_route(payload):
 
 
 # ============ AUTH 访问控制（HTTP Basic Auth，2026-09-19）============
-# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A）。
+# 任务档 tasks/_archive/2026-09-19-web-basic-auth/（方案 A）。
 #
 # ⚠️ 分层：**本组另起一个带鉴权的服务实例**跑（D-4b），不去动 `main()` 起的那台 ——
 #    `main()` 在起服前已注入 `MP_AUTH_DISABLED=1`（D-4a）⇒ 既有 700+ 条断言零改动、零新增失败，
@@ -5277,7 +5277,7 @@ def main() -> int:
 
 
 # ============ BT 阈值回测页（/backtest，2026-09-20）============
-# 任务档 tasks/2026-09-20-backtest-ui/。本页**不依赖上游**（只读本地 db）⇒ 断言一律 deps=()
+# 任务档 tasks/_archive/2026-09-20-backtest-ui/。本页**不依赖上游**（只读本地 db）⇒ 断言一律 deps=()
 # ⇒ **不该出现 SKIP**（出现即说明依赖标记或探测有问题）。
 
 BT_JS = r"""
@@ -5372,8 +5372,8 @@ def assert_backtest(browser, url: str) -> None:
 
 
 # ============ ST 设置页（/settings，2026-09-20）============
-# 任务档 tasks/2026-09-20-settings-page/。**只读断言**：写路径（POST）由
-# tests/test_web.py（4 条契约）+ tasks/2026-09-20-settings-page/journal.md 的人工闭环脚本覆盖；
+# 任务档 tasks/_archive/2026-09-20-settings-page/。**只读断言**：写路径（POST）由
+# tests/test_web.py（4 条契约）+ tasks/_archive/2026-09-20-settings-page/journal.md 的人工闭环脚本覆盖；
 # 验收脚本**绝不 POST 真实 config.json**。
 
 ST_JS = r"""
@@ -5438,7 +5438,7 @@ def assert_settings(browser, url: str) -> None:
 
 
 # ============ PF 组合盈亏（自选列表，2026-09-20）============
-# 任务档 tasks/2026-09-20-portfolio-pnl/。**只读断言**：不为验收伪造成本价
+# 任务档 tasks/_archive/2026-09-20-portfolio-pnl/。**只读断言**：不为验收伪造成本价
 # （真实 config 里没录 cost 时，页面必须显示"未录成本价"的空态）。
 
 PF_JS = r"""

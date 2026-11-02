@@ -1,4 +1,4 @@
-/* 阈值回测页（/backtest）逻辑 —— 2026-09-20（任务档 tasks/2026-09-20-backtest-ui/）。
+/* 阈值回测页（/backtest）逻辑 —— 2026-09-20（任务档 tasks/_archive/2026-09-20-backtest-ui/）。
  *
  * 数据源（只读，零落盘）：`/api/backtest`
  *   → { as_of, window{start,end}, stats{rows,effective_trading_days,triggers}, elapsed_ms,

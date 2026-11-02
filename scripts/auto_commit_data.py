@@ -1,6 +1,6 @@
 """数据目录自动提交推送（script 模式 cron 的入口，2026-09-20）。
 
-任务档：`tasks/2026-09-20-autopush-pathspec-fix/`（方案 A）。
+任务档：`tasks/_archive/2026-09-20-autopush-pathspec-fix/`（方案 A）。
 
 **为什么有它**：原来这条 cron 是 **prompt 模式** —— "只提交 data/context/alerts" 这条约束
 写在提示词里，靠 LLM 每次照做。2026-09-20 的实测教训是：约束写在 prompt 里**没有机器强制**

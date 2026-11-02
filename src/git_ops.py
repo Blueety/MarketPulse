@@ -4,11 +4,11 @@ daily_report / snapshot_report / opening_analyzer 三个入口在 main() 末尾�
 auto_commit_push(date, report_type)，将本次产生的 data/ / context/ / alerts/ 等变更
 add + commit + push 到 origin/master，确保 Railway 部署与最新数据同步。
 
-设计要点（见 tasks/2026-09-02-marketpulse-cron-autopush/plan.md §3）：
+设计要点（见 tasks/_archive/2026-09-02-marketpulse-cron-autopush/plan.md §3）：
 - 纯 stdlib（logging/os/subprocess/pathlib），零新依赖（NF1）。
 - **提交范围 = 路径白名单 `_DATA_PATHS`（data / context / alerts），禁止 `-A` / `--all` / `.`**：
   `git add -A` 会扫走工作区里正在写的源码/测试/文档半成品（2026-09-14 实测被外部 cron 多次
-  扫走，见 tasks/2026-09-14-autopush-scope/plan.md §3.2）。`_commit` 与 `_has_changes` 必须
+  扫走，见 tasks/_archive/2026-09-14-autopush-scope/plan.md §3.2）。`_commit` 与 `_has_changes` 必须
   **同范围** —— 只收窄 add 不收窄 status，会让"仅源码 WIP"时日志误报 `Failed`、返回值语义错标。
 - 开关：env AUTO_PUSH == "0" 时完全跳过，返回 False 且零子进程（默认开启）。
 - 无改动（`git status --porcelain -- <白名单>` 为空）跳过，幂等（NF3）。

@@ -113,7 +113,7 @@
 
 ### 3.5 `timeline.html`（`/timeline`）—— 市场日历（2026-09-18 上线；2026-09-19 接手同名占位项）
 
-> 「市场日历」这个名字与位置**继承自 2026-09-12 效果图遗留的占位项**（来历见 `tasks/2026-09-12-visual-fidelity/plan.md` §12 Q1）。**内部命名一律保持 `timeline`**：路由 `/timeline`、`timeline.js`、`#tl-*` 类名、`TL-*` 断言、`econ_events` 表 —— 只有用户可见的名字是「市场日历」。
+> 「市场日历」这个名字与位置**继承自 2026-09-12 效果图遗留的占位项**（来历见 `tasks/_archive/2026-09-12-visual-fidelity/plan.md` §12 Q1）。**内部命名一律保持 `timeline`**：路由 `/timeline`、`timeline.js`、`#tl-*` 类名、`TL-*` 断言、`econ_events` 表 —— 只有用户可见的名字是「市场日历」。
 
 | 区块 | id | 内容 | 数据源 |
 | --- | --- | --- | --- |
@@ -267,7 +267,7 @@
 1. **主题初始化 4 处同源**：`index.html` head 内联脚本、`macro.html` head 内联脚本、`macro_cn.html` head 内联脚本、各 JS 的 `applyTheme()`。三页内联脚本语义**不一致**：`index.html` 只在值为 `light` 时写属性，两个宏观页是「显式应用任意存储值」。改一处必须四处同改。
 2. **`chart-crosshair.js` 必须在业务脚本之前**：顺序错 → `plugins:[undefined]` 被 Chart.js **静默忽略**（不报错、横线不出现）。
 3. **`_ASSET_FILES` 登记**（`app.py:115`）：新增/重命名静态文件必须加进去，否则改它不换 `?v=` → 验证吃到旧副本。
-4. **shell 行为六副本**（2026-09-20 起）：`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / `settings.js` 各有一份顶栏侧栏 shell 逻辑（主题、抽屉、市场状态、锚点、`__marketSession` 钩子），**刻意的复制**，**改必须六处同改**。⚠️ 第 5 份（`backtest.js`）、第 6 份（`settings.js`，2026-09-20 设置页）是 2026-09-20 阈值回测页新增的 —— 抽取共享 `shell.js` 已单独立项（本轮不抽，见 `tasks/2026-09-20-backtest-ui/plan.md` §10 D-3）。
+4. **shell 行为六副本**（2026-09-20 起）：`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / `settings.js` 各有一份顶栏侧栏 shell 逻辑（主题、抽屉、市场状态、锚点、`__marketSession` 钩子），**刻意的复制**，**改必须六处同改**。⚠️ 第 5 份（`backtest.js`）、第 6 份（`settings.js`，2026-09-20 设置页）是 2026-09-20 阈值回测页新增的 —— 抽取共享 `shell.js` 已单独立项（本轮不抽，见 `tasks/_archive/2026-09-20-backtest-ui/plan.md` §10 D-3）。
 5. **canvas 位图 == 显示尺寸**：容器显式给高度 + `maintainAspectRatio:false` + **禁 `!important` 覆盖 canvas 尺寸**（DPR=2 时验收断言 `bitmapW == cssW×2 ± 1`）。
 6. **双 tab 的 radio 必须是 `.tab-panels` 的前置同级兄弟**，且**不能 `display:none`**（会让 label 点击与键盘焦点一起失效）。
 7. **骨架屏 `colspan` 必须等于实际列数**（板块表 5 列；自选表 5 列）——写少会错位。

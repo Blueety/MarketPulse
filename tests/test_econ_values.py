@@ -1,4 +1,4 @@
-"""事件结果值层单测（2026-09-19，任务档 tasks/2026-09-19-timeline-event-values）。
+"""事件结果值层单测（2026-09-19，任务档 tasks/_archive/2026-09-19-timeline-event-values）。
 
 **全程不联网**：值侧用固定 JSON fixture（形状抄自 2026-09-19 本机实测的真实响应）。
 

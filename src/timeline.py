@@ -1,6 +1,6 @@
 """时间线组装（2026-09-18）：经济事件 × 行情影响 × 新闻叙事 → `/api/timeline` 的 payload。
 
-任务档：`tasks/2026-09-18-event-timeline-page/`（plan v3 定稿）。
+任务档：`tasks/_archive/2026-09-18-event-timeline-page/`（plan v3 定稿）。
 
 **三层口径（plan §4.3 / §7）**：
 

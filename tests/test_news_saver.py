@@ -1,6 +1,6 @@
 """资讯落盘测试（三十四期）：一句话切分 / 尾部噪声 / 脚注清扫 / 条数上限 / 无结果不写盘。
 
-对应 plan `tasks/2026-09-12-news-macro-brief/plan.md` N-2（落盘层：切句 + 去噪声）。
+对应 plan `tasks/_archive/2026-09-12-news-macro-brief/plan.md` N-2（落盘层：切句 + 去噪声）。
 monkeypatch 落点：`src.news_saver` 自身的模块级路径常量（`save_news` 直接引用本模块名字，
 故打在定义方 `src.news_saver` 即生效）。
 """

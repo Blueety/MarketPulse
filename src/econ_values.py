@@ -1,6 +1,6 @@
 """事件结果值层（2026-09-19）：TradingView 经济日历 → `actual / forecast / previous`。
 
-任务档：`tasks/2026-09-19-timeline-event-values/`（plan 定稿，方案 A「骨架不动 + 值层 join」）。
+任务档：`tasks/_archive/2026-09-19-timeline-event-values/`（plan 定稿，方案 A「骨架不动 + 值层 join」）。
 
 **为什么需要这个模块**：`econ_events` 的骨架源（Fed 官方页 / 第三方镜像 `.ics`）都是**纯日程源**，
 源头就没有数值 ⇒ 取值只能引入带值的新源。本模块是**值侧**，骨架侧（`econ_calendar.py`）零改动。

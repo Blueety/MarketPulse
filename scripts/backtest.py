@@ -4,7 +4,7 @@
 复用生产同一套告警语义（src.analyzer.check_breach：严格大于阈值、env/config 实时阈值、
 缺口断开），回放历史触发事件并统计后效与有效触发率。无任何写回副作用。
 
-2026-09-20（`tasks/2026-09-20-backtest-ui/`）：**纯统计逻辑已搬到 `src/backtest.py`**，
+2026-09-20（`tasks/_archive/2026-09-20-backtest-ui/`）：**纯统计逻辑已搬到 `src/backtest.py`**，
 本文件只留「入口 + 呈现」——`render_report`（md）/ `print_summary`（终端）/ `main`（CLI）。
 搬迁理由：看板要呈现同一份回测结果（`GET /api/backtest`），而 web 层不该 import `scripts/`；
 这样 CLI 与 web **共用唯一实现**（避免同一算法两份实现）。

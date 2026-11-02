@@ -44,10 +44,10 @@ CREATE TABLE IF NOT EXISTS history (
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_date ON history(symbol, date);
 
--- 经济事件日历（2026-09-18，任务档 tasks/2026-09-18-event-timeline-page）
+-- 经济事件日历（2026-09-18，任务档 tasks/_archive/2026-09-18-event-timeline-page）
 -- 主键 (date, kind, source)：同一 `(日期, 类型)` 允许来自不同源（fed 官方 / 镜像），
 -- 页面上再按 (date, kind) 去重（官方优先）—— 库里保留两源便于对账与排障。
--- 末 8 列为**结果值层**（2026-09-19，任务档 tasks/2026-09-19-timeline-event-values）：
+-- 末 8 列为**结果值层**（2026-09-19，任务档 tasks/_archive/2026-09-19-timeline-event-values）：
 -- 由 TradingView 经济日历 enrich 既有行（**只 UPDATE 不 INSERT**，见 update_econ_event_values）。
 -- ⚠️ `CREATE TABLE IF NOT EXISTS` 对**既有库不加列** ⇒ 既有库靠 `_migrate_econ_events` 的幂等
 --    `ALTER TABLE ADD COLUMN` 补（两处列清单必须同步，见 ECON_VALUE_COLS）。

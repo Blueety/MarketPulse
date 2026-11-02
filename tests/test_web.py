@@ -1647,7 +1647,7 @@ def test_cn_econ_ttl_is_hourly():
 
 
 # ---- 访问控制（HTTP Basic Auth，2026-09-19）----
-# 任务档 tasks/2026-09-19-web-basic-auth/（方案 A；D-1「未配置 → fail-open」已裁定）。
+# 任务档 tasks/_archive/2026-09-19-web-basic-auth/（方案 A；D-1「未配置 → fail-open」已裁定）。
 #
 # ⚠️ R9：鉴权是**现读 env**（`web.app.auth_enabled()`），不是 import 时定型的模块级常量
 #    ⇒ monkeypatch env 直接生效，**不需要** `importlib.reload`（reload 会污染其它用例）。
@@ -1792,7 +1792,7 @@ def test_auth_basic_prefix_is_case_insensitive(monkeypatch):
     assert c.get("/", headers={"Authorization": "basic " + raw}).status_code == 200
 
 
-# ---- 阈值回测（2026-09-20，tasks/2026-09-20-backtest-ui/）-----------------------------------
+# ---- 阈值回测（2026-09-20，tasks/_archive/2026-09-20-backtest-ui/）-----------------------------------
 # 统计逻辑在 src/backtest.py（与 CLI **同一份实现**）；web 只组装响应。故这里的断言只覆盖
 # **契约与降级**，算法正确性由 tests/test_backtest.py 负责。
 
@@ -1801,7 +1801,7 @@ def test_auth_basic_prefix_is_case_insensitive(monkeypatch):
 
 
 
-# ---- 阈值回测（2026-09-20，tasks/2026-09-20-backtest-ui/）-----------------------------------
+# ---- 阈值回测（2026-09-20，tasks/_archive/2026-09-20-backtest-ui/）-----------------------------------
 # 统计逻辑在 src/backtest.py（与 CLI **同一份实现**）；web 只组装响应。故这里的断言只覆盖
 # **契约与降级**，算法正确性由 tests/test_backtest.py 负责。
 
@@ -1877,7 +1877,7 @@ def test_backtest_page_renders():
     assert "backtest.js" in r.text
 
 
-# ---- 设置页（2026-09-20，tasks/2026-09-20-settings-page/）-----------------------------------
+# ---- 设置页（2026-09-20，tasks/_archive/2026-09-20-settings-page/）-----------------------------------
 # web 首次获得「有限写」（config.json 白名单键）。契约：恒 200 读 / 400 白名单外 / 403 Railway /
 # 保存成功必须 reload（否则告警与回测的 import 快照不动 = 功能骗人，plan R1）。
 
@@ -2017,7 +2017,7 @@ def test_settings_page_renders():
     assert "设置" in r.text and "settings.js" in r.text
 
 
-# ---- 组合盈亏（2026-09-20，tasks/2026-09-20-portfolio-pnl/）---------------------------------
+# ---- 组合盈亏（2026-09-20，tasks/_archive/2026-09-20-portfolio-pnl/）---------------------------------
 # 判据：有 cost ⇒ pnl_pct；(value 或 cost) 缺失 ⇒ **None**（绝不算 0）；概览 = 有成本标的等权平均。
 
 def _wl_payload(monkeypatch, stocks, values):

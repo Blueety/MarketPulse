@@ -130,7 +130,7 @@ def test_insufficient_data_exit(tmp_path, monkeypatch):
     assert not (tmp_path / "backtest_report.md").exists()
 
 
-# ---- 搬迁护栏（2026-09-20，tasks/2026-09-20-backtest-ui/）--------------------------------------
+# ---- 搬迁护栏（2026-09-20，tasks/_archive/2026-09-20-backtest-ui/）--------------------------------------
 # ⚠️ 上面 10 条用例**一个字都没改** —— 那是"搬迁零行为改动"最强的证据（改了就没意义了）。
 # 本组是**新增**护栏：把 plan §10.1 硬约束 3（"唯一实现"）从"评审时 grep"变成机器判据。
 

@@ -18,7 +18,7 @@
 | `venv/Scripts/python scripts/backfill_history.py [--dry-run] [--symbols SH,SZ] [--no-patch-existing]` | 历史数据回填（补 1Y）：走 `_yahoo_chart_get` 双主机轮换；**A 股 Yahoo 覆盖不足时改走 AkShare**（`399006.SZ` Yahoo 仅 1 天 → AkShare 243 天，daemon 线程 15s 限时）；按符号所属市场时区归档日期；**只新增 date 不存在的行**；丢弃「仅 BTC 有值」的非交易日；AkShare 补的 A 股键**只补既有行中为 `None` 的位置**（绝不覆盖非空值，`--no-patch-existing` 关闭）；经 `merge_history` 按 date 合并；收尾按 date 升序重排并断言；**不碰 `last_values.json`**。`--dry-run` 只打印计划不写盘。**执行前必须先备份 `data/history.json`**；前置：`history.retention_days=365` | 需要补齐 1Y 历史 / 改了回填逻辑后 |
 | `venv/Scripts/python scripts/backtest.py [--history PATH]` | 运行独立回测脚本（验证告警阈值有效性）：复用生产 `check_breach` 语义回放 `data/history.json`，输出各标的告警次数 / 年化频率 / WARN-ALERT 分布 / 1·3·5·10 日平均后效 / 胜率 / 有效触发率，生成 `reports/backtest_report.md`；`--history` 指定只读历史文件（用于数据不足验证）；全程 <5s、不联网、零副作用 | 改了 `scripts/backtest.py` / 阈值逻辑后回归 |
 | `curl http://localhost:<port>/api/news` | 最新资讯端点（`data/news.json` 只读；缺失/坏文件 → 200 空结构） | 改 `web/app.py` 资讯链路 / Hermes 接入后 |
-| ⚠️ `scripts/migrate_to_sqlite.py` —— **已归档，勿再执行**（BUG-005） | 三十一期迁移**已完成**，脚本已移档到 `tasks/2026-09-24-qa-bughunt/legacy/migrate_to_sqlite.py`（留下一段说明与守卫，`main()` 无条件拒绝运行并退出码 1）。它**没有 `--dry-run`**：任何调用都会 `DELETE FROM history` 后从旧 `data/history.json`（末行 2026-09-11）全量重灌 ⇒ 裸跑会把生产库 272 个日期塌回旧快照。故**不再提供命令** | —（禁止执行） |
+| ⚠️ `scripts/migrate_to_sqlite.py` —— **已归档，勿再执行**（BUG-005） | 三十一期迁移**已完成**，脚本已移档到 `tasks/_archive/2026-09-24-qa-bughunt/legacy/migrate_to_sqlite.py`（留下一段说明与守卫，`main()` 无条件拒绝运行并退出码 1）。它**没有 `--dry-run`**：任何调用都会 `DELETE FROM history` 后从旧 `data/history.json`（末行 2026-09-11）全量重灌 ⇒ 裸跑会把生产库 272 个日期塌回旧快照。故**不再提供命令** | —（禁止执行） |
 | `venv/Scripts/python scripts/backup_db.py [--db] [--backup-dir]` | 按月导出 history 备份（当月覆盖/历史月冻结） | daily 后自动执行；手动补备份 |
 | `venv/Scripts/python scripts/render_report_image.py --date YYYY-MM-DD` | 独立重渲染日报图片（Hermes 追加 AI 解读后重渲染含解读图）；依赖 imgkit + 本地 wkhtmltoimage（先 `pip install -r requirements.txt` 装 imgkit，再 winget 装 wkhtmltopdf）；失败仅退出码非 0，不影响日报 md | 改了 `src/image_renderer.py` / 模板 / 重渲染入口后 |
 | `venv/Scripts/python -m pytest tests/test_phase26.py -v` | 自动提交（`src/git_ops.py`）行为单测（**16 条**）：env 门控 / 无改动跳过 / commit message 格式 / 代理注入不污染 env / 失败不抛异常 / **路径白名单实参 + status 同范围 + 源码 WIP 不触发提交 + `reports` 不入列 + 忽略文件不触发** | 改了 `src/git_ops.py` 后 |
@@ -53,7 +53,7 @@
 | `venv/Scripts/python -m pytest tests/ -v` | 完整测试套件 | 全绿（未跑的要在 journal 里标注原因） |
 | `git diff` | 改动范围 | 与计划里的「预估 diff 范围」一致 |
 
-⚠️ 本项目有 auto-push 白名单（`data/` `context/` `alerts/`，见 `AGENTS.md`）：**临时文件一旦落进这三个目录就会被自动推上线上**，清理必须在提交前做完（旧账见 `tasks/2026-09-24-qa-bughunt/journal.md`）。
+⚠️ 本项目有 auto-push 白名单（`data/` `context/` `alerts/`，见 `AGENTS.md`）：**临时文件一旦落进这三个目录就会被自动推上线上**，清理必须在提交前做完（旧账见 `tasks/_archive/2026-09-24-qa-bughunt/journal.md`）。
 
 ## UI 变更怎么验
 
@@ -82,7 +82,7 @@
 | 错误处理/离线容错 | 主脚本（断网场景） |
 | 日报图片化（`src/image_renderer.py` / 模板 / 重渲染入口） | 跑 `scripts/render_report_image.py --date` 验证 PNG 生成（宽 600、≤800KB、含解读章节）、相关单测 `tests/test_phase14.py` |
 | 中国宏观页 `/macro/cn`（2026-09-14） | `scripts/probe_cn_macro.py`（数据源回归，退出码非 0 即停更）+ `pytest tests/test_cn_econ.py` + `pytest tests/test_web.py`（新增 6 条）+ `curl` 两个新端点（含空态）+ **`verify_ui.py`（新增 `assert_macro_cn_page` 与 F-5 补强，改了模板/静态/侧栏必跑）** |
-| 事件日历同步 cron（2026-09-19 交接，**待接入**） | 每天一次 `venv\Scripts\python -m scripts.sync_econ_calendar`（落盘后自动 commit+push，消息 `auto: {date} econ-calendar`）。判据：stdout 的 `[1/3]` 事件条数、`[values]` 值层命中数、`[news]` 写入条数、`[git] 自动提交推送` 四行；退出码 0/1/2 分别=正常/有源失败/两源全失败。`--skip-values` 可只跳过结果值层。提示词全文见 `tasks/2026-09-18-event-timeline-page/journal.md` §14.4 |
+| 事件日历同步 cron（2026-09-19 交接，**待接入**） | 每天一次 `venv\Scripts\python -m scripts.sync_econ_calendar`（落盘后自动 commit+push，消息 `auto: {date} econ-calendar`）。判据：stdout 的 `[1/3]` 事件条数、`[values]` 值层命中数、`[news]` 写入条数、`[git] 自动提交推送` 四行；退出码 0/1/2 分别=正常/有源失败/两源全失败。`--skip-values` 可只跳过结果值层。提示词全文见 `tasks/_archive/2026-09-18-event-timeline-page/journal.md` §14.4 |
 | 事件结果值层（2026-09-19） | ① 单测 `pytest tests/test_econ_values.py`；② sync `--dry-run`（看命中率且**不写库**）→ 真跑 `AUTO_PUSH=0 ... --skip-news`（**限一次**；`--skip-news` 只为缩范围，值层照样跑）⇒ 判据 `[values] 值层：命中 N/M 条，写入库 K 组`（**N==K**，差即"骨架里没该行"）+ 独立核算 `actual is not null` 计数；③ **`verify_ui.py`（必跑）**：新增 `EV-*` 组（键透传 / 三方对账 sqlite vs API vs DOM / 真实数据锁死 / 无 0-None 混淆 / unit 缺失不加后缀 / 待公布 / 768-375 两态断点），既有 `TL-*` 16 条复跑仍绿。前置：`storage.init_db()` 的 8 列迁移必须已跑（`PRAGMA table_info(econ_events)` 含 `actual`），否则 UPDATE 会 `no such column` |
 | web 访问控制（2026-09-19，HTTP Basic Auth） | ① `pytest tests/test_web.py -v -k auth`；② 本地三连（`/`=401、`/healthz`=200、`-u user:pass` `/`=200）；③ **`verify_ui.py`（必跑）**：新增 `AUTH-*` 7 条（自带带鉴权实例；含 Playwright `http_credentials` 打开 `/` 证明静态资源在鉴权下正常送达）。⚠️ `main()` 起的主实例已注入 `MP_AUTH_DISABLED=1` ⇒ 既有 700+ 条断言零改动；**给 `new_context` 逐个加凭据会与既有信号耦合，不要那样做**。🔴 改 `railway.toml` 的 `healthcheckPath` 后必须确认线上部署不进重启循环 |
 | cron 自动提交推送（二十六期） | 无需手动；daily_report / snapshot_report / opening_analyzer 末尾自动 commit+push；本地验证用 `AUTO_PUSH=0` 关闭（如 `AUTO_PUSH=0 venv/Scripts/python daily_report.py`）；真跑验证限一次（会 push 触发 Railway 重部署，且遗留 Hermes「每日数据更新」cron 可能抢先提交）。🔴 **范围白名单由 pathspec 强制（2026-09-20）**：`_commit` = `git add <paths>` + `git commit -m <msg> -- <paths>`；只收窄 `git add` 不够 —— 不带 pathspec 的 `git commit` 会提交**整个暂存区**，把别处已 staged 的删除/重命名一起带走（事故 `6ec1562`）。护栏 `pytest tests/test_phase26.py -v` |

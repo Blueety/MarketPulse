@@ -1,4 +1,4 @@
-/* 设置页（/settings）逻辑 —— 2026-09-20（任务档 tasks/2026-09-20-settings-page）。
+/* 设置页（/settings）逻辑 —— 2026-09-20（任务档 tasks/_archive/2026-09-20-settings-page）。
  *
  * 数据源：`/api/settings`（GET：生效值 + env 覆盖 + schema；POST：白名单内的部分更新）。
  *

@@ -1,6 +1,6 @@
 """经济事件日历（2026-09-18）：官方发布日程的两个抓取器 + 归一化 + 过滤去重。
 
-任务档：`tasks/2026-09-18-event-timeline-page/`（plan v3 定稿 / research.md 调研依据）。
+任务档：`tasks/_archive/2026-09-18-event-timeline-page/`（plan v3 定稿 / research.md 调研依据）。
 
 **分工（plan §2，实测确定）**：
 
