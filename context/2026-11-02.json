@@ -2,14 +2,14 @@
   "date": "2026-11-02",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 7580.07,
+      "change_pct": 0.0,
+      "status": "下跌趋势"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "休市"
+      "value": 25436.998,
+      "change_pct": 0.0,
+      "status": "下跌趋势"
     },
     "SH": {
       "value": 3638.031,
@@ -211,7 +211,7 @@
       7725.2,
       7625.61,
       7580.07,
-      null
+      7580.07
     ],
     "ixic": [
       26820.38,
@@ -243,7 +243,7 @@
       26252.016,
       25581.643,
       25436.998,
-      null
+      25436.998
     ],
     "sh": [
       3823.6206,
