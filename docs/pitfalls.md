@@ -1106,3 +1106,15 @@ refract 档下它反而生效，所以这个冲突只在 frost 档可见 —— 
 修法用**内联 + `!important`**（层叠最高优先级）：`skin.js` 的 `applyReducedTransparency()` 在引擎挂载完成后给
 每个 `.lg-inner` 写内联 `backdrop-filter: none !important`，并把引擎原本的值存进 WeakMap、关闭偏好时原样还回去
 （还回去时**不带** `!important`，否则会压过滚动降级那条规则）。
+
+## 工具链（脚手架同步，2026-11-02 实跑）
+
+更新器在**仓库外**：`D:/Obsidianhouse/AISTUDY/project-scaffold/project-scaffold/scripts/scaffold-update.sh`。
+
+- **本机必须显式用 Git Bash**：omp shell 里 `bash` 指向 WSL 桩（`C:\Windows\System32\bash.exe`）⇒ 输出全是 `?`、退出码 1。
+  正确调用：`PATH=/d/Claude/Git/usr/bin:/usr/bin:$PATH D:/Claude/Git/usr/bin/bash.exe scripts/scaffold-update.sh <项目>`。
+  第二段 PATH 不能省：Windows 的 `find.exe` 会抢在 MSYS `find` 前面，更新器报 `FIND: 参数格式不正确` 并误判「找不到基线」。
+- **先看 `.scaffold-version`**：有基线才对得上三方合并；没有就只能按内容猜（脚手架仓库 2026-10-29 重写过历史，猜出来的一致率只有 52%）。
+- **冲突只有两类**：机制类（`.githooks/pre-commit`、`scripts/check-gates.*`、`docs/agents/*`、多数 `skills/*`、`tasks/_template/*`）整份取模板、本地改了必冲突、有 bug 报上游；内容类（`AGENTS.md` / `README.md` / `docs/{architecture,commands,pitfalls}.md` / `skills/pre-review`）必须人工并集 —— 尤其 `skills/pre-review` 的「独立期望值预言机」一节模板里没有。
+- **闸门新规则会立刻判既有任务目录**：`--write` 结束时的自检就是跑一次全量闸门。新版本加的两条（`plan.md` 的「目标」非空、`journal.md` 的「下次注意什么」每条要有去向 `→` / 「不沉淀」）会让在飞任务当场变红 ⇒ 同步完先跑 `sh scripts/check-gates.sh` 清零，再谈提交。
+- **`--keep-local` 裁决可消除反复冲突**：机制类/内容类判断一致后，用 `--write --keep-local <路径>` 记一次，之后不再打扰。

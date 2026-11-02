@@ -1,0 +1,32 @@
+# 脚手架文件的分类。更新器（scripts/scaffold-update.sh）只在「两边都改过」时用它：
+#
+#   mechanism  机制文件。项目的正确状态就是模板原样；本地改了应当报上游，而不是
+#              留在本地。更新器会直接取模板版，并把本地改动备份到现场目录。
+#   content    内容文件。项目本来就会填满它（命令、坑、架构、规范），差异是正常的。
+#              更新器照常三方合并；要免掉反复冲突，用 --keep-local / --union 记裁决。
+#
+# 没列在这里的文件走默认的三方合并，行为和没有这份清单时完全一样。
+#
+# 只影响更新器，不影响任何闸门：闸门不读这个文件。
+#
+# 加一行 = 改一次所有项目的同步行为，改之前想清楚。
+
+mechanism .githooks/pre-commit
+mechanism .scaffold-kinds
+mechanism scripts/check-gates.sh
+mechanism scripts/check-gates.awk
+mechanism docs/agents/架构师.md
+mechanism docs/agents/执行者.md
+mechanism docs/agents/任务分级.md
+mechanism skills/bug-fix/SKILL.md
+mechanism skills/pre-review/SKILL.md
+mechanism skills/receiving-review/SKILL.md
+mechanism skills/refactor/SKILL.md
+mechanism skills/research/SKILL.md
+mechanism skills/self-audit/SKILL.md
+mechanism skills/tdd/SKILL.md
+mechanism tasks/_template/prd.md
+mechanism tasks/_template/plan.md
+mechanism tasks/_template/journal.md
+mechanism tasks/_template/review.md
+mechanism tasks/_template/slice.md

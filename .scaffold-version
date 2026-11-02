@@ -1,5 +1,7 @@
 scaffold=/d/Obsidianhouse/AISTUDY/project-scaffold/project-scaffold
 project_name=MarketPulse
-commit=6eb5ee91947ca3d17c96ac38cc15096c04ba2ff5
+commit=fe434d22703c92789df33ff436f0d8a744c5636e
+baseline_source=version-file
 updated=2026-11-02
-gate_violations=914
+gate_violations=0
+decision keep-local skills/pre-review/SKILL.md fbefb58b6ce2f8c4a1bc3a122aad785f820d526e

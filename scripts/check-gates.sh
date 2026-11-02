@@ -13,14 +13,16 @@
 #   - 闸门 B：非 .md 文件里没有 [DEBUG- 残留（大小写不敏感；.md 是文档，会引用这个约定）。
 #              排除 scripts/check-gates.sh 自身、node_modules/、二进制文件；
 #              全量模式还排除 .gitignore 命中的本地文件（那是数据不是代码）
-#   - plan.md：档位与类型已声明、相关文件 / 验证命令非空、步骤表非空、
+#   - plan.md：档位与类型已声明、目标 / 相关文件 / 验证命令非空、步骤表非空、
 #              确认清单至少一条且全勾、
 #              没有残留模板提示「（从 prd.md 提取）」、测试 Seam 四行要么全填要么全空、
 #              bug 任务的闸门 A 字段（含 ≥3 条排序假设）、bug-不可复现 必须声明 T3
 #   - prd.md：验收标准非空且有条目；档位行填了就必须合法（不强制存在）
 #   - journal.md：章节齐全（含雾区变化 / 一致性走查）、结束状态合法、验证结果有内容且不写「应该可以」、
 #                 改动清单已填且没留模板占位符（src/... 或 <...>）、
-#                 结束状态是 DONE / DONE_WITH_CONCERNS 时「主要提交」必须回填
+#                 结束状态是 DONE / DONE_WITH_CONCERNS 时「主要提交」必须回填、
+#                 「下次注意什么」每一条都写了去向（→ pitfalls / → 任务分级阈值 /
+#                 → skills/<名> / 不沉淀）——只判有没有出口，不判内容质量
 #   - NN-*.md（切片）：类型与状态取值合法、档位与优先级取值合法、演示与完成标准非空、
 #                      文件范围与被谁挡已填、确认清单至少一条且全勾、状态 completed 时必须回填主要提交；
 #                      决策条目则要求问题 / 结论 / 依据三字段非空
@@ -214,21 +216,13 @@ check_scale() {
     # 从空树算起才等同于「这个任务从零开始」。
     local empty_tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
     local cands=("$@")
-    if [ "${#cands[@]}" -eq 0 ]; then
-        # 这次提交没碰任何任务目录——最常见的是「计划先提交、代码后提交」。
-        # 退回**所有在飞任务**（cwd 是索引物化的树，看到的就是提交后的状态）：
-        # 不归属的话，一个纯代码提交就没人管，规模规则等于失效。
-        for d in tasks/*/; do
-            d="${d%/}"
-            case "$d" in tasks/_template|tasks/_archive) continue ;; esac
-            [ -d "$d" ] && cands+=("$d")
-        done
-    fi
     for d in ${cands[@]+"${cands[@]}"}; do
         task_is_high_tier "$d" && return 0
     done
     if [ "${#cands[@]}" -eq 0 ]; then
-        # 一个任务目录都没有：只能量这次索引。够 T2 就是「连 plan 都没写」。
+        # 这次提交没碰任何任务目录——最常见的是「计划先提交、代码后提交」。
+        # 直接量本次索引：**不要**退回「所有在飞任务」。退回去的话，仓库里只要
+        # 躺着一个 T2 任务，规模底线就永久失效，而这正是 T0/T1 不等确认的唯一兜底。
         n="$(count_code_changes "" "$root")"
     else
         # 按**任务**累计，不按单次提交：从 plan.md 进入历史的那次提交之前算起。
@@ -443,7 +437,7 @@ main() {
 
     # 要检查哪些任务目录
     local dirs=()
-    local d p rest
+    local d p rest st p1 p2 np
     if [ "${#task_args[@]}" -gt 0 ]; then
         # 参数按**调用时**的 cwd 解析。脚本后面会 cd 到仓库根，
         # 从子目录用相对路径点名（`cd docs && ../scripts/check-gates.sh ../tasks/x`）
@@ -467,25 +461,46 @@ main() {
     elif [ "$staged" -eq 1 ]; then
         # D 也要算：只删 review.md 的那次提交同样得查那个任务目录，
         # 不然「T2/T3 必须有 review.md」在删除路径上是空的。
-        while IFS= read -r p; do
-            case "$p" in
+        while IFS=$'\t' read -r st p1 p2; do
+            # 重命名/复制时第二列是目标路径；其余状态只有一列。
+            case "$st" in R*|C*) np="$p2" ;; *) np="$p1" ;; esac
+            [ -n "${np:-}" ] || continue
+
+            # 拍平检测要放在重命名豁免**之前**：`git mv tasks/x tasks/_archive`
+            # 在 _archive 不存在时正是 R100——跳过 R100 就会把这种归档方式放过去，
+            # 而那层的文件从此不在任何全量检查的覆盖里。
+            #
+            # 注意 case 的 `*` 会跨 `/`：不能写 `tasks/_archive/*.md`——那会把
+            # `tasks/_archive/<任务>/journal.md` 也匹配上，正常归档全被判成拍平。
+            case "$np" in
+                tasks/_archive/*)
+                    rest="${np#tasks/_archive/}"
+                    case "$rest" in
+                        */*) : ;;   # 正常归档：<任务>/<文件>
+                        *)
+                            fail "$np: tasks/_archive/ 顶层不该有文件——归档要 'mkdir -p tasks/_archive' 之后再 git mv，见 tasks/README.md 的「归档」"
+                            continue ;;
+                    esac ;;
+            esac
+
+            # 纯重命名 / 纯复制（内容一字未变）不算改动。归档就是把任务目录挪进
+            # tasks/_archive/，文件本身没变；按内容查会把「归档」这个被推荐的动作
+            # 本身判红（旧格式的任务目录一归档就 60 条违规）。
+            case "$st" in R100|C100) continue ;; esac
+
+            case "$np" in
                 # 归档过的任务在 tasks/_archive/<任务>/ 下，比在飞的深一层。
                 # 改到它照样要查——「跳过」只针对全量自查，不是免检。
                 tasks/_archive/*/*)
-                    rest="${p#tasks/_archive/}"
+                    rest="${np#tasks/_archive/}"
                     dirs+=("tasks/_archive/${rest%%/*}") ;;
-                # 归档**拍平**了（`git mv` 没先 mkdir 的后果）：文件直接躺在
-                # `tasks/_archive/` 下面。全量自查会把它整个跳过，所以这里必须报
-                # ——否则「把任务拍平」的那次提交正好是唯一能溜过去的提交。
-                tasks/_archive/*.md)
-                    fail "$p: tasks/_archive/ 顶层不该有文件——归档要 'mkdir -p tasks/_archive' 之后再 git mv，见 tasks/README.md 的「归档」" ;;
                 tasks/*/*)
-                    rest="${p#tasks/}"
+                    rest="${np#tasks/}"
                     d="tasks/${rest%%/*}"
                     case "$d" in tasks/_template) continue ;; esac
                     dirs+=("$d") ;;
             esac
-        done < <(git -c core.quotepath=false -C "$root" diff --cached --name-only --diff-filter=ACMRD 2>/dev/null)
+        done < <(git -c core.quotepath=false -C "$root" diff --cached --name-status -M --diff-filter=ACMRD 2>/dev/null)
     else
         # `tasks/_archive/` 里**直接躺着 .md 文件**说明归档方式用错了：
         # `git mv tasks/x tasks/_archive/` 在 _archive 不存在时会把任务目录改名成

@@ -54,10 +54,18 @@
 
 ## 下次注意什么
 
-- 同步脚手架时**先看 `.scaffold-version`**：有基线才对得上三方；没有就先跑一次 `--write` 把基线写进去（本次已建）。
-- **9 个冲突里只有两类**：机制类（`docs/agents/*`、大部分 `skills/*`）整份取模板；内容类（`AGENTS.md` / `README.md` / `docs/{architecture,commands,pitfalls}.md` / `skills/pre-review`）必须人工并集——尤其 `skills/pre-review` 的「独立期望值预言机」一节模板里没有，每次同步都要检查它还在。
-- **机制文件不要本地化**：`scripts/check-gates.*`、`.githooks/pre-commit`、`docs/agents/*` 与脚手架逐字节一致，本地改了下次同步必冲突；发现它们有 bug 就报上游（本次记了 2 条，见「下一步」）。
-- 闸门存量债的构成会变：`docs/architecture.md` 的模块表必须**一格一路径**，第二列写多路径或带括号说明就会被判「模块不存在」。
+- 同步脚手架时**先看 `.scaffold-version`**：有基线才对得上三方；没有就先跑一次 `--write` 把基线写进去（本次已建）。→ pitfalls（`docs/pitfalls.md`「工具链（脚手架同步）」）
+- **冲突里只有两类**：机制类（`docs/agents/*`、大部分 `skills/*`、`tasks/_template/*`）整份取模板；内容类（`AGENTS.md` / `README.md` / `docs/{architecture,commands,pitfalls}.md` / `skills/pre-review`）必须人工并集——尤其 `skills/pre-review` 的「独立期望值预言机」一节模板里没有，每次同步都要检查它还在。→ pitfalls
+- **机制文件不要本地化**：`scripts/check-gates.*`、`.githooks/pre-commit`、`docs/agents/*` 与脚手架逐字节一致，本地改了下次同步必冲突；发现它们有 bug 就报上游（本次记了 2 条，见「下一步」）。→ pitfalls
+- 闸门存量债的构成会变：`docs/architecture.md` 的模块表必须**一格一路径**，第二列写多路径或带括号说明就会被判「模块不存在」。→ pitfalls
+
+## 追加 3：同步到 `fe434d2`（2026-11-02 同日，第三次）
+
+- **动作**：`scripts/scaffold-update.sh D:/AGENT/MarketPulse` 预览 → `--write`。结果：升级 4（`scripts/check-gates.{sh,awk}`、`tasks/README.md`、`tasks/_template/journal.md`）/ 新增 1（`.scaffold-kinds`，机制/内容分类清单）/ 冲突 1（`.gitignore` 模板新增 `/.scaffold-work/`）/ 保留 8。
+- **`.gitignore` 裁决**：并集，`.workbuddy/` 之后追加模板那 4 行（`/.scaffold-work/` 只影响非 git 项目的兜底，本仓本来写进 `.git/`）。
+- **新规则带来的 4 条红**：全在本任务的 `journal.md`「下次注意什么」没有去向（`check-gates.awk` 新增 `check_next_notes`）⇒ 四条各补 `→ pitfalls`，并把这四条的实质写进 `docs/pitfalls.md` 的「工具链（脚手架同步）」。闸门 4 → **0**。
+- **上游修复**：`check-gates.sh` 的规模兜底不再退回「所有在飞任务」（本任务「下一步」缺陷 1 已修）；`check-gates.awk` 的 `plan_check` 补上「目标」非空（缺陷 2 已修）。两条上游缺陷可从「下一步」划掉。
+- **验证**：`sh scripts/check-gates.sh` → 0 项；`sh scripts/check-gates.sh --staged` → 通过；`.scaffold-version` → `commit=fe434d2`、`gate_violations=0`。
 
 ## 涉及的 ADR
 
