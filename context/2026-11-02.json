@@ -12,18 +12,18 @@
       "status": "休市"
     },
     "SH": {
-      "value": 3640.9301,
-      "change_pct": 1.1645820138756824,
+      "value": 3638.031,
+      "change_pct": 1.0840294540458641,
       "status": "连涨1日"
     },
     "SZ": {
-      "value": 11092.389,
-      "change_pct": 2.387023776733961,
+      "value": 11010.678,
+      "change_pct": 1.6327997678373525,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 2492.914,
-      "change_pct": 3.2848876111448906,
+      "value": 2458.698,
+      "change_pct": 1.8672712334828576,
       "status": "连涨1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3651.4337,
       3599.0166,
       3599.0166,
-      3640.9301
+      3638.031
     ],
     "sz": [
       12858.753,
@@ -307,7 +307,7 @@
       11138.198,
       10833.784,
       10833.784,
-      11092.389
+      11010.678
     ],
     "cyb": [
       3139.825,
@@ -339,7 +339,7 @@
       2517.588,
       2413.629,
       2413.629,
-      2492.914
+      2458.698
     ],
     "gcf": [
       null,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "消费",
-        "change": 3.93,
-        "turnover": "273.5亿",
+        "change": 4.15,
+        "turnover": "396.2亿",
         "top_stock": "水井坊"
-      },
-      {
-        "name": "通信/电子",
-        "change": 3.21,
-        "turnover": "1781.7亿",
-        "top_stock": "欣旺达"
       },
       {
         "name": "地产/基建",
         "change": 2.79,
-        "turnover": "70.1亿",
+        "turnover": "104.1亿",
         "top_stock": "统一股份"
       },
       {
+        "name": "通信/电子",
+        "change": 2.67,
+        "turnover": "2865.6亿",
+        "top_stock": "欣旺达"
+      },
+      {
         "name": "金融",
-        "change": 2.42,
-        "turnover": "1496.7亿",
+        "change": 2.4,
+        "turnover": "2357.9亿",
         "top_stock": "中集集团"
       },
       {
-        "name": "光伏/新能源",
-        "change": 2.41,
-        "turnover": "2748.9亿",
-        "top_stock": "欣旺达"
+        "name": "农业",
+        "change": 2.14,
+        "turnover": "287.1亿",
+        "top_stock": "统一股份"
       }
     ],
     "losers": [
       {
         "name": "资源/有色",
-        "change": 0.35,
-        "turnover": "298.6亿",
+        "change": 0.15,
+        "turnover": "454.0亿",
         "top_stock": "中稀有色"
       },
       {
         "name": "医药",
-        "change": 1.29,
-        "turnover": "875.4亿",
+        "change": 1.42,
+        "turnover": "1394.8亿",
         "top_stock": "贝达药业"
       },
       {
         "name": "军工",
-        "change": 1.89,
-        "turnover": "1059.4亿",
+        "change": 1.8,
+        "turnover": "1625.6亿",
         "top_stock": "ST联光"
       },
       {
-        "name": "农业",
-        "change": 2.1,
-        "turnover": "192.6亿",
-        "top_stock": "统一股份"
+        "name": "光伏/新能源",
+        "change": 2.05,
+        "turnover": "4249.6亿",
+        "top_stock": "欣旺达"
       },
       {
         "name": "其他",
-        "change": 2.18,
-        "turnover": "12713.8亿",
+        "change": 2.11,
+        "turnover": "19933.8亿",
         "top_stock": "恒生电子"
       }
     ]
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "消费 surge 2026-11-02",
-    "通信/电子 surge 2026-11-02",
     "地产/基建 surge 2026-11-02",
+    "通信/电子 surge 2026-11-02",
     "金融 surge 2026-11-02",
-    "光伏/新能源 surge 2026-11-02"
+    "农业 surge 2026-11-02"
   ],
   "correlation": [],
   "watchlist": {
