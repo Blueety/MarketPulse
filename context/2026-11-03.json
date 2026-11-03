@@ -12,17 +12,17 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3612.0853,
-      "change_pct": -0.7131306147845036,
+      "value": 3608.0976,
+      "change_pct": -0.822742159408723,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 10993.065,
+      "value": 10876.989,
       "change_pct": null,
       "status": "连涨1日"
     },
     "CYB": {
-      "value": 2435.597,
+      "value": 2391.652,
       "change_pct": null,
       "status": "连涨1日"
     },
@@ -275,7 +275,7 @@
       3599.0166,
       3599.0166,
       3638.0292,
-      3612.0853
+      3608.0976
     ],
     "sz": [
       12901.947,
@@ -307,7 +307,7 @@
       10833.784,
       10833.784,
       0.0,
-      10993.065
+      10876.989
     ],
     "cyb": [
       3142.563,
@@ -339,7 +339,7 @@
       2413.629,
       2413.629,
       0.0,
-      2435.597
+      2391.652
     ],
     "gcf": [
       null,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "农业",
-        "change": 1.86,
-        "turnover": "192.4亿",
-        "top_stock": "金健米业"
-      },
-      {
-        "name": "资源/有色",
-        "change": 1.65,
-        "turnover": "279.5亿",
-        "top_stock": "中稀有色"
-      },
-      {
-        "name": "金融",
-        "change": 0.91,
-        "turnover": "1318.2亿",
-        "top_stock": "三一重工"
+        "change": 1.53,
+        "turnover": "324.3亿",
+        "top_stock": "新洋丰"
       },
       {
         "name": "消费",
-        "change": 0.88,
-        "turnover": "185.1亿",
+        "change": 1.51,
+        "turnover": "326.6亿",
         "top_stock": "皇台酒业"
       },
       {
-        "name": "地产/基建",
-        "change": 0.74,
-        "turnover": "66.5亿",
-        "top_stock": "申达股份"
+        "name": "金融",
+        "change": 1.06,
+        "turnover": "2274.4亿",
+        "top_stock": "三一重工"
+      },
+      {
+        "name": "资源/有色",
+        "change": 0.35,
+        "turnover": "459.2亿",
+        "top_stock": "中稀有色"
+      },
+      {
+        "name": "其他",
+        "change": -0.31,
+        "turnover": "19546.6亿",
+        "top_stock": "七 匹 狼"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -1.55,
-        "turnover": "1553.0亿",
+        "change": -3.79,
+        "turnover": "2693.9亿",
         "top_stock": "*ST实达"
       },
       {
-        "name": "医药",
-        "change": -0.82,
-        "turnover": "788.3亿",
-        "top_stock": "智飞生物"
-      },
-      {
         "name": "军工",
-        "change": 0.02,
-        "turnover": "943.2亿",
+        "change": -1.58,
+        "turnover": "1570.7亿",
         "top_stock": "久之洋"
       },
       {
-        "name": "其他",
-        "change": 0.38,
-        "turnover": "11386.2亿",
-        "top_stock": "七 匹 狼"
+        "name": "医药",
+        "change": -1.49,
+        "turnover": "1349.6亿",
+        "top_stock": "珍宝岛"
       },
       {
         "name": "光伏/新能源",
-        "change": 0.47,
-        "turnover": "2675.8亿",
+        "change": -0.81,
+        "turnover": "3959.4亿",
         "top_stock": "圣阳股份"
+      },
+      {
+        "name": "地产/基建",
+        "change": -0.42,
+        "turnover": "110.5亿",
+        "top_stock": "申达股份"
       }
     ]
   },
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "农业 surge 2026-11-03",
-    "资源/有色 surge 2026-11-03",
-    "金融 surge 2026-11-03",
     "消费 surge 2026-11-03",
-    "地产/基建 surge 2026-11-03"
+    "金融 surge 2026-11-03",
+    "资源/有色 surge 2026-11-03",
+    "其他 drop 2026-11-03"
   ],
   "correlation": [],
   "watchlist": {
