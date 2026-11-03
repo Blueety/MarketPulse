@@ -2,18 +2,46 @@
   "date": "2026-11-02",
   "items": [
     {
+      "title": "美伊展现“谈判意愿”，全球能源价格重挫",
+      "url": "https://wallstreetcn.com/articles/3785033",
+      "source": "华尔街见闻",
+      "published": "2026-11-03",
+      "summary": "国际油价周一录得近三个月来最大单日跌幅，美伊双方通过各自官方渠道释放谈判意愿，令此前因霍尔木兹海峡局势紧张而积累的大量地缘政治风险溢价迅速回落"
+    },
+    {
+      "title": "双方股东都不满意！“史上第二大科技并购”官宣后，Marvell暴跌13%，Lumentum重挫...",
+      "url": "https://wallstreetcn.com/articles/3785029",
+      "source": "华尔街见闻",
+      "published": "2026-11-03",
+      "summary": "Marvell宣布以全股票方式斥资约1150亿美元收购光学器件制造商Lumentum，缔造科技行业史上规模数一数二的并购案"
+    },
+    {
+      "title": "“整晚都在和黑客交易”！币安被黑，币圈发财",
+      "url": "https://wallstreetcn.com/articles/3785032",
+      "source": "华尔街见闻",
+      "published": "2026-11-03",
+      "summary": "币安遭遇史上最大规模盗窃案，63亿美元资产被盗，却意外为一小批行动迅速的交易者创造了丰厚利润"
+    },
+    {
+      "title": "独家专访法国央行副行长奎里：货币政策如何“穿透”暂时性冲击？ - 21财经",
+      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQV09CYVI3N2JIMENTUDVvOVVJYlpCRXhITFdUNW8zQ2NUMUxpdUJtWTVRbVNCQkJmbjJiU0NibkhYcEctODVIT0NwcHgwN21LemhZY3RJOEdjQ20td19ERDFlaW83UEpyRHFHNG5Xb3NmdTZ5WUZHM2pvWG1lQmx4NXQ5QXViMTJGQzY3Z0pVWQ?oc=5",
+      "source": "Google News",
+      "published": "2026-11-03",
+      "summary": "独家专访法国央行副行长奎里：货币政策如何“穿透”暂时性冲击"
+    },
+    {
+      "title": "苹果上季营收盈利均超预期，但内存成本高企、毛利率收窄、在华业绩逊色、服务增速放缓",
+      "url": "https://wallstreetcn.com/articles/3785024",
+      "source": "财报见闻",
+      "published": "2026-11-03",
+      "summary": "苹果交出一份喜忧参半的财报：在全球智能手机出货 两位数大跌 的今年第三季度，iPhone的收入增长仍强于华尔街预期，助推苹果总营收超预期增长，但在重要海外市场中国的业绩明显不及预期，服务业务收入增长进一步放缓"
+    },
+    {
       "title": "华尔街见闻早餐FM-Radio | 2026年11月3日",
       "url": "https://wallstreetcn.com/articles/3785026",
       "source": "华尔街见闻",
       "published": "2026-11-03",
       "summary": "华见早安之声 要闻精选 王毅 分别同 伊朗最高国家安全委员会副秘书巴盖里 、 沙特国家安全顾问艾班 会见会谈"
-    },
-    {
-      "title": "Marvell暴跌13%，Lumentum重挫19%！史上第二大科技并购引抛售",
-      "url": "https://wallstreetcn.com/articles/3785029",
-      "source": "华尔街见闻",
-      "published": "2026-11-03",
-      "summary": "Marvell Technology宣布收购光学技术公司Lumentum Holdings，此举将成为科技行业史上最大并购交易之一，也是Marvell将自身重塑为AI基础设施核心供应商的最大赌注"
     },
     {
       "title": "Palantir Q3营收翻倍，美国商业收入首超政府收入，全年指引上调，但盘后下跌",
@@ -23,39 +51,11 @@
       "summary": "Palantir Technologies公布强劲的三季度业绩，营收同比接近翻倍，美国商业收入史上首次超越政府收入，并大幅上调全年指引，远超华尔街预期"
     },
     {
-      "title": "苹果上季营收盈利均超预期，但毛利率收窄、在华业绩逊色、服务增速放缓",
-      "url": "https://wallstreetcn.com/articles/3785024",
-      "source": "财报见闻",
-      "published": "2026-11-03",
-      "summary": "苹果交出一份喜忧参半的财报：在全球智能手机出货 两位数大跌 的今年第三季度，iPhone的收入增长仍强于华尔街预期，助推苹果总营收超预期增长，但在重要海外市场中国的业绩明显不及预期，服务业务收入增长进一步放缓"
-    },
-    {
       "title": "美国中期选举或成黄金转折点，赤字忧虑有望重燃避险需求",
       "url": "https://wallstreetcn.com/articles/3785025",
       "source": "华尔街见闻",
       "published": "2026-11-03",
       "summary": "黄金正面临逾十年来最惨烈的年度跌势，但即将到来的美国中期选举或许正在酝酿一次叙事转换——财政赤字与通胀担忧重回视野，有望重新激活这一贵金属的避险属性"
-    },
-    {
-      "title": "芯片股拖累美股指，纳指100跌入技术调整，存储、光通信下挫，油价大跌提振黄金大反弹",
-      "url": "https://wallstreetcn.com/articles/3784983",
-      "source": "华尔街见闻",
-      "published": "2026-11-03",
-      "summary": "伊朗核谈判出现积极进展，推动WTI原油单日下跌逾8%，创五个月来最大单日跌幅，但芯片及人工智能相关股票的抛售令市场承压，纳斯达克100指数较10月高点回落超过10%，正式进入技术性调整区间"
-    },
-    {
-      "title": "时隔半年再筹200亿巨债，Meta拟首次发售欧元债券拓展AI资金池",
-      "url": "https://wallstreetcn.com/articles/3785018",
-      "source": "华尔街见闻",
-      "published": "2026-11-03",
-      "summary": "Meta正以债券与股权并举的方式为AI野心融资，但市场情绪已明显降温"
-    },
-    {
-      "title": "哈塞特淡化AI债务风险：行业资金充裕，不存在全面抛售风险",
-      "url": "https://wallstreetcn.com/articles/3785014",
-      "source": "华尔街见闻",
-      "published": "2026-11-03",
-      "summary": "白宫国家经济委员会主任凯文·哈塞特淡化了市场对AI基础设施建设融资风险的担忧"
     }
   ]
 }
