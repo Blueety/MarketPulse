@@ -1118,3 +1118,4 @@ refract 档下它反而生效，所以这个冲突只在 frost 档可见 —— 
 - **冲突只有两类**：机制类（`.githooks/pre-commit`、`scripts/check-gates.*`、`docs/agents/*`、多数 `skills/*`、`tasks/_template/*`）整份取模板、本地改了必冲突、有 bug 报上游；内容类（`AGENTS.md` / `README.md` / `docs/{architecture,commands,pitfalls}.md` / `skills/pre-review`）必须人工并集 —— 尤其 `skills/pre-review` 的「独立期望值预言机」一节模板里没有。
 - **闸门新规则会立刻判既有任务目录**：`--write` 结束时的自检就是跑一次全量闸门。新版本加的两条（`plan.md` 的「目标」非空、`journal.md` 的「下次注意什么」每条要有去向 `→` / 「不沉淀」）会让在飞任务当场变红 ⇒ 同步完先跑 `sh scripts/check-gates.sh` 清零，再谈提交。
 - **`--keep-local` 裁决可消除反复冲突**：机制类/内容类判断一致后，用 `--write --keep-local <路径>` 记一次，之后不再打扰。
+- **模块表（`docs/architecture.md` 的「## 模块划分」）路径格一格只能写一个路径**：`check-gates.awk` 的 `modules_dump` 把整格当单条路径（只去反引号与尾斜杠），`check-gates.sh` 又拿它做存在性判断 ⇒ 写 `A + B` / `A、B` 恒定报「声明了模块「A + B」，但它不存在」，闸门永远过不去，且提示完全不指向「一格只能一个路径」。多个模块各占一行，说明写第 3 列。这是上游缺陷（`fe434d2` 未修），机制文件不本地 fork ⇒ 约束写在文档侧。

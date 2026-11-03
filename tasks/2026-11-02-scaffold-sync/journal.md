@@ -74,9 +74,13 @@
 ## 下一步
 
 - ~~**存量债清零**（908 条）~~ **已做归档一步**（2026-11-02 同日，见文末「追加」）：94 个已收尾任务移入 `tasks/_archive/`，剩 **60** 条全部来自留在 `tasks/` 的 5 个带验证脚本的目录。下一步二选一：原地回填那 5 个目录的 `journal.md` / `plan.md`，或把脚本搬到 `scripts/verify/`（`parents[2]` 数学不变）后再归档。
-- **上游缺陷 2 条**（报给 `project-scaffold`，本仓不本地改）：
-  1. `scripts/check-gates.sh:228` 规模兜底按「**任一**候选任务声明 T2/T3」短路，且候选为空时退回所有在飞任务 ⇒ 一个只改代码的提交只要仓库里有任意 T2 任务就放行。判据应改成「**本次贵任**累计 `src/` 改动 ≥4 文件且该任务档位 < T2」。
-  2. `scripts/check-gates.awk:453` 注释称 `field_filled` 管住「目标」，实际 `plan_check` 没有这条调用。
+- **上游缺陷**（报给 `project-scaffold`，本仓不本地改）：
+  1. ~~`scripts/check-gates.sh:228` 规模兜底按「**任一**候选任务声明 T2/T3」短路，且候选为空时退回所有在飞任务~~ **`fe434d2` 已修**：候选为空时直接量本次索引，不再退回在飞任务。
+  2. ~~`scripts/check-gates.awk:453` 注释称 `field_filled` 管住「目标」，实际 `plan_check` 没有这条调用~~ **`fe434d2` 已修**：`plan_check` 补上 `field_filled("目标")`。
+  3. **未修（`fe434d2` 仍在）**：`check-gates.awk` 的 `modules_dump` 把「路径」格整格当**一条**路径（只去反引号与尾斜杠、不按 `+` / `、` / 逗号切分），而 `check-gates.sh` 的 `check_architecture` 用它做存在性判断 ⇒ 表里写 `A + B` 恒定报「声明了模块「A + B」，但它不存在」，闸门**永远不可能通过**，且错误信息完全不提示「一格只能写一个路径」。
+     - 复现（已实跑）：`/d/tmp/gateprobe` 最小仓库，`docs/architecture.md` 表行写 `` `src/a.py` + `src/b.py`（两个文件） ``，`scripts/check-gates.sh` → `[x] docs/architecture.md 声明了模块「src/a.py + src/b.py（两个文件）」，但它不存在` / 失败 1 项。
+     - 建议：要么按 `+`/`、`/`,`/` / `/`；` 切分后逐个查（路径格允许并列），要么识别出多路径时给出「路径格一格一个路径」的明确报错。现状是静默退化成一次莫名其妙的存在性失败。
+     - 本仓对策（文档侧，见「追加 4」）：`docs/architecture.md` 的「## 模块划分」之上写死了「一格一个路径」的约束说明；2026-11-02 那次同步已把当时 4 行多路径格拆成单路径行。
 - `docs/commands.md` 开头「5 个 JSON API」仍是旧值（真实 6 页面 + 12 GET + 1 POST，见 `docs/architecture.md` 的接口契约）；同类旧值可能还有 `tasks/` 下的历史文档，本次未批量清理。
 - `docs/agents/架构师.md` 一半 `【】` 伪标题、一半 `##`（模板原样，属上游排版问题）。
 
@@ -112,3 +116,13 @@
   - `verify_ui.py` 全量 **两次都红**：24 条失败全部指向 Chart.js 未加载（`window.Chart` undefined → `getChart` 抛错）⇒ 页面 `<script src="https://cdn.jsdelivr.net/...">` 在浏览器侧 `net::ERR_CONNECTION_CLOSED`。同机 `curl -o /dev/null -w %{http_code}` 与 Playwright `page.request.get` 均 **200**，页面内 `onerror` 置 `__chartFailed=true` —— 是 Clash 对浏览器 TLS 的拦截，**与环境有关、与本次迁移无关**（脚本内容除 docstring 路径外未改，页面资产除注释行外未改）。
 - **闸门**：全量 `check-gates.sh` **0 项**（914 → 0）；`git config core.hooksPath .githooks` 已设置，钩子启用。
 - **钩子副作用**：`--staged` **不跳过** `tasks/_archive/`，所以「纯 rename 的归档提交」会被钩子判 60 项。本次顺序是先归档提交、后启用钩子，避免了 `--no-verify`。以后改成归档目录内容时，要接受同样的检查。
+
+## 追加 4：模块表路径格「一格一路径」（2026-11-03）
+
+- **触发**：用户指出 `check-gates.awk` 把模块表路径列整格当一条路径，`docs/architecture.md` 里 `A + B` 的行会恒定误报「文件不存在」⇒ 闸门永远不可能通过。
+- **核实（实跑，不是推断）**：
+  - `modules_dump`（`scripts/check-gates.awk:405`）取 `cells[3]` 整格，只做「去反引号 / 去首尾空白 / 去尾斜杠」，不切分。
+  - 最小仓库 `/d/tmp/gateprobe`（`docs/architecture.md` 一行写 `` `src/a.py` + `src/b.py`（两个文件） ``）→ `[x] docs/architecture.md 声明了模块「src/a.py + src/b.py（两个文件）」，但它不存在`，失败 1 项（探针已删）。
+  - 本仓当前**没有**这种行：`awk -v kind=modules` 解析出 16 条，全是一格一路径，闸门 0 项。历史上有 4 行多路径格（报告输出 / 告警输出 / 数据持久化 / Web 看板），已在 `96fa3ab`（2026-11-02 同步）拆成单路径行。
+- **处置**：机制文件不 fork ⇒ 改在文档侧。`docs/architecture.md` 的「## 模块划分」标题下加 3 行约束（一格一个路径 / 说明写第 3 列 / 引用本次复现），上游缺陷记为「下一步」第 3 条。
+- **验证**：`sh scripts/check-gates.sh` → 闸门检查通过（0 项）；解析路径数 16 不变（注释行不是表格行，不影响 `md_section` 取表）。
