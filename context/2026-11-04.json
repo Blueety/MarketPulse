@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3600.229,
-      "change_pct": -0.21808168382141999,
+      "value": 3604.3722,
+      "change_pct": -0.10325108722115121,
       "status": "连跌2日"
     },
     "SZ": {
-      "value": 10923.204,
-      "change_pct": 0.42488780672666077,
+      "value": 10891.914,
+      "change_pct": 0.13721628292536742,
       "status": "连涨2日"
     },
     "CYB": {
-      "value": 2405.74,
-      "change_pct": 0.5890489084532256,
+      "value": 2394.123,
+      "change_pct": 0.10331770675666876,
       "status": "连涨2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3599.0166,
       3638.0292,
       3608.0976,
-      3600.229
+      3604.3722
     ],
     "sz": [
       12887.62,
@@ -307,7 +307,7 @@
       10833.784,
       0.0,
       10876.989,
-      10923.204
+      10891.914
     ],
     "cyb": [
       3135.277,
@@ -339,7 +339,7 @@
       2413.629,
       0.0,
       2391.652,
-      2405.74
+      2394.123
     ],
     "gcf": [
       null,
@@ -414,64 +414,64 @@
     "gainers": [
       {
         "name": "医药",
-        "change": 1.76,
-        "turnover": "299.3亿",
-        "top_stock": "百济神州"
+        "change": 0.88,
+        "turnover": "780.7亿",
+        "top_stock": "海创药业"
       },
       {
         "name": "资源/有色",
-        "change": 1.73,
-        "turnover": "103.0亿",
+        "change": 0.24,
+        "turnover": "260.2亿",
         "top_stock": "云南锗业"
       },
       {
         "name": "通信/电子",
-        "change": 0.07,
-        "turnover": "464.2亿",
-        "top_stock": "立讯精密"
+        "change": 0.18,
+        "turnover": "1558.0亿",
+        "top_stock": "歌尔股份"
+      },
+      {
+        "name": "军工",
+        "change": -0.02,
+        "turnover": "871.8亿",
+        "top_stock": "上海沪工"
       },
       {
         "name": "其他",
-        "change": -0.06,
-        "turnover": "3456.8亿",
+        "change": -0.23,
+        "turnover": "9983.6亿",
         "top_stock": "金 螳 螂"
-      },
-      {
-        "name": "金融",
-        "change": -0.06,
-        "turnover": "373.4亿",
-        "top_stock": "海正药业"
       }
     ],
     "losers": [
       {
         "name": "地产/基建",
-        "change": -1.48,
-        "turnover": "22.4亿",
-        "top_stock": "华天科技"
+        "change": -1.31,
+        "turnover": "62.4亿",
+        "top_stock": "敦煌种业"
       },
       {
         "name": "农业",
-        "change": -1.47,
-        "turnover": "74.4亿",
-        "top_stock": "史丹利"
-      },
-      {
-        "name": "军工",
-        "change": -1.0,
-        "turnover": "272.6亿",
-        "top_stock": "光智科技"
+        "change": -0.55,
+        "turnover": "222.9亿",
+        "top_stock": "万向德农"
       },
       {
         "name": "消费",
-        "change": -0.24,
-        "turnover": "57.9亿",
+        "change": -0.51,
+        "turnover": "154.7亿",
         "top_stock": "皇台酒业"
       },
       {
+        "name": "金融",
+        "change": -0.33,
+        "turnover": "1090.9亿",
+        "top_stock": "歌尔股份"
+      },
+      {
         "name": "光伏/新能源",
-        "change": -0.21,
-        "turnover": "749.2亿",
+        "change": -0.3,
+        "turnover": "2117.0亿",
         "top_stock": "圣阳股份"
       }
     ]
@@ -484,8 +484,8 @@
     "医药 surge 2026-11-04",
     "资源/有色 surge 2026-11-04",
     "通信/电子 surge 2026-11-04",
-    "其他 drop 2026-11-04",
-    "金融 drop 2026-11-04"
+    "军工 drop 2026-11-04",
+    "其他 drop 2026-11-04"
   ],
   "correlation": [],
   "watchlist": {
