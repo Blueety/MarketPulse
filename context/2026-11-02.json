@@ -13,18 +13,18 @@
     },
     "SH": {
       "value": 3638.0292,
-      "change_pct": -4.947731341494644e-05,
-      "status": "连跌1日"
+      "change_pct": 1.0839794403837988,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 0.0,
-      "change_pct": -100.0,
-      "status": "连跌1日"
+      "value": 11010.678,
+      "change_pct": 1.6327997678373525,
+      "status": "连涨1日"
     },
     "CYB": {
-      "value": 0.0,
-      "change_pct": -100.0,
-      "status": "连跌1日"
+      "value": 2458.698,
+      "change_pct": 1.8672712334828576,
+      "status": "连涨1日"
     },
     "VIX": {
       "value": 21.15,
@@ -307,7 +307,7 @@
       11138.198,
       10833.784,
       10833.784,
-      0.0
+      11010.678
     ],
     "cyb": [
       3139.825,
@@ -339,7 +339,7 @@
       2517.588,
       2413.629,
       2413.629,
-      0.0
+      2458.698
     ],
     "gcf": [
       null,
@@ -407,25 +407,8 @@
     ]
   },
   "breach": {
-    "triggered": true,
-    "indices": [
-      {
-        "name": "SZ",
-        "current": 0.0,
-        "previous": 11010.678,
-        "change_pct": -100.0,
-        "threshold": 2.9321384276952474,
-        "level": "WARN"
-      },
-      {
-        "name": "CYB",
-        "current": 0.0,
-        "previous": 2458.698,
-        "change_pct": -100.0,
-        "threshold": 4.119629506974958,
-        "level": "WARN"
-      }
-    ]
+    "triggered": false,
+    "indices": []
   },
   "sector_heat": {
     "gainers": [
