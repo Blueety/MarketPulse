@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3604.3722,
-      "change_pct": -0.10325108722115121,
-      "status": "连跌2日"
+      "value": 3686.1725,
+      "change_pct": 2.1638799349551983,
+      "status": "连涨1日"
     },
     "SZ": {
-      "value": 10891.914,
-      "change_pct": 0.13721628292536742,
+      "value": 11335.687,
+      "change_pct": 4.217141343068383,
       "status": "连涨2日"
     },
     "CYB": {
-      "value": 2394.123,
-      "change_pct": 0.10331770675666876,
+      "value": 2544.73,
+      "change_pct": 6.400513118129226,
       "status": "连涨2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3599.0166,
       3638.0292,
       3608.0976,
-      3604.3722
+      3686.1725
     ],
     "sz": [
       12887.62,
@@ -307,7 +307,7 @@
       10833.784,
       0.0,
       10876.989,
-      10891.914
+      11335.687
     ],
     "cyb": [
       3135.277,
@@ -339,7 +339,7 @@
       2413.629,
       0.0,
       2391.652,
-      2394.123
+      2544.73
     ],
     "gcf": [
       null,
@@ -407,72 +407,81 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "SH",
+        "current": 3686.1725,
+        "previous": 3608.0976,
+        "change_pct": 2.16,
+        "threshold": 1.5622393071486673,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
       {
-        "name": "医药",
-        "change": 0.88,
-        "turnover": "780.7亿",
-        "top_stock": "海创药业"
+        "name": "通信/电子",
+        "change": 6.29,
+        "turnover": "3579.3亿",
+        "top_stock": "科泰电源"
       },
       {
         "name": "资源/有色",
-        "change": 0.24,
-        "turnover": "260.2亿",
+        "change": 5.24,
+        "turnover": "629.5亿",
         "top_stock": "云南锗业"
       },
       {
-        "name": "通信/电子",
-        "change": 0.18,
-        "turnover": "1558.0亿",
-        "top_stock": "歌尔股份"
+        "name": "光伏/新能源",
+        "change": 5.07,
+        "turnover": "5242.0亿",
+        "top_stock": "科泰电源"
+      },
+      {
+        "name": "医药",
+        "change": 4.71,
+        "turnover": "1631.4亿",
+        "top_stock": "康龙化成"
       },
       {
         "name": "军工",
-        "change": -0.02,
-        "turnover": "871.8亿",
-        "top_stock": "上海沪工"
-      },
-      {
-        "name": "其他",
-        "change": -0.23,
-        "turnover": "9983.6亿",
-        "top_stock": "金 螳 螂"
+        "change": 4.12,
+        "turnover": "1858.7亿",
+        "top_stock": "光智科技"
       }
     ],
     "losers": [
       {
-        "name": "地产/基建",
-        "change": -1.31,
-        "turnover": "62.4亿",
-        "top_stock": "敦煌种业"
+        "name": "消费",
+        "change": -1.1,
+        "turnover": "327.6亿",
+        "top_stock": "来伊份"
       },
       {
         "name": "农业",
-        "change": -0.55,
-        "turnover": "222.9亿",
+        "change": 0.43,
+        "turnover": "388.3亿",
         "top_stock": "万向德农"
       },
       {
-        "name": "消费",
-        "change": -0.51,
-        "turnover": "154.7亿",
-        "top_stock": "皇台酒业"
+        "name": "地产/基建",
+        "change": 0.61,
+        "turnover": "129.0亿",
+        "top_stock": "华天科技"
       },
       {
         "name": "金融",
-        "change": -0.33,
-        "turnover": "1090.9亿",
-        "top_stock": "歌尔股份"
+        "change": 0.65,
+        "turnover": "2390.9亿",
+        "top_stock": "山东黄金"
       },
       {
-        "name": "光伏/新能源",
-        "change": -0.3,
-        "turnover": "2117.0亿",
-        "top_stock": "圣阳股份"
+        "name": "其他",
+        "change": 2.5,
+        "turnover": "22050.7亿",
+        "top_stock": "山东黄金"
       }
     ]
   },
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
-    "医药 surge 2026-11-04",
-    "资源/有色 surge 2026-11-04",
+    "SH surge 2026-11-04",
     "通信/电子 surge 2026-11-04",
-    "军工 drop 2026-11-04",
-    "其他 drop 2026-11-04"
+    "资源/有色 surge 2026-11-04",
+    "光伏/新能源 surge 2026-11-04",
+    "医药 surge 2026-11-04"
   ],
   "correlation": [],
   "watchlist": {
