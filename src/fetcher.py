@@ -182,6 +182,25 @@ def _yahoo_chart_get(symbol: str, params: dict) -> "requests.Response":
     if last_exc is not None:
         raise last_exc
     raise RuntimeError(f"Yahoo {symbol} 无可用主机")
+
+
+def _positive_price(value, source: str, symbol: str) -> float:
+    """价格合法性校验：0 / 负数 / NaN / 非数值一律抛 ValueError（视为取数失败）。
+
+    新浪 spot 在**盘前**（11-02 收盘后重跑日报时实测）、停牌或接口异常时会返回 0 而不是空，
+    直接落库就成了真实收盘价：`2026-11-02` 的 sz/cyb 因此被写成 0.0（-100% 假告警 +
+    趋势/相关性失真）。与 `_to_float` 的「0 视为缺失」同一口径：抛异常 → `fetch_with_retry`
+    记失败返回 None，`merge_history` 的「None 不覆盖」纪律保证既有好值不被抹掉。
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"AkShare {source} 价格非数值 {value!r}: {symbol}") from None
+    if not v > 0:                       # 0 / 负数 / NaN（NaN 参与比较恒 False）
+        raise ValueError(f"AkShare {source} 价格无效 {value!r}: {symbol}")
+    return v
+
+
 def fetch_from_akshare(symbol: str) -> float:
     """从 AkShare 新浪接口获取 A 股指数实时价格。"""
     import akshare as ak
@@ -192,21 +211,27 @@ def fetch_from_akshare(symbol: str) -> float:
         ak_symbol = f"sz{symbol[:-3]}"
     else:
         raise ValueError(f"不支持的 AkShare ticker: {symbol}")
-    
+
     # 优先用新浪实时接口（延迟低，代理兼容性好）
+    spot = None
     try:
         df = ak.stock_zh_index_spot_sina()
         row = df[df["代码"] == ak_symbol]
         if not row.empty:
-            return float(row.iloc[0]["最新价"])
+            spot = row.iloc[0]["最新价"]
     except Exception:
         pass
-    
+    if spot is not None:
+        try:
+            return _positive_price(spot, "实时行情", symbol)
+        except ValueError as exc:       # 盘前 0 价 → 继续走日线接口，不直接失败
+            log.warning("%s（降级到日线接口）", exc)
+
     # 降级到日线接口
     df = ak.stock_zh_index_daily(symbol=ak_symbol)
     if df.empty:
         raise ValueError(f"AkShare 返回空数据: {symbol}")
-    return float(df.iloc[-1]["close"])
+    return _positive_price(df.iloc[-1]["close"], "日线", symbol)
 
 
 def fetch_vix_vxn(symbol: str) -> float:

@@ -1119,3 +1119,32 @@ refract 档下它反而生效，所以这个冲突只在 frost 档可见 —— 
 - **闸门新规则会立刻判既有任务目录**：`--write` 结束时的自检就是跑一次全量闸门。新版本加的两条（`plan.md` 的「目标」非空、`journal.md` 的「下次注意什么」每条要有去向 `→` / 「不沉淀」）会让在飞任务当场变红 ⇒ 同步完先跑 `sh scripts/check-gates.sh` 清零，再谈提交。
 - **`--keep-local` 裁决可消除反复冲突**：机制类/内容类判断一致后，用 `--write --keep-local <路径>` 记一次，之后不再打扰。
 - **模块表（`docs/architecture.md` 的「## 模块划分」）路径格一格只能写一个路径**：`check-gates.awk` 的 `modules_dump` 把整格当单条路径（只去反引号与尾斜杠），`check-gates.sh` 又拿它做存在性判断 ⇒ 写 `A + B` / `A、B` 恒定报「声明了模块「A + B」，但它不存在」，闸门永远过不去，且提示完全不指向「一格只能一个路径」。多个模块各占一行，说明写第 3 列。这是上游缺陷（`fe434d2` 未修），机制文件不本地 fork ⇒ 约束写在文档侧。
+
+## A 股指数被写成 `0.0`：盘前重跑日报 + spot 零价（2026-11-02 事故，2026-11-04 修复）
+
+**症状**：`history` 里 `2026-11-02` 的 `sz`/`cyb` 是 `0.0`（不是 `NULL`）⇒ 日报 A 股表 `0.00 / -100.00%`、
+`alerts/2026-11-02-close.md` 两条假 WARN、`context/2026-11-02.json` 的 `indices`/`history_30d`/`breach`
+（`triggered: true`）全被污染，前端涨跌幅 `-100%`。
+
+**根因链（用 `git show <sha>:data/marketpulse.db` 逐提交比对确认）**：
+① `e68054e`（11-03 08:05，11-02 日报）写入的是正确收盘 `sz 11010.678 / cyb 2458.698`；
+② 同一份日报在 11-03 09:03（**A 股盘前**）又跑了一次（`adc0a9e`）⇒ 新浪实时 spot 在盘前返回
+`最新价 = 0`，`fetch_from_akshare` 直接 `float(row.iloc[0]["最新价"])` 返回 `0.0`；
+③ `merge_history` 只跳 `None`（「None 不覆盖」纪律），`0.0` 是**数值**，于是把前一天写好的正确收盘整格覆盖掉。
+`sh` 那次拿到的是 3638.0292（另一路源），所以只有两只被清成 0。
+
+**修法（代码）**：`src/fetcher._positive_price()` —— 0 / 负数 / NaN / 非数值一律抛 `ValueError`，
+spot 零价时**降级走日线接口**，两路都无效则抛异常 → `fetch_with_retry` 记失败返回 `None` → `merge_history`
+自动跳过（既有好值保住）。护栏 `tests/test_fetcher.py`（3 例，改前全红、改后全绿）。
+
+**修法（数据）**：`analyzer.merge_history('2026-11-02', {'SZ': 11010.678, 'CYB': 2458.698})`
+（preserve 语义允许非空覆盖）→ `storage.wal_checkpoint()` → `storage.export_monthly_backups()`；
+`context/YYYY-MM-DD.json` 的派生字段**必须用库里的函数重算**（`compute_changes` / `compute_streaks` +
+`trend_label`），手写数字会和口径分叉；`breach` 无触发时是 `{"triggered": false, "indices": []}`。
+假告警文件（只含被污染条目）用 `git rm` 删掉，`data/alerts.log` 若已跨日则无需清。
+
+**自查命令**：`select date, symbol, value from history where value is not null and value <= 0` —— 恒应为空；
+`0.0` 与 `None` 语义不同，出现 0 就是取数缺陷，不是「休市」。
+
+**教训**：盘前/收盘后重跑日报是把脏价写进历史的高危窗口（spot 接口在非交易时段返回 0 而不是空）；
+任何「取数 → 落库」链路都要在**入口**挡掉非正价格，而不是指望下游的 `None` 纪律。
