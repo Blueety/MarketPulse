@@ -2,14 +2,14 @@
   "date": "2026-11-04",
   "indices": {
     "GSPC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 7703.81,
+      "change_pct": 1.7821565031735085,
+      "status": "连涨2日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 25938.424,
+      "change_pct": 2.2324364526105764,
+      "status": "连涨2日"
     },
     "SH": {
       "value": 3686.1725,
@@ -211,7 +211,7 @@
       7580.07,
       7541.4,
       7568.92,
-      null
+      7703.81
     ],
     "ixic": [
       26861.064,
@@ -243,7 +243,7 @@
       25436.998,
       25164.363,
       25372.01,
-      null
+      25938.424
     ],
     "sh": [
       3842.1946,
@@ -305,7 +305,7 @@
       11138.198,
       10833.784,
       10833.784,
-      0.0,
+      11010.678,
       10876.989,
       11335.687
     ],
@@ -337,7 +337,7 @@
       2517.588,
       2413.629,
       2413.629,
-      0.0,
+      2458.698,
       2391.652,
       2544.73
     ],
@@ -410,11 +410,43 @@
     "triggered": true,
     "indices": [
       {
+        "name": "GSPC",
+        "current": 7703.81,
+        "previous": 7568.92,
+        "change_pct": 1.78,
+        "threshold": 0.8650098358536759,
+        "level": "WARN"
+      },
+      {
+        "name": "IXIC",
+        "current": 25938.424,
+        "previous": 25372.01,
+        "change_pct": 2.23,
+        "threshold": 1.3887360930708996,
+        "level": "WARN"
+      },
+      {
         "name": "SH",
         "current": 3686.1725,
         "previous": 3608.0976,
         "change_pct": 2.16,
         "threshold": 1.5622393071486673,
+        "level": "WARN"
+      },
+      {
+        "name": "SZ",
+        "current": 11335.687,
+        "previous": 10876.989,
+        "change_pct": 4.22,
+        "threshold": 2.9321384276952474,
+        "level": "WARN"
+      },
+      {
+        "name": "CYB",
+        "current": 2544.73,
+        "previous": 2391.652,
+        "change_pct": 6.4,
+        "threshold": 4.119629506974958,
         "level": "WARN"
       }
     ]
@@ -490,11 +522,11 @@
     "losers": []
   },
   "search_keywords": [
+    "GSPC surge 2026-11-04",
+    "IXIC surge 2026-11-04",
     "SH surge 2026-11-04",
-    "通信/电子 surge 2026-11-04",
-    "资源/有色 surge 2026-11-04",
-    "光伏/新能源 surge 2026-11-04",
-    "医药 surge 2026-11-04"
+    "SZ surge 2026-11-04",
+    "CYB surge 2026-11-04"
   ],
   "correlation": [],
   "watchlist": {
