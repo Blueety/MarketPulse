@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3689.7893,
-      "change_pct": 0.09811803435676937,
+      "value": 3689.9109,
+      "change_pct": 0.10141684904870102,
       "status": "连涨2日"
     },
     "SZ": {
-      "value": 11498.769,
-      "change_pct": 1.4386600476883344,
+      "value": 11471.094,
+      "change_pct": 1.1945195734497542,
       "status": "连涨2日"
     },
     "CYB": {
-      "value": 2576.279,
-      "change_pct": 1.2397778939219477,
+      "value": 2566.803,
+      "change_pct": 0.8674004707768551,
       "status": "连涨2日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3638.0292,
       3608.0976,
       3686.1725,
-      3689.7893
+      3689.9109
     ],
     "sz": [
       12887.62,
@@ -307,7 +307,7 @@
       11010.678,
       10876.989,
       11335.687,
-      11498.769
+      11471.094
     ],
     "cyb": [
       3135.277,
@@ -339,7 +339,7 @@
       2458.698,
       2391.652,
       2544.73,
-      2576.279
+      2566.803
     ],
     "gcf": [
       null,
@@ -414,65 +414,65 @@
     "gainers": [
       {
         "name": "光伏/新能源",
-        "change": 3.87,
-        "turnover": "4603.1亿",
+        "change": 3.31,
+        "turnover": "6389.8亿",
         "top_stock": "鹏辉能源"
       },
       {
-        "name": "资源/有色",
-        "change": 2.98,
-        "turnover": "502.2亿",
-        "top_stock": "融捷股份"
-      },
-      {
         "name": "医药",
-        "change": 2.64,
-        "turnover": "1178.3亿",
+        "change": 2.85,
+        "turnover": "1684.3亿",
         "top_stock": "福瑞医科"
       },
       {
-        "name": "通信/电子",
-        "change": 2.12,
-        "turnover": "2697.8亿",
-        "top_stock": "中利集团"
+        "name": "资源/有色",
+        "change": 2.64,
+        "turnover": "703.5亿",
+        "top_stock": "融捷股份"
       },
       {
         "name": "农业",
-        "change": 1.95,
-        "turnover": "284.6亿",
+        "change": 2.14,
+        "turnover": "401.1亿",
         "top_stock": "协鑫集成"
+      },
+      {
+        "name": "地产/基建",
+        "change": 2.11,
+        "turnover": "123.3亿",
+        "top_stock": "京投发展"
       }
     ],
     "losers": [
       {
         "name": "金融",
-        "change": 0.59,
-        "turnover": "1545.3亿",
-        "top_stock": "巨化股份"
-      },
-      {
-        "name": "消费",
-        "change": 1.13,
-        "turnover": "185.6亿",
-        "top_stock": "皇台酒业"
+        "change": 0.77,
+        "turnover": "2310.3亿",
+        "top_stock": "顺鑫农业"
       },
       {
         "name": "其他",
-        "change": 1.43,
-        "turnover": "15241.4亿",
+        "change": 1.37,
+        "turnover": "22302.3亿",
         "top_stock": "金 螳 螂"
       },
       {
         "name": "军工",
-        "change": 1.58,
-        "turnover": "1201.2亿",
+        "change": 1.37,
+        "turnover": "1773.7亿",
         "top_stock": "华民股份"
       },
       {
-        "name": "地产/基建",
-        "change": 1.88,
-        "turnover": "85.2亿",
-        "top_stock": "京投发展"
+        "name": "消费",
+        "change": 1.6,
+        "turnover": "279.9亿",
+        "top_stock": "皇台酒业"
+      },
+      {
+        "name": "通信/电子",
+        "change": 1.65,
+        "turnover": "3810.7亿",
+        "top_stock": "中利集团"
       }
     ]
   },
@@ -482,10 +482,10 @@
   },
   "search_keywords": [
     "光伏/新能源 surge 2026-11-05",
-    "资源/有色 surge 2026-11-05",
     "医药 surge 2026-11-05",
-    "通信/电子 surge 2026-11-05",
-    "农业 surge 2026-11-05"
+    "资源/有色 surge 2026-11-05",
+    "农业 surge 2026-11-05",
+    "地产/基建 surge 2026-11-05"
   ],
   "correlation": [],
   "watchlist": {
