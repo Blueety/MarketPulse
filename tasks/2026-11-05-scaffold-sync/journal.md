@@ -6,7 +6,7 @@
 
 ## 主要提交
 
-- **主要提交**: `75d31c4`（第二轮：同步上游 `115092e`）；第一轮为 `1414bf3`
+- **主要提交**: `a13c5d8`（第三轮：同步 `ce88c06` 并回退措辞）；第二轮 `75d31c4`；第一轮 `1414bf3`
 
 ## 改动文件清单
 
@@ -60,8 +60,19 @@
 | `scaffold-update.sh … --refresh-gate-count` | 「存量违规 0 条」→ `.scaffold-version` 写回 `gate_violations=0` |
 | `git hash-object` × 4 个机制文件 vs `115092e:templates/<path>` | 全部 MATCH |
 
-- 返工: 18 次
-<!-- = `review.md` 两轮「逐条处理」的 12 + 6 条（第一轮独立审查 12 条、第二轮 6 条）。 -->
+**第三轮复跑（上游 `ce88c06` 之后）**
+
+| 命令 | 结果 |
+|---|---|
+| `scaffold-update.sh`（预览 → `--write`） | 升级 1（`scripts/check-gates.sh`），基线写 `ce88c06` |
+| `git hash-object` vs `ce88c06:templates/scripts/check-gates.sh` | MATCH（blob `6ec2666…`） |
+| `sh scripts/check-gates.sh` | 0 项（回退 5 处措辞后仍 0） |
+| `sh scripts/check-gates.sh --staged` | 0 项（含 `reports/` 产物引用，D7 已修） |
+| `venv/Scripts/python -m pytest tests/ -q` | **880 passed**（148s） |
+| `scaffold-update.sh … --refresh-gate-count` | 「存量违规 0 条」 |
+
+- 返工: 19 次
+<!-- = `review.md` 三轮「逐条处理」的 12 + 6 + 1 条（每轮独立子 agent 审查；第 3 轮只有 1 条 P3）。 -->
 
 ## 遇到的问题
 
@@ -70,6 +81,7 @@
 - **取下游缺省值的合并稿会带进未落地的规则**：`AGENTS.md`/`README.md` 合并稿声称闸门会拦「文档断链 / ADR 互指」，`tasks/_template/journal.md` 示范「`→` 写下一行」，而我保留的是 old gate ⇒ 独立审查抓出 4 条 Major（文档描述的能力不存在、照模板写会被自家闸门拦）。证据：`review.md` 第 1–4 条 + `awk -v kind=journal` 探针实跑输出。
 - **README 合并稿重复**：首次合并把「修 bug / 写测试 / 重构 / 提交前 / 收到意见」写了两遍（ours 与 theirs 都覆盖同一批主题），已重排成一份并在同一轮补回 `CONTEXT.md` 用词那条。
 - **第二轮「为过闸门改写措辞」踩了两个坑**（第 2 轮独立审查发现，均为 Major）：① 把新浪行情站 URL 里的 `hisdata_klc2` 写成「本地目录」——为满足闸门的路径形状判定造出了**假事实**（证据：`akshare/fund/fund_etf_sina.py` 用它拼 `finance.sina.com.cn/.../hisdata_klc2/klc_kl.js`）；② 上游报告的 D6 把项目自写的 provenance README 当成「上游原样 vendored」，据此断言「三条硬约束都不可行」，与同一提交的 pitfalls 自相矛盾。教训：改写措辞前先确认**这个路径到底指谁**，别让校验器倒推事实。
+- **为过闸门改措辞，上游一修就得改回来**（第三轮）：第二轮把 vendor README 的「包内 `styles/…` / `dist/…`」与四处 `reports/backtest_report.md` 改成描述式，纯为迁就校验器；上游 `ce88c06` 改用「只查活文档 + `--staged` 回工作区判存在性」后，这 5 处第 3 轮全部回退，净收益 0。教训：**先问这条路径为什么被报，再决定改文档还是改校验器**。
 - **`--staged` 与全量结论相反**：`reports/backtest_report.md`（`.gitignore` 的产物）在全量模式下 `[ -e ]` 通过、在 staged 的合成根里不存在 ⇒ 钩子恒红。已改成「`reports/` 下的 `backtest_report.md`」写法，并作为上游客 D7 记入报告。
 
 ## 下次注意什么
@@ -86,7 +98,8 @@
 
 ## 下一步
 
-- 上游 `115092e` 已修 D1–D4，本任务的 4 条 `keep-local` 已全部撤销（只剩 `skills/pre-review/SKILL.md` 这条本仓固有的）。剩余上游客：D5（`--keep-local` 未落盘，未复现）、D6（缺 `.gates-ignore` 排除表，本项目不需要但别人会撞）、D7（`--staged` 看不到 gitignored 产物，**建议优先修**，否则每个用产物目录的项目提交都被拦）。
+- 上游 `115092e` 修 D1–D4、`ce88c06` 修 D7 并用「按位置划活文档」取代 D6 的排除表建议 ⇒ 本任务 4 条 `keep-local` 全撤（只剩 `skills/pre-review/SKILL.md` 这条本仓固有的）。仍开放：D5（`--keep-local` 未落盘，未复现，上游只改了提示文案）。
+- ⚠️ 干净 clone / CI 上跑全量闸门前，先 `venv/Scripts/python scripts/backtest.py` 生成 `reports/backtest_report.md`（D7 的修法把「产物是否存在」交给工作区判）。
 - 顺手可清的两处既有表述（非本轮引入，未动以免拉宽 diff）：`docs/pitfalls.md` 的 `seed_history` 行指向的 `legacy/README.md` 并不记录该脚本退役原因（原因在 `tasks/_archive/2026-09-24-qa-bughunt/{journal,bug_report,plan}.md`）；`docs/commands.md` 归档脚本条目首列改成真实路径后，「已移档到该 `legacy/` 目录」略冗余。
 - 顺带可清的历史断链（新校验本来能抓到）：`scripts/migrate_to_sqlite.py`、`src/wecom_sdk.py`、`scripts/wecom_service.bat`、`hisdata_klc2/klc_kl.js` 在活文档里仍被引用。
 
@@ -101,6 +114,6 @@
 
 ## 结束状态
 
-- **结束状态**: DONE_WITH_CONCERNS
+- **结束状态**: DONE
 
-关注点：上游 D7 未修，涉及产物路径的文档只能写描述式；`skills/pre-review/SKILL.md` 的 `keep-local` 是本仓固有分叉（§7 独立期望值预言机），每次上游改它都要重新判断。
+三轮（`115092e` / `ce88c06`）之后：机制文件与模板逐字节一致、`gate_violations=0`、两种闸门模式 0 项、`pytest` 880 passed、5 处为过闸门的措辞改写已全部回退。唯一 `keep-local` 是本仓固有分叉（`skills/pre-review/SKILL.md` 的 §7 独立期望值预言机），每次上游改它都要重新判断。
