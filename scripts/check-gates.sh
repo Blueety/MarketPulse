@@ -29,9 +29,12 @@
 #   - review.md（裁决单）：任务档位是 T2 / T3 时必须存在——plan.md / prd.md / 切片里
 #                          **任何一处**声明了 T2/T3 就算，不依赖 plan.md 是否存在；
 #                          章节齐全、固定点已填、逐条处理表非空、「审查者明确未判断的」不许留空
-#   - 文档内相对引用：根目录 md、docs/、skills/ 里用反引号或 markdown 链接写下的
-#                      相对路径必须存在（围栏代码块、带占位符的示例不算）。
-#                      tasks/ 整个跳过——那是快照，断链属于历史。
+#   - 文档内相对引用：根目录 md、docs/、skills/、tasks/README.md 里用反引号或
+#                      markdown 链接写下的相对路径必须存在（围栏代码块、带占位符的
+#                      示例不算）。其他位置的 md 不查——第三方目录里的 README 是别人
+#                      的文档，扫进来只会误报。tasks/ 其余部分是快照，断链属于历史。
+#                      --staged 时文档内容取索引，但引用目标的存在性回工作区判
+#                      （产物在 .gitignore 里，索引物化树里没有）。
 #   - docs/adr/：任何 `ADR-NNNN` 引用都要有文件；`Superseded-By` 与 `Supersedes`
 #                必须互指；写了 Superseded-By 就不能还是 `Status: accepted`
 #   - 决策锚点（只提示，不影响退出码）：代码里的 `# 决策: ADR-NNNN` 注释，
@@ -159,40 +162,71 @@ check_slice()   { run_check slice   "$1"; }
 # 只查**像文件**的引用（最后一段带扩展名）。纯目录引用（`src/`、`docs/adr/`）不查：
 # 空目录进不了 git，模板里也用它们做示意。
 check_links() {
+    local staged_mode="${1:-0}"
     local f ref line n=0 out="" total=0 resolved cand b
     local -a files=() all=()
     local -A bybase=()
+
+    # 只查**活文档**：仓库根的 md、`docs/`、`skills/`、`tasks/README.md`。
+    #
+    # 为什么按位置划而不是「扫所有 md」：第三方代码目录（`vendor/`、依赖包里
+    # 带的 README）是**别人的文档**，它们的相对链接在这个仓库里必然对不上。把
+    # 它们算进来，唯一出路是加一份项目级忽略清单——那会变成永久豁免通道，
+    # 而「文档放在哪儿」本来就是明确的，按位置划不需要任何例外。
+    is_doc() {
+        case "$1" in
+            tasks/README.md) return 0 ;;
+            docs/*|skills/*) return 0 ;;
+            */*) return 1 ;;
+            *) return 0 ;;
+        esac
+    }
 
     # 文件清单用 git 拿，**不用 `find`**：`find` 会扫进 `.gitignore` 里的东西
     # （venv/、node_modules/、构建产物、编辑器缓存），那些目录里成千上万个
     # 第三方 README 全是别人的相对链接，跟这个项目没关系。实测一个 Python 项目
     # 因此多出 313 条假违规。不在 git 仓库里时才退回 find。
-    if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+    #
+    # --staged 时 **cwd 已经是索引物化出来的临时树**，所以文件取自那里（要查的是
+    # 「即将提交的内容」），而不是工作区。
+    if [ "$staged_mode" -eq 1 ]; then
+        while IFS= read -r f; do
+            f="${f#./}"
+            is_doc "$f" || continue
+            files+=("$f")
+        done < <(find . -name '*.md' -type f 2>/dev/null | sort)
+    elif git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
         # `core.quotepath=false`：默认会把非 ASCII 文件名转义成 `"\344\273..."`，
         # 那样 awk 打不开这些文件、直接报错退出，后面的文件一个都不会被扫到
         # （表现为「明明是断链却全绿」）。
         while IFS= read -r f; do
-            case "$f" in
-                tasks/README.md) ;;
-                tasks/*) continue ;;
-            esac
+            is_doc "$f" || continue
             files+=("$f")
         done < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard -- '*.md' 2>/dev/null | sort)
-        while IFS= read -r f; do all+=("$f"); done \
-            < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard 2>/dev/null)
     else
         while IFS= read -r f; do
-            case "$f" in
-                ./tasks/README.md) ;;
-                ./tasks/*) continue ;;
-            esac
-            files+=("${f#./}")
+            f="${f#./}"
+            is_doc "$f" || continue
+            files+=("$f")
         done < <(find . -name '*.md' -type f 2>/dev/null | sort)
-        while IFS= read -r f; do all+=("${f#./}"); done \
-            < <(find . -type f -not -path './.git/*' 2>/dev/null | sort)
     fi
     total="${#files[@]}"
     [ "$total" -gt 0 ] || return 0
+
+    # 后缀索引用的文件清单也是「存在的文件」，--staged 时取两边的并集：
+    # 只取物化树会漏掉被引用的产物，只取工作区会漏掉「已暂存、工作区还没建」的新文件。
+    if [ "$staged_mode" -eq 1 ]; then
+        while IFS= read -r f; do [ -n "$f" ] && all+=("${f#./}"); done \
+            < <(find . -type f 2>/dev/null | sort)
+        while IFS= read -r f; do [ -n "$f" ] && all+=("$f"); done \
+            < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard 2>/dev/null)
+    elif git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+        while IFS= read -r f; do all+=("$f"); done \
+            < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard 2>/dev/null)
+    else
+        while IFS= read -r f; do all+=("${f#./}"); done \
+            < <(find . -type f -not -path './.git/*' 2>/dev/null | sort)
+    fi
 
     # 后缀索引：文档里常写简称（`static/app.js` 而真实路径是 `web/static/app.js`）。
     # 按 basename 建表，未命中的引用再看有没有哪个已跟踪文件以 `/<ref>` 结尾。
@@ -205,6 +239,10 @@ check_links() {
     while IFS=$'\t' read -r f ref; do
         [ -n "$ref" ] || continue
         [ -e "$ref" ] && continue
+        # 存在性回**工作区**再判一次。文档引用的常常是**产物**（`reports/*.md`、
+        # 截图、生成的 json），它们落在 .gitignore 里、索引物化树里永远没有。
+        # 只看物化树的话，同一个文档全量自查通过、钩子报 4 条——每次提交都被拦。
+        [ -n "${root_pwd:-}" ] && [ -e "$root_pwd/$ref" ] && continue
         resolved=0
         b="${ref##*/}"
         for cand in ${bybase[$b]:-}; do
@@ -630,7 +668,7 @@ main() {
     check_architecture "$staged" "$root"
 
     # 文档内相对引用 + ADR 互链：都是「仓库状态」不变量，和具体任务无关
-    check_links
+    check_links "$staged"
     check_adr
     # 代码里的 `决策: ADR-NNNN` 锚点：只提示，不影响退出码
     check_anchors "$staged" "$root"

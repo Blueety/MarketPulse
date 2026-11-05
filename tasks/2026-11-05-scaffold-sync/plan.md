@@ -77,3 +77,15 @@
   5. `docs/pitfalls.md` 改两轮实录 + 「写非仓库路径别写成路径形状」教训；上游报告补「修复验收」与 D6。
 - **验证**：`sh scripts/check-gates.sh` 0 项；`--staged` 通过；`pytest tests/ -q` 880 passed；`--refresh-gate-count` → 存量违规 0 条；4 个机制文件 `git hash-object` 与 `115092e:templates/<path>` 逐字节一致。
 - **不做什么**：不动 `skills/pre-review/SKILL.md` 的 `keep-local`（§7 是本仓独有）；不向上游写任何文件（只投一份报告副本）。
+
+---
+
+## 第三轮：上游 `ce88c06`（`--staged` 与「活文档」范围）后回退为过闸门做的措辞改写
+
+- **触发**：上游修掉 D7（`--staged` 看不到 `.gitignore` 产物）并用「按位置划活文档」取代 D6 的排除表建议。
+- **步骤**：`--write` 升 `scripts/check-gates.sh`（唯一变化文件）；**回退**第二轮为迁就闸门改的 5 处措辞
+  （`web/static/vendor/liquid-glass/README.md` 两处「包内布局」、`AGENTS.md`/`docs/architecture.md`/`docs/commands.md`/`docs/pitfalls.md`
+  的 `reports/backtest_report.md`）；pitfalls 记「为过闸门改措辞前先确认为什么要改」；上游报告追加第三轮。
+- **验证**：`check-gates.sh` 0 项、`--staged` 0 项（含 `reports/` 产物引用）、`--refresh-gate-count` 0 条、
+  `git hash-object` 与 `ce88c06:templates/scripts/check-gates.sh` MATCH、`pytest tests/ -q` 见 journal。
+- **教训**：校验器不该要求文档改写成它的语法；上游一修，那些改写净收益为 0（本轮全部回退）。

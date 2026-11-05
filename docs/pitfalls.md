@@ -107,7 +107,7 @@
 - **复用 check_breach 不重写触发逻辑**：`scripts/backtest.py` 的 `collect_triggers` 直接调用生产 `check_breach(sym, cur, prev)`（严格大于阈值、实时 env/config 阈值、缺口断开），切勿在回测侧另写一套比较/阈值逻辑——否则回测与生产行为脱节（计划风险"触发语义漂移"）。改阈值语义必须同步改 `src/analyzer.check_breach`，回测随之生效。
 - **历史键小写**：history 存 `gspc`/`vix`/`sh` 等小写键（六期B 纪律）；回测按 `sym.lower()` 取列，勿用大写 symbol 取 history 值（得到 None → 误判缺口）。`BACKTEST_SYMBOLS` 大写（VIX/VXN/MOVE/GSPC/IXIC/SH/SZ），CYB 不在内（PRD 表未列，决策 A）。
 - **缺口断开**：相邻两行任一为 None 即跳过该日触发；前向后效为点对点收益（p[t+h]-p[t]），缺口不阻断但越界窗口不计入（n 透明展示）。
-- **只读边界**：脚本只写 `reports/` 下的 `backtest_report.md`；`--history` 仅指定只读输入，不提供任何写回能力。`REPORTS_DIR` 若被测试 monkeypatch，须打在 `scripts.backtest` 模块（同 src/ 纪律：打在 analyzer 定义方不生效）。
+- **只读边界**：脚本只写 `reports/backtest_report.md`；`--history` 仅指定只读输入，不提供任何写回能力。`REPORTS_DIR` 若被测试 monkeypatch，须打在 `scripts.backtest` 模块（同 src/ 纪律：打在 analyzer 定义方不生效）。
 - **阈值实时性**：报告内"各标的当前阈值"表用 `alert_threshold(sym)` 实时值，并注明"阈值来自 config/env 实时配置"——避免"配置已改、报告仍是旧值"误解。测试须 `monkeypatch.delenv("ALERT_THRESHOLD_<SYM>", raising=False)` 隔离宿主 env。
 - **样本门槛**：全局有效交易日 <30 优雅退出（退出码 0、不写报告）；单标的有效点 <30 仅输出计数与"样本不足"标注，不出后效/胜率/有效触发率，防小样本误导。回测只给事实数字，不输出任何结论性评语。
 - **history 排序**：`load_history` 返回存储顺序，回测前按 date 升序排序，避免乱序造成伪触发。
@@ -1176,21 +1176,27 @@ spot 零价时**降级走日线接口**，两路都无效则抛异常 → `fetch
 同时把 content 文件里描述「闸门会拦什么」的句子按**实际启用的**校验改写。
 
 **已解除（同日第二轮，上游 `115092e`）**：D1–D4 全部修好 ⇒ 四个 `keep-local` 全撤、机制文件升到模板版，
-同一条命令 **385 → 2 项**（扫描文件数 477 → 64）。剩下 2 项是 vendored 目录 README 里描述的
-**上游包内布局**（`dist` / `styles`）——那份 README 是本项目自己写的 provenance 文档（`bbe9023`
-创建，上游包本体只有 css/js/LICENSE），不属于「原样禁改写」范围，已把两处改成「`dist` 目录下的
-`liquid-glass.esm.js`」这种不带斜杠链的写法（闸门对**含 `/` 且带扩展名**的串才判，`<name>`、
-`YYYY`、无斜杠的裸文件名都不判）。
+同一条命令 **385 → 17**（扫描文件数 477 → 64）：17 项里 **15 项是真实历史断链**（已逐条修文档），
+2 项是 vendored 目录 README 里描述的**上游包内布局**——那份 README 是本项目自己写的 provenance 文档
+（`bbe9023` 创建，上游包本体只有 css/js/LICENSE），不属于「原样禁改写」范围。
 
-**教训（对文档本身）**：写「某文件在包内/外部目录下」这类**非仓库路径**时，不要写成「目录/文件名」的样子
-——闸门按形状判断，形状像路径就会去仓库里找。写成「`dist` 目录下的文件名」既准确又不会被误判。
+**同日第三轮（上游 `ce88c06`）**：上游没有采纳「项目级 `.gates-ignore`」，而是**按位置划活文档**——
+只查仓库根 `*.md` + `docs/` + `skills/` + `tasks/README.md`，第三方目录里的 README 一律不扫；
+同时 `--staged` 的引用存在性回**工作区**再判一次。两个上游问题一起消失，于是第二轮为迁就闸门做的
+**五处**措辞改写全部回退成原样（vendored README 两行恢复「包内 `styles/…` / `dist/…`」写法，
+四处 `reports/backtest_report.md` 恢复成可点击路径）。教训：**为过闸门改措辞之前先确认为什么要改**，
+否则上游一修就得再改回来（第二轮那 5 处改动净收益为 0）。
+
+⚠️ 取舍：D7 的修法是「引用目标的存在性回**工作区**判」⇒ 在**干净 clone**/CI 上，
+`.gitignore` 的产物（如 `reports/backtest_report.md`）不存在时仍会被判断链。本仓工作区里有该文件，
+本地与钩子都绿；换机器跑全量自查前先 `venv/Scripts/python scripts/backtest.py` 生成一次。
 
 **上游报告**：`tasks/2026-11-05-scaffold-sync/upstream-report.md`（副本投在脚手架仓库根
 `UPSTREAM-BUGS-2026-11-05-marketpulse.md`）——D1（`find` 不尊重 `.gitignore`）、D2（`emit_link` 误判
 占位符 / 类名串 / 点号表达式 / 包名）、D3（journal 逐行 vs 按条目）、D4（`- 返工: 0 次` 被当成一条验证
-结果）**均已修**（`9d2d6b7`/`115092e`）；D5（`--keep-local` 有一次没写回）**仍未复现**，上游只把提示文案改成「登记裁决（收尾统一写盘）」并加了写盘确认行；D6（缺项目级
-`.gates-ignore` 排除表）仍开放——本项目已不需要它（那份 README 是自己写的），但仓库里若真的 vendored
-一份第三方文档，仍会撞同一面墙。
+结果）**均已修**（`9d2d6b7`/`115092e`）；D5（`--keep-local` 有一次没写回）**仍未复现**，上游只把提示文案改成「登记裁决（收尾统一写盘）」并加了写盘确认行；
+D6（缺项目级排除表）由「只查活文档」的设计取代（不需要例外表）、D7（`--staged` 看不到 gitignored 产物）
+已在 `ce88c06` 修好。
 
 记录格式是 `decision <策略> <路径> <模板 blob sha>`，sha 用
 `git -C <脚手架仓库> rev-parse <模板提交>:templates/<路径>`。**手写才可靠**：更新器在
