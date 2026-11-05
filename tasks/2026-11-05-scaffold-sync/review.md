@@ -120,3 +120,81 @@
 审查者结论：无 Critical，但**不建议原样提交**——4 条 Major 属同一类（新文档描述了 kept gate 不存在的能力），其中第 3 条会让下一个照模板写 journal 的人被自己仓库的闸门拦下。
 
 处理结论：第 1–6、8–12 条已改并复跑验证；第 7 条按「不是本任务产生、走数据链路」不改并留痕。第 3 条的根因（机制模板与 kept gate 不一致）无法在本仓消除，已记 `keep-local` + 缺陷清单待报上游。复跑：`sh scripts/check-gates.sh` 0 项、`--staged` 通过、`pytest tests/ -q` 880 passed。
+
+---
+
+## 第 2 轮审查（上游 `115092e` 修复后）
+
+- **固定点**：工作区 staged（14 文件，`/d/tmp/round2.diff`），无提交 SHA
+- **审查者**：`ScaffoldSyncReview2`（独立子 agent，未接触主线程会话历史）
+- **给了它什么**：staged diff、`review.md` 第 1 轮、`plan.md`、`journal.md`、`upstream-report.md`、上游仓库只读、`AGENTS.md` 编码规范/Working Rules、`docs/architecture.md` 的 2026-09-23 决策条
+- **轮次**：第 2 轮（本轮为该任务最后一轮，上限 2）
+
+### 审查者原文（第 2 轮）
+
+## Standards
+
+**S1｜把"新浪远端路径"改写成了不存在的"本地目录"**
+- 位置：`docs/architecture.md:180`、`docs/pitfalls.md:958`（同一错误另见 `upstream-report.md:220`）
+- 问题：为避开闸门的"路径形状"判定，两处把 `hisdata_klc2/klc_kl.js` 改成"本地 `hisdata_klc2` 目录下的 `klc_kl.js`"。该串根本不是本地目录，而是新浪行情站的 URL 路径段，改写后语义从"远端历史文件"变成"仓库本机目录"，且该目录不存在。
+- 证据：`src/fetcher.py:690` 自己的注释写的是"历史文件（新浪 `hisdata_klc2/klc_kl.js`）"；`.venv/Lib/site-packages/akshare/fund/fund_etf_sina.py:126` 用 `https://finance.sina.com.cn/realstock/company/{symbol}/hisdata_klc2/klc_kl.js` 构造请求；全盘 `find` 无名为 `hisdata_klc2` 的目录。这违反 Working Rules 的"如有失败，先解释原因再修复，不要绕过问题"。
+- 严重度：Major
+- 建议：保留"远端"语义且保持闸门安全形状，例如"新浪行情站的历史文件（URL 里的 `hisdata_klc2` 下的 `klc_kl.js`）"；三处统一。
+
+**S2｜企业微信 G2 的改写保留了错误的包结构**
+- 位置：`docs/system-overview.md:295`
+- 问题：原文 `wecom_channel/ws.py` 被改写为"`wecom_channel` 包里的 `ws` 模块导入 `websockets`"。仓库历史上从未有 `wecom_channel` 包，实际是 `src/wecom_channel.py` 与 `src/wecom_ws.py` 两个平级模块。
+- 证据：`git show 6ec1562` 的删除清单是三个平级模块；`git show 6ec1562^:src/wecom_ws.py` 与 `...:src/wecom_channel.py` 都含 `import websockets`。
+- 严重度：Minor
+
+## Spec
+
+**P1｜上游报告 D6 的核心事实与本轮修复自相矛盾**
+- 位置：`upstream-report.md:224-236` / `:278-280`
+- 问题：D6 断言那份 README 是"上游 npm 包原样 vendored 的文档"，据此给出"三条硬约束都不可行""闸门红 ⇒ commit 被钩子拦""只能二选一"，但同一提交的 `docs/pitfalls.md` 已核实它是本项目 `bbe9023` 自写的 provenance 文档，而本轮正是通过改它把闸门清零的。
+- 证据：`git log --follow web/static/vendor/liquid-glass/README.md` 首现于 `bbe9023`；上游包 README 是英文另一份；`docs/architecture.md:178` 的"原样、禁改写"只列 3 个文件。
+- 严重度：Major
+
+**P2｜"真实断链"数量的表述自相矛盾**
+- 位置：`upstream-report.md:207-220`（关联 `:6`、`docs/pitfalls.md:1179`）
+- 问题：开头写"0 项是本项目的真实断链"，新增段又写"另外清掉的 15 项是真实的历史断链"；"385 → 2" 把 15 项修复隐含在 D1–D4 成果里。
+- 严重度：Minor
+
+**P3｜pitfalls 声称 D5"均已修"，紧邻段落仍在描述未修的行为**
+- 位置：`docs/pitfalls.md:1189-1198`
+- 问题：D5 被归入"均已修"，但下方段落仍写"不会把裁决写回"并给出旧文案实测；上游 `115092e` 只改了提示文案。
+- 严重度：Minor
+
+## 未判断（第 2 轮）
+
+1. 闸门实跑（0 项 / `--staged` / pytest 880 / `--refresh-gate-count` 0）未复跑，按任务说明采信；只做静态核对。
+2. `plan.md` 的第二轮小节当时未暂存，无法判断提交拆分意图。
+3. `journal.md` 当时未含第二轮内容，按第一轮拆分惯例推断为后续提交，未判遗漏。
+4. `docs/pitfalls.md` 表格里"只读 vendored … 上游包自带的示例"与新增段落矛盾——属第一轮遗留、不在本轮 diff 行内，建议顺手改。
+5. `docs/pitfalls.md:255` 的 `seed_history` 行指向的 `legacy/README.md` 并不记录该脚本退役原因（原因在 `tasks/_archive/2026-09-24-qa-bughunt/{journal,bug_report,plan}.md`）——既有表述不准确，非本轮引入。
+6. `docs/commands.md` 归档脚本条目首列改真实路径后"已移档到该 `legacy/` 目录"略冗余，语义正确，未判缺陷。
+7. `scripts/check-gates.{sh,awk}` 与 `115092e:templates/*` 逐字节一致（hash 已比对），未逐行审上游实现；本仓行为只做静态阅读核对，未跑 fixture。
+8. 上游仓库工作树里那份报告副本含同样的 D6 失实内容（未提交）；是否同步修正不在本仓 diff 范围。
+
+## 结论（第 2 轮）
+
+无 Critical；机制面（4 个文件逐字节一致、4 条 keep-local 撤销、基线/计数）可合并。但有 2 条 Major 事实错误，其中 P1 会随报告外发上游 ⇒ 建议连同 S1 修完再提交。
+
+### 逐条处理（第 2 轮）
+
+| # | 审查者发现（原文摘要） | 处理 | 依据 |
+|---|---|---|---|
+| S1 | 把新浪远端 URL 段 `hisdata_klc2/klc_kl.js` 改写成「本地目录」= 造出假事实 | **改** | 三处统一成「新浪行情站 URL 里的 `hisdata_klc2` 目录下的 `klc_kl.js`」（`docs/architecture.md:180`、`docs/pitfalls.md:958`、`upstream-report.md`）。复跑 `check-gates.sh` 0 项 |
+| S2 | G2 的「`wecom_channel` 包里的 `ws` 模块」错（实为两个平级模块） | **改** | 改成「`wecom_channel.py` 与 `wecom_ws.py` 导入 `websockets`」，与同表 G1 行写法一致；证据 `git show 6ec1562` 的删除清单 |
+| P1 | D6 把自写 README 说成「上游原样 vendored」，与实况矛盾且会随报告外发 | **改** | D6 重写：先声明「本轮的 2 项不是上游的锅」（README 由 `bbe9023` 自写、已改措辞解决），再把 `.gates-ignore` 降级为「下一个真的 vendored 第三方文档的项目会撞的墙」的建议；`当前状态` 段改成「本项目已 0 违规、不阻塞」；副本同步 |
+| P2 | 「0 项真实断链」与「15 项真实断链」并存 | **改** | 报告标题段改成「第一轮结论 + 第二轮抓出 15 处」；修复验收段改成 `385 → 17 → 15 修 + 2 → 0` |
+| P3 | D5 被写成「已修」，实际只改了提示文案、缺陷仍未复现 | **改** | pitfalls 把 D5 移出「均已修」，注明「仍未复现，上游只改文案」；旧文案实测句补注 `115092e` 起的新文案 |
+| 4（未判断项） | pitfalls 表格「只读 vendored / 上游包自带的示例」与实况矛盾 | **改** | 该行改写成「自写 vendored README / 描述上游包内布局，不是本仓路径」 |
+| 1 | 闸门与测试未复跑 | **已复核** | 本轮改完后重跑：`check-gates.sh` 0 项、`pytest test_doc_consistency + test_scripts` 5 passed；全量 `pytest tests/ -q` 880 passed（本轮改动仅文档） |
+| 2,3 | plan/journal 的提交拆分意图 | **说明** | 沿用第一轮拆分：工作提交（文档+机制）→ 再单独提交 `journal.md`，故 journal 里写的是工作提交的 SHA |
+| 5,6 | `seed_history` 行的归档 README 不含其退役原因；`commands.md` 略冗余 | **不改** | 两者都是既有表述、非本轮引入；改它们属另一批文档清理，避免把 diff 拉宽。已记入 journal「下一步」 |
+| 7,8 | 未逐行审上游实现；上游副本是否同步 | **说明** | 上游实现只按 `115092e` 的 diff 与实测行为验收；报告副本已同步（`UPSTREAM-BUGS-2026-11-05-marketpulse.md`） |
+
+### 结论（处理完毕）
+
+两轮共 12 + 6 条发现：17 条「改」、1 条「不改+理由」（第 1 轮 #7 `data/news.json`）、其余为「已复核/说明」。无未处理的 Critical/Major。

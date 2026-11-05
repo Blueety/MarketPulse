@@ -107,7 +107,7 @@
 - **复用 check_breach 不重写触发逻辑**：`scripts/backtest.py` 的 `collect_triggers` 直接调用生产 `check_breach(sym, cur, prev)`（严格大于阈值、实时 env/config 阈值、缺口断开），切勿在回测侧另写一套比较/阈值逻辑——否则回测与生产行为脱节（计划风险"触发语义漂移"）。改阈值语义必须同步改 `src/analyzer.check_breach`，回测随之生效。
 - **历史键小写**：history 存 `gspc`/`vix`/`sh` 等小写键（六期B 纪律）；回测按 `sym.lower()` 取列，勿用大写 symbol 取 history 值（得到 None → 误判缺口）。`BACKTEST_SYMBOLS` 大写（VIX/VXN/MOVE/GSPC/IXIC/SH/SZ），CYB 不在内（PRD 表未列，决策 A）。
 - **缺口断开**：相邻两行任一为 None 即跳过该日触发；前向后效为点对点收益（p[t+h]-p[t]），缺口不阻断但越界窗口不计入（n 透明展示）。
-- **只读边界**：脚本只写 `reports/backtest_report.md`；`--history` 仅指定只读输入，不提供任何写回能力。`REPORTS_DIR` 若被测试 monkeypatch，须打在 `scripts.backtest` 模块（同 src/ 纪律：打在 analyzer 定义方不生效）。
+- **只读边界**：脚本只写 `reports/` 下的 `backtest_report.md`；`--history` 仅指定只读输入，不提供任何写回能力。`REPORTS_DIR` 若被测试 monkeypatch，须打在 `scripts.backtest` 模块（同 src/ 纪律：打在 analyzer 定义方不生效）。
 - **阈值实时性**：报告内"各标的当前阈值"表用 `alert_threshold(sym)` 实时值，并注明"阈值来自 config/env 实时配置"——避免"配置已改、报告仍是旧值"误解。测试须 `monkeypatch.delenv("ALERT_THRESHOLD_<SYM>", raising=False)` 隔离宿主 env。
 - **样本门槛**：全局有效交易日 <30 优雅退出（退出码 0、不写报告）；单标的有效点 <30 仅输出计数与"样本不足"标注，不出后效/胜率/有效触发率，防小样本误导。回测只给事实数字，不输出任何结论性评语。
 - **history 排序**：`load_history` 返回存储顺序，回测前按 date 升序排序，避免乱序造成伪触发。
@@ -252,7 +252,7 @@
 - **BTC 的 Yahoo 日线含周末（7×24），不能作为「交易日」依据**：`BTC-USD` 近 1y 返回 **366 个自然日** bar（比 `^GSPC` 的 252 个交易日多 114 个）。直接用会写出 ~110 个「只有 `btc` 有值」的纯周末行 → 超出 `HISTORY_MAX` 被裁、偏离既有行的交易日口径、切断 `compute_correlation` 的收益链、夸大 `scripts/backtest.py` 的样本计数。**修法**：某天若除 `NON_TRADING_CALENDAR_SYMBOLS = {BTC}` 之外无任何标的有值 → 判为非交易日、整行丢弃（`backfill_history.py::plan_fills`，实测丢弃 104 行）。
 - **history 的日期口径是「按符号所属市场时区」，不是统一美东**：`analyzer.get_market_date` 中 `a-share → SHANGHAI_TZ`、`us → EASTERN_TZ`。Yahoo timestamp 转日期时若统一用美东，A 股（上证 09:30 北京 = 前一日 21:30 ET）会整体**早一天**、与既有行错位/重复。**抽查金标准**（回填后逐条核对）：`2025-12-25` 只有 `sh/sz/btc` 有值（美股圣诞休市）、`2026-01-02` 只有美股类有值（中国元旦假期延续）、`2026-02-17` 只有美股类有值（春节）、`2026-01-01` 整行不存在（中美双休，仅 BTC 有 bar 被丢弃）。
 - **既有行的 `None` 有真实语义，回填不得"补全"**：实测 90 行里 `vix 85/90`、`gld 83/90` 非空——空值本身就是休市/未收盘的记录（`2026-05-25` 美股键全空 = 阵亡将士纪念日；`2026-09-11` 的 `vix/gld/btc` 空 = 美股未收盘）。用 Yahoo 历史 bar 去填空会造出"休市日却有 VIX 值"的假数据。**回填只新增 date 不存在的行**（`backfill_history.py` 默认行为，并报告刻意跳过的键数）。
-- **~~`seed_history.py` 保留但勿再使用~~（2026-09-24 已删除）**：它曾因 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`（消费方按**大写 symbol** 取值 ⇒ 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全失效）、`append_history` 整行覆盖抹掉既有行非空值，被 `AGENTS.md` 标为「勿再使用」。**QA 缺陷轮 D-2 已把 `seed_history.py` / `seed_history_market.py` 从仓库根删除**（源码留档在 `tasks/_archive/2026-09-24-qa-bughunt/legacy/` 之外的 git 历史里，`legacy/README.md` 记录退役原因）。**为什么删而不是留**：仓库里同时存在"文档说危险"与"可一键执行"的脚本 = 一把上了膛的枪。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。
+- **~~`seed_history.py` 保留但勿再使用~~（2026-09-24 已删除）**：它曾因 `save_last_values` 用**小写键**整文件覆盖 `data/last_values.json`（消费方按**大写 symbol** 取值 ⇒ 跑一次就让次日涨跌幅退化为"首次运行"、告警基准全失效）、`append_history` 整行覆盖抹掉既有行非空值，被 `AGENTS.md` 标为「勿再使用」。**QA 缺陷轮 D-2 已把 `seed_history.py` / `seed_history_market.py` 从仓库根删除**（源码留档在 `tasks/_archive/2026-09-24-qa-bughunt/legacy/` 之外的 git 历史里，`tasks/_archive/2026-09-24-qa-bughunt/legacy/README.md` 记录退役原因）。**为什么删而不是留**：仓库里同时存在"文档说危险"与"可一键执行"的脚本 = 一把上了膛的枪。回填请用 `scripts/backfill_history.py`（**不碰 `last_values.json`**）。
 - **CYB（`399006.SZ`）Yahoo 1y 覆盖缺口 → 改走 AkShare 补齐（已落地）**：同一条 `range=1y` 请求，`^GSPC`/`^IXIC` 各 252 天、`000001.SS`/`399001.SZ` 各 243 天，而 `399006.SZ` **只返回 1 天** → 回填段 CYB 全空（`cyb 86/259`）。属**外部数据源缺口**（非本地 bug）。修法：A 股标的 Yahoo 返回 < `AKSHARE_FALLBACK_MIN=30` 天时改走 `ak.stock_zh_index_daily`。**四条纪律**：① 新浪源无 timeout → 必须 daemon 线程 + `join(AKSHARE_TIMEOUT=15s)`（复用 `fetch_sector_heat` 范式）；② AkShare 返回**全历史**（2010 起，3956 行）→ 窗口须按 Yahoo 序列最早日期裁剪，且**基准必须排除 7×24 标的**（BTC 的自然日会把窗口提前一天，造出「SH/SZ 为空但 CYB 有值」的错位首行）；③ ticker 换算 `000001.SS → sh000001`、`399006.SZ → sz399006`；④ 单标的失败不回退成 0 行（保留 Yahoo 结果并打印）。补齐后 `cyb 243/259` == `sh 243/259` == `sz 243/259`。**口径交叉验证**：AkShare 对 `2026-09-09/10/11` 的 CYB 收盘 `3354.969 / 3338.422 / 3322.039` 与既有 history 行**逐值相同**，可作正确性判据。
 - **补写既有行空缺的安全边界（仅限 AkShare 权威补数）**：通用回填**只新增 date 不存在的行**（既有 `None` 有休市/未收盘语义）；唯一例外是 AkShare 补的 A 股键，判据三条同时成立才写：① 该键当前为 `None`、② 该行有 `sh`/`sz` 同类非空（证明是 A 股交易日）、③ 只经 `merge_history` 写（只更新非 None 键、不整行覆盖、不新增日期行）。`--no-patch-existing` 可关闭。实测 157 个键补写：**非 cyb 键改动 0、非法覆盖 0、缺同类行的 0、`last_values.json` SHA256 未变**。
 - **回填后必须核对「既有行零改动」与「`last_values.json` 未被动」**：用回填前备份逐键比对（`r.get(k) is not None and a.get(k) != r[k]` → 应为 0 条），并对 `last_values.json` 取 SHA256 前后比对。仅看"行数变多/无报错"不足以证明回填安全。
@@ -344,7 +344,7 @@
 - **「画图缩放」不是「展示换算」，展示位禁继承图表缩放（三十四期）**：概览卡的 GLD×10 是为与 BTC 万级数值共图归一化的**画图缩放系数**（style/数据管线概念），却被当成"金价"展示（3,987 vs 现货 ~4,348，语义错位）。报价位一律用品种本身的实时报价链路（/api/macro），需要新展示位时先问"这个数是什么语义"，别拿现成缩放值凑。另：并行会话/多执行者环境下改共享文件（app.js 的 OVERVIEW_CARDS/GROUPS），动手前 grep 确认没有其他会话的未提交改动叠加。
 - **资讯文件双写者边界（三十三期）**：`context/*.json` 只归 Python（generate_context 覆盖写）、`data/news.json` 只归 Hermes（Python 无搜索能力，决策 G）——Hermes 绝不写 context（会被快照运行覆盖），Python 绝不写 news。`/api/news` 读端逐层容错（坏 JSON/缺 title/url 非 http(s) 逐条过滤、cap 8）永不 500；`target=_blank` 必配 `rel="noopener noreferrer"`。**验证期样例 `data/news.json` 必须删除**（git 追踪范围内，不删会被 cron 提交成假资讯）。
 - **grep `data-placeholder` 盘点占位会漏掉「未打标的的死块」**：`#market-relation` 有 4 个写死 disabled 胶囊但从未打占位标记（外表存在、无功能、盘点清单里消失）。点亮这类块要先在页面上人工过一遍「只有外表没有功能」的区块，别只信标记 grep。
-- **周六跑 daily_report 会生成非交易日的 context/行工件**：ET 日期=当天（周六）→ `context/2026-09-12.json` 与 history 行落盘 → web `_load_latest_context` 选中它、顶栏/相关对都跟着变。验证后删工件（同 history 行处置），且「API 与 context 对照」必须取**最新日期**的 context 文件而非想当然的某个日期。
+- **周六跑 daily_report 会生成非交易日的 context/行工件**：ET 日期=当天（周六）→ `context/` 下会落一份 2026-09-12 的工件（`YYYY-MM-DD.json`，当天是周六）与 history 行 → web `_load_latest_context` 选中它、顶栏/相关对都跟着变。验证后删工件（同 history 行处置），且「API 与 context 对照」必须取**最新日期**的 context 文件而非想当然的某个日期。
 - **点亮占位块是「双点同步」操作**：`index.html` 摘 `data-placeholder="1"` 与 `app.js` 的 `PLACEHOLDERS` 注册表删同名项必须同一批改——只摘 HTML 会出现注册表渲染的「数据未接入」覆盖真值（renderPlaceholders 按注册表写 `.ph-note`），只删注册表则占位属性还在。verify_ui 的 G9/视口断言硬编码占位计数（3→2 需同步两处断言点）。
 - **storage.DB_PATH 是「补丁打使用方」纪律的有意例外**：storage 函数内 `db_path or DB_PATH` 是调用时属性查找，`monkeypatch.setattr(storage, "DB_PATH", tmp)` 单点全局生效（analyzer/web 全部经 storage 走）；故 14 个测试文件的 patch 点统一迁到 conftest `tmp_db` fixture + `seed_db`（等价旧"写 tmp history.json"），无需逐模块打补丁。
 - **NULL 是语义（休市/未收盘），三处必须保真**：迁移脚本 None→NULL、upsert preserve 模式 NULL 不抹（对应 merge_existing 定稿保护）、rows_to_records 全键补 None。change 列保留但一律 NULL（D3）——change_pct 一律读侧相邻收盘价派生，存时点值会引入基准分歧。
@@ -809,7 +809,7 @@
   `.card{background:transparent}` 时，这三张卡仍是 88% 白底（实测计算值 `rgba(255,255,255,.88)`），
   玻璃于是采样到「宿主自家白底」，卡内纹理**直接归零**（外观上只是"玻璃不明显"，不会报错）。
   ⇒ 让位规则必须把这三个 id 一并列出。**通用教训**：给宿主元素改背景/让位前先 `grep` 它有没有 id 级规则。
-- ⚠️ **套件皮肤根自带布局声明**：`skin-kit/css/liquid-skin.css` 的 `[data-liquid-skin]` 块带
+- ⚠️ **套件皮肤根自带布局声明**：套件里的 `liquid-skin.css`（当时路径是 `skin-kit/css/`，本项目 vendored 后落在 `web/static/skin/liquid-skin.css`）的 `[data-liquid-skin]` 块带
   `padding: 40px 24px 120px; min-height: 100vh; position: relative`（套件假设皮肤根是"应用内容列"，
   它的 demo 里就是个 div）。本项目把 `data-liquid-skin` 放在 `<html>` 上（令牌必须与 `data-theme` 同元素）
   ⇒ 不清掉这几条会让整页内缩 40/24/120px、总高 +160px。`mp-skin.css` 用 `html[data-liquid-skin]`（(0,1,1)）压回。
@@ -955,7 +955,7 @@
 - **修法**：ETF 加国内直连源（`_etf_series`：东财 → 新浪 `fund_etf_hist_sina` → 腾讯
   `stock_zh_a_hist_tx` → Yahoo），日期统一为**北京交易日**。
 - **另一个坑（换源时才发现）**：新浪/腾讯/东财的**历史文件都是盘后才更新**
-  （`hisdata_klc2/klc_kl.js`），盘中取不到当日 bar ⇒ 只换历史源会让 A 股午盘快照的「最新价」
+  （新浪行情站 URL 里的 `hisdata_klc2` 目录下的 `klc_kl.js`），盘中取不到当日 bar ⇒ 只换历史源会让 A 股午盘快照的「最新价」
   退化成上一交易日收盘（旧 Yahoo 路给的是盘中实时价：11:45 快照 515300=1.354，既非 10-09
   收盘 1.338 也非当日收盘 1.357）。故配套 `_etf_quote`（腾讯 `qt.gtimg.cn`，字段 `[3]` 当前价 /
   `[30]` 时间戳；**不需要 Referer**，新浪 `hq.sinajs.cn` 不带 Referer 会 403）把当日 bar 补进序列。
@@ -1031,7 +1031,7 @@
 - **量法**：`el.innerHTML = 'aaa'; el.innerHTML = 'b'` 后读回 —— 原生得 `'b'`，被前置化得 `'baaa'`（探针用**游离节点**，不触发布局）。比「源码里有没有 `defineProperty`」可靠：压缩/间接实现会漏源码特征，行为探针不会。命中后**把被改写 setter 的源码片段打进 console**（`Function.prototype.toString.call(descriptor.set)`）—— 片段通常直接点名肇事扩展/用户脚本。
 - **已落**：`web/static/dom-write-guard.js`（方案 ③ 检测 + 方案 ① 修回替换语义；6 页 head 里**最先**执行 ⇒ 首帧前就能认出；晚改写与克隆型在 `DOMContentLoaded` +1.5s 复查），标记 `<html data-dom-write-patched>` / `data-dom-write-repaired` / `data-dom-write-repair-failed` / `data-dom-write-dup-ids`；验收 `scripts/verify/verify_dom_write_guard.py`（四例 × chromium+firefox：干净环境不得误报 / 前置注入必须被认出**且连点 3 次刷新后概览恒为 6 小卡** / 克隆注入必须被认出 / 描述符被锁时优雅降级）。⚠️ 新增静态资源必须登记 `web/app.py` 的 `_ASSET_FILES`，否则改它不换 `?v=`，验收会吃旧副本。
 - **修写入语义要「先清空再委派」，不要「从干净 realm 取原生访问器覆盖回去」**（2026-10-17 实测否掉）：内容脚本 `all_frames` 是常见配置 ⇒ 新 iframe 的 realm **同样被改写**，取回的「原生」就是被改写的那一个；更糟的是跨 realm 委派会把页面**写崩** —— 注入层开始抛 `Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'`，于是「修」比「不修」更坏。正确做法：给命中的 setter 套一层 `set(v){ while(this.firstChild) this.removeChild(this.firstChild); return 原setter.call(this,v); }` —— 不依赖干净 realm、不跨 realm、把「前置插入/追加」都抹平，且只在探针命中时安装（干净环境零改动）。**判据要钉用户可见症状**（连点 3 次刷新后概览仍 6 小卡），不是「标记出现了」。
-- **静态排查的边界（别重复踩）**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）会超时；Firefox 的 `storage/default/` 按**每个源一个目录**铺开（含用户打开过的本地 html 路径），全量扫同样超时 —— 要查用户脚本得先按 UUID 定位到具体扩展的 `idb`。已知会 hook 同族 API 的扩展：AdGuard（`vendors/tsurlfilter.js` 的 `prevent-innerHTML` scriptlet，语义是**吞掉写入**，与「重复」不符）、**PopUpOFF**（2026-10-17 实测元凶：隔离世界内容脚本克隆卡片）、Mira Translator（双语模式**克隆块**并 `insertAdjacentElement('afterend')` 插在原文之后）。
+- **静态排查的边界（别重复踩）**：`grep -rIl` 扫整个 `/d/hapi`（含 `node_modules`）会超时；Firefox 的 `storage/default/` 按**每个源一个目录**铺开（含用户打开过的本地 html 路径），全量扫同样超时 —— 要查用户脚本得先按 UUID 定位到具体扩展的 `idb`。已知会 hook 同族 API 的扩展：AdGuard（扩展包内的 `tsurlfilter.js`，其 `prevent-innerHTML` scriptlet 语义是**吞掉写入**，与「重复」不符）、**PopUpOFF**（2026-10-17 实测元凶：隔离世界内容脚本克隆卡片）、Mira Translator（双语模式**克隆块**并 `insertAdjacentElement('afterend')` 插在原文之后）。
 
 ## 前端验收 verify_ui 的「crosshair 组」会随机红（2026-10-17 实测）
 
@@ -1123,7 +1123,7 @@ refract 档下它反而生效，所以这个冲突只在 frost 档可见 —— 
 ## A 股指数被写成 `0.0`：盘前重跑日报 + spot 零价（2026-11-02 事故，2026-11-04 修复）
 
 **症状**：`history` 里 `2026-11-02` 的 `sz`/`cyb` 是 `0.0`（不是 `NULL`）⇒ 日报 A 股表 `0.00 / -100.00%`、
-`alerts/2026-11-02-close.md` 两条假 WARN、`context/2026-11-02.json` 的 `indices`/`history_30d`/`breach`
+`alerts/` 下 2026-11-02 的收盘告警文件里两条假 WARN、`context/2026-11-02.json` 的 `indices`/`history_30d`/`breach`
 （`triggered: true`）全被污染，前端涨跌幅 `-100%`。
 
 **根因链（用 `git show <sha>:data/marketpulse.db` 逐提交比对确认）**：
@@ -1169,31 +1169,33 @@ spot 零价时**降级走日线接口**，两路都无效则抛异常 → `fetch
 | 点号表达式 | `src/econ_calendar.KINDS`、`web/app.py:_ASSET_FILES` | 模块属性引用 |
 | 包名 | `@avenra/liquid-glass@1.2.0` | npm 依赖 |
 | 子目录相对路径 | `skin/tokens.css`（相对 `web/static/`） | 文档里的简称 |
-| 只读 vendored | `web/static/vendor/liquid-glass/README.md` 里的 `dist/*` | 上游包自带的示例 |
+| 自写 vendored README | `web/static/vendor/liquid-glass/README.md` 的「来源」列写的 `包内 dist/…` | 描述上游包内布局，不是本仓路径 |
 
-**本仓处置**：机制文件不本地 fork（同步规则）⇒ 回滚到同步前版本 + 记 `keep-local`：
-`scripts/check-gates.sh`、`scripts/check-gates.awk`（整份）、`tasks/_template/journal.md`（整份）、
-`docs/agents/任务分级.md`（只改「规模底线」一段：删掉本仓未实现的「在飞 T0/T1 累计 + 点名 + 本次改动」）。
-其余机制文件照常升级；content 文件（`AGENTS.md` / `README.md` / `tasks/README.md`）里凡是描述
-「闸门会拦什么」的句子，一律按**实际启用的**校验写，不写上游客厅里的能力。
+**本仓处置（当日第一轮）**：机制文件不本地 fork（同步规则）⇒ 先回滚到同步前版本 + 记 `keep-local`
+（`scripts/check-gates.sh` / `.awk`、`tasks/_template/journal.md`、`docs/agents/任务分级.md`），
+同时把 content 文件里描述「闸门会拦什么」的句子按**实际启用的**校验改写。
 
-**回滚同时放弃了 3 项模板修复**（下次同步别只看断链 bug）：
-① `emit_violations` 数**非空行**（否则汇总项数比屏幕多 1）；② `check_scale` 的空索引短路与在飞任务累计；
-③ `journal` 的「下次注意什么」改成**按条目**判（续行里的 `→` 也算）。现状是**逐行判**，
-`tasks/_template/journal.md` 里「条目一行 + 缩进 `→` 下一行」的示范在本仓**会被闸门判红**，
-所以那份模板也回滚了；`tasks/README.md` 第 117 行也改成明写「同一行，续行不算」。
+**已解除（同日第二轮，上游 `115092e`）**：D1–D4 全部修好 ⇒ 四个 `keep-local` 全撤、机制文件升到模板版，
+同一条命令 **385 → 2 项**（扫描文件数 477 → 64）。剩下 2 项是 vendored 目录 README 里描述的
+**上游包内布局**（`dist` / `styles`）——那份 README 是本项目自己写的 provenance 文档（`bbe9023`
+创建，上游包本体只有 css/js/LICENSE），不属于「原样禁改写」范围，已把两处改成「`dist` 目录下的
+`liquid-glass.esm.js`」这种不带斜杠链的写法（闸门对**含 `/` 且带扩展名**的串才判，`<name>`、
+`YYYY`、无斜杠的裸文件名都不判）。
 
-**上游报告**：已写成报告 `tasks/2026-11-05-scaffold-sync/upstream-report.md`（提交给脚手架维护方，
-同内容副本投在其仓库根 `UPSTREAM-BUGS-2026-11-05-marketpulse.md`）——缺陷 ①（`find` 不尊重 `.gitignore`）、
-②（`emit_link` 对占位符 / CSS 类名串 / 点号表达式 / 包名误判）、③（journal 逐行 vs 按条目）、
-④（`- 返工: 0 次` 被 `count_result_items` 当成一条验证结果 ⇒ 验证结果为空的 journal 能过闸门）、
-⑤（`--keep-local` 有一次没写回 `.scaffold-version`，未复现）。报告里每条都带最小复现与建议修法。
-下次同步前先看上游有没有修 ①②③，修了再解 `keep-local`。
+**教训（对文档本身）**：写「某文件在包内/外部目录下」这类**非仓库路径**时，不要写成「目录/文件名」的样子
+——闸门按形状判断，形状像路径就会去仓库里找。写成「`dist` 目录下的文件名」既准确又不会被误判。
+
+**上游报告**：`tasks/2026-11-05-scaffold-sync/upstream-report.md`（副本投在脚手架仓库根
+`UPSTREAM-BUGS-2026-11-05-marketpulse.md`）——D1（`find` 不尊重 `.gitignore`）、D2（`emit_link` 误判
+占位符 / 类名串 / 点号表达式 / 包名）、D3（journal 逐行 vs 按条目）、D4（`- 返工: 0 次` 被当成一条验证
+结果）**均已修**（`9d2d6b7`/`115092e`）；D5（`--keep-local` 有一次没写回）**仍未复现**，上游只把提示文案改成「登记裁决（收尾统一写盘）」并加了写盘确认行；D6（缺项目级
+`.gates-ignore` 排除表）仍开放——本项目已不需要它（那份 README 是自己写的），但仓库里若真的 vendored
+一份第三方文档，仍会撞同一面墙。
 
 记录格式是 `decision <策略> <路径> <模板 blob sha>`，sha 用
 `git -C <脚手架仓库> rev-parse <模板提交>:templates/<路径>`。**手写才可靠**：更新器在
 `--keep-local` 那一次没改动任何项目文件时**不会**把裁决写回 `.scaffold-version`
-（实测：`--write --keep-local …` 只打印「记下裁决」，文件里没有这两行；`--refresh-gate-count` 只更新计数）。
+（实测：`--write --keep-local …` 只打印「记下裁决」（`115092e` 起文案改成「登记裁决（收尾统一写盘）」），文件里没有这两行；`--refresh-gate-count` 只更新计数）。
 
 **自查**：同步后先跑 `sh scripts/check-gates.sh | tail -3`，再看 `.scaffold-version` 的
 `gate_violations` 是否等于当前真实值（更新器只在它自己那次运行里统计，可能与磁盘现状脱节）。

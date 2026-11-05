@@ -1,11 +1,7 @@
 scaffold=/d/Obsidianhouse/AISTUDY/project-scaffold/project-scaffold
 project_name=MarketPulse
-commit=f0a83d00cb3802ad2fb9a4193f29d0aae79bdb8e
+commit=115092e8b03408b5ef3b943a7b322a79118cae6b
 baseline_source=version-file
 updated=2026-11-05
 gate_violations=0
-decision keep-local docs/agents/任务分级.md b18e60a5cfb898d1a0dfd4db83eceb96dd7a590f
-decision keep-local scripts/check-gates.awk d37357ac25fde19780b8bbe2b412305f04305ed0
-decision keep-local scripts/check-gates.sh 93b1feff678bb76d5c56c4a8f03da000bae0633d
 decision keep-local skills/pre-review/SKILL.md fbefb58b6ce2f8c4a1bc3a122aad785f820d526e
-decision keep-local tasks/_template/journal.md 943334256d5d1855bfd90d15e1f422294a65e921

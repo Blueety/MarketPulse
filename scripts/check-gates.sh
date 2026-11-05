@@ -29,6 +29,13 @@
 #   - review.md（裁决单）：任务档位是 T2 / T3 时必须存在——plan.md / prd.md / 切片里
 #                          **任何一处**声明了 T2/T3 就算，不依赖 plan.md 是否存在；
 #                          章节齐全、固定点已填、逐条处理表非空、「审查者明确未判断的」不许留空
+#   - 文档内相对引用：根目录 md、docs/、skills/ 里用反引号或 markdown 链接写下的
+#                      相对路径必须存在（围栏代码块、带占位符的示例不算）。
+#                      tasks/ 整个跳过——那是快照，断链属于历史。
+#   - docs/adr/：任何 `ADR-NNNN` 引用都要有文件；`Superseded-By` 与 `Supersedes`
+#                必须互指；写了 Superseded-By 就不能还是 `Status: accepted`
+#   - 决策锚点（只提示，不影响退出码）：代码里的 `# 决策: ADR-NNNN` 注释，
+#                指向不存在的 ADR 或没写目标时打一条 [!]。
 #   - 架构：docs/architecture.md 的模块表 vs 实际模块目录（双向，模块根默认 src）。
 #          表里全是宽声明（模块根本身或它的祖先）时，全量自查会提示一句：新增子目录不会被检查。
 #          模块目录 = 模块根下**非空**的直接子目录（含还没 git add 的），点目录和被
@@ -120,8 +127,11 @@ check_gate_b() {
 emit_violations() {
     [ -n "$1" ] || return 0
     printf '%s\n' "$1"
+    # 数**非空行**。调用方攒出来的字符串常常以换行结尾（`out="$out$line\n"`），
+    # `<<<` 又会补一个换行，于是末尾多出一条空行被算成 1 项违规——
+    # 屏幕上显示 4 条，收尾却写「闸门检查失败：5 项」。
     local n=0 l
-    while IFS= read -r l; do n=$((n + 1)); done <<< "$1"
+    while IFS= read -r l; do [ -n "$l" ] && n=$((n + 1)); done <<< "$1"
     violations=$((violations + n))
 }
 
@@ -132,6 +142,159 @@ check_plan()    { run_check plan    "$1"; }
 check_prd()     { run_check prd     "$1"; }
 check_journal() { run_check journal "$1"; }
 check_slice()   { run_check slice   "$1"; }
+
+# 文档里的相对引用必须指向真实存在的文件。
+#
+# 为什么要有这条：`templates/AGENTS.md` 曾经指向 `WORKFLOW.md`（那个文件不随模板
+# 分发，生成出来的项目里根本没有），三个角色提示词指向 `architecture.md` 里不存在
+# 的小节。这类断链只能靠人读到才发现，而这套规则的价值恰恰在于「换个人/AI 接手时
+# 顺着指针能找到东西」。
+#
+# 只查**活文档**：根目录的 md、`docs/`、`skills/`、`tasks/README.md`。
+# `tasks/<任务>/` 是快照（任务结束后可能改名、删文件，那里的断链是历史不是缺陷），
+# `tasks/_template/` 是**填空模板**（里面的示例路径本来就指向还不存在的东西）——
+# 这两类跳过。注意 `tasks/README.md` 是活文档，不跳过：
+# 约定、归档流程、闸门说明都写在那里，它的断链和 `docs/` 里的一样有害。
+#
+# 只查**像文件**的引用（最后一段带扩展名）。纯目录引用（`src/`、`docs/adr/`）不查：
+# 空目录进不了 git，模板里也用它们做示意。
+check_links() {
+    local f ref line n=0 out="" total=0 resolved cand b
+    local -a files=() all=()
+    local -A bybase=()
+
+    # 文件清单用 git 拿，**不用 `find`**：`find` 会扫进 `.gitignore` 里的东西
+    # （venv/、node_modules/、构建产物、编辑器缓存），那些目录里成千上万个
+    # 第三方 README 全是别人的相对链接，跟这个项目没关系。实测一个 Python 项目
+    # 因此多出 313 条假违规。不在 git 仓库里时才退回 find。
+    if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+        # `core.quotepath=false`：默认会把非 ASCII 文件名转义成 `"\344\273..."`，
+        # 那样 awk 打不开这些文件、直接报错退出，后面的文件一个都不会被扫到
+        # （表现为「明明是断链却全绿」）。
+        while IFS= read -r f; do
+            case "$f" in
+                tasks/README.md) ;;
+                tasks/*) continue ;;
+            esac
+            files+=("$f")
+        done < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard -- '*.md' 2>/dev/null | sort)
+        while IFS= read -r f; do all+=("$f"); done \
+            < <(git -C "$root" -c core.quotepath=false ls-files -co --exclude-standard 2>/dev/null)
+    else
+        while IFS= read -r f; do
+            case "$f" in
+                ./tasks/README.md) ;;
+                ./tasks/*) continue ;;
+            esac
+            files+=("${f#./}")
+        done < <(find . -name '*.md' -type f 2>/dev/null | sort)
+        while IFS= read -r f; do all+=("${f#./}"); done \
+            < <(find . -type f -not -path './.git/*' 2>/dev/null | sort)
+    fi
+    total="${#files[@]}"
+    [ "$total" -gt 0 ] || return 0
+
+    # 后缀索引：文档里常写简称（`static/app.js` 而真实路径是 `web/static/app.js`）。
+    # 按 basename 建表，未命中的引用再看有没有哪个已跟踪文件以 `/<ref>` 结尾。
+    # 只用于**放行**，不用于报错——报错仍然要求精确匹配。
+    for cand in ${all[@]+"${all[@]}"}; do
+        b="${cand##*/}"
+        bybase["$b"]="${bybase[$b]:-}|$cand"
+    done
+
+    while IFS=$'\t' read -r f ref; do
+        [ -n "$ref" ] || continue
+        [ -e "$ref" ] && continue
+        resolved=0
+        b="${ref##*/}"
+        for cand in ${bybase[$b]:-}; do
+            [ -n "$cand" ] || continue
+            case "$cand" in
+                "$ref"|*"/$ref") resolved=1; break ;;
+            esac
+        done
+        [ "$resolved" -eq 1 ] && continue
+        line="  [x] $f: 引用的 $ref 不存在"
+        out="$out$line
+"
+        n=$((n + 1))
+    done < <(awk -v kind=links -f "$AWK_PROG" "${files[@]}" 2>/dev/null | sort -u)
+
+    [ "$n" -gt 0 ] && printf '检查文档内的相对引用（%d 个文件）\n' "$total"
+    emit_violations "$out"
+}
+
+# ADR 的引用与取代关系。见 check-gates.awk 的 adr_check。
+check_adr() {
+    local -a adrs=()
+    local p
+    for p in docs/adr/[0-9][0-9][0-9][0-9]-*.md; do
+        [ -f "$p" ] && adrs+=("$p")
+    done
+    [ "${#adrs[@]}" -gt 0 ] || return 0
+    emit_violations "$(awk -v kind=adr -f "$AWK_PROG" "${adrs[@]}" 2>/dev/null)"
+}
+
+# 代码里的决策锚点：`# 决策: ADR-0003`（`//` 同理）。
+#
+# 只做**提示**（note，不影响退出码），因为它三条判据的价值不对称：
+# 「悬空锚点」该修；「这条 ADR 没有代码引用」不该报（「用 SQLite」这类决定本来
+# 就不落在某一行代码上）；「锚点格式不对」也可能只是注释里的自然行文。
+# 加进失败会让全量自查常年红，而常年红的结果就是没人再看它。
+#
+# 为什么值得有：`docs/architecture.md` 讲的是模块级，「这行为什么这么写」在代码里
+# 没有出口。注释指向 ADR 是唯一的低成本路径，而注释最容易在重构中变成死链。
+check_anchors() {
+    local staged="$1" root="$2" hits=""
+    local -a adrs=()
+    local p id line rest num found
+    for p in "$root"/docs/adr/[0-9][0-9][0-9][0-9]-*.md; do
+        [ -f "$p" ] || continue
+        id="${p##*/}"; adrs+=("${id:0:4}")
+    done
+
+    if [ "$staged" -eq 1 ]; then
+        hits="$(git -C "$root" grep -I -n --cached -e '决策:' -- \
+            ':(exclude)*.md' ':(exclude)*check-gates.sh' \
+            ':(exclude)node_modules/*' ':(exclude)*/node_modules/*' 2>/dev/null || true)"
+    elif git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+        hits="$(git -C "$root" grep --untracked --exclude-standard -I -n -e '决策:' -- \
+            ':(exclude)*.md' ':(exclude)*check-gates.sh' \
+            ':(exclude)node_modules/*' ':(exclude)*/node_modules/*' 2>/dev/null || true)"
+    else
+        hits="$( cd "$root" && find . -type f \
+            ! -path './.git/*' ! -path '*/node_modules/*' \
+            ! -name '*.md' ! -name 'check-gates.sh' \
+            -exec grep -H -I -n '决策:' {} + 2>/dev/null | sed 's|^\./||' || true)"
+    fi
+    [ -n "$hits" ] || return 0
+
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in
+            *ADR-*) ;;
+            *) note "锚点没写目标（应写成「决策: ADR-0001」）：$line"; continue ;;
+        esac
+        # 取 ADR- 之后的**前导数字**。不用 `substr`/`${v:0:4}`：
+        # C locale 下那是按字节切，中文会被切坏（见 check-gates.awk 里同一类坑）。
+        rest="${line#*ADR-}"
+        num="${rest%%[!0-9]*}"
+        case "$num" in
+            [0-9][0-9][0-9][0-9]) ;;
+            *) note "锚点的 ADR 编号不是 4 位数字：$line"; continue ;;
+        esac
+        if [ "${#adrs[@]}" -eq 0 ]; then
+            note "锚点指向 ADR-$num，但 docs/adr/ 里还没有任何 ADR：$line"
+            continue
+        fi
+        found=0
+        for id in "${adrs[@]}"; do
+            [ "$id" = "$num" ] && { found=1; break; }
+        done
+        [ "$found" -eq 1 ] || note "锚点指向 ADR-$num，但 docs/adr/ 里没有这个文件：$line"
+    done <<< "$hits"
+    return 0
+}
 
 # 任务是否已经「开工」——决定 T2/T3 的裁决单要不要。
 # 判据是「任务目录里除了 prd.md / journal.md / review.md 还有没有别的文件」，
@@ -211,7 +374,11 @@ count_code_changes() {
 check_scale() {
     local staged="$1" root="$2"; shift 2
     [ "$staged" -eq 1 ] || return 0
-    local d base n max=0
+    # 索引里没有代码改动 ⇒ 没有「这次提交」可判。
+    # 不短路的话，下面按任务累计的分支算的是 base→索引；索引等于 HEAD 时
+    # 那就是「该任务开始以来的全部改动」，历史 T0/T1 任务一律 ≥4 ⇒ 空跑必红。
+    git -C "$root" diff --cached --quiet -- "${MODULE_ROOT%/}" 2>/dev/null && return 0
+    local d base n max=0 max_dir="" who
     # 空树的 SHA：任务起点那个提交本身就是根提交时，`base^` 不存在，
     # 从空树算起才等同于「这个任务从零开始」。
     local empty_tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
@@ -221,9 +388,28 @@ check_scale() {
     done
     if [ "${#cands[@]}" -eq 0 ]; then
         # 这次提交没碰任何任务目录——最常见的是「计划先提交、代码后提交」。
-        # 直接量本次索引：**不要**退回「所有在飞任务」。退回去的话，仓库里只要
-        # 躺着一个 T2 任务，规模底线就永久失效，而这正是 T0/T1 不等确认的唯一兜底。
-        n="$(count_code_changes "" "$root")"
+        # 这时不能只看本次索引：把 T2 的活拆成两次提交就能溜过去。
+        # 但也不能退回「所有在飞任务」然后见到 T2 就让位——那样仓库里躺着一个
+        # 没归档的 T2 任务，规模底线就永久失效。只累计**声明为 T0/T1** 的任务。
+        #
+        # 起点是「本次索引自己的改动数」：仓库里只有 T2/T3 在飞时（T0 不建目录，
+        # 所以这是常态），没有任何 T0/T1 任务可以归属，这几处改动仍然要有人认领。
+        max="$(count_code_changes "" "$root")"
+        for d in "$root"/tasks/*/; do
+            d="${d%/}"; d="${d#"$root"/}"
+            # 模板目录不是任务：它的 plan.md 档位是 `T?`，会被当成 T0/T1，
+            # 而它的起点是脚手架落地那次提交——于是「累计」把项目至今的全部
+            # src 改动都算进一个假任务里，任何只改代码的提交都被拦。
+            case "$d" in tasks/_template) continue ;; esac
+            [ -f "$root/$d/plan.md" ] || continue
+            task_is_high_tier "$d" && continue
+            base="$(git -C "$root" log --diff-filter=A --format=%H -1 -- "$d/plan.md" 2>/dev/null)"
+            [ -n "$base" ] || continue
+            base="$(git -C "$root" rev-parse -q --verify "$base^" 2>/dev/null || printf '%s' "$empty_tree")"
+            n="$(count_code_changes "$base" "$root")"
+            if [ "$n" -gt "$max" ]; then max="$n"; max_dir="$d"; fi
+        done
+        n="$max"
     else
         # 按**任务**累计，不按单次提交：从 plan.md 进入历史的那次提交之前算起。
         # 只量本次 diff 的话，把 T2 的活拆成两次提交就能溜过去——而「一个任务
@@ -234,12 +420,20 @@ check_scale() {
                 base="$(git -C "$root" rev-parse -q --verify "$base^" 2>/dev/null || printf '%s' "$empty_tree")"
             fi
             n="$(count_code_changes "$base" "$root")"
-            [ "$n" -gt "$max" ] && max="$n"
+            if [ "$n" -gt "$max" ]; then max="$n"; max_dir="$d"; fi
         done
         n="$max"
     fi
     [ "$n" -ge 4 ] || return 0
-    fail "这个任务的代码改动累计 $n 个 $MODULE_ROOT 下的文件，但没有声明 T2/T3 —— 按 docs/agents/任务分级.md 的 6 条信号，文件数 ≥ 4 就是 T2。把 plan.md 的档位升到 T2 并补 review.md（3.4 批准 + 3.8 独立审查）；如果这些文件分属别的任务，说明这个提交混了多个任务，按「一个任务一个提交」拆开"
+    # 报出是哪个任务超的：仓库里几十个 T0/T1 任务时，只说「这个任务」等于让人手算。
+    # 没有可归属的任务（改动全在本次索引里）时主语换成「本次改动」，别再拼出
+    # 「任务 （本次改动） 的…」这种半句话。
+    if [ -n "$max_dir" ]; then
+        who="任务 $max_dir"
+    else
+        who="本次改动"
+    fi
+    fail "$who 的代码改动累计 $n 个 $MODULE_ROOT 下的文件，但没有声明 T2/T3 —— 按 docs/agents/任务分级.md 的 6 条信号，文件数 ≥ 4 就是 T2。把 plan.md 的档位升到 T2 并补 review.md（3.4 批准 + 3.8 独立审查）；如果这些文件分属别的任务，说明这个提交混了多个任务，按「一个任务一个提交」拆开"
 }
 
 # ---------------------------------------------------------------- 架构
@@ -434,6 +628,12 @@ main() {
 
     # 架构：模块表 vs 实际目录。仓库状态不变量，两种模式都跑
     check_architecture "$staged" "$root"
+
+    # 文档内相对引用 + ADR 互链：都是「仓库状态」不变量，和具体任务无关
+    check_links
+    check_adr
+    # 代码里的 `决策: ADR-NNNN` 锚点：只提示，不影响退出码
+    check_anchors "$staged" "$root"
 
     # 要检查哪些任务目录
     local dirs=()

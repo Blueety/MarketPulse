@@ -5,8 +5,8 @@
 
 | 文件 | 来源 | 说明 |
 | --- | --- | --- |
-| `liquid-glass.css` | 包内 `styles/liquid-glass.css` | 引擎自身样式（`.lg-inner` / `.lg-clone` / 各控件） |
-| `liquid-glass.esm.js` | 包内 `dist/liquid-glass.esm.js` | 自包含 ESM（零运行时依赖）；由 `web/static/skin.js` **动态 import** |
+| `liquid-glass.css` | 包内 `styles` 目录下的 `liquid-glass.css` | 引擎自身样式（`.lg-inner` / `.lg-clone` / 各控件） |
+| `liquid-glass.esm.js` | 包内 `dist` 目录下的 `liquid-glass.esm.js` | 自包含 ESM（零运行时依赖）；由 `web/static/skin.js` **动态 import** |
 | `LICENSE-avenra-liquid-glass.txt` | 包内 `LICENSE` | MIT 文本（分发时保留的义务）；上游作者 DevSam7t3 |
 
 - 版本锁定：`1.2.0`（`web/static/skin/liquid-skin.css` 与 `skin-kit` 的类名契约按此版本对齐）。

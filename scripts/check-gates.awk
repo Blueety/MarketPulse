@@ -33,12 +33,22 @@ BEGIN {
     REVIEW_SECS[3] = "逐条处理"
     REVIEW_SECS[4] = "审查者明确未判断的"
     REVIEW_SECS[5] = "结论"
+
+    # 断链检查只认这些扩展名。见 emit_link 里的说明。
+    _n = split("md sh awk bash ps1 cmd py pyi js mjs cjs ts tsx jsx json jsonc yaml yml toml ini cfg conf css scss sass less html htm vue svelte astro go rs java kt kts c h cc cpp hpp cs fs rb php pl lua sql txt csv tsv lock xml svg png jpg ico", _e, " ")
+    for (_i = 1; _i <= _n; _i++) LINK_EXT[_e[_i]] = 1
 }
 
 # ---------------------------------------------------------------- 读入
 
 {
     line = $0
+
+    # kind=adr / kind=links 要一次扫多个文件（互链要跨文件判、断链要一次跑完），
+    # 记下每个文件的起止：L[] 是跨文件累积的，不留边界就会把 A 的行算到 B 头上。
+    if ((kind == "adr" || kind == "links") && FNR == 1) {
+        FIDX++; FSTART[FIDX] = NL + 1; FNAME[FIDX] = FILENAME
+    }
 
     # 剥掉 markdown 注释（含跨行）。模板注释里会出现「应该可以」
     # 「（从 prd.md 提取）」这类字样，不剥掉的话会误报。
@@ -86,6 +96,8 @@ END {
         print (high ? "yes" : "no"); exit
     }
     if (kind == "status")  { print md_token("结束状态"); exit }
+    if (kind == "links")   { links_dump(); exit }
+    if (kind == "adr")     { adr_check(); exit }
     if (kind == "modules") { modules_dump(); exit }
     if      (kind == "plan")    plan_check()
     else if (kind == "prd")     prd_check()
@@ -381,6 +393,9 @@ function count_result_items(text,   n, i, c) {
     for (i = 1; i <= n; i++) {
         if (ROWS[i] !~ /^[[:space:]]*([-*+][[:space:]]+|(（|\()?[0-9]+([.]|、|\)|）)[[:space:]]*)[^[:space:]]/) continue
         if (ROWS[i] ~ /(:|：)[[:space:]]*$/) continue
+        # 模板自带的固定字段不是「验证结果」：`- 返工: 0 次` 只要照抄模板就会出现，
+        # 算进来的话这一节永远非空，「没有一行结果」这条检查就废了。
+        if (ROWS[i] ~ /^[[:space:]]*[-*+][[:space:]]*(返工|被打回)[[:space:]]*[:：]/) continue
         c++
     }
     return c
@@ -399,7 +414,7 @@ function count_items(text,   n, i, c) {
 # ---------------------------------------------------------------- 模块表
 
 # `## 模块划分` 表第 2 列声明的路径，去掉反引号与尾斜杠。
-function modules_dump(   n, i, cells, nf, p, line) {
+function modules_dump(   n, i, cells, nf, p, line, npaths, k, seg, prev_dir) {
     n = md_section("模块划分")
     for (i = 1; i <= n; i++) {
         if (S[i] !~ /^[[:space:]]*\|/) continue
@@ -416,7 +431,21 @@ function modules_dump(   n, i, cells, nf, p, line) {
         sub(/^[[:space:]]+/, "", p); sub(/[[:space:]]+$/, "", p)
         sub(/\/+$/, "", p)
         if (p == "" || p == "路径" || p ~ /^-+$/) continue
-        print p
+        # 一格可以写多个路径，用「空格 + 空格」分隔（`c++`、`a+b` 这类名字不能被切）。
+        # 靠后的段如果自己不带 `/`，按**上一段所在的目录**解析——
+        # `…/settings/lastSession.ts + closeToTray.ts` 的另一半在同一个目录里。
+        npaths = split(p, PARTS, /[[:space:]]+\+[[:space:]]+/)
+        prev_dir = ""
+        for (k = 1; k <= npaths; k++) {
+            seg = PARTS[k]
+            gsub(/^[[:space:]]+/, "", seg); gsub(/[[:space:]]+$/, "", seg)
+            sub(/\/+$/, "", seg)
+            if (seg == "") continue
+            if (index(seg, "/") == 0 && prev_dir != "") seg = prev_dir "/" seg
+            print seg
+            prev_dir = seg
+            sub(/\/[^\/]*$/, "", prev_dir)
+        }
     }
 }
 
@@ -543,19 +572,55 @@ function journal_check(   i, missing, end_state, verify, changed) {
 # 在全量自查里是跳过的，`self-audit` 走查的也是文档一致性、不读历史 journal。
 # 这条只判**形式**（有没有写出口），不判内容质量——「写得对不对」机器管不了，
 # 判质量只会退化成勾选表演。
-function check_next_notes(   n, i, l) {
+#
+# 按**条目**判，不按行判：一个条目可以写两行——先说要记住什么，箭头另起一行。
+# 模板注释里给的就是这种排版，按行判会让模板自己的示例判红。
+function check_next_notes(   n, i, l, txt, item, item_line, have_item) {
     if (!has_section("下次注意什么")) return
-    n = split(section_text("下次注意什么"), NN_LINES, "\n")
+    txt = section_text("下次注意什么")
+    n = split(txt, NN_LINES, "\n")
+    have_item = 0
+    item = ""; item_line = ""
     for (i = 1; i <= n; i++) {
         l = NN_LINES[i]
         gsub(/\r/, "", l)
-        sub(/^[ \t]*([-*+]|[0-9]+\.)?[ \t]*/, "", l)
-        sub(/[ \t]+$/, "", l)
-        if (l == "") continue
-        if (l == "无" || l == "无。" || l == "N/A") continue
-        if (index(l, "→") > 0 || index(l, "不沉淀") > 0) continue
-        V("「下次注意什么」这条没有去向: " l " —— 每条要么 `→ pitfalls` / `→ 任务分级阈值` / `→ skills/<名>`，要么写「不沉淀」")
+        if (l ~ /^[ \t]*$/ || l ~ /^[ \t]*(```|~~~)/) continue
+
+        if (is_bullet(l)) {
+            flush_note(item, item_line, have_item)
+            item = l; item_line = i; have_item = 1
+        } else if (have_item) {
+            item = item "\n" l            # 续行：并进上一个条目
+        } else {
+            item = item "\n" l            # 第一个条目之前就出现的注记
+        }
     }
+    flush_note(item, item_line, have_item)
+}
+
+# 条目符号。和 count_listitems 同口径：`-` `*` `+`、`1.` `1)`，以及中文的 `1、` `1）`。
+# 只认半角点的话，用顿号编号的条目不被当成条目起始，整节会被并成一个条目，
+# 只要其中任意一行有去向就全部放行——静默免检。
+function is_bullet(l) { return l ~ /^[ \t]*([-*+][ \t]+|(（|\()?[0-9]+([.]|、|\)|）)[ \t]*)[^ \t]/ }
+
+# 一个条目里只要**任何一行**写了去向就算数。
+function flush_note(item, item_line, have_item,   l, n, i) {
+    if (item == "") return
+    n = split(item, NOTE_TMP, "\n")
+    for (i = 1; i <= n; i++) {
+        l = NOTE_TMP[i]
+        gsub(/^[ \t]*([-*+]|(（|\()?[0-9]+([.]|、|\)|）))?[ \t]*/, "", l)
+        sub(/[ \t]+$/, "", l)
+        if (l == "无" || l == "无。" || l == "N/A") return
+        if (index(l, "→") > 0 || index(l, "不沉淀") > 0) return
+    }
+    # 报错要能定位。条目可能以换行开头（前面是「第一个项目符号之前的散文」），
+    # 直接剥前缀会剥空，消息就变成「没有去向:  —— …」，指不到任何东西。
+    l = item
+    while (substr(l, 1, 1) == "\n") l = substr(l, 2)
+    sub(/^[ \t]*([-*+]|(（|\()?[0-9]+([.]|、|\)|）))[ \t]*/, "", l)
+    sub(/\n.*/, "", l)
+    V("「下次注意什么」这条没有去向: " l " —— 每条要么 `→ pitfalls` / `→ 任务分级阈值` / `→ skills/<名>`，要么写「不沉淀」")
 }
 
 # ---------------------------------------------------------------- NN-*.md 切片 / 决策条目
@@ -620,4 +685,187 @@ function review_check(   i, undecided) {
     gsub(/[[:space:]]/, "", undecided)
     if (undecided == "")
         V("「## 审查者明确未判断的」留空了（一条都没有就写「无」）——把「没判断」显式化，人才能看出盲区在哪")
+}
+
+# ---------------------------------------------------------------- 文档内的相对引用
+
+# 输出 `文件<TAB>引用`，由 bash 逐个 stat。放在 awk 里是为了
+# 「一个 markdown 解析器」——围栏代码块、行内代码、注释的剥离规则和别的检查同一套，
+# 否则会出现「文档里贴了一段命令，闸门把命令里的路径当真」。
+#
+# 跳过的东西（都是模板里真实存在的写法）：
+#   - 围栏代码块内的内容（示例命令、目录树）
+#   - 带占位符的路径：`<日期>` `{x}` `*` `$`
+#   - 外部链接、锚点、绝对路径
+function links_dump(   i, j, end, l, fence, segs, n, k, s, r) {
+    for (i = 1; i <= FIDX; i++) {
+        end = (i < FIDX ? FSTART[i + 1] : NL + 1)
+        fence = 0
+        for (j = FSTART[i]; j < end; j++) {
+            l = L[j]
+            if (l ~ /^[ \t]*(```|~~~)/) { fence = !fence; continue }
+            if (fence) continue
+
+            # 行内代码：`path`
+            n = split(l, segs, "`")
+            for (k = 2; k <= n; k += 2) emit_link(FNAME[i], trim(segs[k]))
+
+            # markdown 链接：[文字](path)
+            r = l
+            while (match(r, /\]\([^)]+\)/)) {
+                s = substr(r, RSTART + 2, RLENGTH - 3)
+                emit_link(FNAME[i], trim(s))
+                r = substr(r, RSTART + RLENGTH)
+            }
+        }
+    }
+}
+
+function trim(s) {
+    sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
+    sub(/^["']/, "", s); sub(/["']$/, "", s)
+    return s
+}
+
+function emit_link(file, s,   last, t, ext) {
+    if (s == "") return
+    # 不是相对路径：外部 URL、锚点、绝对路径、带占位符/通配符的
+    if (s ~ /^[a-zA-Z]+:\/\//) return
+    if (s ~ /^#/) return
+    if (s ~ /^\//) return
+    if (s ~ /[<>{}*$|]/) return
+    if (s ~ /\.\.\./) return
+    if (s ~ /NNNN/) return
+    # 日期占位符：`reports/YYYY-MM-DD.md`、`history_YYYY-MM.json`。
+    # 命名约定不是路径，但它们的扩展名看着像文件，只能靠 YYYY 认出来。
+    if (index(s, "YYYY") > 0) return
+    # 以点开头的是类名/选择器列表（`.card/.kpi-card/.topbar`）。真正的相对路径
+    # 只有 `./x` 一种写法，单独放行。
+    if (substr(s, 1, 1) == "." && substr(s, 1, 2) != "./") return
+    if (s ~ /[ \t]/) return
+    # env 赋值 / shell 片段：`KEY=/path`、`--out=docs/x.md`。
+    # 用「前缀 + =」而不是「整串含 =」：后者会漏掉 `src/a=b.py` 这种真文件名。
+    if (s ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || s ~ /^--[A-Za-z0-9-]+=/) return
+    # 后缀不属于路径：pytest node id `path::test_x`、行号 `path:120`、
+    # 模块属性 `web/app.py:_ASSET_FILES`。剥掉之后**只判文件那一段**。
+    # 先剥 `::` 再剥 `:120` / `:IDENT`，复合写法 `x.md:12::foo` 需要这个顺序。
+    sub(/::.*$/, "", s)
+    sub(/:[0-9]+$/, "", s)
+    sub(/:[A-Za-z_][A-Za-z0-9_]*$/, "", s)
+    if (s == "") return
+    if (index(s, "/") == 0) return
+
+    # **只查认得扩展名的引用。** 这一条同时挡掉模块属性（`env_util.require_env`）、
+    # 常量引用（`x.KINDS`）、npm 包名（`@scope/pkg@1.2.0`）、点号表达式（`.is_readonly(`）
+    # ——它们的「扩展名」是标识符片段，不是文件类型。
+    # 代价：项目用了列表外的后缀时查不到；加后缀比加特例便宜。
+    last = s
+    sub(/[\/]+$/, "", last)
+    # 裸域名（`youtu.be/`）：去掉尾斜杠后没有内部 `/`，不是相对路径
+    if (index(last, "/") == 0) return
+    sub(/.*\//, "", last)
+    ext = tolower(last)
+    if (ext !~ /\./) return
+    sub(/.*\./, "", ext)
+    if (!(ext in LINK_EXT)) return
+    # 去掉行尾的标点（中文句读紧跟在反引号外的情形）
+    sub(/[，。；：、）)]+$/, "", s)
+    if (s == "" || index(s, "/") == 0) return
+    print file "\t" s
+}
+
+# ---------------------------------------------------------------- ADR
+
+# 一次扫 docs/adr/*.md。检查两件事：
+#   1. 任何 `ADR-<4 位数字>` 引用都要有对应的文件
+#   2. 被取代必须互链：A 写 Superseded-By: ADR-0007，0007 就得写 Supersedes: ADR-0001
+#
+# 为什么必须互链：只说「这被取代了」而不说「被谁取代」，半年后读的人走到断头路；
+# 只在新的那篇里写「我取代了旧的」，旧的那篇就会继续被人当成现行决定引用。
+function adr_check(   i, j, end, l, id, ids, n, k, r, t, have) {
+    for (i = 1; i <= FIDX; i++) {
+        end = (i < FIDX ? FSTART[i + 1] : NL + 1)
+        id = adr_id(FNAME[i])
+        if (id == "") continue
+        ADR_FILE[id] = FNAME[i]
+
+        for (j = FSTART[i]; j < end; j++) {
+            l = L[j]
+
+            if (match(l, /Superseded-By:[ \t]*ADR-[0-9][0-9][0-9][0-9]/)) {
+                t = substr(l, RSTART, RLENGTH); sub(/.*ADR-/, "", t)
+                SUPER_BY[id] = SUPER_BY[id] " " t
+            }
+            if (match(l, /Supersedes:[ \t]*ADR-[0-9][0-9][0-9][0-9]/)) {
+                t = substr(l, RSTART, RLENGTH); sub(/.*ADR-/, "", t)
+                SUPERSEDES[id] = SUPERSEDES[id] " " t
+            }
+            if (match(l, /^Status:[ \t]*[A-Za-z-]+/)) {
+                t = substr(l, RSTART, RLENGTH); sub(/^Status:[ \t]*/, "", t)
+                STATUS[id] = tolower(t)
+            }
+
+            # 正文/小节里出现的所有引用
+            r = l
+            while (match(r, /ADR-[0-9][0-9][0-9][0-9]/)) {
+                t = substr(r, RSTART + 4, 4)
+                ALSO[id] = ALSO[id] " " t
+                r = substr(r, RSTART + RLENGTH)
+            }
+        }
+    }
+
+    # 1. 引用存在性
+    for (i = 1; i <= FIDX; i++) {
+        id = adr_id(FNAME[i])
+        if (id == "") continue
+        n = split(ALSO[id] " " SUPER_BY[id] " " SUPERSEDES[id], REFS, " ")
+        for (k = 1; k <= n; k++) {
+            t = REFS[k]
+            if (t == "" || t == id) continue
+            if (!(t in ADR_FILE)) {
+                if (index(SEEN[id ">" t], "x") == 0) {
+                    SEEN[id ">" t] = "x"
+                    print "  [x] " FNAME[i] ": 引用了 ADR-" t "，但 docs/adr/ 里没有这个文件"
+                }
+            }
+        }
+    }
+
+    # 2. 互链
+    for (i = 1; i <= FIDX; i++) {
+        id = adr_id(FNAME[i])
+        if (id == "") continue
+
+        n = split(SUPER_BY[id], REFS, " ")
+        for (k = 1; k <= n; k++) {
+            t = REFS[k]
+            if (t == "" || !(t in ADR_FILE)) continue
+            if (index(" " SUPERSEDES[t] " ", " " id " ") == 0)
+                print "  [x] " FNAME[i] ": 写了 Superseded-By: ADR-" t "，但 ADR-" t " 里没有 `Supersedes: ADR-" id "`"
+        }
+
+        n = split(SUPERSEDES[id], REFS, " ")
+        for (k = 1; k <= n; k++) {
+            t = REFS[k]
+            if (t == "" || !(t in ADR_FILE)) continue
+            if (index(" " SUPER_BY[t] " ", " " id " ") == 0)
+                print "  [x] " FNAME[i] ": 写了 Supersedes: ADR-" t "，但 ADR-" t " 里没有 `Superseded-By: ADR-" id "`"
+        }
+    }
+
+    # 3. 归档/取代过的 ADR 不该还写着 accepted
+    for (i = 1; i <= FIDX; i++) {
+        id = adr_id(FNAME[i])
+        if (id == "" || SUPER_BY[id] == "") continue
+        if (STATUS[id] != "" && STATUS[id] != "superseded")
+            print "  [x] " FNAME[i] ": 已经写了 Superseded-By，但 Status 是 '" STATUS[id] "'（应为 superseded）"
+    }
+}
+
+function adr_id(f,   b, id) {
+    b = f; sub(/.*\//, "", b)
+    if (b !~ /^[0-9][0-9][0-9][0-9]-/) return ""
+    id = substr(b, 1, 4)
+    return id
 }

@@ -3,7 +3,7 @@
 > 报告方：MarketPulse（`D:/AGENT/MarketPulse`，Python + 只读 Web 看板，Windows 10 + Git Bash）
 > 脚手架版本：`f0a83d0`（模板 `templates/`，本项目从 `fe434d2` 同步上来）
 > 触发场景：一次例行脚手架同步。同步后 `sh scripts/check-gates.sh` **385 项违规**，逐类核查后确认其中
-> **313 项是校验器扫错文件、72 项是判定过宽**，0 项是本项目的真实断链（ADR 那条校验本身 **0 违规**，很干净）。
+> **313 项是校验器扫错文件、72 项是判定过宽**（第一轮结论：当时扫描范围里没有真实断链；第二轮用修好的校验器重跑后，在本仓抓出 **15 处真实的历史断链**，见文末补充报告）。
 > 结论：本次只落地了升级的文件，`scripts/check-gates.{sh,awk}`、`tasks/_template/journal.md`、
 > `docs/agents/任务分级.md` 在本项目记了 `keep-local`（机制文件不本地 fork），等下面 D1–D4 修掉再解除。
 
@@ -197,3 +197,117 @@ seam 措辞改成「写进 `plan.md` 而不是等确认」）都已落地并生�
 
 四个文件修好后的验证路径（本项目会重跑）：预览应显示这四个文件「升级」，随后
 `sh scripts/check-gates.sh` 必须仍为 0 项（本项目 100 个历史任务、约 100 篇活文档，正好是回归样本）。
+
+---
+
+# 补充报告（2026-11-05 20:20，`115092e` 之后）：D1–D4 已确认修好，但缺一个「放行」机制
+
+## 修复验收（本项目实跑）
+
+`115092e` 之后把 `scripts/check-gates.{sh,awk}` 升到模板版。数字变化：**385 → 17 → 15 项修复 + 2 → 0**（17 = 新闸门在本仓的首次实跑；15 = 它抓出的真实历史断链，已逐条修文档；2 = 一条自写 README 的写法问题，见下；0 = 当前）：
+
+```
+$ sh scripts/check-gates.sh
+检查文档内的相对引用（64 个文件）      # 之前是 477 个文件（含 venv/reports/.workbuddy）
+  [x] web/static/vendor/liquid-glass/README.md: 引用的 dist/liquid-glass.esm.js 不存在
+  [x] web/static/vendor/liquid-glass/README.md: 引用的 styles/liquid-glass.css 不存在
+闸门检查失败：2 项。
+```
+
+- D1 ✅：`git ls-files -co --exclude-standard` 生效，扫描文件数 477 → 64，`venv/`(33)+`.venv/`(6)+`reports/`(210)+`.workbuddy/`(64) = 313 项一次性消失。
+- D2 ✅：占位符（`YYYY`）、以点开头（`.card/.kpi-card`）、`:IDENT`（`web/app.py:_ASSET_FILES`）、模块属性（`x.KINDS`）、npm 包名（`@scope/pkg@1.2.0`）都不再报；`skin/tokens.css` 经 basename+后缀解析正确对上 `web/static/skin/tokens.css`。
+- D3/D4 ✅：`tasks/_template/journal.md` 升回模板版后，本项目 T2 任务的 journal 直接通过（不再需要把 `→` 挪到同一行）。
+- 首次实跑报的是 **17 项**：其中 **15 项是真实的历史断链**（`scripts/migrate_to_sqlite.py` 早已归档、新浪行情站 URL 里的 `hisdata_klc2` 被写成了仓库路径、`wecom_*` 模块 2026-09-20 已删、图标实际在 `web/static/icons/`），已按「指向归档真实路径 / 改成描述式」逐条修正；**2 项**是下面 D6 的写法问题。这条校验本身是有价值的，本项目留下了它，现在 0 违规。
+
+## D6（建议，非本轮阻塞）：缺一个项目级的排除表
+
+**本轮的 2 项不是上游的锅**，先把事实说清：`web/static/vendor/liquid-glass/README.md` 是**本项目自己写的
+provenance 文档**（`bbe9023` 创建），不是上游包原样 vendored 的文件——上游包里那份是英文 README，
+入库的只有 `liquid-glass.css` / `liquid-glass.esm.js` / `LICENSE-…` 三个文件（`docs/architecture.md`
+2026-09-23 那条决策列的就是这三个，写的是「原样、禁改写」）。它表格的「来源」列写了包内布局
+（`包内 dist/liquid-glass.esm.js`、`包内 styles/liquid-glass.css`），闸门按形状把这两个当真路径 ⇒ 2 项。
+本轮把这两处改成「`dist` 目录下的 `liquid-glass.esm.js`」这种不带斜杠链的写法，闸门立即归零。**已解决。**
+
+**但下面这个缺口是真的**：`check_links` 只有「精确匹配」和「basename 后缀匹配」两条放行路径，
+**没有项目级排除表**。一旦某项目真的把第三方文档原样入库（vendored 的库 README/CHANGELOG 很常见，
+它们里面的相对路径指的是**包内布局**，与宿主仓库无关），就只剩三条路，而每条都有代价：
+
+1. 改第三方文件——破「原样 vendored」，`diff` 就无法判断上游升级了什么，且下次升级要手工重打；
+2. 删掉它——丢版本/来源证据；
+3. `.gitignore` 掉——已跟踪文件照样被 `ls-files --exclude-standard` 列出，无效。
+
+同类工具早就有这个口子（`.markdownlintignore`、`.eslintignore`、`golangci-lint` 的 `skip-dirs`）。
+
+### 建议 A：项目级排除表（推荐，约 15 行）
+
+项目根放 `.gates-ignore`，每行一个 glob 或前缀，`#` 注释：
+
+```
+# 第三方 / vendored 文档：里面的相对路径指的是上游包内布局，不是本仓库
+web/static/vendor/**
+```
+
+`check_links()` 在组装 `files` 的循环里加：
+
+```sh
+[ -f "$root/.gates-ignore" ] && ignore_globs="$(grep -v '^[[:space:]]*#' "$root/.gates-ignore" | sed '/^$/d')" || ignore_globs=""
+# 每个文件名过一遍 case 匹配，命中则 continue
+```
+
+（也可以用 `git check-attr`/`.gitattributes` 标记，但新增一个 dotfile 比要求项目改 `.gitattributes` 更明确。）
+建议**同时**对 `check_adr()` 与决策锚点提供同样入口——它们目前都不会误报，但一旦有人把 ADR 模板 vendored 进来就会再撞一次。
+
+### 建议 B：内置跳过第三方目录（兜底，2 行）
+
+不读配置文件，直接跳过路径中含 `vendor/` / `third_party/` / `node_modules/` 的 md：
+
+```sh
+case "$f" in */vendor/*|*/third_party/*|*/node_modules/*) continue ;; esac
+```
+
+优点：零配置；缺点：把「目录名叫 vendor」写死成规则，误伤面取决于命名习惯 ⇒ 建议 **B 打底 + A 兜精确**。
+
+### 建议 C（不做也行，只是记录）
+
+解析器可以把「首段不存在于任何已跟踪路径 + basename 恰好匹配一个文件」判为**提示**（`[!]` 而非 `[x]`）。
+本项目这两条就属于这种：`dist/` 不存在、`liquid-glass.esm.js` 恰好唯一。
+但提示仍然会让人去点开看，长期等于噪声，所以还是 A 更干净。
+
+## 当前状态
+
+本项目已经 0 违规（15 处真实断链修完，2 处写法改完），不阻塞同步与提交，所以 **A/B 都不做也不会挡路**——
+它们只是「下一个真的 vendored 第三方文档的项目」会撞的墙。优先级由你定；本项目这边建议做 B（两行，
+零配置），A 留作后续。
+
+## D7（新，实测必现）`--staged` 看不到 gitignored 的产物 ⇒ 每次提交都被拦
+
+**现象**：同一份文档在两种模式下结论相反：
+
+```sh
+$ sh scripts/check-gates.sh            # 全量
+闸门检查通过。
+
+$ sh scripts/check-gates.sh --staged   # 钩子跑的就是这个
+  [x] AGENTS.md: 引用的 reports/backtest_report.md 不存在
+  [x] docs/architecture.md: 引用的 reports/backtest_report.md 不存在
+  [x] docs/commands.md: 引用的 reports/backtest_report.md 不存在
+  [x] docs/pitfalls.md: 引用的 reports/backtest_report.md 不存在
+闸门检查失败：4 项。
+```
+
+**根因**：`--staged` 把索引物化到一个临时目录再跑校验（`check-gates.sh` 的 `--staged` 分支），
+而 `reports/` 是本项目 `.gitignore` 排除的**产物目录**（`backtest.py` 写出来的报告）。文件在真实工作区里存在，
+所以全量模式 `[ -e "$ref" ]` 通过；临时目录里没有它，于是 `--staged` 恒红。
+
+**为什么这不是「文档写错了」**：`reports/` 是本项目**规定要写**的产物目录（`backtest_report.md` 是脚本输出），
+文档里提到它的产物路径是正当的；`.gitignore` 掉产物也是正当的。两者都对，冲突在校验器：**它把「仓库里有没有」
+当成了「磁盘上有没有」，而 staged 模式的「磁盘」是合成出来的**。
+
+**建议**（任一）：
+1. `--staged` 分支里，`[ -e "$ref" ]` 失败时回退到**真实工作区**再判一次（只用于存在性，不读内容）；
+2. 或对 `.gitignore` 命中的路径直接跳过（`git check-ignore -q -- "$ref"`）——副作用是「拼错名字的产物路径」也会被放过，
+   所以推荐 1；
+3. 顺带：`check_links` 的 `all` 列表在 staged 模式下应来自「索引 ∪ 工作区未忽略文件」，否则后缀解析也会漏。
+
+**本项目当前对策**：把文档里的写法改成「`reports/` 下的 `backtest_report.md`」（不带斜杠链 ⇒ 不参与判定），
+两种模式都绿。这不是好办法——它牺牲了可点击/可 grep 的路径形式来迁就 staged 模式的合成根。

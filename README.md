@@ -220,8 +220,8 @@ SOME_TOKEN = require_env("SOME_TOKEN")   # 缺失直接 raise（不静默退化�
 - 若曾把凭据提交进仓库：**先到服务方后台吊销/轮换**（删代码挡不住别人继续用旧凭据），
   再清源码。清理 git history 需 force push，单独立项。
 
-> **企业微信通道已移除（2026-09-20）**：`src/wecom_sdk.py` / `wecom_channel.py` / `wecom_ws.py`
-> 与 `scripts/wecom_service.bat` 已删除（该通道从未接入任何入口，实际推送走「Hermes → QQ」）。
+> **企业微信通道已移除（2026-09-20）**：`src/` 下的 `wecom_sdk.py` / `wecom_channel.py` / `wecom_ws.py`
+> 与 `scripts/` 下的 `wecom_service.bat` 已删除（该通道从未接入任何入口，实际推送走「Hermes → QQ」）。
 > `src/env_util.py` 与上述守卫**保留** —— 它们不是企业微信专属：前者是读敏感配置的单点实现
 > （当前无消费者），后者保护整个仓库。顺带消掉了原 G2（依赖清单缺口）与 G3（孤儿模块）。
 
@@ -247,7 +247,7 @@ pytest tests/ -v
 - 写测试走 `skills/tdd/SKILL.md`：先把要测的 seam 写进 `plan.md` 的「## 测试 Seam」一节，再动手。
 - 重构走 `skills/refactor/SKILL.md`：先造行为安全网，再改结构；行为一变就不是重构。
 - 命名和描述用 `CONTEXT.md` 里的词。
-- 提交前走 `skills/pre-review/SKILL.md`：Standards / Spec 两轴分开报告。**T2 / T3 必须派独立子 agent 审**，产出 `tasks/<日期>-<简述>/review.md`；T1 自己审。提交时 `scripts/check-gates.sh --staged` 会拦 `[DEBUG-` 残留、`plan.md` / `journal.md` / 切片 / `review.md` 的字段、`architecture.md` 模块表与实际目录的偏差，以及**规模低报**（`src/` 下改 ≥ 4 个文件却没有 T2 / T3 的声明）。（上游 `f0a83d0` 的「文档断链」「ADR 互指」两条校验本仓未启用，见 `docs/pitfalls.md`。）
+- 提交前走 `skills/pre-review/SKILL.md`：Standards / Spec 两轴分开报告。**T2 / T3 必须派独立子 agent 审**，产出 `tasks/<日期>-<简述>/review.md`；T1 自己审。提交时 `scripts/check-gates.sh --staged` 会拦 `[DEBUG-` 残留、`plan.md` / `journal.md` / 切片 / `review.md` 的字段、`architecture.md` 模块表与实际目录的偏差、**文档里指向不存在文件的相对路径**、**ADR 的取代关系只写一边**，以及**规模低报**（`src/` 下改 ≥ 4 个文件却没有 T2 / T3 的声明）。
 - 收到审查意见走 `skills/receiving-review/SKILL.md`：每条发现落到「改 / 不改 + 理由 / 不接受 + 反证」，改完重跑验证。
 - **长期项目定期走查**走 `skills/self-audit/SKILL.md`：逐条实跑 `docs/commands.md` 的命令、逐条对 `architecture.md` 的接口契约与数据模型、逐个 grep `CONTEXT.md` 的术语、逐条实跑 `docs/pitfalls.md` 的解决命令。触发：T3 任务结束 / 每 10 个任务 / 你说「查一下」。产出不一致清单，每条落到「改文档 / 改代码 / 删掉」。
 - 提交时闸门自动跑（`core.hooksPath` 指向 `.githooks`）。手动全量：`sh scripts/check-gates.sh`（Windows 上别用 `bash`，它可能指向 WSL 的桩，会输出乱码并返回 1）。**禁止** `git commit --no-verify` 绕闸门（见 `AGENTS.md` 编码规范的「禁止」）。

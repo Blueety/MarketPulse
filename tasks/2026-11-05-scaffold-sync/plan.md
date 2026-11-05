@@ -62,3 +62,18 @@
 - [x] 没有遗漏测试（无新逻辑，靠现有脚本测试 + 全量 pytest）
 - [x] 测试 seam 已写入本节
 - [x] 没有引入不必要依赖
+
+---
+
+## 第二轮：上游 `115092e` 修复后解除全部 `keep-local`（2026-11-05 20:15–21:10）
+
+- **触发**：上游 `115092e` 修掉 D1–D4；用户确认可以更新。
+- **档位**：仍属本任务（T2），不新开目录。
+- **步骤**：
+  1. 删掉 4 条 `keep-local` 裁决（除 `skills/pre-review/SKILL.md`），`tasks/_template/journal.md` 与 `docs/agents/任务分级.md` 先恢复成模板内容再去同步（否则会被判「本地改过、模板没动」而跳过）；
+  2. `--write` 覆盖 `scripts/check-gates.{sh,awk}`（机制文件语义）；新基线 `115092e`；
+  3. 新闸门跑出 17 项 → 15 项真实历史断链逐条修文档，2 项是自写 vendored README 的「包内布局」写法（改成不带斜杠链的描述式）；
+  4. 把第一轮加的「本仓未启用」措辞全部恢复成模板口径（两条校验现已启用）；
+  5. `docs/pitfalls.md` 改两轮实录 + 「写非仓库路径别写成路径形状」教训；上游报告补「修复验收」与 D6。
+- **验证**：`sh scripts/check-gates.sh` 0 项；`--staged` 通过；`pytest tests/ -q` 880 passed；`--refresh-gate-count` → 存量违规 0 条；4 个机制文件 `git hash-object` 与 `115092e:templates/<path>` 逐字节一致。
+- **不做什么**：不动 `skills/pre-review/SKILL.md` 的 `keep-local`（§7 是本仓独有）；不向上游写任何文件（只投一份报告副本）。
