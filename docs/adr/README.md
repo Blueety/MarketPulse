@@ -44,12 +44,66 @@
 
 编号规则：扫 `docs/adr/`，取最大编号 +1。
 
+### 被否决的方案：先写它最强的理由
+
+`Considered Options` 里每否决一条，**先写出它最强、最公平的版本，再说为什么不用**。写「考虑过 X，但不好」等于没写——半年后有人只看见「不好」，会把 X 重新提一遍。写清「X 在 A 场景下确实更好，但我们放弃它是因为要付 B 代价」，后来人才能判断 B 现在是否还成立。
+
+### 决策被取代时：两边都要写
+
+**这不是可选项。** 新 ADR 写 `Supersedes`，旧 ADR 写 `Superseded-By`，两边都要有、且互相指对：
+
+```md
+# 旧 ADR（0001-xxx.md）
+Status: superseded
+Superseded-By: ADR-0007
+
+# 新 ADR（0007-xxx.md）
+Status: accepted
+Supersedes: ADR-0001
+```
+
+为什么必须两边都写：只说「这条被取代了」而不说被谁取代，读的人走到断头路；只在新的那篇里说「我取代了旧的」，旧的那篇会继续被人当成现行决定引用——**代码里引用的、注释里指向的，往往是旧编号**。
+
+同一批改动里完成，不要「下次补」。
+
+## 代码里的锚点
+
+ADR 讲的是「为什么」，但读代码的人不会去翻 `docs/adr/`。所以在一段**看起来奇怪、或者明显是妥协**的代码旁写一行注释指向它：
+
+```python
+# 决策: ADR-0003 —— 这里手写分帧是因为库的默认实现会缓冲到 64KB
+def read_frame(sock): ...
+
+// 决策: ADR-0005 —— 不要改成 ORM，见该 ADR 的 Consequences
+```
+
+```js
+// 决策: ADR-0005
+```
+
+规则只有两条：
+
+- 写成 `决策: ADR-NNNN`（半角冒号、四位数字），注释符号随意
+- **只标注「看代码想不通为什么」的地方**，不要给每一行都挂锚点——挂满等于没挂
+
+`scripts/check-gates.sh` 会扫 `src/` 等非 `.md` 文件里的这类注释，发现指向不存在的 ADR、或没写目标的，打一条 `[!]` 提示。**它不影响退出码**：「这条 ADR 没有代码引用」不该报（「用 SQLite」这种决定本来就不落在某一行代码上），而提示变成失败会让全量自查常年红，红了就没人看。
+
+## 闸门会查什么
+
+`scripts/check-gates.sh`（以及 `pre-commit`）会检查：
+
+- 任何 `ADR-NNNN` 引用都必须有对应文件——写了不存在的编号会红
+- `Superseded-By` 与 `Supersedes` 必须互指；只写一边会红
+- 写了 `Superseded-By` 却仍留着 `Status: accepted` 会红
+
+它不判内容好坏：理由写得对不对，机器看不出来。
+
 ## 可选小节
 
 只在真正有价值时加，多数 ADR 不需要：
 
-- **Status**：`proposed | accepted | deprecated | superseded by ADR-NNNN`。决策可能被重新讨论时有用
-- **Considered Options**：被否决的方案值得记住时才写
+- **Status**：`proposed | accepted | superseded`。决策可能被重新讨论时有用；**写了 `Superseded-By` 就必须是 `superseded`**
+- **Considered Options**：被否决的方案值得记住时才写（写法见上面「先写它最强的理由」）
 - **Consequences**：有非显然的下游影响时才写
 
 ## 创建时机

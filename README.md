@@ -241,15 +241,21 @@ pytest tests/ -v
 
 完整规则在 `AGENTS.md`（流程真源），这里只列入口：
 
-- 修改前先读 `docs/architecture.md`；改行为前先读 `docs/commands.md`。
+- 修改前先读 `docs/architecture.md`；改行为前先读 `docs/commands.md`，并先跑测试。
 - 动手前按 `docs/agents/任务分级.md` 声明档位（**T0 / T1 是通知，T2 / T3 的计划要批准**）。
-- 修 bug 走 `skills/bug-fix/SKILL.md`（闸门 A）；写测试走 `skills/tdd/SKILL.md`（seam 先确认）；重构走 `skills/refactor/SKILL.md`。
-- 提交前走 `skills/pre-review/SKILL.md`（Standards / Spec 双轴）；收到意见走 `skills/receiving-review/SKILL.md`。
+- 修 bug 走 `skills/bug-fix/SKILL.md`：进根因假设前先有一条能对这个 bug 变红的命令（闸门 A）。
+- 写测试走 `skills/tdd/SKILL.md`：先把要测的 seam 写进 `plan.md` 的「## 测试 Seam」一节，再动手。
+- 重构走 `skills/refactor/SKILL.md`：先造行为安全网，再改结构；行为一变就不是重构。
 - 命名和描述用 `CONTEXT.md` 里的词。
+- 提交前走 `skills/pre-review/SKILL.md`：Standards / Spec 两轴分开报告。**T2 / T3 必须派独立子 agent 审**，产出 `tasks/<日期>-<简述>/review.md`；T1 自己审。提交时 `scripts/check-gates.sh --staged` 会拦 `[DEBUG-` 残留、`plan.md` / `journal.md` / 切片 / `review.md` 的字段、`architecture.md` 模块表与实际目录的偏差，以及**规模低报**（`src/` 下改 ≥ 4 个文件却没有 T2 / T3 的声明）。（上游 `f0a83d0` 的「文档断链」「ADR 互指」两条校验本仓未启用，见 `docs/pitfalls.md`。）
+- 收到审查意见走 `skills/receiving-review/SKILL.md`：每条发现落到「改 / 不改 + 理由 / 不接受 + 反证」，改完重跑验证。
+- **长期项目定期走查**走 `skills/self-audit/SKILL.md`：逐条实跑 `docs/commands.md` 的命令、逐条对 `architecture.md` 的接口契约与数据模型、逐个 grep `CONTEXT.md` 的术语、逐条实跑 `docs/pitfalls.md` 的解决命令。触发：T3 任务结束 / 每 10 个任务 / 你说「查一下」。产出不一致清单，每条落到「改文档 / 改代码 / 删掉」。
+- 提交时闸门自动跑（`core.hooksPath` 指向 `.githooks`）。手动全量：`sh scripts/check-gates.sh`（Windows 上别用 `bash`，它可能指向 WSL 的桩，会输出乱码并返回 1）。**禁止** `git commit --no-verify` 绕闸门（见 `AGENTS.md` 编码规范的「禁止」）。
+  clone 到新机器后要跑一次 `git config core.hooksPath .githooks`——这个设置在 `.git/config` 里，不随仓库走。
+- 要查外部一手事实走 `skills/research/SKILL.md`：派后台子 agent，产出带引用的 `tasks/<日期>-<简述>/research/<slug>.md`；结论进 `CONTEXT.md` / `docs/adr/`，文件本身过期即删。
+- 复杂任务先写 `tasks/<日期>-<简述>/prd.md`。
+- 完成前运行 `docs/commands.md` 里的完整检查。
 - 任务结束：规则进 `docs/pitfalls.md`、决策进 `docs/adr/`、日志进 `tasks/<日期>-<简述>/journal.md`。
-
-> ⚠️ 提交前闸门（`.githooks/pre-commit`）已随仓库落地，但**尚未启用**（`core.hooksPath` 为空）：
-> 首次安装时存量违规 914 条，清零前启用会让每次提交都被拦。治理路线见 `tasks/README.md`。
 
 ## 📚 相关文档
 

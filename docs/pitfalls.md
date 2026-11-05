@@ -1148,3 +1148,50 @@ spot 零价时**降级走日线接口**，两路都无效则抛异常 → `fetch
 
 **教训**：盘前/收盘后重跑日报是把脏价写进历史的高危窗口（spot 接口在非交易时段返回 0 而不是空）；
 任何「取数 → 落库」链路都要在**入口**挡掉非正价格，而不是指望下游的 `None` 纪律。
+
+## 脚手架同步：断链校验用 `find` 扫全盘，本项目一同步就 385 项红（2026-11-05 实跑）
+
+`f0a83d0` 给闸门加了「文档内相对引用必须存在」与「ADR 互指」两条校验。ADR 那条在本仓 **0 违规**；
+断链那条一上来就是 **385 项**，其中 **313 项**全部来自 `.gitignore` 覆盖的目录。
+
+根因（`scripts/check-gates.sh:161` 的 `check_links()`）：它用 `find . -name '*.md' -type f` 取文件，
+**不经过 git**，于是本机磁盘上的 `venv/`（33）、`.venv/`（6）、`reports/`（210，生成物）、
+`.workbuddy/`（64，agent 记忆）全被当成活文档扫；脚本自己的注释写的却是「只查活文档：根目录 md、
+`docs/`、`skills/`、`tasks/README.md`」——**注释与实现不一致**。
+修法应为 `git ls-files -co --exclude-standard -- '*.md'`。
+
+剩下 **72 项**是 `emit_link()` 的判定过宽（`f0a83d0` 已修掉 env 赋值 / node id / 行号 / 裸域名四类，仍有漏网）：
+
+| 误判类型 | 例子 | 实际含义 |
+| :--- | :--- | :--- |
+| 占位符 | `reports/YYYY-MM-DD.md`、`data/backup/history_YYYY-MM.json` | 命名约定，不是真实文件 |
+| CSS 类名串 | `.card/.kpi-card/.topbar` | 斜杠分隔的选择器列表 |
+| 点号表达式 | `src/econ_calendar.KINDS`、`web/app.py:_ASSET_FILES` | 模块属性引用 |
+| 包名 | `@avenra/liquid-glass@1.2.0` | npm 依赖 |
+| 子目录相对路径 | `skin/tokens.css`（相对 `web/static/`） | 文档里的简称 |
+| 只读 vendored | `web/static/vendor/liquid-glass/README.md` 里的 `dist/*` | 上游包自带的示例 |
+
+**本仓处置**：机制文件不本地 fork（同步规则）⇒ 回滚到同步前版本 + 记 `keep-local`：
+`scripts/check-gates.sh`、`scripts/check-gates.awk`（整份）、`tasks/_template/journal.md`（整份）、
+`docs/agents/任务分级.md`（只改「规模底线」一段：删掉本仓未实现的「在飞 T0/T1 累计 + 点名 + 本次改动」）。
+其余机制文件照常升级；content 文件（`AGENTS.md` / `README.md` / `tasks/README.md`）里凡是描述
+「闸门会拦什么」的句子，一律按**实际启用的**校验写，不写上游客厅里的能力。
+
+**回滚同时放弃了 3 项模板修复**（下次同步别只看断链 bug）：
+① `emit_violations` 数**非空行**（否则汇总项数比屏幕多 1）；② `check_scale` 的空索引短路与在飞任务累计；
+③ `journal` 的「下次注意什么」改成**按条目**判（续行里的 `→` 也算）。现状是**逐行判**，
+`tasks/_template/journal.md` 里「条目一行 + 缩进 `→` 下一行」的示范在本仓**会被闸门判红**，
+所以那份模板也回滚了；`tasks/README.md` 第 117 行也改成明写「同一行，续行不算」。
+
+**上游报告**：待报（本仓对脚手架仓库零写入）——缺陷 ①（`find` 不尊重 `.gitignore`）、
+②（`emit_link` 对占位符 / CSS 类名串 / 点号表达式 / 包名误判）、③（journal 逐行 vs 按条目）、
+④（`- 返工: 0 次` 被 `count_result_items` 当成一条验证结果 ⇒ 验证结果为空的 journal 能过闸门）。
+下次同步前先看上游有没有修 ①②③，修了再解 `keep-local`。
+
+记录格式是 `decision <策略> <路径> <模板 blob sha>`，sha 用
+`git -C <脚手架仓库> rev-parse <模板提交>:templates/<路径>`。**手写才可靠**：更新器在
+`--keep-local` 那一次没改动任何项目文件时**不会**把裁决写回 `.scaffold-version`
+（实测：`--write --keep-local …` 只打印「记下裁决」，文件里没有这两行；`--refresh-gate-count` 只更新计数）。
+
+**自查**：同步后先跑 `sh scripts/check-gates.sh | tail -3`，再看 `.scaffold-version` 的
+`gate_violations` 是否等于当前真实值（更新器只在它自己那次运行里统计，可能与磁盘现状脱节）。

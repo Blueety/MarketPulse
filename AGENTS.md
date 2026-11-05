@@ -99,9 +99,9 @@
 - 每完成一个逻辑步骤后运行验证命令，不接受"应该可以"——必须实际运行验证命令。
 - 如有失败，先解释原因再修复，不要绕过问题。
 - 修 bug 时：进入根因假设前，必须有一条已经实跑过、能对**这个** bug 变红的命令（`skills/bug-fix/SKILL.md` 闸门 A）；拿不出这条命令就先停下说明试过什么、缺什么。本地门禁全绿不代表线上没事（见 `app.py` 那条事故）。
-- 写测试前：先书面列出要测的 seam 并等待确认（`skills/tdd/SKILL.md`）；修 bug 的回归测试只在存在正确 seam 时写。
+- 写测试前：先把要测的 seam 写进 `plan.md` 的「## 测试 Seam」一节（T1 写完即继续；**T0 不建 plan**，seam 一行写在回复里；T2 / T3 随 plan 一次批准）。没写下来、或与 `plan.md` 不符的，停下来问（`skills/tdd/SKILL.md`）；修 bug 的回归测试只在存在正确 seam 时写。
 - 调试日志统一加 `[DEBUG-xxxx]` 前缀，提交前 grep 清干净。
-- 提交前闸门：`scripts/check-gates.sh` 检查 `[DEBUG-` 残留、`docs/architecture.md` 模块表与实际目录是否对得上、`plan.md` 的档位/类型/闸门 A 字段、`journal.md` 的章节与验证结果、切片文件字段、**T2 / T3 的 `review.md` 是否存在且填全**。启用后由 `.githooks/pre-commit` 跑 `--staged` 自动拦截；被拦下就按提示补内容，**不要**用 `git commit --no-verify` 绕过。手动检查：`sh scripts/check-gates.sh`（全量）/ `sh scripts/check-gates.sh --staged`（索引）——Windows 上别用 `bash`，它可能指向 WSL 的桩（见 `docs/pitfalls.md`）。
+- 提交前闸门：`.githooks/pre-commit` 会跑 `scripts/check-gates.sh --staged`，检查 `[DEBUG-` 残留、`docs/architecture.md` 模块表与实际目录是否对得上、`plan.md` 的档位/类型/闸门 A 字段、`journal.md` 的章节与验证结果、切片文件字段、**T2 / T3 的 `review.md` 是否存在且填全**。被拦下就按提示补内容，**不要**用 `git commit --no-verify` 绕过。手动检查：`sh scripts/check-gates.sh`（全量）/ `sh scripts/check-gates.sh --staged`（索引）——Windows 上别用 `bash`，它可能指向 WSL 的桩（见 `docs/pitfalls.md`）。⚠️ 上游 `f0a83d0` 新加的「文档断链」「ADR 互指」两条校验本仓**未启用**（`keep-local` 裁决，理由见 `docs/pitfalls.md` 2026-11-05）。
 - ✅ **钩子已启用**（2026-11-02）：`git config core.hooksPath` 现在是 `.githooks`，`git commit` 会先跑 `sh scripts/check-gates.sh --staged`。该设置存在 `.git/config`，**clone 后不会跟着来** —— 新机器/新 clone 必须手动 `git config core.hooksPath .githooks`，否则闸门静默失效且没有任何提示（判据：`git config core.hooksPath` 输出 `.githooks`）。存量违规 914 → **0** 的路径：94 个已收尾任务移入 `tasks/_archive/` + `docs/architecture.md` 模块表改成一格一路径 + 5 个验证脚本从 `tasks/<任务>/` 迁到 `scripts/verify/` 后归档。
 - 提交前审查：T0 不审；T1 自己审；**T2 / T3 必须派一个全新的子 agent 审**（只给它 `prd.md`、`plan.md`、diff、相关规范，**不给它会话历史**），产出 `tasks/<日期>-<简述>/review.md`。轮次上限 2，超了升级给人。双轴报告（Standards / Spec 分别报告，不合并、不跨轴排序）。
 - 收到审查意见后按 `skills/receiving-review/SKILL.md` 逐条处理：改 / 不改+理由 / 不接受+反证，**没有第四种**；不能静默跳过任何一条。
