@@ -1183,9 +1183,11 @@ spot 零价时**降级走日线接口**，两路都无效则抛异常 → `fetch
 `tasks/_template/journal.md` 里「条目一行 + 缩进 `→` 下一行」的示范在本仓**会被闸门判红**，
 所以那份模板也回滚了；`tasks/README.md` 第 117 行也改成明写「同一行，续行不算」。
 
-**上游报告**：待报（本仓对脚手架仓库零写入）——缺陷 ①（`find` 不尊重 `.gitignore`）、
+**上游报告**：已写成报告 `tasks/2026-11-05-scaffold-sync/upstream-report.md`（提交给脚手架维护方，
+同内容副本投在其仓库根 `UPSTREAM-BUGS-2026-11-05-marketpulse.md`）——缺陷 ①（`find` 不尊重 `.gitignore`）、
 ②（`emit_link` 对占位符 / CSS 类名串 / 点号表达式 / 包名误判）、③（journal 逐行 vs 按条目）、
-④（`- 返工: 0 次` 被 `count_result_items` 当成一条验证结果 ⇒ 验证结果为空的 journal 能过闸门）。
+④（`- 返工: 0 次` 被 `count_result_items` 当成一条验证结果 ⇒ 验证结果为空的 journal 能过闸门）、
+⑤（`--keep-local` 有一次没写回 `.scaffold-version`，未复现）。报告里每条都带最小复现与建议修法。
 下次同步前先看上游有没有修 ①②③，修了再解 `keep-local`。
 
 记录格式是 `decision <策略> <路径> <模板 blob sha>`，sha 用

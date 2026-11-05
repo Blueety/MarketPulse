@@ -24,6 +24,7 @@
 | `tasks/_template/plan.md` | 模板 seam 措辞 |
 | `tasks/2026-11-05-scaffold-sync/plan.md` | 本任务计划（T2） |
 | `tasks/2026-11-05-scaffold-sync/review.md` | 独立审查裁决单（12 条发现 + 9 条未判断） |
+| `tasks/2026-11-05-scaffold-sync/upstream-report.md` | 上游缺陷报告（D1–D5，每条带最小复现与建议修法；副本投在脚手架仓库根 `UPSTREAM-BUGS-2026-11-05-marketpulse.md`） |
 
 回滚（与模板逐字节一致，故未出现在 diff 里）：`scripts/check-gates.sh`、`scripts/check-gates.awk`、`tasks/_template/journal.md`。
 
@@ -67,7 +68,7 @@
 
 ## 下一步
 
-- 把四条上游缺陷报到 `project-scaffold`（本仓对脚手架仓库零写入）；修好后重跑同步并解除 `keep-local`（先看 `scripts/check-gates.sh` 的 `check_links` 是否已改成 `git ls-files -co --exclude-standard`）。
+- 上游缺陷报告已交付（`tasks/2026-11-05-scaffold-sync/upstream-report.md`）；等 `project-scaffold` 修 D1–D4 后重跑同步并解除 `keep-local`（先看 `scripts/check-gates.sh` 的 `check_links` 是否已改成 `git ls-files -co --exclude-standard`）。
 - 顺带可清的历史断链（新校验本来能抓到）：`scripts/migrate_to_sqlite.py`、`src/wecom_sdk.py`、`scripts/wecom_service.bat`、`hisdata_klc2/klc_kl.js` 在活文档里仍被引用。
 
 ## 雾区变化
