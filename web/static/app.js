@@ -1051,7 +1051,9 @@ const POINT_RANGE_MONTHS = { 5: 1, 22: 1, 65: 3, 130: 6, 260: 12, 780: 36, 1300:
 // 点位数据的**实际日历跨度**（月）：首末日期差 / 30.44，向下取整，至少 1。
 // ⚠️ 用 Date.UTC 手工拆日期（不写 `new Date('YYYY-MM-DD')`：那会按本地时区解析，东八区会偏一天）。
 function pointSpanMonths() {
-  const dates = (state.point.payload && state.point.payload.dates) || [];
+  // ⚠️ 只算**可见窗口**：请求为了均线回看多取了 60 个交易日，直接用 payload.dates 会虚报跨度
+  const all = (state.point.payload && state.point.payload.dates) || [];
+  const dates = all.slice(Math.max(0, all.length - state.point.days));
   if (dates.length < 2) return null;
   function ms(d) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || ''));
@@ -1092,6 +1094,11 @@ function pointYDigits(raw) {
 //    旧实现要求「最近 win 个槽位内零缺失」才能出一个点 ⇒ 绝大多数日期被丢弃（MA60 只剩 49 点），
 //    剩下的点之间被 Chart.js 用一条**直线**连起来（2025-12-31 → 2026-07-29 一条 7 个月的长弦）。
 //    改成滚动维护最近 win 个非空值的和，缺口不再吞点：首点仍是「第 win 个有效观测」，之后逐日连续。
+// 均线裁回可见窗口：均线在**全长序列**上算（含请求多取的回看段），只画窗口内的点
+function maVisible(pts, visSet) {
+  return pts.filter(function (p) { return visSet[p.x] === 1; });
+}
+
 function movingAvgPts(values, dates, dateIndexMap, win) {
   const pts = [];
   const buf = [];          // 最近 win 个有效值（滑动窗）
@@ -1153,8 +1160,19 @@ function maColorsFor(priceColor) {
   });
 }
 
+// 均线需要**窗口之前**的样本：3M 档只有 ~65 个交易日，MA60 在窗口内根本凑不满 60 个观测，
+// 结果是在最右边剩一小截（用户 2026-11-07 截图：「这个均线是不是有问题」）。
+// ⇒ 请求时多取 MA_LOOKBACK 个交易日，均线在**全长序列**上算，再把点裁回窗口。
+// 这样窗口内每个观测点都有 MA 值（左端不再凭空断开），且 MA 数值与「全量历史」口径一致。
+// 回看条数 = 2×最长均线窗口：共享日期轴上 A 股/美股各有约 6% 的空位（休市），
+// 只多取 60 条时 MA60 的样本常差 4~5 个 ⇒ 窗口左端又会缺 5 个点（实测 2025-11-12 才开始）。
+var MA_LOOKBACK = 120;
+function pointRequestDays() {
+  return Math.min(state.point.days + MA_LOOKBACK, 3650);   // 后端 days 上限 3650
+}
+
 function buildPointQuery() {
-  return '/api/history?symbols=' + encodeURIComponent(state.point.symbol) + '&days=' + state.point.days;
+  return '/api/history?symbols=' + encodeURIComponent(state.point.symbol) + '&days=' + pointRequestDays();
 }
 
 // 点位卡内失败/空态：隐藏 canvas + 空态文案 + **清空 meta**。
@@ -1254,9 +1272,14 @@ function renderPointChart() {
   if (!payload) return;   // 尚未结算：保留骨架/现有画面，避免先闪一帧空态
 
   if (charts.main) { charts.main.destroy(); delete charts.main; }
-  const dates = payload.dates || [];
+  const allDates = payload.dates || [];
   const s0 = (payload.series || [])[0] || null;
-  const raw = (s0 && s0.raw) || [];
+  const allRaw = (s0 && s0.raw) || [];
+  // 请求多取了 MA_LOOKBACK 个交易日：**只显示**最后 days 条，均线用全长算
+  const visLen = Math.min(state.point.days, allDates.length);
+  const visStart = Math.max(0, allDates.length - visLen);
+  const dates = allDates.slice(visStart);
+  const raw = allRaw.slice(visStart);
   const symLabel = pointSymbolLabel(state.point.symbol);
   const rangeLabel = pointRangeLabel(state.point.days);
   window.__mpPointRawFirst = null;
@@ -1289,6 +1312,12 @@ function renderPointChart() {
   // 轴：与对比视图同一套（category + 交易日），保证 crosshair 吸附/坐标语义一致
   const pseudo = { key: s0.key, label: s0.label || symLabel, values: raw, raw: raw };
   const axis = buildTradingAxis(dates, [pseudo]);
+  // 均线的「全长轴」：请求多取的那些交易日也要有坐标，否则全量序列里的前段 MA 会被 dateIndexMap 丢掉
+  const fullMap = (visStart > 0)
+    ? buildTradingAxis(allDates, [{ key: s0.key, label: s0.label || symLabel, values: allRaw, raw: allRaw }]).dateIndexMap
+    : axis.dateIndexMap;
+  const visSet = {};
+  dates.forEach(function (d) { visSet[d] = 1; });
   const palette = colors();
   const digits = pointYDigits(raw);
   const priceColor = seriesColor(palette, s0.key);
@@ -1297,9 +1326,9 @@ function renderPointChart() {
     buildLineDataset(pseudo, priceColor,
                      buildLinePts(pseudo, dates, axis.dateIndexMap), { area: true }),
     buildLineDataset({ key: 'ma20', label: 'MA20' }, maColors[0],
-                     movingAvgPts(raw, dates, axis.dateIndexMap, 20), {}),
+                     maVisible(movingAvgPts(allRaw, allDates, fullMap, 20), visSet), {}),
     buildLineDataset({ key: 'ma60', label: 'MA60' }, maColors[1],
-                     movingAvgPts(raw, dates, axis.dateIndexMap, 60), {})
+                     maVisible(movingAvgPts(allRaw, allDates, fullMap, 60), visSet), {})
   ];
   // 复用对比视图的 options（缩放 / grid / 图例关 / 轴侧），只替换 y 刻度与 tooltip 数值口径
   const opts = buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.point.days) });

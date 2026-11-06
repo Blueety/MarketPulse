@@ -5078,7 +5078,9 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     check(m["mode"] == "point" and m["pointBarShown"] and not m["tabsShown"] and not m["rangeShown"],
           "TM-2 点位视图：#point-bar 可见、#trend-tabs/#range-bar 隐藏", m)
 
-    # ---- TM-3 点位 1Y 请求 URL（上证 → symbols=SH&days=260）----
+    # ---- TM-3 点位 1Y 请求 URL（上证 → symbols=SH&days=260+120 回看）----
+    # ⚠️ 页面为均线回看多取 MA_LOOKBACK=120 个交易日（buildPointQuery），
+    #    所以 1Y 档请求是 days=380、1月档是 days=142；档位本身（state.point.days）仍是 260 / 22。
     page.evaluate(
         """() => { const s = document.getElementById('point-symbol'); s.value = 'SH';
                    s.dispatchEvent(new Event('change')); }""")
@@ -5089,8 +5091,8 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     page.wait_for_timeout(1500)
     urls = page.evaluate(
         "() => performance.getEntriesByType('resource').map(e => e.name).filter(n => n.indexOf('/api/history?') !== -1)")
-    hit = [u for u in urls if "symbols=SH&days=260" in u]
-    check(bool(hit), "TM-3 点位 1Y 发出 GET /api/history?symbols=SH&days=260", urls[-3:])
+    hit = [u for u in urls if "symbols=SH&days=380" in u]
+    check(bool(hit), "TM-3 点位 1Y 发出 GET /api/history?symbols=SH&days=380（260 + 120 回看）", urls[-3:])
 
     # ---- TM-4 点位图 y = 绝对点位（与 /api/history 响应体同源比对）----
     # ⚠️ 必须等「1Y 那一帧」：切档是异步的，早一步会读到上一个档位（3Y）的图与标签
@@ -5100,6 +5102,8 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           "TM-4a 点位图 3 条线（点位 + MA20 + MA60）", (m["chartAlive"], m["dsCount"]))
     y0 = m["firstYs"][0] if m["firstYs"] else None
     # 期望值取自响应**响应体**（独立于被测实现写的 __mp* 钩子与它自己画的 dataset）
+    # ⚠️ 页面为了均线回看会多取 60 个交易日（buildPointQuery 的 days+60），
+    #    所以「响应首个非空」必须按**可见窗口**（末 260 条）取，而不是整个响应体
     src = page.evaluate(
         """async () => {
             const r = await fetch('/api/history?symbols=SH&days=260');
@@ -5117,72 +5121,90 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           "TM-4c 钩子 __mpPointSymbol/__mpPointDays 与所选档位一致，且 __mpPointRawFirst == 响应首个非空 raw",
           (m["symbol"], m["days"], m["rawFirst"], src["first"]))
 
-    # ---- TM-10 均线：逐点连续 + 数值 == 独立预言机（「最近 win 个有效观测」滚动均值）----
-    # 回归对象（2026-11-06 用户反馈「MA60 中间直接横过去、没有波折」）：旧的槽位窗口法要求
-    # 「最近 win 个日期内零缺失」，共享日期轴上别的市场休市造成的 null 会吞掉绝大多数点，
-    # 剩余点之间被画成一条长直线。判据取两条：① 图上点集与预言机**逐点相等**（含 x 顺序，
-    # 长度短了就说明有跳点）；② MA 点数 == 有效观测数 − win + 1（缺口不能再吞点）。
+    # ---- TM-10 均线：覆盖整个可见窗口 + 数值 == 独立预言机（用全量历史算「最近 win 个有效观测」）----
+    # 两次回归叠加：
+    #   ① 2026-11-06「MA60 中间直接横过去」= 槽位窗口法被 null 缺口吞点（已改为有效观测窗口）；
+    #   ② 2026-11-07「3M 档均线只剩右边一小截」= 均线只在请求窗口内算，凑不满 win 就整段缺席
+    #      ⇒ 页面改为 days+60 回看、算完整段再裁回窗口（buildPointQuery / maVisible）。
+    # 判据：MA20/MA60 的点必须**逐个可见观测都有**，且逐点等于独立预言机（取全量历史滚窗均值）。
     ma = page.evaluate(
         """async () => {
             const c = window.Chart.getChart(document.getElementById('chart-main'));
             if (!c) return null;
-            const r = await fetch('/api/history?symbols=SH&days=260');
-            const j = await r.json();
-            const raw = ((j.series || [])[0] || {}).raw || [];
-            const dates = j.dates || [];
-            // 预言机必须与页面同轴：`buildTradingAxis()` 只收「该标的有值 + 非周末」的日期，
-            // 均线在其它日期上不出点（否则点数与 x 顺序都对不上）。
-            const inAxis = {};
-            raw.forEach((v, i) => {
-                if (v == null) return;
-                const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(dates[i] || ''));
-                if (m) {
-                    const wd = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
-                    if (wd === 0 || wd === 6) return;
+            // 可见窗口（末 260 条，与 1Y 档一致）
+            const rv = await (await fetch('/api/history?symbols=SH&days=260')).json();
+            const visDates = rv.dates || [];
+            const visRaw = (((rv.series || [])[0]) || {}).raw || [];
+            // 全量历史（预言机用：均线的回看样本必须来自窗口之前）
+            const rf = await (await fetch('/api/history?symbols=SH&days=2600')).json();
+            const fullDates = rf.dates || [];
+            const fullRaw = (((rf.series || [])[0]) || {}).raw || [];
+            const weekday = (d) => {
+                const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(d || ''));
+                if (!m) return true;
+                const wd = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
+                return wd !== 0 && wd !== 6;
+            };
+            // 全量序列上滚窗算均线（只收「有值 + 非周末」的观测）
+            function rolling(win) {
+                const map = {}; let sum = 0; const buf = [];
+                for (let i = 0; i < fullDates.length; i++) {
+                    const v = fullRaw[i];
+                    if (v != null && weekday(fullDates[i])) {
+                        sum += v; buf.push(v); if (buf.length > win) sum -= buf.shift();
+                        if (buf.length === win) map[fullDates[i]] = sum / buf.length;
+                    }
                 }
-                inAxis[dates[i]] = true;
-            });
-            function ma(win) {
-                const out = []; let sum = 0; const buf = [];
-                for (let i = 0; i < raw.length; i++) {
-                    const v = raw[i];
-                    if (v != null) { sum += v; buf.push(v); if (buf.length > win) sum -= buf.shift(); }
-                    if (buf.length < win || !inAxis[dates[i]]) continue;
-                    out.push({ x: dates[i], y: sum / buf.length });
-                }
-                return out;
+                return map;
             }
+            const m20 = rolling(20), m60 = rolling(60);
+            const visSet = {}, obs = [];
+            visDates.forEach((d, i) => {
+                visSet[d] = true;
+                if (visRaw[i] != null && weekday(d)) obs.push(d);
+            });
             const chart = c.data.datasets.slice(1).map(d => d.data.map(p => ({ x: p.x, y: p.y })));
             return {
                 chart: chart,
-                oracle: [ma(20), ma(60)],
-                valid: Object.keys(inAxis).length
+                obs: obs,
+                oracle: [m20, m60],
+                visN: visDates.length,
+                fullFirst: fullDates[0]
             };
         }""")
     ok10 = bool(ma) and len(ma["chart"]) == 2
     detail10 = None
     if ok10:
-        for k, (got, exp) in enumerate(zip(ma["chart"], ma["oracle"])):
+        for k, got in enumerate(ma["chart"]):
             win = 20 if k == 0 else 60
-            # ① 连续：点数必须等于「有效观测 − win + 1」，少一个都说明窗口被缺口吞掉
-            if len(got) != max(0, ma["valid"] - win + 1):
+            om = ma["oracle"][k]
+            # 期望点集 = 可见观测里「预言机算得出值」的那些（回看样本不足的头部点本就该缺席，
+            # 例如黄金在回填前有整段空洞）。这样判据同时覆盖「不许吞点」与「不许伪造点」。
+            expDates = [d for d in ma["obs"] if om.get(d) is not None]
+            gotDates = [g["x"] for g in got]
+            if gotDates != expDates:
                 ok10 = False
-                detail10 = ("MA%d 点数 %d != 有效观测 %d − %d + 1" % (win, len(got), ma["valid"], win),)
+                detail10 = ("MA%d x 序列 != 预言机（缺 %d / 多 %d）"
+                            % (win, len(set(expDates) - set(gotDates)), len(set(gotDates) - set(expDates))),
+                            gotDates[:3], expDates[:3])
                 break
-            # ② 逐点相等（x 顺序 + y 数值），窗口里出现跳点会立刻对不上
             bad = None
-            for i, (g, e) in enumerate(zip(got, exp)):
-                if g["x"] != e["x"] or abs(g["y"] - e["y"]) > 0.05:
-                    bad = (i, g, e)
+            for i, g in enumerate(got):
+                if abs(g["y"] - om[g["x"]]) > 0.05:
+                    bad = (i, g["x"], g["y"], om[g["x"]])
                     break
-            if bad or len(got) != len(exp):
+            if bad:
                 ok10 = False
-                detail10 = ("MA%d 第 %s 点与预言机不符" % (win, bad[0] if bad else "len"),
-                            bad, len(got), len(exp))
+                detail10 = ("MA%d 数值与预言机不符" % win, bad)
+                break
+            # 左端不许「只剩一小截」：期望点集的首点必须落在窗口前 5% 的位置内
+            if expDates and gotDates and gotDates[0] != expDates[0]:
+                ok10 = False
+                detail10 = ("MA%d 首点不在窗口左端" % win, gotDates[0], expDates[0])
                 break
     check(ok10,
-          "TM-10 MA20/MA60 逐点连续且 == 独立预言机（最近 win 个有效观测滚动均值；缺口不许吞点）",
-          detail10 or (ma["chart"] and [len(x) for x in ma["chart"]], ma["valid"]))
+          "TM-10 MA20/MA60 覆盖可见窗口每个观测点，且逐点 == 独立预言机（全量历史滚窗均值）",
+          detail10 or (ma["chart"] and [len(x) for x in ma["chart"]], len(ma["obs"])))
 
     # ---- TM-11 图例标注线色 + 撞色自动让位（2026-11-06「图表上要标注这两条线的颜色」）----
     # 判据：① canvas 内建图例可见且 3 项；② 每项色块 == 对应 dataset 的线色（标注与线同源，不是另写一套）；
@@ -5294,8 +5316,8 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
                                   .filter(n => n.indexOf('/api/history?') !== -1).slice(-1)[0] || ''}; }""")
     check(m12["rangeLabel"] == "1月" and 0 < got12["n"] <= 22,
           "TM-12c 1月档：#range-label = 「1月」且点数 ≤22", (m12["rangeLabel"], got12["n"]))
-    check("symbols=" in got12["url"] and "days=22" in got12["url"],
-          "TM-12d 1月档请求 days=22", got12["url"][-60:])
+    check("symbols=" in got12["url"] and "days=142" in got12["url"],
+          "TM-12d 1月档请求 days=142（22 + 120 回看）", got12["url"][-60:])
     check(bool(got12["ticks"]) and all(re.fullmatch(r"\d{1,2}/\d{1,2}", t or "") for t in got12["ticks"]),
           "TM-12e 1月档横轴是「月/日」粒度", got12["ticks"][:6])
     page.click('#point-range button[data-days="2600"]')
