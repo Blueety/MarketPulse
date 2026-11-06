@@ -8,7 +8,9 @@
 
 ## 主要提交
 
-- **主要提交**: `(见 git log 中 fix(web): 点位图均线按「最近 N 个有效观测」取窗口)`
+- **主要提交**:
+  - `aa04dee` — 均线窗口改为「最近 N 个有效观测」（缺口不再吞点）+ TM-10
+  - `60ba013` — 点位图 canvas 内图例 + 均线撞色自动让位 + TM-11a..d
 
 ## 改动文件清单
 
@@ -16,7 +18,9 @@
 |---|---|
 | `web/static/app.js` | `movingAvgPts` 改为滚动维护最近 `win` 个非空值：`buf` + `sum`，缺口不再吞点；首点仍是「第 win 个有效观测」 |
 | `scripts/verify/verify_ui.py` | 新增 **TM-10**：MA 点数 == 轴内有效观测数 − win + 1，且逐点等于独立预言机（预言机内部复刻 `buildTradingAxis()` 的「有值且非周末」筛选） |
-| `docs/pitfalls.md` | 模块 web/ 追加一条：均线窗口必须按有效观测取，附修前/修后点数与判据 |
+| `docs/pitfalls.md` | 模块 web/ 追加两条：均线窗口口径（附修前/修后点数）与「图例画在 canvas 内 + 均线撞色让位」策略 |
+| `web/static/app.js`（第二轮） | `maColorsFor(priceColor)` + `hexToRgb`/`colorGap`：MA20/MA60 与该指数主色或彼此色距 <110 时退到备选色；点位视图启用 Chart.js 内建 legend（`generateLabels` 直接取 dataset 线色） |
+| `scripts/verify/verify_ui.py`（第二轮） | TM-11a..d：图例 3 项、色块 == 线色、SH 与创业板（紫）两两色距 ≥110 |
 
 ## 验证结果
 
@@ -26,6 +30,10 @@
 - `venv/Scripts/python.exe scripts/verify/verify_ui.py`：TM-10 通过；残留 3 条见下。
 - `venv/Scripts/python.exe scripts/verify/verify_offline_assets.py`：ALL PASSED（6 组）。
 - `venv/Scripts/python.exe -m pytest tests/ -q`：880 passed。
+- 图例/撞色（第二轮，`verify_ui` 738 PASS / 1 FAIL，唯一红仍是既有 `CS-8b`）：
+  - 上证：`#FF6E5E / #3B82F6 / #2FD6A8`，两两色距 `249 / 244 / 115`；
+  - 创业板：`#C792EA / #3B82F6 / #E5C07B`，两两色距 `141 / 124 / 219`（MA60 首选的紫 #A78BFA 与主线紫色距 ≈36 ⇒ 自动退到金）；
+  - 图例画在 canvas 内，`#chart-main-wrap` 高度仍 360px（首页高度门禁不受影响）。
 
 ## 遇到的问题
 
