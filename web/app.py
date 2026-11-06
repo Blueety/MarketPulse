@@ -230,7 +230,11 @@ _ASSET_FILES = ("style.css", "app.js", "macro.js", "chart-crosshair.js", "macro_
                 # 液态玻璃皮肤（2026-09-23）：目录名可写进元组 —— `_asset_version()` 按**文件**逐个
                 # 取 mtime（`STATIC_DIR / n`），故这里的每一项都必须是**文件**路径，不能只写目录。
                 "skin.js", "skin/tokens.css", "skin/liquid-skin.css", "skin/motion.css", "skin/mp-skin.css",
-                "vendor/liquid-glass/liquid-glass.css", "vendor/liquid-glass/liquid-glass.esm.js")
+                "vendor/liquid-glass/liquid-glass.css", "vendor/liquid-glass/liquid-glass.esm.js",
+                # 图表引擎（2026-11-06 自托管）：同样必须写**文件**路径 —— `_asset_version()` 按
+                # `STATIC_DIR / n` 逐个 `stat()` 取 mtime，写成目录名会 stat 失败被 `if .exists()`
+                # 静默跳过，于是 205KB 的 Chart.js 更新后 `?v=` 不变，浏览器继续吃旧副本。
+                "vendor/chartjs/chart.umd.min.js", "vendor/chartjs/chartjs-plugin-zoom.min.js")
 
 
 def _asset_version() -> str:

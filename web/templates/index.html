@@ -55,9 +55,12 @@
   </script>
   <!-- 皮肤运行时（ESM，动态 import vendored 引擎）：分帧挂载 + 滚动降级 + 重挂载钩子 -->
   <script type="module" src="/static/skin.js?v={{ asset_v }}"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+  <!-- 图表引擎：**同源自托管**（vendored 于 web/static/vendor/chartjs/）。
+       ⚠️ 曾用第三方 CDN（jsdelivr）—— 部分移动网络取不到 ⇒ `window.__chartFailed` ⇒ 趋势卡恒空白
+       （2026-11-06 实测，见 docs/pitfalls.md「静态库一律自托管」）。勿改回第三方 CDN。 -->
+  <script src="/static/vendor/chartjs/chart.umd.min.js?v={{ asset_v }}"
           onerror="window.__chartFailed=true"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"
+  <script src="/static/vendor/chartjs/chartjs-plugin-zoom.min.js?v={{ asset_v }}"
           onerror="window.__zoomFailed=true"></script>
 </head>
 <body>

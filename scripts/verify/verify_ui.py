@@ -4928,7 +4928,7 @@ def assert_viewport(w: int, h: int, m: dict, expect_date: str = "") -> None:
         print(f"  overflowers={m['overflowers']}")
     check(m["dashExists"], ".dash 骨架存在")
     check(m["scrollW"] == m["innerW"], f"{w} 无横向溢出", m["scrollW"], m["innerW"])
-    check(m["chartFailed"] is False, "Chart.js CDN 正常")
+    check(m["chartFailed"] is False, "Chart.js 可用（自托管，v4.4.1）")
 
     # canvas 位图 == 显示尺寸（C2 回归护栏；DPR=1 严格相等）
     c = m["canvas"]

@@ -26,7 +26,8 @@
   </script>
   <!-- 与首页同一份 style.css（宏观页样式追加在同一文件尾部的 .mac-* 段） -->
   <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+  <!-- 图表引擎同源自托管（vendored，理由见 docs/pitfalls.md「静态库一律自托管」） -->
+  <script src="/static/vendor/chartjs/chart.umd.min.js?v={{ asset_v }}"
           onerror="window.__chartFailed=true"></script>
 </head>
 <body>

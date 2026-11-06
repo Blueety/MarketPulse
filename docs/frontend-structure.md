@@ -13,8 +13,8 @@
 | 页面 | **4 个**：`/`（看板）、`/macro`（全球宏观）、`/macro/cn`（中国宏观）、**`/timeline`（市场日历，2026-09-18 上线；用户可见名与「市场日历」占位项合并，2026-09-19）** |
 | JSON API | **10 个**：`/api/history` `/api/latest` `/api/alerts` `/api/news` `/api/watchlist` `/api/macro` `/api/econ` `/api/econ/cn` `/api/cn/quotes` **`/api/timeline`** |
 | 模板 | 8 个 web 模板（6 页 + 2 个 include） + 1 个非 web 模板（`report_card.html`，长图渲染用） |
-| 静态资产 | `style.css` 1 份 + 业务 JS **6 份**（`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / **`settings.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） |
-| JS 框架 | **无框架、无构建**：原生 ES5 风格 IIFE + Chart.js 4.4.1（CDN）+ chartjs-plugin-zoom |
+| 静态资产 | `style.css` 1 份 + 业务 JS **6 份**（`app.js` / `macro.js` / `macro_cn.js` / `timeline.js` / `backtest.js` / **`settings.js`**） + 共享插件 1 份 + SVG 素材 6 个（flags 2 / icons 4） + **vendored 第三方运行时**：`vendor/chartjs/`（Chart.js 4.4.1 + plugin-zoom 2.0.1，≈218 KB，2026-11-06 自托管）与 `vendor/liquid-glass/`（皮肤引擎，见 §11） |
+| JS 框架 | **无框架、无构建**：原生 ES5 风格 IIFE + Chart.js 4.4.1（自托管 `web/static/vendor/chartjs/`）+ chartjs-plugin-zoom |
 | 前端总规模 | ≈ **6,100 行**（`style.css` 1074 + `app.js` 1229 + `macro.js` 722 + `macro_cn.js` 805 + **`timeline.js` 380** + `chart-crosshair.js` 262 + 模板 ~572 + `web/app.py` 1254（含后端） |
 | 主题 | 双主题（light / dark），CSS 自定义属性 token 驱动，`localStorage["mp-theme"]` 持久化 |
 | 验收 | `scripts/verify/verify_ui.py`（Playwright，**5 视口**，退出码 0/1；断言组 `MX/NA/QM/UX/PW/TL`） |
@@ -311,7 +311,7 @@
 
 5. **加载态不统一** —— 骨架屏只在 HTML 静态写好（overview / watchlist / sectors / alerts），news / KPI / 宏观页首屏是空白或「—」。
 6. **响应式坏带** —— `1500–1919`（五列 KPI 无专属断点）与 `769–1024`（三列挤爆）曾实测为坏带，已补断点；改动栅格后**必须五视口重测**，别只测 1920/1280/375。
-7. **图表 CDN 依赖** —— Chart.js 与 zoom 插件走 jsdelivr，`onerror` 只置 `window.__chartFailed/__zoomFailed` 标志，各页未统一消费（`macro` 页有 `#macro-chart-fail`，首页只有 `.chart-empty`）。
+7. **图表 CDN 依赖 —— 已解决（2026-11-06）**：Chart.js 4.4.1 与 plugin-zoom 2.0.1 已 vendored 到 `web/static/vendor/chartjs/` 同源加载，`onerror` 降级链（`__chartFailed/__zoomFailed`）保留；由 `scripts/verify/verify_offline_assets.py` 阻断一切第三方域后断言 3 页 × 2 视口出图。
 8. **`macro_cn.js` 分组串行取数** —— 冷启动 13 个 AkShare 接口 + 中债 8 s，前端超时已给到 30 s；交互上可考虑更明确的进度反馈。
 
 ---

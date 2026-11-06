@@ -95,7 +95,7 @@
 - **板块热度数据源在 context，不在 history**：history.json 无板块字段；`/api/latest` 的 sector_heat 来自最新 `context/*.json` 的 `sector_heat`（gainers/losers）；context 缺失 / 键缺失 → 降级空结构 `{gainers:[],losers:[]}`。PRD 字面「从 history.json 最新条目」不实。
 - **alerts 空目录容错**：`alerts/` 目录缺失 / 空 / 含坏文件（无 frontmatter）→ `/api/alerts` 返回 `[]` 或跳过坏文件，绝不 500；告警文件名含日期，排序按文件名倒序取最近 10 条。
 - **只读边界**：web 进程绝不写 data/alerts/context；`/api/latest` 涨跌幅由 history 相邻记录自算，不读 `last_values.json`（它是次日告警基准，读它违反只读语义）。
-- **Chart.js CDN 降级**：图表库走 jsdelivr CDN，图区 `<script onerror>` 置 `window.__chartFailed`；`renderCharts` 在 `window.__chartFailed || !window.Chart` 时显示「图表加载失败」降级文案，页面其余模块（HTML 直渲）不受影响；无外网环境不白屏。
+- **静态库一律自托管**：图表库原走 jsdelivr CDN —— 2026-11-06 实测证实第三方 CDN 在国内移动网络不可达，`window.Chart` 取不到 ⇒ 3 个出图页图表**恒空白**（与用户手机截图一致，探针 `blocked: chart=false, failed=true` / `ok: chart=true`）。现库统一走 `web/static/vendor/chartjs/`（`chart.umd.min.js` 4.4.1 + `chartjs-plugin-zoom.min.js` 2.0.1，禁改写，另加 `_ASSET_FILES` 换 `?v=`），由 `scripts/verify/verify_offline_assets.py` 阻断一切非本机请求后断言「3 页 × 2 视口图表实例存在」；**新增第三方前端库同样必须 vendored，不得再引外部 CDN**。`onerror` 降级链路**保留**：图区 `<script onerror>` 置 `window.__chartFailed`；三页**判据并不一致**：首页 `renderMainChart()`（`app.js:762`）与 `macro_cn.js:521` 判 `window.__chartFailed || !window.Chart`，而 `macro.js:435` 只判 `!window.Chart`（从不读 `__chartFailed`；行为等价——`__chartFailed` 只可能伴随 `Chart` 缺失——但别指望在宏观页用该标志分流）。降级文案：首页隐藏 canvas + `.chart-empty`，宏观页 `#macro-chart-fail`、中国宏观页 `#cn-chart-fail`；页面其余模块（HTML 直渲）不受影响；无外网环境不白屏（自托管后此路径只在静态文件 404/损坏时触发）。
 ## 模块 src/（十二期：相关性分析）
 
 - **相关性输入用收益率，非原始价格**：`compute_correlation` 从 history 收盘价相邻日推导日收益率（(p[t]-p[t-1])/p[t-1]），缺口行（None 或 prev 为 None）断开收益链不参与；窗口取 history 最后 `CORRELATION_DAYS=30` 行（与趋势图同语义，非自然日）。切勿对 history 提前 append 当日记录后才计算（report 阶段 history 未含当日，与趋势图一致）。
@@ -136,7 +136,7 @@
 - **FastAPI Query 参数越界自动 422**：`days: int = Query(30, ge=1, le=90)` 时前端传 `?days=0` / `?days=91` 由框架直接返回 422，前端无需自行校验，但测试必须覆盖这两个边界。
 - **默认行为变更必同步测试**：`/api/history` 默认窗口 7→30 天后，既有 `test_api_history` 的 `len(dates)<=7` 与 vix null 索引（1→2）断言、以及 `test_api_history_series_shape` 的键集断言（`raw`）都要同步更新，否则旧断言锁死新行为。
 - **新增 API 字段同步键集断言**：series 增 `raw` 等长原始值（GLD 已 ×10，与图线一致）后，`test_api_history_series_shape` 的 `set(s.keys())` 必须含 `raw`，否则键集漂移无人发现。
-- **CDN 插件降级纪律**：chartjs-plugin-zoom 走 CDN，`<script onerror="window.__zoomFailed=true">`；插件缺失时图表照常渲染仅无缩放（zoom 配置仅在 `window.ChartZoom && !window.__zoomFailed` 时注入），与既有 Chart.js `__chartFailed` 降级同纪律，不白屏。
+- **插件降级纪律**：chartjs-plugin-zoom **自托管**（`web/static/vendor/chartjs/chartjs-plugin-zoom.min.js`，2026-11-06 起不再走 CDN），`<script onerror="window.__zoomFailed=true">`；插件缺失时图表照常渲染仅无缩放（zoom 配置仅在 `window.ChartZoom && !window.__zoomFailed` 时注入），与既有 Chart.js `__chartFailed` 降级同纪律，不白屏。
 - **筛选/排序单一管线**：指标筛选（state.selected）与表格排序（state.sort）统一由 `refresh()` 驱动——历史请求带 `?symbols=`、概览表在 `renderOverview` 内先按 selected 过滤再排序；整组无选中时历史请求发空余串会退回全量，故前端对 `selected.size===0` 直接走空 payload 渲染「无选中指标」占位，避免与「全部」语义混淆。
 - **浏览器自动化访问 DOM 走 `tab.evaluate`**：`browser` 的 `run` 顶层作用域无 `document`，必须在 `tab.evaluate(() => {...})` 内操作 DOM；模拟点击后需 `await setTimeout` 等 fetch 回调再断言。
 ## 环境相关
