@@ -365,6 +365,28 @@ body {
 .seg button:hover { color: var(--text-primary); border-color: var(--blue); }
 .seg button.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
 
+/* ===== 趋势卡双视图（2026-11-06 home-trend-modes）：对比 / 点位 =====
+   ⚠️ 两个视图**共用** #chart-main / #chart-main-wrap，新增的控件行（chips / point-bar）默认 hidden ——
+   首页高度预算只剩 24px（默认态 scrollHeight @1920 实测 1216 / 上限 1240）。
+   ⚠️ 显示语义一律用 `:not(.hidden)`：`.hidden` 只有 (0,1,0)，写在 .seg 之前 ⇒ 会被 `.seg{display:flex}`
+   反压（`#trend-tabs`/`#range-bar` 本身就是 .seg 节点，必须用 id 特异性收回来）。 */
+#trend-tabs.hidden, #range-bar.hidden { display: none; }
+.trend-chips:not(.hidden) { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.trend-chip {
+  background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-family: inherit;
+  cursor: pointer; white-space: nowrap; transition: all .15s ease;
+}
+.trend-chip:hover { color: var(--text-primary); border-color: var(--blue); }
+.trend-chip.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+.point-bar:not(.hidden) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.point-label { font-size: 12px; color: var(--text-secondary); }
+#point-symbol {
+  background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 5px; padding: 0 8px; height: 26px; font-size: 12px; font-family: inherit;
+  max-width: 180px;
+}
+
 /* ===== 数据表格 ===== */
 .table-scroll { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }

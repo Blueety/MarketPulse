@@ -43,7 +43,7 @@ function colors() {
 const charts = {};  // 'main' -> Chart 实例（重渲染前 destroy）
 if (window.Chart && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
 
-// 趋势主图类别（四图合一后的 4 个 tab，keys 为 history 小写键）
+// 趋势主图类别（固定 4 组；「自选」是第 5 个 tab 见 CUSTOM_GROUP，keys 为 history 小写键）
 const GROUPS = [
   { id: "us", name: "美股大盘", keys: ["gspc", "ixic"] },
   { id: "cn", name: "A 股大盘", keys: ["sh", "sz", "cyb"] },
@@ -121,10 +121,81 @@ function iconAssetHtml(colorVar, name) {
     '<img class="ico-flag-img" src="/static/icons/' + name + '.svg" alt="" onerror="this.remove()"></i>';
 }
 
+// === 趋势卡双视图（2026-11-06 home-trend-modes）：对比 / 点位 ===
+// 「自选」= 对比视图的第 5 个 tab（跨组任意组合）。做成 tab 而不是 head 里再加控件：
+// `.card-head` 是 flex-wrap，元素一多就换行 → 首页高度预算（只剩 24px）会被顶破。
+const CUSTOM_GROUP = { id: 'custom', name: '自选', keys: [] };
+// 自选默认组合（跨组：标普 500 + 上证）。**默认非空是门禁契约**：verify_ui 会逐个点开
+// `#trend-tabs button` 并要求「切换后图表可用 + meta ≥1」，空选择会落到空态 → 现有断言变红。
+const DEFAULT_CUSTOM_KEYS = ['gspc', 'sh'];
+// 点位视图标的清单：**与 `src/fetcher.py:SYMBOLS` 同序**（顺序决定 chip 顺序与下拉顺序，改一处必须两边同改）
+const POINT_SYMBOLS = [
+  { value: 'GSPC', text: '标普500' },
+  { value: 'IXIC', text: '纳斯达克' },
+  { value: 'SH', text: '上证指数' },
+  { value: 'SZ', text: '深证成指' },
+  { value: 'CYB', text: '创业板指' },
+  { value: 'VIX', text: 'VIX（恐慌指数）' },
+  { value: 'VXN', text: 'VXN（科技波动）' },
+  { value: 'MOVE', text: 'MOVE（债市波动）' },
+  { value: 'GCF', text: '黄金 COMEX' },
+  { value: 'BTC', text: '比特币（BTC-USD）' }
+];
+// 合法 chip key（history 的小写键）：POINT_SYMBOLS 全覆盖，含 gcf（history 列名是 gcf，非 gc=f）
+const CUSTOM_KEY_SET = POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); });
+// 点位时间档 = 交易日条数（与 #range-bar 的 days 口径一致；10Y 档依赖 scripts/backfill_history.py 的 10 年回填）
+const POINT_RANGES = [
+  { days: 260, label: '1Y' },
+  { days: 780, label: '3Y' },
+  { days: 1300, label: '5Y' },
+  { days: 2600, label: '10Y' },
+  { days: 3650, label: '全部' }
+];
+
+// localStorage 读写：隐私模式 / 配额满时静默失败，绝不因偏好读写打断渲染
+function lsGet(key, fallback) {
+  try {
+    var v = localStorage.getItem(key);
+    return v == null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, val); } catch (e) {}
+}
+// 自选组合：非法/空数组一律回落到默认组合（「至少保留 1 个」的不变量在读取端也守一次）
+function loadCustomKeys() {
+  try {
+    var arr = JSON.parse(lsGet('mp-trend-custom', 'null'));
+    if (Array.isArray(arr)) {
+      var out = arr.map(function (k) { return String(k).toLowerCase(); })
+        .filter(function (k, i, a) { return CUSTOM_KEY_SET.indexOf(k) !== -1 && a.indexOf(k) === i; });
+      if (out.length) return out;
+    }
+  } catch (e) {}
+  return DEFAULT_CUSTOM_KEYS.slice();
+}
+function loadPointSymbol() {
+  var v = String(lsGet('mp-point-symbol', 'GSPC')).toUpperCase();
+  var ok = POINT_SYMBOLS.filter(function (s) { return s.value === v; }).length > 0;
+  return ok ? v : 'GSPC';
+}
+function loadPointDays() {
+  var n = parseInt(lsGet('mp-point-days', '260'), 10);
+  var ok = POINT_RANGES.filter(function (r) { return r.days === n; }).length > 0;
+  return ok ? n : 260;
+}
+
 // 单一状态源：驱动所有视图刷新
 const state = {
   days: 30,
   trendGroup: 'us',   // 趋势主图当前类别 tab
+  trendView: lsGet('mp-trend-view', 'compare') === 'point' ? 'point' : 'compare',  // 'compare' | 'point'
+  customKeys: loadCustomKeys(),       // 「自选」tab 选中的 series key（小写，如 'gspc'）
+  point: {                            // 点位视图独立数据（与 state.history 无关）
+    symbol: loadPointSymbol(),
+    days: loadPointDays(),
+    payload: null
+  },
   history: null,      // /api/history 全量 payload
   latest: null,       // /api/latest payload
   latestDate: null,   // /api/latest 的 date：判定板块数据是否新鲜（as_of !== date → 显示快照标注）
@@ -540,7 +611,7 @@ function renderPlaceholders() {
   });
 }
 
-// === 趋势主图（四图合一）===
+// === 趋势主图（对比视图：归一化叠加）===
 function buildTradingAxis(dates, series) {
   const allDates = new Set();
   series.forEach(function (s) {
@@ -703,7 +774,8 @@ function renderTrendTabs() {
   const box = document.getElementById('trend-tabs');
   if (!box) return;
   box.innerHTML = '';
-  GROUPS.forEach(function (g) {
+  // 顺序契约：us, cn, vol, alt, 自选 —— verify_ui 会点 `#trend-tabs button[1]`（必须仍是 A 股大盘）
+  GROUPS.concat([CUSTOM_GROUP]).forEach(function (g) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = g.name;
@@ -716,10 +788,57 @@ function renderTrendTabs() {
       box.querySelectorAll('button').forEach(function (b) {
         b.classList.toggle('active', b === btn);
       });
-      renderMainChart();   // 纯客户端切换：复用 state.history，不发网络请求
+      renderTrendChips();     // 「自选」才显示 chip 行（其余组保持默认态的零增高）
+      renderTrendChart();     // 纯客户端切换：复用 state.history，不发网络请求
     });
     box.appendChild(btn);
   });
+}
+
+// 「自选」chip 行：10 个标的（顺序 = /api/history 的 series 顺序；无 history 时回落到 POINT_SYMBOLS）
+function trendChipCatalog() {
+  const series = (state.history || {}).series || [];
+  if (series.length) {
+    return series.map(function (s) { return { key: s.key, label: s.label }; });
+  }
+  return POINT_SYMBOLS.map(function (s) { return { key: s.value.toLowerCase(), label: s.text }; });
+}
+
+function renderTrendChips() {
+  const box = document.getElementById('trend-chips');
+  if (!box) return;
+  const show = state.trendView === 'compare' && state.trendGroup === 'custom';
+  box.classList.toggle('hidden', !show);
+  if (!show) return;   // 非自选视图不重建节点（省 DOM 抖动）
+  box.innerHTML = '';
+  trendChipCatalog().forEach(function (c) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.key = c.key;
+    btn.textContent = c.label;
+    btn.className = 'trend-chip';
+    btn.classList.toggle('active', state.customKeys.indexOf(c.key) !== -1);
+    btn.addEventListener('click', function () {
+      const i = state.customKeys.indexOf(c.key);
+      if (i === -1) {
+        state.customKeys.push(c.key);
+      } else if (state.customKeys.length > 1) {
+        state.customKeys.splice(i, 1);
+      } else {
+        return;   // 不变量：至少保留 1 个标的（取消最后一个 = 空态，无意义）
+      }
+      btn.classList.toggle('active', state.customKeys.indexOf(c.key) !== -1);
+      lsSet('mp-trend-custom', JSON.stringify(state.customKeys));
+      renderMainChart();
+    });
+    box.appendChild(btn);
+  });
+}
+
+// 视图分派：所有「重画趋势卡」的调用点走这里（主题切换 / 刷新 / macro 晚到 / tab 切换）
+function renderTrendChart() {
+  if (state.trendView === 'point') renderPointChart();
+  else renderMainChart();
 }
 
 function renderTrendMeta(g, series) {
@@ -734,7 +853,8 @@ function renderTrendMeta(g, series) {
   series.forEach(function (s) {
     const span = document.createElement('span');
     span.className = 'meta-item';
-    span.style.color = palette[s.key] || '#8b949e';
+    // 取色与图线同源（seriesColor 自带 gcf → gc=f 映射与兜底），不得再写第二套兜底
+    span.style.color = seriesColor(palette, s.key);
     span.textContent = s.label + ' ' + rangeShort(state.days) + ' ' + fmtPct(s.change_7d);
     el.appendChild(span);
   });
@@ -747,6 +867,12 @@ function renderTrendMeta(g, series) {
 // ⚠️ 该脚本必须在 `<script src="app.js">` **之前**引入，否则 `plugins: [window.hoverCrosshair]`
 //    会变成 `[undefined]` 并被 Chart.js **静默忽略**（横线不出现且不报错）。
 
+// 系列色：history 的 'gcf' 在 SERIES_VAR 里的键名是 'gc=f'（macro 序列口径），必须显式映射，
+// 否则自定义组合勾了黄金会拿到 undefined → 画成透明/黑线
+function seriesColor(palette, key) {
+  return palette[key] || (key === 'gcf' ? palette['gc=f'] : null) || '#8b949e';
+}
+
 function renderMainChart() {
   const canvas = document.getElementById('chart-main');
   const emptyEl = document.getElementById('chart-main-empty');
@@ -754,10 +880,11 @@ function renderMainChart() {
   if (charts.main) { charts.main.destroy(); delete charts.main; }
 
   let g = GROUPS[0];
-  GROUPS.forEach(function (x) { if (x.id === state.trendGroup) g = x; });
+  GROUPS.concat([CUSTOM_GROUP]).forEach(function (x) { if (x.id === state.trendGroup) g = x; });
+  const keys = g.id === 'custom' ? state.customKeys : g.keys;
   const history = state.history || {};
   const dates = history.dates || [];
-  const series = (history.series || []).filter(function (s) { return g.keys.indexOf(s.key) !== -1; });
+  const series = (history.series || []).filter(function (s) { return keys.indexOf(s.key) !== -1; });
 
   if (window.__chartFailed || !window.Chart) {
     canvas.style.display = 'none';
@@ -773,6 +900,9 @@ function renderMainChart() {
       emptyEl.classList.remove('hidden');
       // ⚠️ 2026-09-17（产线走查 G4）：「暂无数据」太泛 —— 这里是**趋势**卡，写明是趋势数据缺失，
       //    与上方失败条（取数失败）区分：这是"取到了但没数据"，不是错误。
+      // ⚠️ 「自选」一个都不选的空态**不可达**：chip 处理器与 loadCustomKeys() 都守「至少保留 1 个」。
+      //    这条不变量同时是既有 tab 轮询门禁（每个 tab 切后都要有图 + meta ≥1）的前提，
+      //    所以这里不再给 custom 单独写文案（写了也是死代码）。
       emptyEl.textContent = '暂无趋势数据';
     }
     renderTrendMeta(g, []);
@@ -811,7 +941,7 @@ function renderMainChart() {
   }
   const palette = colors();
   const datasets = series.map(function (s) {
-    return buildLineDataset(s, palette[s.key], buildLinePts(s, dates, axis.dateIndexMap), { area: true });
+    return buildLineDataset(s, seriesColor(palette, s.key), buildLinePts(s, dates, axis.dateIndexMap), { area: true });
   });
   let gcMeta = null;
   if (gcSeries && mcVisible.length) {
@@ -848,6 +978,352 @@ function renderMainChart() {
     plugins: [hoverCrosshair]   // 内联插件仅挂本实例（不 Chart.register，避免影响全局）
   });
   renderTrendMeta(g, gcMeta ? series.concat([gcMeta]) : series);
+}
+
+// === 点位视图（单指数绝对点位 + MA20/MA60）===
+// 与对比视图**共用** #chart-main / #chart-main-wrap / #chart-main-empty / #home-fail-bar / #home-chart-skel
+// （切换只 destroy + 重建实例）—— 卡片高度因此不变，首页高度门禁（≤1240）不受影响。
+function pointSymbolLabel(value) {
+  const hit = POINT_SYMBOLS.filter(function (s) { return s.value === value; })[0];
+  return hit ? hit.text : value;
+}
+function pointRangeLabel(days) {
+  const hit = POINT_RANGES.filter(function (r) { return r.days === days; })[0];
+  return hit ? hit.label : days + 'D';
+}
+// 档位 → 期望日历跨度（月）。'全部'1825 不在表里 = 不判短（无基准可比）。
+const POINT_RANGE_MONTHS = { 260: 12, 780: 36, 1300: 60, 2600: 120 };
+
+// 点位数据的**实际日历跨度**（月）：首末日期差 / 30.44，向下取整，至少 1。
+// ⚠️ 用 Date.UTC 手工拆日期（不写 `new Date('YYYY-MM-DD')`：那会按本地时区解析，东八区会偏一天）。
+function pointSpanMonths() {
+  const dates = (state.point.payload && state.point.payload.dates) || [];
+  if (dates.length < 2) return null;
+  function ms(d) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || ''));
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  const a = ms(dates[0]);
+  const b = ms(dates[dates.length - 1]);
+  if (a == null || b == null || b <= a) return null;
+  return Math.max(1, Math.floor((b - a) / 86400000 / 30.44));
+}
+
+// `#range-label` 的**唯一**文案来源（对比：按 state.days；点位：按点位档位 + 实际跨度）。
+// 回填前 3Y/5Y/10Y 会退化成同一长度 ⇒ 实际跨度短于档位名义跨度时追加提示，避免被当成 bug。
+function trendRangeLabel() {
+  if (state.trendView === 'point') {
+    const base = pointRangeLabel(state.point.days);
+    const months = pointSpanMonths();
+    const expect = POINT_RANGE_MONTHS[state.point.days];
+    if (months && expect && months < expect - 1) return base + '（实际 ' + months + ' 个月）';
+    return base;
+  }
+  return state.days >= 365 ? '近 1 年' : '近 ' + state.days + ' 日';
+}
+function syncRangeLabel() {
+  const el = document.getElementById('range-label');
+  if (el) el.textContent = trendRangeLabel();
+}
+// y 轴/ tooltip 小数位：绝对点位量级差异极大（BTC ~6e4 / VIX ~1e1），按最大值统一取位
+function pointYDigits(raw) {
+  var maxAbs = 0;
+  raw.forEach(function (v) { if (v != null) maxAbs = Math.max(maxAbs, Math.abs(v)); });
+  if (maxAbs >= 1000) return 0;
+  return maxAbs < 100 ? 2 : 1;
+}
+// 滑动均值：窗口内有效值不足 win 个 → 该点无值（不拿残缺窗口充数，否则线头会跳）
+function movingAvgPts(values, dates, dateIndexMap, win) {
+  const pts = [];
+  for (var i = 0; i < values.length; i++) {
+    const d = dates[i];
+    if (dateIndexMap[d] === undefined) continue;
+    var sum = 0, cnt = 0;
+    for (var j = Math.max(0, i - win + 1); j <= i; j++) {
+      const v = values[j];
+      if (v != null) { sum += v; cnt++; }
+    }
+    if (cnt >= win) pts.push({ x: d, y: sum / cnt });
+  }
+  return pts;
+}
+
+function buildPointQuery() {
+  return '/api/history?symbols=' + encodeURIComponent(state.point.symbol) + '&days=' + state.point.days;
+}
+
+// 点位卡内失败/空态：隐藏 canvas + 空态文案 + **清空 meta**。
+// ⚠️ 必须显式复位：失败时不能把上一次（对比组或上一个档位）的图与 meta 留在卡里 ——
+//    失败 ≠ 静默（F2，review 2026-11-06）。
+function showPointCardState(msg) {
+  if (charts.main) { charts.main.destroy(); delete charts.main; }
+  const canvas = document.getElementById('chart-main');
+  const emptyEl = document.getElementById('chart-main-empty');
+  const meta = document.getElementById('trend-meta');
+  if (canvas) canvas.style.display = 'none';
+  if (emptyEl) {
+    emptyEl.classList.remove('hidden');
+    emptyEl.textContent = msg;
+  }
+  if (meta) {
+    meta.innerHTML = '';
+    meta.textContent = '';
+  }
+  window.__mpPointRawFirst = null;
+}
+
+// 点位取数：只取 series[0]（后端 _resolve_symbols 按注册表序返回）。并发切换时按 snapshot 丢弃过期响应。
+function fetchPoint() {
+  const wantSym = state.point.symbol;
+  const wantDays = state.point.days;
+  state.point.payload = null;
+  showHomeChartSkel(true);
+  fetch(buildPointQuery())
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (payload) {
+      if (wantSym !== state.point.symbol || wantDays !== state.point.days) return;   // 已切走 → 丢弃
+      state.point.payload = payload;
+      showHomeFailBar(false);
+      // 已切回对比视图时**不要**重画（否则点位图会盖掉对比图）
+      if (state.trendView === 'point') renderPointChart();
+    }, function (e) {
+      if (wantSym !== state.point.symbol || wantDays !== state.point.days) return;
+      // 失败 ≠ 静默：卡内显式失败态（对比图/旧 meta 不得留在卡里）+ 失败条
+      if (state.trendView === 'point') {
+        showPointCardState('点位数据获取失败');
+        syncRangeLabel();
+      }
+      showHomeFailBar(true, e && e.message ? e.message : '加载失败');
+    })
+    .then(function () { showHomeChartSkel(false); });
+}
+
+function renderPointMeta(symLabel, rangeLabel, raw, dates) {
+  const el = document.getElementById('trend-meta');
+  if (!el) return;
+  el.innerHTML = '';
+  var first = null, last = null, hi = null, lo = null;
+  (raw || []).forEach(function (v) {
+    if (v == null) return;
+    if (first === null) first = v;
+    last = v;
+    if (hi === null || v > hi) hi = v;
+    if (lo === null || v < lo) lo = v;
+  });
+  if (first === null) {
+    el.textContent = symLabel + ' · 暂无数据';
+    return;
+  }
+  const pct = first ? (last - first) / first * 100 : null;
+  // 极值与 y 轴同口径取位（F8：BTC 档不出现轴 `108,000` / meta `108,000.00` 的错位）
+  const digits = pointYDigits(raw);
+  // 「数据起点」= 该指数在窗口内**实际首个有值的交易日**（数据未回填时直接暴露真实起点，
+  // 免得 10Y/5Y/3Y 三档退化成同一长度被当成 bug）
+  var startIdx = 0;
+  for (var i = 0; i < raw.length; i++) { if (raw[i] != null) { startIdx = i; break; } }
+  [symLabel + ' ' + rangeLabel + ' ' + fmtPct(pct),
+   '区间最高 ' + fmtNumSep(hi, digits),
+   '区间最低 ' + fmtNumSep(lo, digits),
+   '数据自 ' + dates[startIdx]].forEach(function (t) {
+    const span = document.createElement('span');
+    span.className = 'meta-item';
+    span.textContent = t;
+    el.appendChild(span);
+  });
+}
+
+function renderPointChart() {
+  const canvas = document.getElementById('chart-main');
+  const emptyEl = document.getElementById('chart-main-empty');
+  if (!canvas) return;
+  window.__mpTrendMode = 'point';
+  window.__mpPointSymbol = state.point.symbol;
+  window.__mpPointDays = state.point.days;
+
+  const payload = state.point.payload;
+  if (state.trendView !== 'point') return;   // 视图已切回对比：不许用点位图覆盖对比图
+  syncRangeLabel();                          // 档位或实际跨度可能刚变（无 payload 时只有档位文案）
+  if (!payload) return;   // 尚未结算：保留骨架/现有画面，避免先闪一帧空态
+
+  if (charts.main) { charts.main.destroy(); delete charts.main; }
+  const dates = payload.dates || [];
+  const s0 = (payload.series || [])[0] || null;
+  const raw = (s0 && s0.raw) || [];
+  const symLabel = pointSymbolLabel(state.point.symbol);
+  const rangeLabel = pointRangeLabel(state.point.days);
+  window.__mpPointRawFirst = null;
+
+  if (window.__chartFailed || !window.Chart) {
+    // 与失败态同款复位：清 canvas + 清 meta，避免残留上一次对比组的文案
+    showPointCardState('图表加载失败（离线 / CDN 不可达）');
+    return;
+  }
+  var firstIdx = -1;
+  for (var i = 0; i < raw.length; i++) { if (raw[i] != null) { firstIdx = i; break; } }
+  if (!dates.length || firstIdx === -1) {
+    canvas.style.display = 'none';
+    if (emptyEl) {
+      emptyEl.classList.remove('hidden');
+      emptyEl.textContent = '该指数在所选窗口内暂无数据'
+        + (dates.length ? '（数据自 ' + dates[0] + ' 起）' : '');
+    }
+    renderPointMeta(symLabel, rangeLabel, null, dates);
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+  canvas.style.display = '';
+  if (window.ChartZoom && !window.__zoomFailed && !renderMainChart._zoomRegistered) {
+    Chart.register(window.ChartZoom);
+    renderMainChart._zoomRegistered = true;
+  }
+  window.__mpPointRawFirst = raw[firstIdx];   // 验收钩子：与 dataset[0] 首个非空 y 必须相等
+
+  // 轴：与对比视图同一套（category + 交易日），保证 crosshair 吸附/坐标语义一致
+  const pseudo = { key: s0.key, label: s0.label || symLabel, values: raw, raw: raw };
+  const axis = buildTradingAxis(dates, [pseudo]);
+  const palette = colors();
+  const digits = pointYDigits(raw);
+  const datasets = [
+    buildLineDataset(pseudo, seriesColor(palette, s0.key),
+                     buildLinePts(pseudo, dates, axis.dateIndexMap), { area: true }),
+    buildLineDataset({ key: 'ma20', label: 'MA20' }, cssVar('--blue', '#0A84FF'),
+                     movingAvgPts(raw, dates, axis.dateIndexMap, 20), {}),
+    buildLineDataset({ key: 'ma60', label: 'MA60' }, cssVar('--c-move', '#A78BFA'),
+                     movingAvgPts(raw, dates, axis.dateIndexMap, 60), {})
+  ];
+  // 复用对比视图的 options（缩放 / grid / 图例关 / 轴侧），只替换 y 刻度与 tooltip 数值口径
+  const opts = buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.point.days) });
+  opts.scales.y.ticks.callback = function (v) { return fmtNumSep(v, digits); };
+  opts.plugins.tooltip.callbacks.label = function (ctx) {
+    const v = ctx.parsed ? ctx.parsed.y : null;
+    if (v == null) return ctx.dataset.label + ' —';
+    return ctx.dataset.label + ' ' + fmtNumSep(v, digits);
+  };
+  charts.main = new Chart(canvas, {
+    type: 'line',
+    data: { datasets: datasets },
+    options: opts,
+    // ⚠️ chart-crosshair.js 硬契约：自定义读数口径的 formatter 挂在**插件对象**上，
+    //    绝不能写进 options.plugins.hoverCrosshair（会被 Chart.js 当 scriptable option 立即调用而抛错）
+    plugins: [typeof window.makeHoverCrosshair === 'function'
+      ? window.makeHoverCrosshair({ formatter: function (v) { return fmtNumSep(v, digits); } })
+      : window.hoverCrosshair]
+  });
+  renderPointMeta(symLabel, rangeLabel, raw, dates);
+}
+
+// 点位下拉的符号清单：**与「自选」chip 同源** —— history 到达后用 `/api/history` 的 `series`
+// （顺序 = 后端 SYMBOLS 注册表序），`POINT_SYMBOLS` 只在首帧（history 未到）作兜底。
+// ⚠️ 两处消费者同源之后，新增一个符号不会出现「chip 里有、下拉里没有」的半同步。
+function pointSymbolCatalog() {
+  const series = (state.history || {}).series || [];
+  if (series.length) {
+    return series.map(function (s) { return { value: String(s.key).toUpperCase(), text: s.label }; });
+  }
+  return POINT_SYMBOLS.map(function (s) { return { value: s.value, text: s.text }; });
+}
+
+// 点位控件（标的 <select> + 时间档按钮）：一次渲染后由事件驱动，与视图切换解耦
+function renderPointControls() {
+  const sel = document.getElementById('point-symbol');
+  if (sel) {
+    const opts = pointSymbolCatalog();
+    sel.innerHTML = '';
+    opts.forEach(function (s) {
+      const o = document.createElement('option');
+      o.value = s.value;
+      o.textContent = s.text;
+      sel.appendChild(o);
+    });
+    // 保留当前命中项；不在清单里（例如配置删了该符号）→ 回落到第一项，并把独立数据置空重取
+    const hit = opts.filter(function (o) { return o.value === state.point.symbol; }).length > 0;
+    if (!hit && opts.length) {
+      state.point.symbol = opts[0].value;
+      state.point.payload = null;
+      window.__mpPointSymbol = state.point.symbol;
+      lsSet('mp-point-symbol', state.point.symbol);
+      if (state.trendView === 'point') fetchPoint();   // 否则卡里留的是旧符号的图（误导）
+    }
+    sel.value = state.point.symbol;
+  }
+  const bar = document.getElementById('point-range');
+  if (!bar) return;
+  bar.innerHTML = '';
+  POINT_RANGES.forEach(function (r) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.days = String(r.days);
+    b.textContent = r.label;
+    b.className = r.days === state.point.days ? 'active' : '';
+    b.addEventListener('click', function () {
+      if (state.point.days === r.days) return;
+      state.point.days = r.days;
+      lsSet('mp-point-days', String(r.days));
+      syncRangeLabel();   // 档位文案即时生效（数据到达后再按实际跨度补一次）
+      bar.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+      fetchPoint();
+    });
+    bar.appendChild(b);
+  });
+}
+
+// 视图显隐唯一入口（不渲染图表：渲染由 setTrendView / 各刷新路径负责）
+function applyTrendViewUI() {
+  const v = state.trendView;
+  document.querySelectorAll('#trend-view button').forEach(function (b) {
+    const on = b.dataset.view === v;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const isPoint = v === 'point';
+  ['trend-tabs', 'range-bar'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', isPoint);
+  });
+  const bar = document.getElementById('point-bar');
+  if (bar) bar.classList.toggle('hidden', !isPoint);
+  window.__mpTrendMode = v;
+  window.__mpPointSymbol = state.point.symbol;
+  window.__mpPointDays = state.point.days;
+  syncRangeLabel();     // 标签单一来源：对比按 state.days / 点位按档位 + 实际跨度
+  renderTrendChips();   // chip 行只在「对比 + 自选」时可见
+}
+
+function setTrendView(v) {
+  v = v === 'point' ? 'point' : 'compare';
+  if (state.trendView === v) return;
+  state.trendView = v;
+  lsSet('mp-trend-view', v);
+  applyTrendViewUI();
+  if (v === 'point') {
+    if (state.point.payload) renderPointChart();
+    else fetchPoint();          // symbol/days 变更后 payload 已置空 → 这里自然重新取数
+  } else {
+    renderMainChart();          // 数据已在 state.history，切回不再发请求
+  }
+}
+
+// 初始化装配（只挂一次事件）：视图切换 + 标的下拉 + 时间档按钮 + localStorage 视图恢复
+function initTrendViewControls() {
+  document.querySelectorAll('#trend-view button').forEach(function (b) {
+    b.addEventListener('click', function () { setTrendView(b.dataset.view); });
+  });
+  const sel = document.getElementById('point-symbol');
+  if (sel) {
+    sel.addEventListener('change', function () {
+      if (!sel.value || sel.value === state.point.symbol) return;
+      state.point.symbol = sel.value;
+      lsSet('mp-point-symbol', sel.value);
+      window.__mpPointSymbol = sel.value;
+      fetchPoint();
+    });
+  }
+  renderPointControls();
+  applyTrendViewUI();                              // 默认 compare：只设 active 类，不触发渲染
+  if (state.trendView === 'point') fetchPoint();   // 深链（localStorage 记住点位视图）时补一次取数
 }
 
 // === KPI 卡（4 张：美股 / A股 / VIX / 自选）===
@@ -1199,8 +1675,7 @@ function showHomeChartSkel(show) {
 }
 
 function refresh() {
-  const rangeLabel = document.getElementById('range-label');
-  if (rangeLabel) rangeLabel.textContent = state.days >= 365 ? '近 1 年' : '近 ' + state.days + ' 日';
+  syncRangeLabel();   // 标签单一来源（对比按 state.days / 点位按档位）
   if (refreshing) return;
   setRefreshBusy(true);
   showHomeChartSkel(true);       // G4：loading 态（成功/失败结算时撤）
@@ -1210,12 +1685,14 @@ function refresh() {
     })
     .then(function (history) {
       state.history = history;
-      renderMainChart();
+      renderTrendChart();
+      renderPointControls();   // 下拉选项与 chip 同源（history 到达后才按 series 建）
       paintSparklines();
-      showHomeFailBar(false);
+      // ⚠️ 点位视图的失败条归 fetchPoint 所有：history 成功不得把它抹掉（两个数据源互不代表）
+      if (state.trendView !== 'point') showHomeFailBar(false);
     }, function (e) {
       // ⚠️ 失败 ≠ 静默（P1-②）：**保留旧图渲染**（离线仍看旧数据的既有行为）+ 显式失败条
-      renderMainChart();
+      renderTrendChart();
       showHomeFailBar(true, e && e.message ? e.message : '加载失败');
     })
     .then(function () {
@@ -1253,7 +1730,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const next = getTheme() === 'dark' ? 'light' : 'dark';
       try { localStorage.setItem('mp-theme', next); } catch (e) {}
       applyTheme(next);
-      renderMainChart();
+      renderTrendChart();
       repaintSparklines();
     });
   }
@@ -1300,7 +1777,11 @@ document.addEventListener('DOMContentLoaded', function () {
   if (refreshBtn) refreshBtn.addEventListener('click', function () { refresh(); });
   // 首页失败条的重试（F2）：与刷新同一条路径
   const homeRetry = document.getElementById('home-retry');
-  if (homeRetry) homeRetry.addEventListener('click', function () { refresh(); });
+  if (homeRetry) homeRetry.addEventListener('click', function () {
+    refresh();
+    // 点位视图有独立数据源（symbols=X&days=N）：重试必须一起重发，否则失败条永远修不好
+    if (state.trendView === 'point') fetchPoint();
+  });
   // 时间范围（7D / 30D / 90D / 1Y）
   const rangeBar = document.getElementById('range-bar');
   if (rangeBar) {
@@ -1318,6 +1799,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   renderPlaceholders();
   renderTrendTabs();
+  initTrendViewControls();   // 双视图：按钮 / 标的下拉 / 时间档 / localStorage 恢复（2026-11-06）
   renderLede();
   updateMarketStatus();
   setInterval(updateMarketStatus, 60000);
@@ -1390,7 +1872,7 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(mcTimer);
       state.macro = data || { stocks: [] };
       renderOverview();
-      renderMainChart();   // 三十四期：macro 晚到时补画 alt 组的黄金 COMEX 线
+      renderTrendChart();   // 三十四期：macro 晚到时补画 alt 组的黄金 COMEX 线（点位视图下为空操作）
     })
     .catch(function (err) {
       console.error('[macro] fetch failed:', err);

@@ -1206,3 +1206,12 @@ D6（缺项目级排除表）由「只查活文档」的设计取代（不需要
 
 **自查**：同步后先跑 `sh scripts/check-gates.sh | tail -3`，再看 `.scaffold-version` 的
 `gate_violations` 是否等于当前真实值（更新器只在它自己那次运行里统计，可能与磁盘现状脱节）。
+
+## 模块 web/（首页趋势卡双视图 2026-11-06）
+
+- **两个视图必须共用同一个 canvas**：`#chart-main` / `#chart-main-wrap` / `#chart-main-empty` / `#home-fail-bar` / `#home-chart-skel` 同时是首页高度门禁（`scrollHeight @1920 ≤ 1240`，默认态实测 1216、余量 24px）和 `canvas 位图 == 显示尺寸` 断言的锚点。新增第二个 canvas 或新开一行卡片会把这套断言顶红；切换视图只 destroy + 重建 Chart 实例（`charts.main` 唯一）。
+- **`#trend-tabs` 按钮顺序是硬契约**：`us, cn, vol, alt, 自选`。verify_ui 会点 `#trend-tabs button[1]`（必须仍是 A 股大盘），并**逐个点开所有 tab**、要求「切换后图表可用 + `#trend-meta .meta-item` ≥1」⇒「自选」tab 的默认组合**不能为空**（空 → 空态 → 既有断言变红）。新增 tab 必须同步把 `tabCount` 断言 4 → 5（三视口各一条）与 `TM-1b`。
+- **点位视图的 10Y 档依赖历史回填**：`days=2600` 只是请求上限，库内不足时后端返回全部记录（`records[-days:]`）⇒ 回填前 3Y/5Y/10Y 会退化成同一长度。meta 的「数据自 YYYY-MM-DD」是该指数**实际首个有值交易日**，别当 bug 去改窗口逻辑；10 年回填是独立步骤（`scripts/backfill_history.py`），不在本卡里做。
+- **`.hidden` 只有 (0,1,0)，会被 `.seg { display:flex }` 反压**：`#trend-tabs` / `#range-bar` 本身就是 `.seg` 节点 ⇒ 隐藏规则必须用 id 特异性（`#trend-tabs.hidden`）。新增控件行（`#trend-chips` / `#point-bar`）用 `:not(.hidden)` 的显示语义，且**默认必须 `hidden`**（默认态零增高）。
+- **history 的黄金键是 `gcf`，不是 `gc=f`**：`SERIES_VAR` 里的 `gc=f` 是 `/api/macro` 的 key。自选 chip 勾了黄金时取色必须走 `seriesColor()` 的显式映射，否则 `palette['gcf']` 为 `undefined` → 线画不出来（不报错）。meta 文字色同样走 `seriesColor()`（不要再写第二套 `|| '#8b949e'` 兜底）。
+- **两个数据源各管各的失败条**：`/api/history?days=`（对比）与 `/api/history?symbols=&days=`（点位）是两条独立取数链。`refresh()` 成功时**只在对比视图**收失败条（`if (state.trendView !== 'point') showHomeFailBar(false)`），否则点位取数失败会被一次 history 成功悄悄抹掉 → 432px 空卡零提示（「失败 ≠ 静默」）。点位失败要显式写卡内失败态（隐藏 canvas + `#chart-main-empty` 文案 + 清空 `#trend-meta`），因为 `renderPointChart()` 在 `payload === null` 时会早退。同理 `#home-retry` 必须同时重发 `fetchPoint()`。

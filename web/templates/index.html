@@ -93,7 +93,7 @@
           </section>
         </div>
 
-        <!-- 行 2：市场趋势（四图合一 + 类别 tab）+ 自选列表（迷你条） -->
+        <!-- 行 2：市场趋势（双视图：对比 4 组 tab + 自选 / 点位）+ 自选列表（迷你条） -->
         <div class="row-main">
           <!-- ⚠️ data-blur=1.5（plan §11.1.5 参数表写的是 2.5）：实测 blur 2.5 把 16px 方格抹到
                留存比 0.367（判据 ≥0.40），blur 1.5 → 0.458。依据是 plan §0 C2 自己的物理结论
@@ -103,6 +103,12 @@
             <div class="skin-glass-body">
             <div class="card-head">
               <h2>市场趋势 <span class="h2-sub" id="range-label">近 30 日</span></h2>
+              <!-- 双视图切换（2026-11-06 home-trend-modes）：对比 = 归一化叠加，点位 = 单指数绝对点位。
+                   ⚠️ 新增控件一律放 .card-head 之内/之后且默认 hidden —— 首页高度预算只剩 24px。 -->
+              <div class="seg" id="trend-view">
+                <button type="button" data-view="compare" class="active">对比</button>
+                <button type="button" data-view="point">点位</button>
+              </div>
               <div class="seg" id="trend-tabs"></div>
               <div class="seg range-bar" id="range-bar">
                 <button type="button" data-days="7">7D</button>
@@ -110,7 +116,16 @@
                 <button type="button" data-days="90">90D</button>
                 <button type="button" data-days="365">1Y</button>
               </div>
+              <!-- 点位视图控件（默认 hidden）：与 #trend-tabs/#range-bar 二选一显示，
+                   放进 .card-head 同一行 ⇒ 点位态不额外增高（默认 1216 / 点位 1216）。 -->
+              <div class="point-bar hidden" id="point-bar">
+                <label class="point-label" for="point-symbol">标的</label>
+                <select id="point-symbol"></select>
+                <div class="seg" id="point-range"></div>
+              </div>
             </div>
+            <!-- 自选 chip 行（对比视图，「自选」tab 激活时才取消 hidden；默认态零增高） -->
+            <div class="trend-chips hidden" id="trend-chips"></div>
             <!-- 首页失败条（F2，2026-09-17 走查整改 P1-②/P2-⑤）：history 取数失败 ≠ 静默——
                  保留旧图渲染（离线仍看旧数据）+ 显式失败条 + 重试。
                  ⚠️ 与宏观页 #mac-fail-bar **同构但有意复制**（不抽共享 class，避免牵连宏观页 N-* 断言）；

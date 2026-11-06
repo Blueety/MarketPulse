@@ -4955,7 +4955,7 @@ def assert_viewport(w: int, h: int, m: dict, expect_date: str = "") -> None:
     check((not m["watchHidden"]) and m["watchRows"] >= 1, f"{w} 自选列表可见且有行", m["watchRows"])
     check(len(m["phNotes"]) == 1 and m["phNotes"] == ["数据未接入"],
           f"{w} 1 个占位模块文案（资金流向）", m["phNotes"])
-    check(m["tabCount"] == 4, f"{w} 趋势类别 tab 4 个", m["tabCount"])
+    check(m["tabCount"] == 5, f"{w} 趋势类别 tab 5 个（4 组 + 自选）", m["tabCount"])
     check(m["isWeekendFri"] is False and m["isWeekendSat"] is True,
           f"{w} isWeekendDate(周五)=false / (周六)=true", (m["isWeekendFri"], m["isWeekendSat"]))
     # ⚠️ 2026-09-14（macro-page-refine）：原为写死 `"2026-09-11" in topbarDate` → **数据日一变就必红**
@@ -4999,6 +4999,234 @@ def summarize_and_exit(strict: bool | None = None) -> int:
         return 1 if strict else 0
     print("ALL PASSED")
     return 0
+
+
+def assert_trend_modes(page, url: str, errors: list[str]) -> None:
+    """TM-* 首页趋势卡双视图（对比 / 点位，2026-11-06 home-trend-modes）。
+
+    断言全部是**页面上可观察的结果**（控件显隐 / 请求 URL / dataset 数 / y 值量级 / 容器高度）
+    + `window.__mp*` 钩子，不断言内部函数名或 CSS 数值。
+    ⚠️ 结束时必须恢复「对比 + 美股大盘」并清掉 localStorage 视图偏好 —— 后续断言（1Y 档 ≥200 点、
+    375 重载）默认按对比视图/首组 tab 取基线。
+    ⚠️ 失败注入（TM-9）必须开**独立 context**：注入的 500 会让浏览器记一条 console error，
+    留在主页面会污染全流程「console error = 0」断言。
+    """
+    snap = """() => {
+        const q = (s) => document.querySelector(s);
+        const shown = (s) => { const e = q(s); return !!e && !e.classList.contains('hidden')
+                                      && getComputedStyle(e).display !== 'none'; };
+        const chart = window.Chart && window.Chart.getChart(document.getElementById('chart-main'));
+        const firstY = (ds) => { const p = ds && ds.data ? ds.data.find(o => o && o.y != null) : null;
+                                 return p ? p.y : null; };
+        return {
+            viewBtns: [...document.querySelectorAll('#trend-view button')].map(b => ({
+                view: b.dataset.view || '', text: (b.textContent || '').trim(),
+                active: b.classList.contains('active') })),
+            tabCount: document.querySelectorAll('#trend-tabs button').length,
+            tabActive: [...document.querySelectorAll('#trend-tabs button')]
+                        .filter(b => b.classList.contains('active')).map(b => b.dataset.group || b.textContent),
+            tabsShown: shown('#trend-tabs'), rangeShown: shown('#range-bar'),
+            pointBarShown: shown('#point-bar'), chipsShown: shown('#trend-chips'),
+            chipCount: document.querySelectorAll('#trend-chips .trend-chip').length,
+            chipActive: [...document.querySelectorAll('#trend-chips .trend-chip.active')]
+                        .map(b => b.dataset.key || ''),
+            mode: window.__mpTrendMode || null,
+            symbol: window.__mpPointSymbol || null, days: window.__mpPointDays || null,
+            rawFirst: window.__mpPointRawFirst == null ? null : window.__mpPointRawFirst,
+            chartAlive: !!chart,
+            dsCount: chart ? chart.data.datasets.length : 0,
+            firstYs: chart ? chart.data.datasets.map(firstY) : [],
+            label0: chart && chart.data.datasets[0] ? chart.data.datasets[0].label : null,
+            wrapH: q('#chart-main-wrap') ? Math.round(q('#chart-main-wrap').getBoundingClientRect().height) : null,
+            rangeLabel: (q('#range-label') || {}).textContent || null,
+            failBarShown: shown('#home-fail-bar'),
+            emptyShown: shown('#chart-main-empty'),
+            emptyText: (q('#chart-main-empty') || {}).textContent || null,
+            canvasDisplay: q('#chart-main') ? q('#chart-main').style.display : null,
+            metaItems: document.querySelectorAll('#trend-meta .meta-item').length,
+            metaText: (q('#trend-meta') || {}).textContent || null,
+        };
+    }"""
+
+    def _wait_until(pred, timeout_ms: int = 12000) -> dict:
+        waited = 0
+        st = page.evaluate(snap)
+        while waited < timeout_ms and not pred(st):
+            page.wait_for_timeout(250)
+            waited += 250
+            st = page.evaluate(snap)
+        return st
+
+    # ---- TM-1 默认态：两个视图按钮 + 对比激活 + 5 个 tab ----
+    # 先回到首组 tab（上一个用例逐个点 tab 结束在「自选」，chip 行会可见 → 默认态断言失真）
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[0].click()")
+    page.wait_for_timeout(400)
+    m = page.evaluate(snap)
+    views = [(b["view"], b["text"], b["active"]) for b in m["viewBtns"]]
+    check(len(m["viewBtns"]) == 2 and views[0][0] == "compare" and views[0][2]
+          and views[1][0] == "point" and not views[1][2],
+          "TM-1a #trend-view 两个按钮且「对比」为默认激活", views)
+    check(m["tabCount"] == 5, "TM-1b #trend-tabs button 共 5 个（4 组 + 自选）", m["tabCount"])
+    check(m["mode"] == "compare" and m["tabsShown"] and m["rangeShown"]
+          and not m["pointBarShown"] and not m["chipsShown"],
+          "TM-1c 默认对比视图：tabs/range 可见，point-bar/chips 隐藏", m)
+
+    # ---- TM-2 切「点位」：控件行互换 ----
+    page.click('#trend-view button[data-view="point"]')
+    page.wait_for_timeout(500)
+    m = page.evaluate(snap)
+    check(m["mode"] == "point" and m["pointBarShown"] and not m["tabsShown"] and not m["rangeShown"],
+          "TM-2 点位视图：#point-bar 可见、#trend-tabs/#range-bar 隐藏", m)
+
+    # ---- TM-3 点位 1Y 请求 URL（上证 → symbols=SH&days=260）----
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol'); s.value = 'SH';
+                   s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(400)
+    page.click('#point-range button[data-days="780"]')   # 先切 3Y 再回 1Y：保证 260 档必然发一次请求
+    page.wait_for_timeout(500)
+    page.click('#point-range button[data-days="260"]')
+    page.wait_for_timeout(1500)
+    urls = page.evaluate(
+        "() => performance.getEntriesByType('resource').map(e => e.name).filter(n => n.indexOf('/api/history?') !== -1)")
+    hit = [u for u in urls if "symbols=SH&days=260" in u]
+    check(bool(hit), "TM-3 点位 1Y 发出 GET /api/history?symbols=SH&days=260", urls[-3:])
+
+    # ---- TM-4 点位图 y = 绝对点位（与 /api/history 响应体同源比对）----
+    # ⚠️ 必须等「1Y 那一帧」：切档是异步的，早一步会读到上一个档位（3Y）的图与标签
+    m = _wait_until(lambda st: st["days"] == 260 and st["rangeLabel"] == "1Y"
+                    and st["chartAlive"] and st["rawFirst"] is not None and st["dsCount"] == 3)
+    check(m["chartAlive"] and m["dsCount"] == 3,
+          "TM-4a 点位图 3 条线（点位 + MA20 + MA60）", (m["chartAlive"], m["dsCount"]))
+    y0 = m["firstYs"][0] if m["firstYs"] else None
+    # 期望值取自响应**响应体**（独立于被测实现写的 __mp* 钩子与它自己画的 dataset）
+    src = page.evaluate(
+        """async () => {
+            const r = await fetch('/api/history?symbols=SH&days=260');
+            const j = await r.json();
+            const raw = ((j.series || [])[0] || {}).raw || [];
+            const first = raw.find(v => v != null);
+            return { first: first == null ? null : first,
+                     n: raw.filter(v => v != null).length };
+        }""")
+    check(src["first"] is not None and y0 is not None and abs(y0 - src["first"]) <= 0.01,
+          "TM-4b 点位图 y 值 == /api/history 响应 series[0].raw 首个非空值（同源比对，非自证）",
+          (y0, src))
+    check(m["symbol"] == "SH" and m["days"] == 260 and m["rawFirst"] is not None
+          and abs(m["rawFirst"] - src["first"]) <= 0.01,
+          "TM-4c 钩子 __mpPointSymbol/__mpPointDays 与所选档位一致，且 __mpPointRawFirst == 响应首个非空 raw",
+          (m["symbol"], m["days"], m["rawFirst"], src["first"]))
+
+    # ---- TM-8 #range-label 跟随视图/档位 + 实际跨度提示（F3）----
+    check(m["rangeLabel"] == "1Y", "TM-8a 点位 1Y：#range-label = 「1Y」", m["rangeLabel"])
+    page.click('#point-range button[data-days="2600"]')   # 10Y（回填前实际只有十几个月）
+    page.wait_for_timeout(1500)
+    m = _wait_until(lambda st: (st["rangeLabel"] or "").startswith("10Y"), timeout_ms=12000)
+    check((m["rangeLabel"] or "").startswith("10Y") and "实际" in m["rangeLabel"]
+          and "个月）" in m["rangeLabel"],
+          "TM-8b 点位 10Y：#range-label 追加实际跨度（数据未回填时不冒充 10 年）", m["rangeLabel"])
+
+    # ---- TM-5 自选跨组：10 个 chip，勾 GSPC+SH → 2 条线且都从 100 起算 ----
+    page.click('#trend-view button[data-view="compare"]')
+    page.wait_for_timeout(400)
+    m = page.evaluate(snap)
+    check(m["rangeLabel"] == "近 30 日",
+          "TM-8c 切回对比：#range-label 回到 state.days 口径（近 30 日）", m["rangeLabel"])
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
+    page.wait_for_timeout(400)
+    m = page.evaluate(snap)
+    check(m["chipsShown"] and m["chipCount"] == 10,
+          "TM-5a 自选 tab：10 个标的 chip 可见", (m["chipsShown"], m["chipCount"]))
+    # 把选择收敛到 {gspc, sh}（默认组合可能被 localStorage 改过 → 逐个对齐，不断言默认值）
+    want = {"gspc", "sh"}
+    if m["chipCount"] == 10:   # chip 行没渲染出来时不要再点（Playwright 会等 30s 才超时，掩盖真错）
+        for c in [{"key": k, "active": k in m["chipActive"]} for k in
+                  ["gspc", "ixic", "sh", "sz", "cyb", "vix", "vxn", "move", "gcf", "btc"]]:
+            if (c["key"] in want) != c["active"]:
+                page.click('#trend-chips .trend-chip[data-key="%s"]' % c["key"])
+                page.wait_for_timeout(150)
+    page.wait_for_timeout(600)
+    m = page.evaluate(snap)
+    ok5 = (m["dsCount"] == 2 and len(m["firstYs"]) == 2
+           and all(v is not None and abs(v - 100) <= 0.01 for v in m["firstYs"]))
+    check(ok5, "TM-5b 勾 GSPC+SH：dataset 数 2 且两条线首个非空 y ≈ 100", (m["dsCount"], m["firstYs"]))
+    # 不变量（F6 定案）：只剩 1 个时再取消它必须无效 —— 这是既有 tab 轮询门禁的前提，不是偏好
+    page.evaluate(
+        """() => { [...document.querySelectorAll('#trend-chips .trend-chip')].forEach(b => {
+              if (b.dataset.key !== 'gspc' && b.classList.contains('active')) b.click(); }); }""")
+    page.wait_for_timeout(400)
+    page.click('#trend-chips .trend-chip[data-key="gspc"]')
+    page.wait_for_timeout(400)
+    m = page.evaluate(snap)
+    check(m["chipActive"] == ["gspc"] and m["dsCount"] == 1,
+          "TM-5c 只剩 1 个 chip 时取消无效（「至少保留 1 个」不变量）", (m["chipActive"], m["dsCount"]))
+
+    # ---- TM-6 两视图来回切换：容器高度稳定 + 无 pageerror ----
+    err_before = len([e for e in errors if e.startswith("pageerror:")])
+    h0 = page.evaluate("() => Math.round(document.getElementById('chart-main-wrap').getBoundingClientRect().height)")
+    for _ in range(2):
+        page.click('#trend-view button[data-view="point"]')
+        page.wait_for_timeout(700)
+        page.click('#trend-view button[data-view="compare"]')
+        page.wait_for_timeout(700)
+    h1 = page.evaluate("() => Math.round(document.getElementById('chart-main-wrap').getBoundingClientRect().height)")
+    err_after = len([e for e in errors if e.startswith("pageerror:")])
+    check(abs(h1 - h0) <= 2, "TM-6a 两视图切换后 #chart-main-wrap 高度变化 ≤2px", (h0, h1))
+    check(err_after == err_before, "TM-6b 两视图切换无 pageerror", (err_before, err_after))
+
+    # ---- TM-9 点位取数失败：卡内显式失败态 + 失败条不被 history 成功抹掉（F1/F2）----
+    # ⚠️ 必须用**独立 context**：注入的 500 会让浏览器记一条 console error，
+    #    留在主页面会污染全流程「console error = 0」断言（那是注入的噪声，不是页面缺陷）。
+    ctx2 = page.context.browser.new_context(viewport={"width": 1920, "height": 1080})
+    try:
+        pg2 = ctx2.new_page()
+        # 深链进点位视图：加载即触发一次 fetchPoint（被 500 拦截）
+        pg2.add_init_script("try { localStorage.setItem('mp-trend-view', 'point'); } catch (e) {}")
+        hit500: list[str] = []
+
+        def _fail_point(route):
+            hit500.append(route.request.url)
+            route.fulfill(status=500, content_type="application/json", body='{"detail":"forced"}')
+
+        pg2.route(re.compile(r"/api/history\?symbols="), _fail_point)
+        pg2.goto(url, wait_until="load", timeout=60000)
+        f = pg2.evaluate(snap)
+        for _ in range(40):   # 轮询到失败态（history 同时到达 → 天然覆盖 F1 判定点）
+            pg2.wait_for_timeout(250)
+            f = pg2.evaluate(snap)
+            if f["emptyShown"] and f["failBarShown"]:
+                break
+        pg2.wait_for_timeout(800)   # 再等一拍：确认 history 成功**没有**把失败条收掉
+        f = pg2.evaluate(snap)
+        check(bool(hit500), "TM-9a 注入 500 生效（点位请求确实发出）", hit500[-1:])
+        check(f["emptyShown"] and "点位数据获取失败" in (f["emptyText"] or ""),
+              "TM-9b 点位取数失败 → 卡内文案「点位数据获取失败」", (f["emptyShown"], f["emptyText"]))
+        check(f["canvasDisplay"] == "none",
+              "TM-9c 点位取数失败 → canvas 隐藏（不留对比图）", f["canvasDisplay"])
+        check(f["metaItems"] == 0 and (f["metaText"] or "").strip() == "",
+              "TM-9d 点位取数失败 → #trend-meta 清空（不残留对比组文案）", (f["metaItems"], f["metaText"]))
+        check(f["failBarShown"] is True,
+              "TM-9e 点位取数失败 → #home-fail-bar 可见，且 history 成功不抹掉（F1）", f["failBarShown"])
+        # 重试闭环（`#home-retry` 在点位视图要一起重发 fetchPoint）
+        pg2.unroute(re.compile(r"/api/history\?symbols="), _fail_point)
+        pg2.evaluate("() => document.getElementById('home-retry').click()")
+        pg2.wait_for_timeout(2500)
+        f2 = pg2.evaluate(snap)
+        check(f2["failBarShown"] is False and f2["chartAlive"] and f2["emptyShown"] is False,
+              "TM-9f 点位失败后点重试 → 重发点位取数、失败条消失、图回来",
+              (f2["failBarShown"], f2["chartAlive"], f2["emptyShown"]))
+    finally:
+        ctx2.close()
+
+    # ---- 收尾：回到「对比 + 美股大盘」并清偏好（后续断言按默认基线跑）----
+    page.evaluate(
+        """() => { ['mp-trend-view', 'mp-point-symbol', 'mp-point-days', 'mp-trend-custom']
+                    .forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+                   document.querySelectorAll('#trend-tabs button')[0].click(); }""")
+    page.wait_for_timeout(400)
+    m = page.evaluate(snap)
+    check(m["mode"] == "compare" and m["tabActive"] == ["us"] and not m["chipsShown"],
+          "TM-7 收尾：回到对比视图 + 美股大盘 tab（chip 行隐藏）", (m["mode"], m["tabActive"]))
 
 
 def main() -> int:
@@ -5146,7 +5374,7 @@ def main() -> int:
             # §8.4 双主题各自调参：light 档同样跑一遍玻璃判据（GLASS_RANGES 按当前主题自动切区间）
             assert_glass(1920, 1080, page.evaluate(GLASS_JS))
 
-            # 4 个类别 tab 切换（无「Canvas is already in use」）
+            # 5 个类别 tab 切换（4 组 + 自选；无「Canvas is already in use」）
             errors.clear()
             tab_result = page.evaluate(
                 """async () => {
@@ -5169,6 +5397,9 @@ def main() -> int:
                 check(t["chart"] and t["active"] and t["meta"] >= 1,
                       f"tab「{t['name']}」切换后图表可用", t)
             check(not errors, "tab 切换无 console error", errors)
+
+            # TM-* 首页趋势卡双视图（对比 / 点位，2026-11-06 home-trend-modes）
+            assert_trend_modes(page, url, errors)
 
             # 时间范围 1Y
             page.evaluate("() => document.querySelector('#range-bar button[data-days=\"365\"]').click()")

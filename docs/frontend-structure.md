@@ -62,7 +62,7 @@
 | --- | --- | --- | --- | --- |
 | 行 1 | `.row-kpi`（5 等分） | `#lede`（`display:contents`，内含 4 张 KPI 卡） | `/api/history` + `/api/latest` + `/api/watchlist` + `/api/macro` | `renderLede()` + `paintSparklines()` |
 | | | `#promo-global`（静态 promo，**"数据未接入"**） | 无 | **纯静态 HTML**，JS 不碰（`renderPlaceholders()` 只处理 `#fund-flow`） |
-| 行 2 | `.row-main`（1.9fr / 1fr） | `#trend`（四图合一 + 4 类别 tab + 4 档时间范围 `#range-bar`） | `/api/history?days=` | `renderMainChart()` / `renderTrendTabs()` |
+| 行 2 | `.row-main`（1.9fr / 1fr） | `#trend`（双视图：`对比` = 4 组 tab + 「自选」第 5 tab + 4 档时间范围 `#range-bar`；`点位` = 标的 + 1Y/3Y/5Y/10Y/全部 `#point-range`） | `/api/history?days=` / `/api/history?symbols=&days=` | `renderMainChart()` / `renderPointChart()` / `renderTrendTabs()` / `renderTrendChips()` |
 | | | `#watchlist-section`（**默认 `hidden`**） | `/api/watchlist` | `renderWatchlist()` |
 | 行 3 | `.row-3`（3 列） | `#overview`（6 小卡 `#overview-body`） | `/api/latest` | `renderOverview()` |
 | | | `#sectors`（3 子块：`#risk-appetite` / `#fund-flow` **占位** / `#market-relation`） | `/api/latest` | `renderRiskAppetite()` / `renderMarketRelation()` |
@@ -169,7 +169,7 @@
 | ---: | --- | --- |
 | 5 | 主题切换 | `getTheme()` / `applyTheme()` |
 | 24 | 序列色常量 | `SERIES_VAR` / `SERIES_FALLBACK` / `ALL_KEYS` / `colors()` |
-| 47 | 配置常量 | `GROUPS`（4 类别 tab）、`PLACEHOLDERS`、`OVERVIEW_CARDS` |
+| 47 | 配置常量 | `GROUPS`（4 组）、`CUSTOM_GROUP`（「自选」第 5 tab）、`POINT_SYMBOLS` / `POINT_RANGES`（点位视图，与 `src/fetcher.py` 的 `SYMBOLS` 同序）、`PLACEHOLDERS`、`OVERVIEW_CARDS` |
 | 71 | 图标系统 | `ICON_COLORS` / `iconHtml` / `iconFlagHtml` / `iconAssetHtml` |
 | 107 | **全局 `state`** | `days` / `history` / `latest` / `latestDate` / `watch` / `macro` |
 | 114 | 工具函数 | `escapeHtml` / `fmtNum` / `fmtPct` / `fmtAxisPct`（crosshair 默认口径）/ `buildQuery` |
@@ -177,7 +177,7 @@
 | 156 | 数据索引 | `sourceMap(kind)`：`indices` 是 list，必须按 symbol 建映射 |
 | 171-345 | 渲染器 | `renderOverview` / `renderSector` / `renderRiskAppetite` / `renderUsSectors` / `renderSectorAsOf` / `renderAlerts` / `renderMarketRelation` / `renderNews` / `renderPlaceholders` |
 | 362 | 自动滚动 | `makeAutoScroller(bodyId, itemSel)` → `newsScroller` + `alertScroller`（`scrollTop` + rAF，16 px/s） |
-| 491 | 趋势主图 | `buildTradingAxis` / `buildLinePts` / `buildLineDataset` / `buildLineOptions` / `tickLimit` / `rangeShort` / `renderTrendTabs` / `renderTrendMeta` / `renderMainChart`（**四图合一**：归一化到 100） |
+| 491 | 趋势主图 | `buildTradingAxis` / `buildLinePts` / `buildLineDataset` / `buildLineOptions` / `tickLimit` / `rangeShort` / `renderTrendTabs` / `renderTrendChips` / `renderTrendMeta` / `renderMainChart`（**对比**：归一化到 100）/ `renderPointChart` + `fetchPoint` + `movingAvgPts`（**点位**：绝对点位 + MA20/60）；两视图共用 `charts.main` |
 | 691 | crosshair | 使用 `window.hoverCrosshair`（默认口径） |
 | 799-910 | KPI | `renderLede()` + `drawOneSpark` / `paintSparklines` / `repaintSparklines`（原生 canvas） |
 | 911-956 | 自选列表 | `renderWatchlist`（纯 CSS 迷你条） |
