@@ -1032,18 +1032,27 @@ function pointYDigits(raw) {
   if (maxAbs >= 1000) return 0;
   return maxAbs < 100 ? 2 : 1;
 }
-// 滑动均值：窗口内有效值不足 win 个 → 该点无值（不拿残缺窗口充数，否则线头会跳）
+// 滑动均值：口径 = **最近 win 个有效观测**（不是最近 win 个日期槽位）。
+// ⚠️ 2026-11-06 用户反馈「MA60 中间直接横过去、没有波折」的根因：`/api/history` 的 dates 是
+//    多市场共享的交易日轴，某标的在别的市场交易日上是 null（上证 299 槽位里 18 个 null）。
+//    旧实现要求「最近 win 个槽位内零缺失」才能出一个点 ⇒ 绝大多数日期被丢弃（MA60 只剩 49 点），
+//    剩下的点之间被 Chart.js 用一条**直线**连起来（2025-12-31 → 2026-07-29 一条 7 个月的长弦）。
+//    改成滚动维护最近 win 个非空值的和，缺口不再吞点：首点仍是「第 win 个有效观测」，之后逐日连续。
 function movingAvgPts(values, dates, dateIndexMap, win) {
   const pts = [];
+  const buf = [];          // 最近 win 个有效值（滑动窗）
+  var sum = 0;
   for (var i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v != null) {
+      sum += v;
+      buf.push(v);
+      if (buf.length > win) sum -= buf.shift();
+    }
+    if (buf.length < win) continue;         // 样本不足 win 个有效观测：不出点（不拿残缺窗口充数）
     const d = dates[i];
     if (dateIndexMap[d] === undefined) continue;
-    var sum = 0, cnt = 0;
-    for (var j = Math.max(0, i - win + 1); j <= i; j++) {
-      const v = values[j];
-      if (v != null) { sum += v; cnt++; }
-    }
-    if (cnt >= win) pts.push({ x: d, y: sum / cnt });
+    pts.push({ x: d, y: sum / buf.length });
   }
   return pts;
 }

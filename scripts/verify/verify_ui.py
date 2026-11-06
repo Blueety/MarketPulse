@@ -5117,6 +5117,73 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           "TM-4c 钩子 __mpPointSymbol/__mpPointDays 与所选档位一致，且 __mpPointRawFirst == 响应首个非空 raw",
           (m["symbol"], m["days"], m["rawFirst"], src["first"]))
 
+    # ---- TM-10 均线：逐点连续 + 数值 == 独立预言机（「最近 win 个有效观测」滚动均值）----
+    # 回归对象（2026-11-06 用户反馈「MA60 中间直接横过去、没有波折」）：旧的槽位窗口法要求
+    # 「最近 win 个日期内零缺失」，共享日期轴上别的市场休市造成的 null 会吞掉绝大多数点，
+    # 剩余点之间被画成一条长直线。判据取两条：① 图上点集与预言机**逐点相等**（含 x 顺序，
+    # 长度短了就说明有跳点）；② MA 点数 == 有效观测数 − win + 1（缺口不能再吞点）。
+    ma = page.evaluate(
+        """async () => {
+            const c = window.Chart.getChart(document.getElementById('chart-main'));
+            if (!c) return null;
+            const r = await fetch('/api/history?symbols=SH&days=260');
+            const j = await r.json();
+            const raw = ((j.series || [])[0] || {}).raw || [];
+            const dates = j.dates || [];
+            // 预言机必须与页面同轴：`buildTradingAxis()` 只收「该标的有值 + 非周末」的日期，
+            // 均线在其它日期上不出点（否则点数与 x 顺序都对不上）。
+            const inAxis = {};
+            raw.forEach((v, i) => {
+                if (v == null) return;
+                const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(dates[i] || ''));
+                if (m) {
+                    const wd = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
+                    if (wd === 0 || wd === 6) return;
+                }
+                inAxis[dates[i]] = true;
+            });
+            function ma(win) {
+                const out = []; let sum = 0; const buf = [];
+                for (let i = 0; i < raw.length; i++) {
+                    const v = raw[i];
+                    if (v != null) { sum += v; buf.push(v); if (buf.length > win) sum -= buf.shift(); }
+                    if (buf.length < win || !inAxis[dates[i]]) continue;
+                    out.push({ x: dates[i], y: sum / buf.length });
+                }
+                return out;
+            }
+            const chart = c.data.datasets.slice(1).map(d => d.data.map(p => ({ x: p.x, y: p.y })));
+            return {
+                chart: chart,
+                oracle: [ma(20), ma(60)],
+                valid: Object.keys(inAxis).length
+            };
+        }""")
+    ok10 = bool(ma) and len(ma["chart"]) == 2
+    detail10 = None
+    if ok10:
+        for k, (got, exp) in enumerate(zip(ma["chart"], ma["oracle"])):
+            win = 20 if k == 0 else 60
+            # ① 连续：点数必须等于「有效观测 − win + 1」，少一个都说明窗口被缺口吞掉
+            if len(got) != max(0, ma["valid"] - win + 1):
+                ok10 = False
+                detail10 = ("MA%d 点数 %d != 有效观测 %d − %d + 1" % (win, len(got), ma["valid"], win),)
+                break
+            # ② 逐点相等（x 顺序 + y 数值），窗口里出现跳点会立刻对不上
+            bad = None
+            for i, (g, e) in enumerate(zip(got, exp)):
+                if g["x"] != e["x"] or abs(g["y"] - e["y"]) > 0.05:
+                    bad = (i, g, e)
+                    break
+            if bad or len(got) != len(exp):
+                ok10 = False
+                detail10 = ("MA%d 第 %s 点与预言机不符" % (win, bad[0] if bad else "len"),
+                            bad, len(got), len(exp))
+                break
+    check(ok10,
+          "TM-10 MA20/MA60 逐点连续且 == 独立预言机（最近 win 个有效观测滚动均值；缺口不许吞点）",
+          detail10 or (ma["chart"] and [len(x) for x in ma["chart"]], ma["valid"]))
+
     # ---- TM-8 #range-label 跟随视图/档位 + 实际跨度提示（F3）----
     check(m["rangeLabel"] == "1Y", "TM-8a 点位 1Y：#range-label = 「1Y」", m["rangeLabel"])
     page.click('#point-range button[data-days="2600"]')   # 10Y（回填前实际只有十几个月）
