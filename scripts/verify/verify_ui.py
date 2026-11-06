@@ -5270,6 +5270,63 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
               "TM-8b 点位 10Y（数据不足 9 年）：#range-label 追加实际跨度（不冒充 10 年）",
               (label, years))
 
+    # ---- TM-12 档位粒度（周/月/年）+ 横轴按跨度换粒度 + 黄金覆盖（2026-11-06）----
+    labels12 = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#point-range button')).map(b => b.textContent)")
+    check(labels12 == ['1周', '1月', '3月', '6月', '1Y', '3Y', '5Y', '10Y', '全部'],
+          "TM-12a 点位档位 9 个（周/月/年混合，顺序固定）", labels12)
+    bar_css = page.evaluate(
+        """() => { const b = document.getElementById('point-range');
+                   const cs = getComputedStyle(b);
+                   return { wrap: cs.flexWrap, h: b.getBoundingClientRect().height,
+                            scrollable: b.scrollWidth >= b.clientWidth }; }""")
+    check(bar_css["wrap"] == "nowrap" and bar_css["h"] <= 32,
+          "TM-12b 档位行单行不换行（窄屏横向滚动，不增高）", bar_css)
+    page.click('#point-range button[data-days="22"]')
+    page.wait_for_timeout(1500)
+    m12 = _wait_until(lambda st: st["days"] == 22 and st["rangeLabel"] == "1月", timeout_ms=12000)
+    got12 = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+                   const d = (c && c.data.datasets[0].data) || [];
+                   const ticks = (c.scales.x.ticks || []).map(t => t.label);
+                   return {n: d.length, ticks: ticks,
+                           url: performance.getEntriesByType('resource').map(e => e.name)
+                                  .filter(n => n.indexOf('/api/history?') !== -1).slice(-1)[0] || ''}; }""")
+    check(m12["rangeLabel"] == "1月" and 0 < got12["n"] <= 22,
+          "TM-12c 1月档：#range-label = 「1月」且点数 ≤22", (m12["rangeLabel"], got12["n"]))
+    check("symbols=" in got12["url"] and "days=22" in got12["url"],
+          "TM-12d 1月档请求 days=22", got12["url"][-60:])
+    check(bool(got12["ticks"]) and all(re.fullmatch(r"\d{1,2}/\d{1,2}", t or "") for t in got12["ticks"]),
+          "TM-12e 1月档横轴是「月/日」粒度", got12["ticks"][:6])
+    page.click('#point-range button[data-days="2600"]')
+    page.wait_for_timeout(2000)
+    m12b = _wait_until(lambda st: st["days"] == 2600, timeout_ms=15000)
+    ticks10y = page.evaluate(
+        "() => window.Chart.getChart(document.getElementById('chart-main')).scales.x.ticks.map(t => t.label)")
+    shown = [t for t in ticks10y if t]
+    check(all(re.fullmatch(r"\d{4}", t) for t in shown) and len(shown) == len(set(shown)) and len(shown) >= 5,
+          "TM-12f 10Y 横轴只标年份且不重复（同一年多个刻度只留一个）", ticks10y)
+    # 黄金：历史里 gcf 曾在 2025-10~2026-09 整段为空（1Y 图只剩十几个点），2026-11-06 已补
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol'); s.value = 'GCF';
+                   s.dispatchEvent(new Event('change')); }""")
+    page.click('#point-range button[data-days="260"]')
+    page.wait_for_timeout(2200)
+    gold = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+                   const d = (c && c.data.datasets[0].data) || [];
+                   return {label: c.data.datasets[0].label, n: d.length,
+                           first: d[0] && d[0].x,
+                           ma20: ((c.data.datasets[1] || {}).data || []).length}; }""")
+    check(gold["label"].find("金") >= 0 and gold["n"] >= 200,
+          "TM-12g 黄金 1Y 有点数 ≥200（不是「只有几天」）", gold)
+    check(gold["ma20"] >= 180, "TM-12h 黄金 1Y 的 MA20 点数 ≥180", gold["ma20"])
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol'); s.value = 'SH';
+                   s.dispatchEvent(new Event('change')); }""")
+    page.click('#point-range button[data-days="260"]')
+    page.wait_for_timeout(1500)
+
     # ---- TM-5 自选跨组：10 个 chip，勾 GSPC+SH → 2 条线且都从 100 起算 ----
     page.click('#trend-view button[data-view="compare"]')
     page.wait_for_timeout(400)

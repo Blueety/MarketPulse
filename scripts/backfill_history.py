@@ -197,8 +197,11 @@ def patch_targets(series: dict[str, dict[str, float]],
                   syms_to_patch: list[str]) -> list[tuple[str, str, float]]:
     """列出「既有行中该键为 None」的待补写项 [(date, sym, close)]（只读，绝不覆盖非空值）。
 
-    仅用于 AkShare 权威补数：既有行的 `None` 在**A 股交易日行**上属于 Yahoo 覆盖缺口的产物，
-    不是休市语义（该行同时有 `sh`/`sz` 等值即为证）。仍只写 `None` 位置，非空值一律不动。
+    ⚠️ 2026-11-06 扩大到**所有取到序列的标的**（原先只补走 AkShare 的 A 股）：
+    既有行里的 `None` 只有在「该市场那天休市」时才是真实语义，而**取到了日 bar 就说明那天交易过**
+    ⇒ 只在该标的自己有条的那天补写 `None` 位置，既不会把休市写成值，也不会漏掉取数缺口。
+    起因：黄金（`gcf`）在 2025-10 ~ 2026-09 整段为空（线上 Yahoo 403，日报写不进 gcf），
+    1Y 点位图只剩 13~16 个点，看着像「只有几天数据」。
     """
     rows = {r["date"]: r for r in load_history()}
     out: list[tuple[str, str, float]] = []
@@ -331,7 +334,7 @@ def main() -> int:
     else:
         print("    无需补齐")
 
-    patch_syms = [] if args.no_patch_existing else list(ak_filled)
+    patch_syms = [] if args.no_patch_existing else list(series)
     targets = patch_targets(series, patch_syms) if patch_syms else []
 
     raw_days = {d for vals in series.values() for d in vals if d not in existing}

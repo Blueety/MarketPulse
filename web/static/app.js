@@ -144,7 +144,14 @@ const POINT_SYMBOLS = [
 // 合法 chip key（history 的小写键）：POINT_SYMBOLS 全覆盖，含 gcf（history 列名是 gcf，非 gc=f）
 const CUSTOM_KEY_SET = POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); });
 // 点位时间档 = 交易日条数（与 #range-bar 的 days 口径一致；10Y 档依赖 scripts/backfill_history.py 的 10 年回填）
+// 点位视图档位（2026-11-06 加「周/月」细档：原来只有年档，看短期波动没入口）。
+// `days` = 交易日条数（后端 `records[-days:]`）：5≈1周、22≈1月、65≈3月、130≈6月。
+// ⚠️ 按钮多了 ⇒ `#point-range` 在窄屏横向滚动（CSS），不换行、不增高（首页高度预算只剩 24px）。
 const POINT_RANGES = [
+  { days: 5, label: '1周' },
+  { days: 22, label: '1月' },
+  { days: 65, label: '3月' },
+  { days: 130, label: '6月' },
   { days: 260, label: '1Y' },
   { days: 780, label: '3Y' },
   { days: 1300, label: '5Y' },
@@ -685,9 +692,59 @@ function buildLineDataset(s, color, pts, extra) {
 }
 
 // maintainAspectRatio:false —— 位图尺寸由 .chart-wrap 容器高度决定（禁止 CSS !important 覆盖）
+// 横轴刻度文案：按**实际跨度**换粒度（2026-11-06 用户反馈「点位图怎么都是以年为单位的」）。
+// 旧实现一律 `M/D`：10 年图上会出现 11/7、7/27、4/16 … 同一串标签反复出现，根本分不清年份。
+//   ≤400 天 → `M/D`（周/月/年档都够用）
+//   ≤2200 天 → `YY/M`（3Y/5Y：能区分年份又不至于挤）
+//   >2200 天 → `YYYY`（10Y：14 个刻度里只有年份才有意义）
+function axisSpanDays(tradingDates) {
+  const n = (tradingDates || []).length;
+  if (n < 2) return 0;
+  const parse = function (s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const a = parse(tradingDates[0]), b = parse(tradingDates[n - 1]);
+  return (a != null && b != null) ? (b - a) / 86400000 : 0;
+}
+
+// 年档去重插件（仅跨度 > 2200 天时挂）：`autoSkip` 后的**可见**刻度里，同一年只留第一个。
+// ⚠️ 不能写在 ticks.callback 里：回调拿到的是**全部候选索引**（相邻两天），
+//    对「上一个候选」去重会把整条轴几乎清空（实测只剩 2016、2019 两个标签）。
+var mpYearDedupePlugin = {
+  id: 'mpYearDedupe',
+  beforeDraw: function (chart) {
+    const sc = chart.scales && chart.scales.x;
+    // ⚠️ 分类标签是写在 `options.scales.x.labels` 上的（不是 `chart.data.labels`，本图只给了 datasets）
+    const labels = (chart.options && chart.options.scales && chart.options.scales.x
+                    && chart.options.scales.x.labels) || (chart.data && chart.data.labels) || [];
+    if (!sc || !sc.ticks) return;
+    let prevYear = null;
+    sc.ticks.forEach(function (t) {
+      const date = String(labels[Number(t.value)] || '');
+      const m = /^(\d{4})-/.exec(date);
+      if (!m) return;
+      if (prevYear === m[1]) t.label = '';
+      else { prevYear = m[1]; t.label = m[1]; }
+    });
+  }
+};
+
+function axisLabelFormatter(tradingDates) {
+  const spanDays = axisSpanDays(tradingDates);
+  return function (index, ticks) {
+    const parts = String(tradingDates[index] || '').split('-');
+    if (parts.length !== 3) return String(tradingDates[index] || '');
+    if (spanDays > 2200) return parts[0];   // 年档去重由 mpYearDedupePlugin 负责
+    if (spanDays > 400) return parts[0].slice(2) + '/' + Number(parts[1]);
+    return Number(parts[1]) + '/' + Number(parts[2]);
+  };
+}
+
 function buildLineOptions(tradingDates, extra) {
   const tc = themeColors();
   const maxTicks = (extra && extra.maxTicks) || 10;
+  const axisLabel = axisLabelFormatter(tradingDates);
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -731,10 +788,7 @@ function buildLineOptions(tradingDates, extra) {
           maxRotation: 0,
           autoSkip: true,
           maxTicksLimit: maxTicks,
-          callback: function (value, index) {
-            const parts = String(tradingDates[index]).split("-");
-            return Number(parts[1]) + "/" + Number(parts[2]);
-          }
+          callback: function (value, index, ticks) { return axisLabel(index, ticks); }
         }
       },
       y: {
@@ -992,7 +1046,7 @@ function pointRangeLabel(days) {
   return hit ? hit.label : days + 'D';
 }
 // 档位 → 期望日历跨度（月）。'全部'1825 不在表里 = 不判短（无基准可比）。
-const POINT_RANGE_MONTHS = { 260: 12, 780: 36, 1300: 60, 2600: 120 };
+const POINT_RANGE_MONTHS = { 5: 1, 22: 1, 65: 3, 130: 6, 260: 12, 780: 36, 1300: 60, 2600: 120 };
 
 // 点位数据的**实际日历跨度**（月）：首末日期差 / 30.44，向下取整，至少 1。
 // ⚠️ 用 Date.UTC 手工拆日期（不写 `new Date('YYYY-MM-DD')`：那会按本地时区解析，东八区会偏一天）。
@@ -1298,6 +1352,8 @@ function renderPointChart() {
     plugins: [typeof window.makeHoverCrosshair === 'function'
       ? window.makeHoverCrosshair({ formatter: function (v) { return fmtNumSep(v, digits); } })
       : window.hoverCrosshair]
+      // 年档（跨度 > 2200 天）才挂：把「同一年出现两次」的刻度标签清掉
+      .concat(axisSpanDays(axis.tradingDates) > 2200 ? [mpYearDedupePlugin] : [])
   });
   renderPointMeta(symLabel, rangeLabel, raw, dates);
 }

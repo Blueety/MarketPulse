@@ -380,6 +380,12 @@ body {
 .trend-chip:hover { color: var(--text-primary); border-color: var(--blue); }
 .trend-chip.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
 .point-bar:not(.hidden) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 点位档位 9 个（周/月/年混合，2026-11-06）：窄屏**横向滚动**而不是换行 ——
+   换行会多出一行、把首页高度门禁（scrollHeight @1920 ≤ 1240，余量仅 24px）顶红。
+   `min-width:0` 让它在 flex 父级里能真正缩下来，否则会撑破 .card-head。 */
+.point-bar > #point-range { overflow-x: auto; flex-wrap: nowrap; min-width: 0; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none; }
+.point-bar > #point-range::-webkit-scrollbar { display: none; }
+.point-bar > #point-range button { flex: 0 0 auto; }
 .point-label { font-size: 12px; color: var(--text-secondary); }
 #point-symbol {
   background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border);
