@@ -19,6 +19,8 @@
 2. Given 上图同一帧，When 逐点比对 `Chart.getChart('#chart-main').data.datasets[1..2]` 与独立预言机（滚动均值，窗口 = 最近 win 个有效观测），Then 每个点的 `x`（日期）与 `y`（均值，误差 ≤0.05）完全一致。
 3. Given 3Y 档的上证，When 观察 MA60 曲线，Then 相邻数据点之间不再出现跨多月的直线段（最大相邻间隔与该指数价格线一致，即节假日 11 天以内）。
 4. Given 本次改动，When 跑 `scripts/verify/verify_ui.py`，Then 新增 TM-10 通过，且其余断言数量与改动前持平（不引入新红）。
+5. Given 点位视图，When 观察图表上方，Then canvas 内图例列出 3 项（指数名 / MA20 / MA60），色块颜色与该线实际颜色一致（不是另写一套配色）。
+6. Given 选中创业板（主线紫 `#C792EA`）与 MA60 首选紫 `#A78BFA` 撞色，When 渲染点位图，Then 三条线两两 RGB 色距 ≥110（MA60 自动退到备选色），与上证同样成立。
 
 ## 这一版要验证什么
 

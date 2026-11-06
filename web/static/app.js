@@ -1057,6 +1057,48 @@ function movingAvgPts(values, dates, dateIndexMap, win) {
   return pts;
 }
 
+// 均线配色：与所选指数的**主色撞色时自动让位**（用户 2026-11-06：创业板主线是紫、MA60 也是紫，
+// 同一张图上两条同色系曲线分不清）。首选色若与该指数主色（或已选的另一条均线）色距 < 阈值，
+// 依次退到备选；全撞则退回首选（宁可撞色也不能没颜色）。
+// 图例（点位视图专属，画在 canvas 内不占卡片高度）用的就是这里返回的同一批颜色 ⇒ 标注与线上线色必然一致。
+var MA_COLOR_SPECS = [
+  { label: 'MA20', candidates: [['--blue', '#0A84FF'], ['--c-ixic', '#2FD6A8'], ['--c-gspc', '#66A8E0'], ['--c-sz', '#F0A868']] },
+  { label: 'MA60', candidates: [['--c-move', '#A78BFA'], ['--c-gld', '#E5C07B'], ['--c-vix', '#FFB454'], ['--c-ixic', '#2FD6A8']] }
+];
+// 色距阈值（RGB 欧氏距离，0..441）：CYB 紫 #C792EA vs MA60 紫 #A78BFA ≈ 36 → 必须让位；
+// GSPC 蓝 #66A8E0 vs MA20 蓝 #0A84FF ≈ 103 → 也要让位（同屏两个蓝同样难分）。
+var MA_COLOR_MIN_GAP = 110;
+
+function hexToRgb(hex) {
+  var s = String(hex || '').trim();
+  var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
+  if (m) {
+    var h = m[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  var rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(s);
+  return rgb ? [+rgb[1], +rgb[2], +rgb[3]] : null;
+}
+function colorGap(a, b) {
+  var x = hexToRgb(a), y = hexToRgb(b);
+  if (!x || !y) return Infinity;      // 认不出的色值不参与让位判断（宁可保留首选）
+  return Math.sqrt(Math.pow(x[0] - y[0], 2) + Math.pow(x[1] - y[1], 2) + Math.pow(x[2] - y[2], 2));
+}
+function maColorsFor(priceColor) {
+  var used = priceColor ? [priceColor] : [];
+  return MA_COLOR_SPECS.map(function (spec) {
+    var first = cssVar(spec.candidates[0][0], spec.candidates[0][1]);
+    for (var i = 0; i < spec.candidates.length; i++) {
+      var c = cssVar(spec.candidates[i][0], spec.candidates[i][1]);
+      var clear = used.every(function (u) { return colorGap(c, u) >= MA_COLOR_MIN_GAP; });
+      if (clear) { used.push(c); return c; }
+    }
+    used.push(first);
+    return first;
+  });
+}
+
 function buildPointQuery() {
   return '/api/history?symbols=' + encodeURIComponent(state.point.symbol) + '&days=' + state.point.days;
 }
@@ -1195,12 +1237,14 @@ function renderPointChart() {
   const axis = buildTradingAxis(dates, [pseudo]);
   const palette = colors();
   const digits = pointYDigits(raw);
+  const priceColor = seriesColor(palette, s0.key);
+  const maColors = maColorsFor(priceColor);
   const datasets = [
-    buildLineDataset(pseudo, seriesColor(palette, s0.key),
+    buildLineDataset(pseudo, priceColor,
                      buildLinePts(pseudo, dates, axis.dateIndexMap), { area: true }),
-    buildLineDataset({ key: 'ma20', label: 'MA20' }, cssVar('--blue', '#0A84FF'),
+    buildLineDataset({ key: 'ma20', label: 'MA20' }, maColors[0],
                      movingAvgPts(raw, dates, axis.dateIndexMap, 20), {}),
-    buildLineDataset({ key: 'ma60', label: 'MA60' }, cssVar('--c-move', '#A78BFA'),
+    buildLineDataset({ key: 'ma60', label: 'MA60' }, maColors[1],
                      movingAvgPts(raw, dates, axis.dateIndexMap, 60), {})
   ];
   // 复用对比视图的 options（缩放 / grid / 图例关 / 轴侧），只替换 y 刻度与 tooltip 数值口径
@@ -1210,6 +1254,35 @@ function renderPointChart() {
     const v = ctx.parsed ? ctx.parsed.y : null;
     if (v == null) return ctx.dataset.label + ' —';
     return ctx.dataset.label + ' ' + fmtNumSep(v, digits);
+  };
+  // 图例（点位视图专属）：把三条线的**颜色**标出来（用户 2026-11-06：「图表上要标注这两条线的颜色」）。
+  // 用 Chart.js 内建 legend 画在 canvas 里（不是 DOM），所以不占卡片高度 —— 首页 scrollHeight 门禁
+  // 只剩 24px，任何一行 DOM 图例都会把它顶红。底色/文字色取数据集自身的线色，标注与线上颜色必然同源。
+  opts.plugins.legend = {
+    display: true,
+    position: 'top',
+    align: 'end',
+    labels: {
+      color: (opts.plugins.legend && opts.plugins.legend.labels && opts.plugins.legend.labels.color) || undefined,
+      boxWidth: 18,
+      boxHeight: 2,
+      padding: 12,
+      usePointStyle: false,
+      generateLabels: function (chart) {
+        return chart.data.datasets.map(function (ds) {
+          const col = ds.pointBackgroundColor || ds.borderColor;
+          const idx = chart.data.datasets.indexOf(ds);
+          return {
+            text: ds.label,
+            datasetIndex: idx,
+            fillStyle: col,
+            strokeStyle: col,
+            lineWidth: 2,
+            hidden: !chart.isDatasetVisible(idx)
+          };
+        });
+      }
+    }
   };
   charts.main = new Chart(canvas, {
     type: 'line',

@@ -5184,6 +5184,56 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           "TM-10 MA20/MA60 逐点连续且 == 独立预言机（最近 win 个有效观测滚动均值；缺口不许吞点）",
           detail10 or (ma["chart"] and [len(x) for x in ma["chart"]], ma["valid"]))
 
+    # ---- TM-11 图例标注线色 + 撞色自动让位（2026-11-06「图表上要标注这两条线的颜色」）----
+    # 判据：① canvas 内建图例可见且 3 项；② 每项色块 == 对应 dataset 的线色（标注与线同源，不是另写一套）；
+    #       ③ 切换到与 MA60 首选紫撞色的创业板（--c-cyb）后，三条线两两色距 ≥ 110（撞色必须让位）。
+    LG_JS = """() => {
+        const c = window.Chart.getChart(document.getElementById('chart-main'));
+        if (!c) return null;
+        const lg = c.legend;
+        const items = (lg && lg.legendItems) || [];
+        const hex = s => String(s || '');
+        const rgb = s => { const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex(s)); if (!m) return null;
+            let h = m[1]; if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+            return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; };
+        const gap = (a,b) => { const x=rgb(a), y=rgb(b); if(!x||!y) return null;
+            return Math.sqrt(Math.pow(x[0]-y[0],2)+Math.pow(x[1]-y[1],2)+Math.pow(x[2]-y[2],2)); };
+        const cols = c.data.datasets.map(d => d.pointBackgroundColor || d.borderColor);
+        return {
+            meaning: lg && lg.options ? lg.options.display : null,
+            legendVisible: !!(lg && lg.legendHitBoxes && lg.height),
+            items: items.map(it => ({ text: it.text, fill: hex(it.fillStyle) })),
+            cols: cols.map(hex),
+            gapPriceMa20: gap(cols[0], cols[1]),
+            gapPriceMa60: gap(cols[0], cols[2]),
+            gapMa20Ma60: gap(cols[1], cols[2]),
+            symbol: c.data.datasets[0].label
+        };
+    }"""
+    lg = page.evaluate(LG_JS)
+    ok_legend = bool(lg) and len(lg["items"]) == 3 and all(it["text"] for it in lg["items"])
+    check(ok_legend, "TM-11a 点位图例 3 项（价格线 / MA20 / MA60）", lg and lg["items"])
+    same = False
+    if ok_legend:
+        same = all(str(it["fill"]).lower() == str(col).lower() for it, col in zip(lg["items"], lg["cols"]))
+    check(same, "TM-11b 图例色块 == 对应 dataset 线色（标注与线同源）", lg and (lg["items"], lg["cols"]))
+    check(bool(lg) and min(lg["gapPriceMa20"], lg["gapPriceMa60"], lg["gapMa20Ma60"]) >= 110,
+          "TM-11c 上证：价格线 / MA20 / MA60 两两色距 ≥110", lg and (lg["gapPriceMa20"], lg["gapPriceMa60"], lg["gapMa20Ma60"]))
+
+    # 撞色样本：创业板（--c-cyb 紫）与 MA60 首选紫 #A78BFA 色距 ≈36 ⇒ 必须让位到备选色
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol'); s.value = 'CYB';
+                   s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(1600)
+    lg_cyb = page.evaluate(LG_JS)
+    check(bool(lg_cyb) and min(lg_cyb["gapPriceMa20"], lg_cyb["gapPriceMa60"], lg_cyb["gapMa20Ma60"]) >= 110,
+          "TM-11d 创业板（紫）：均线与主线撞色时自动让位（两两色距 ≥110）",
+          lg_cyb and (lg_cyb["cols"], lg_cyb["gapPriceMa60"]))
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol'); s.value = 'SH';
+                   s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(1200)
+
     # ---- TM-8 #range-label 跟随视图/档位 + 实际跨度提示（F3）----
     check(m["rangeLabel"] == "1Y", "TM-8a 点位 1Y：#range-label = 「1Y」", m["rangeLabel"])
     page.click('#point-range button[data-days="2600"]')   # 10Y（回填前实际只有十几个月）
