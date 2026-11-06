@@ -12,18 +12,18 @@
       "status": "未开盘"
     },
     "SH": {
-      "value": 3627.9984,
-      "change_pct": -1.6778887078848275,
+      "value": 3647.8962,
+      "change_pct": -1.1386399292557443,
       "status": "连跌1日"
     },
     "SZ": {
-      "value": 11190.464,
-      "change_pct": -2.446410080851915,
+      "value": 11216.946,
+      "change_pct": -2.2155515419889267,
       "status": "连跌1日"
     },
     "CYB": {
-      "value": 2470.126,
-      "change_pct": -3.766436302279516,
+      "value": 2477.072,
+      "change_pct": -3.4958272995629107,
       "status": "连跌1日"
     },
     "VIX": {
@@ -275,7 +275,7 @@
       3608.0976,
       3686.1725,
       3689.911,
-      3627.9984
+      3647.8962
     ],
     "sz": [
       12887.62,
@@ -307,7 +307,7 @@
       10876.989,
       11335.687,
       11471.094,
-      11190.464
+      11216.946
     ],
     "cyb": [
       3135.277,
@@ -339,7 +339,7 @@
       2391.652,
       2544.73,
       2566.803,
-      2470.126
+      2477.072
     ],
     "gcf": [
       null,
@@ -407,81 +407,72 @@
     ]
   },
   "breach": {
-    "triggered": true,
-    "indices": [
-      {
-        "name": "SH",
-        "current": 3627.9984,
-        "previous": 3689.911,
-        "change_pct": -1.68,
-        "threshold": 1.5622393071486673,
-        "level": "WARN"
-      }
-    ]
+    "triggered": false,
+    "indices": []
   },
   "sector_heat": {
     "gainers": [
       {
         "name": "农业",
-        "change": 0.32,
-        "turnover": "161.2亿",
+        "change": 0.7,
+        "turnover": "348.4亿",
         "top_stock": "万向德农"
       },
       {
-        "name": "消费",
-        "change": -0.57,
-        "turnover": "68.1亿",
-        "top_stock": "山西汾酒"
-      },
-      {
         "name": "金融",
-        "change": -0.97,
-        "turnover": "469.4亿",
+        "change": -0.77,
+        "turnover": "1186.9亿",
         "top_stock": "东方明珠"
       },
       {
-        "name": "医药",
-        "change": -1.09,
-        "turnover": "359.0亿",
-        "top_stock": "*ST香雪"
+        "name": "地产/基建",
+        "change": -0.78,
+        "turnover": "76.0亿",
+        "top_stock": "敦煌种业"
       },
       {
-        "name": "资源/有色",
-        "change": -1.42,
-        "turnover": "146.1亿",
-        "top_stock": "亚盛集团"
+        "name": "消费",
+        "change": -0.98,
+        "turnover": "158.8亿",
+        "top_stock": "大湖股份"
+      },
+      {
+        "name": "军工",
+        "change": -1.26,
+        "turnover": "893.3亿",
+        "top_stock": "中直股份"
       }
     ],
     "losers": [
       {
         "name": "通信/电子",
-        "change": -4.48,
-        "turnover": "797.9亿",
-        "top_stock": "中利集团"
+        "change": -3.17,
+        "turnover": "1843.5亿",
+        "top_stock": "东方嘉盛"
       },
       {
-        "name": "军工",
-        "change": -2.94,
-        "turnover": "351.5亿",
-        "top_stock": "长春一东"
+        "name": "医药",
+        "change": -1.98,
+        "turnover": "890.6亿",
+        "top_stock": "百济神州"
+      },
+      {
+        "name": "资源/有色",
+        "change": -1.95,
+        "turnover": "341.1亿",
+        "top_stock": "闽东电力"
       },
       {
         "name": "光伏/新能源",
-        "change": -2.53,
-        "turnover": "1550.7亿",
-        "top_stock": "*ST亿晶"
-      },
-      {
-        "name": "地产/基建",
-        "change": -2.1,
-        "turnover": "33.6亿",
-        "top_stock": "敦煌种业"
+        "change": -1.83,
+        "turnover": "3853.7亿",
+        "top_stock": "东方日升"
       },
       {
         "name": "其他",
-        "change": -2.08,
-        "turnover": "4796.6亿",
-        "top_stock": "山东黄金"
+        "change": -1.37,
+        "turnover": "11672.0亿",
+        "top_stock": "东方新能"
       }
     ]
   },
@@ -490,11 +481,11 @@
     "losers": []
   },
   "search_keywords": [
-    "SH drop 2026-11-06",
     "农业 surge 2026-11-06",
-    "消费 drop 2026-11-06",
     "金融 drop 2026-11-06",
-    "医药 drop 2026-11-06"
+    "地产/基建 drop 2026-11-06",
+    "消费 drop 2026-11-06",
+    "军工 drop 2026-11-06"
   ],
   "correlation": [],
   "watchlist": {
