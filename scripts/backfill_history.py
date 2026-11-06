@@ -58,7 +58,6 @@ from src.analyzer import (  # noqa: E402
 from src.fetcher import A_SHARE_SYMBOLS, SYMBOLS, _yahoo_chart_get  # noqa: E402
 
 DEFAULT_RANGE = "1y"
-RETENTION_WARN_THRESHOLD = 300   # 低于此值说明 retention 未放宽，回填会被立刻裁剪
 SOURCE_THROTTLE = 0.5            # 源间节流（秒），降低 10 标的连续取数的 429 概率
 AKSHARE_TIMEOUT = 15             # 秒；AkShare 走新浪源无 timeout，须 daemon 线程 + join 限时
 AKSHARE_FALLBACK_MIN = 30        # A 股标的 Yahoo 返回少于该天数 → 改用 AkShare（实测 399006.SZ 仅 1 天）
@@ -313,10 +312,10 @@ def main() -> int:
         return 2
 
     print(f"=== MarketPulse 历史回填（range={args.range}，符号 {len(syms)} 个）===")
-    print(f"HISTORY_MAX（当前生效）= {HISTORY_MAX}")
-    if HISTORY_MAX < RETENTION_WARN_THRESHOLD:
-        print("!! 警告：HISTORY_MAX < 300，新增行会被 merge_history 立即裁剪。")
-        print("   请先把 config.json 的 history.retention_days 或 env HISTORY_RETENTION_DAYS 放宽到 365。")
+    # ⚠️ 三十一期起 `HISTORY_MAX`（history.retention_days）**已废止**：SQLite 永久保留、无裁剪
+    #    （`analyzer.append_history` / `merge_history` 只管写，不再按它删除）。这里只回显配置值，
+    #    不再据此报警 —— 否则会在回填 5/10 年时误报「更早的行会被裁剪」，让人以为白跑（2026-11-06 实测）。
+    print(f"HISTORY_MAX（配置值，已废止不生效）= {HISTORY_MAX}")
 
     history = load_history()
     existing = {r["date"] for r in history}
@@ -369,8 +368,9 @@ def main() -> int:
     if targets:
         print(f"AkShare 空缺补写完成: {apply_patch_targets(targets)} 个键")
     code = finalize_and_report()
-    if code == 0 and len(load_history()) >= HISTORY_MAX:
-        print(f"注意：已达 HISTORY_MAX={HISTORY_MAX} 上限，更早的行会被裁剪。")
+    rows = load_history()
+    if code == 0 and rows:
+        print(f"回填后共 {len(rows)} 行（{rows[0]['date']} ~ {rows[-1]['date']}）")
     return code
 
 

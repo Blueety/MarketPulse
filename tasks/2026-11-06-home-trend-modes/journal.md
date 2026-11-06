@@ -81,3 +81,21 @@
   - 关注点 1：10 年回填未执行（等用户确认），3Y/5Y/10Y 三档暂时退化
   - 关注点 2：自选态 `scrollHeight` 1250（超 1240 预算 10px），已记录取舍
   - 关注点 3：`verify_ui` 唯一红项 `CS-8b` 是既有临界项，与本任务无关
+
+## 后续（2026-11-06 当晚，同一张卡的两处用户反馈）
+
+**1. 图例文字读不出**（截图：深色底上「纳斯达克」被画成与线同色的绿）
+- 根因：Chart.js v4 的 legend 在 `generateLabels` 返回项缺少 `fontColor` 时会沿用上一次的 `fillStyle` 当文字色。
+- 修法：逐项显式给 `fontColor = --text-primary`，`labels.color` 同步；回归判据 `TM-11e`（图例文字色 == `--text-primary`，不是线段色）。
+
+**2. 5Y 与 10Y 的图完全一样**（「10 年的数据是不是不够」）
+- 根因：库里只有 13 个月（309 行），`days=1300/2600` 都被后端 `records[-days:]` 截到同一段。
+- 处理：`scripts/backfill_history.py --range 10y` 实跑（先 `wal_checkpoint` + 备份到仓库外）⇒ `data/marketpulse.db` 2606 个交易日（2016-11-07 ~ 2026-11-06，长表 25086 行，2.1 MB）。
+- 实测：1Y=253 / 3Y=754 / 5Y=1256 / 10Y=2514 点，`#range-label` 在数据足够时是干净的「10Y」。
+- 连带修掉两处**因数据变长才暴露的 bug**：
+  - `_trailing_returns` 取的是**最旧** N 根收益（`rets[:N]`，而 rets 旧→新）⇒ 动态告警阈值被冻结成 2016 年那 20 根的常数；改为最新 N 根。
+  - 回放 `collect_triggers` 每对 (行 × 标的) 都重排一遍前缀 ⇒ 10 年历史下 `/api/backtest` 47s（`verify_ui` 的 BT 段 30s 超时崩）。改为 `analyzer.rolling_dynamic_thresholds()`（O(n)）+ `check_breach(dynamic_override=…)`，实测 **47s → 0.56s**；`statistics.stdev`（3.14 走有理数，0.5ms/次）换成两遍法 + `math.fsum`。
+  - 等价性护栏：`tests/test_analyzer.py::TestRollingDynamicThresholds`（4 条，含「回放逐点 == 逐点调用」）。
+- 闸门侧顺带改：`TM-8b` 的判据随数据量走（跨度 ≥9 年 ⇒ 标签就该是「10Y」；<9 年 ⇒ 必须挂「实际 N 个月」），否则回填后这条会假红。
+
+**保留的已知红**：`CS-8b`（交叉线跟手 17.1 vs 判据 >20）—— 本次改动前后同一条、同一数量级，属既有临界项。

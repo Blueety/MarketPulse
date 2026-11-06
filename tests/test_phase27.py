@@ -102,10 +102,13 @@ class TestTrailingReturns:
         assert rets[1] == pytest.approx(-5/110*100, abs=1e-3)
 
     def test_gap_outside_window_ok(self):
-        # 缺口在最旧行（窗口外），不影响最近 4 个收盘
+        # 缺口在最旧行（窗口外），不影响最近 3 根收益。
+        # ⚠️ 2026-11-06 口径修正：`_trailing_returns` 原实现 `rets[:N]` 取的是**最旧** N 根
+        # （rets 是旧→新排列），历史一长动态阈值就被冻结成最早那段；上一条 `test_continuous_window`
+        # 只因「收益数 == 窗口数」才没暴露。现在取最新 N 根，故期望值改为末尾 3 根。
         hist = _hist_dates([None, 100, 110, 99, 110, 99, 110])
         rets = an._trailing_returns("VIX", hist, 3)
-        assert rets == pytest.approx([10.0, -10.0, 11.1111], abs=1e-3)
+        assert rets == pytest.approx([11.1111, -10.0, 11.1111], abs=1e-3)
 
 
 class TestDynamicThreshold:

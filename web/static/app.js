@@ -1263,12 +1263,16 @@ function renderPointChart() {
     position: 'top',
     align: 'end',
     labels: {
-      color: (opts.plugins.legend && opts.plugins.legend.labels && opts.plugins.legend.labels.color) || undefined,
+      color: cssVar('--text-primary', '#E5E7EB'),
       boxWidth: 18,
       boxHeight: 2,
       padding: 12,
       usePointStyle: false,
       generateLabels: function (chart) {
+        // ⚠️ 必须逐项给 `fontColor`：Chart.js v4 的 legend 在 `fontColor` 缺省时会沿用上一次的
+        //    `fillStyle`（色块色）当文字色 —— 实测「纳斯达克」被画成与线同色的绿 #2FD6A8，
+        //    在深色底上几乎读不出来（用户 2026-11-06 截图反馈）。文字统一用高对比 token。
+        const textColor = cssVar('--text-primary', '#E5E7EB');
         return chart.data.datasets.map(function (ds) {
           const col = ds.pointBackgroundColor || ds.borderColor;
           const idx = chart.data.datasets.indexOf(ds);
@@ -1277,6 +1281,7 @@ function renderPointChart() {
             datasetIndex: idx,
             fillStyle: col,
             strokeStyle: col,
+            fontColor: textColor,
             lineWidth: 2,
             hidden: !chart.isDatasetVisible(idx)
           };

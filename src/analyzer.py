@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import sqlite3
 import statistics
@@ -174,8 +175,15 @@ def compute_changes(current: dict, last_values: dict) -> dict:
 def _trailing_returns(symbol: str, history, lookback_days: int) -> list[float]:
     """从最新往回收集有效日收益（%）。跳过该列非数值行（缺口跳过，继续扫描）。
 
-    返回最新 lookback_days 个收益；样本不足时返回全部（由调用方判门槛）。
-    history 已假定不含候选当日（调用方负责排除，纯函数不读日期语义）。"""
+    返回**最新** lookback_days 个收益，顺序为旧→新（与 `_threshold_from_rets` 的求和顺序一致）。
+    样本不足时返回全部（由调用方判门槛）。
+    history 已假定不含候选当日（调用方负责排除，纯函数不读日期语义）。
+
+    ⚠️ 2026-11-06 修 bug：原实现是 `rets[:lookback_days]`，而 `rets` 是**旧→新**排列 ⇒ 取到的是
+    **最旧**的 N 个收益。历史不足 N+1 个收盘时看不出（测试也都落在这一档），一旦历史变长，
+    动态阈值就被冻结成「全库最早 N 个收益」算出的常数（实测 10 年库上每个交易日都返回
+    1.0199…，即 2016 年那 20 根）。回填 10 年历史会把这个错误放大到线上告警阈值，
+    故改为 `rets[-lookback_days:]`（最新 N 个）。"""
     lower = symbol.lower()
     rows = sorted((r for r in (history or []) if r.get("date")), key=lambda r: r["date"])
     closes = []
@@ -185,8 +193,32 @@ def _trailing_returns(symbol: str, history, lookback_days: int) -> list[float]:
             closes.append(float(v))
         # 跳过 None，继续往回扫（不 break）
     rets = [(closes[i - 1] - closes[i]) / closes[i] * 100.0
-            for i in range(len(closes) - 1, 0, -1)]   # 相邻日收益，新→旧
-    return rets[:lookback_days]
+            for i in range(len(closes) - 1, 0, -1)]   # 旧→新
+    if lookback_days <= 0:
+        return []
+    return rets[-lookback_days:]
+
+
+def _threshold_from_rets(rets: list[float], lookback_days: int, k_factor: float) -> float | None:
+    """由 trailing 收益算动态阈值。样本不足 / 零方差 / 值 <=0 → None（回退固定）。
+
+    单一实现：`dynamic_alert_threshold`（单点）与 `rolling_dynamic_thresholds`（回放）
+    都走这里，避免两套公式漂移。
+
+    ⚠️ 标准差**不用 `statistics.stdev`**：Python 3.14 的实现走精确有理数运算（`fractions`），
+    单次约 0.5ms —— 回放 10 年历史要算 1.8 万次（7 标的 × 2606 行）⇒ 光 stdev 就 9s
+    （实测 `collect_triggers` 5→10s 中它是最大头）。改为两遍法（先均值再离差平方和，`math.fsum`
+    精确求和）：与 `statistics.stdev` 的差在 1e-16 相对量级，但快 100 倍。
+    零方差仍返回 None（与 `statistics.StatsError` 分支等价：退化样本不做动态阈值）。"""
+    n = len(rets)
+    if n < lookback_days or n < 2:
+        return None                           # 样本不足 → 回退固定
+    mean = math.fsum(rets) / n
+    var = math.fsum((x - mean) ** 2 for x in rets) / (n - 1)   # 样本方差（ddof=1）
+    if var <= 0:
+        return None                           # 零方差 → 回退固定
+    value = mean + k_factor * math.sqrt(var)
+    return value if value > 0 else None       # ≤0（高 drift 病理）无意义 → 回退固定
 
 
 def dynamic_alert_threshold(symbol: str, history, lookback_days: int | None = None,
@@ -196,16 +228,43 @@ def dynamic_alert_threshold(symbol: str, history, lookback_days: int | None = No
     纯计算、可单测；不触 I/O。阈值 = trailing 收益均值 + k × 样本标准差（ddof=1）。"""
     lookback_days = ALERT_LOOKBACK_DAYS if lookback_days is None else int(lookback_days)
     k_factor = ALERT_K_FACTOR if k_factor is None else float(k_factor)
-    rets = _trailing_returns(symbol, history, lookback_days)
-    if len(rets) < lookback_days or len(rets) < 2:
-        return None                           # 样本不足 → 回退固定
-    try:
-        mean = sum(rets) / len(rets)
-        std = statistics.stdev(rets)          # 样本标准差 ddof=1；零方差 → StatisticsError
-    except statistics.StatisticsError:
-        return None
-    value = mean + k_factor * std
-    return value if value > 0 else None       # ≤0（高 drift 病理）无意义 → 回退固定
+    return _threshold_from_rets(_trailing_returns(symbol, history, lookback_days),
+                                lookback_days, k_factor)
+
+
+def rolling_dynamic_thresholds(symbol: str, history, lookback_days: int | None = None,
+                               k_factor: float | None = None) -> list[float | None]:
+    """回放用批量版：返回与 `history` **等长**的列表，第 i 项 = 用 `history[:i]` 算出的动态阈值。
+
+    O(n)（排序一次 + 滑动收益窗），语义与逐点调用 `dynamic_alert_threshold` **逐点等价**
+    （同一 `_threshold_from_rets`、同一收益顺序），但避免回放历史时每次重排前缀
+    —— 2026-11-06 回填 10 年历史后 `/api/backtest` 从 0.9s 涨到 47s 的根因就是
+    `_trailing_returns` 对每个 (行 × 标的) 都 `sorted()` 一次完整前缀（O(n² log n)）。
+
+    项为 None 表示该位置（含样本不足/零方差/值≤0）应回退固定阈值。"""
+    lookback_days = ALERT_LOOKBACK_DAYS if lookback_days is None else int(lookback_days)
+    k_factor = ALERT_K_FACTOR if k_factor is None else float(k_factor)
+    lower = symbol.lower()
+    n = len(history)
+    ordered = sorted(range(n), key=lambda i: history[i].get("date") or "")
+    out: list[float | None] = [None] * n
+    rets: list[float] = []                    # 旧→新（与 `_trailing_returns` 的切片同序），长度 ≤ lookback_days
+    prev_close: float | None = None
+    for idx in ordered:
+        row = history[idx]
+        # 该行的阈值只用它**之前**的数据：与 collect_triggers 传 history[:i]（不含第 i 行）一致
+        # ⚠️ 必须先算 out[idx] 再吃本行价格 —— 顺序写反会让回放阈值多看一根收益（实测 2309 触发 → 901）
+        out[idx] = _threshold_from_rets(rets, lookback_days, k_factor)
+        v = row.get(lower)
+        if isinstance(v, (int, float)):
+            v = float(v)
+            if prev_close is not None:
+                rets.append((v - prev_close) / prev_close * 100.0)   # 新收益追加到末尾（旧→新）
+                if len(rets) > lookback_days:
+                    del rets[0:len(rets) - lookback_days]
+            prev_close = v
+    return out
+
 
 
 def alert_threshold(symbol: str) -> float:
@@ -214,19 +273,26 @@ def alert_threshold(symbol: str) -> float:
 
 
 def check_breach(symbol: str, current: float | None, last: float | None,
-                 history: list[dict] | None = None) -> dict | None:
+                 history: list[dict] | None = None,
+                 dynamic_override: float | None = None) -> dict | None:
     """判断当日变化率是否超过告警阈值（严格大于，等于不触发）。返回告警 dict 或 None；level：恐慌区间为 ALERT。
 
     新增可选 history：非空且 ALERT_DYNAMIC 启用且动态值可算 → 生效阈值=动态值、
     threshold_mode="dynamic"；否则 threshold=alert_threshold(symbol)、threshold_mode="fixed"。
     告警 dict 新增两键（PRD 需求 5）："threshold_mode" 显式标注模式、"dynamic_threshold" 本次动态
     计算值（fixed 模式为 None）。既有键（threshold 存生效值）与两返回分支（STOCK_SYMBOLS / 波动率）
-    的 level/state/suggestion 逻辑原样。"""
+    的 level/state/suggestion 逻辑原样。
+
+    `dynamic_override`（回放用）：调用方已用 `rolling_dynamic_thresholds()` 一次算好的动态阈值；
+    传了就**不再重算**（避免 O(n²) 重排前缀），语义与传 `history` 完全相同
+    —— 该位置算出 None ⇒ 调用方不传本参数，即落回固定阈值。"""
     if current is None or last is None or last == 0:
         return None
     change = (current - last) / last * 100.0
     threshold, mode, dyn_val = alert_threshold(symbol), "fixed", None
-    if ALERT_DYNAMIC and history:
+    if ALERT_DYNAMIC and dynamic_override is not None:
+        threshold, mode, dyn_val = float(dynamic_override), "dynamic", float(dynamic_override)
+    elif ALERT_DYNAMIC and history:
         dyn = dynamic_alert_threshold(symbol, history)
         if dyn is not None:
             threshold, mode, dyn_val = dyn, "dynamic", dyn

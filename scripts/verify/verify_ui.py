@@ -5217,6 +5217,15 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     if ok_legend:
         same = all(str(it["fill"]).lower() == str(col).lower() for it, col in zip(lg["items"], lg["cols"]))
     check(same, "TM-11b 图例色块 == 对应 dataset 线色（标注与线同源）", lg and (lg["items"], lg["cols"]))
+    # TM-11e 文字色：必须显式给 fontColor，否则 Chart.js v4 会沿用色块色当文字色
+    # （实测「纳斯达克」被画成线色绿 #2FD6A8，深色底上读不出 —— 用户 2026-11-06 截图反馈）
+    fonts = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+                   const lg = c.legend; const cs = getComputedStyle(document.documentElement);
+                   return { fc: (lg.legendItems || []).map(i => i.fontColor),
+                            want: cs.getPropertyValue('--text-primary').trim() }; }""")
+    check(bool(fonts) and all(str(f).lower() == str(fonts["want"]).lower() for f in fonts["fc"]),
+          "TM-11e 图例文字色 = --text-primary（不是线段色，深色底可读）", fonts)
     check(bool(lg) and min(lg["gapPriceMa20"], lg["gapPriceMa60"], lg["gapMa20Ma60"]) >= 110,
           "TM-11c 上证：价格线 / MA20 / MA60 两两色距 ≥110", lg and (lg["gapPriceMa20"], lg["gapPriceMa60"], lg["gapMa20Ma60"]))
 
@@ -5236,12 +5245,30 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
 
     # ---- TM-8 #range-label 跟随视图/档位 + 实际跨度提示（F3）----
     check(m["rangeLabel"] == "1Y", "TM-8a 点位 1Y：#range-label = 「1Y」", m["rangeLabel"])
-    page.click('#point-range button[data-days="2600"]')   # 10Y（回填前实际只有十几个月）
+    page.click('#point-range button[data-days="2600"]')
     page.wait_for_timeout(1500)
     m = _wait_until(lambda st: (st["rangeLabel"] or "").startswith("10Y"), timeout_ms=12000)
-    check((m["rangeLabel"] or "").startswith("10Y") and "实际" in m["rangeLabel"]
-          and "个月）" in m["rangeLabel"],
-          "TM-8b 点位 10Y：#range-label 追加实际跨度（数据未回填时不冒充 10 年）", m["rangeLabel"])
+    # 判据随数据量走（2026-11-06 回填 10 年历史后，10Y 档真的能拉到 2016 年）：
+    #   · 图上实际跨度 < 9 年 ⇒ 标签必须追加「实际 N 个月」，不许冒充 10 年；
+    #   · 实际跨度 ≥ 9 年 ⇒ 标签必须是干净的「10Y」，不得再挂「实际」尾巴。
+    span = page.evaluate(
+        """() => { const c = window.Chart.getChart(document.getElementById('chart-main'));
+                   const d = (c && c.data.datasets[0] && c.data.datasets[0].data) || [];
+                   if (!d.length) return null;
+                   return {first: d[0].x, last: d[d.length - 1].x}; }""")
+    years = None
+    if span:
+        from datetime import date as _d
+        y0, m0, d0 = (int(x) for x in span["first"].split("-"))
+        y1, m1, d1 = (int(x) for x in span["last"].split("-"))
+        years = (_d(y1, m1, d1) - _d(y0, m0, d0)).days / 365.25
+    label = m["rangeLabel"] or ""
+    if years is not None and years >= 9:
+        check(label == "10Y", "TM-8b 点位 10Y（数据≥9 年）：#range-label 就是「10Y」", (label, years))
+    else:
+        check("实际" in label and "个月）" in label,
+              "TM-8b 点位 10Y（数据不足 9 年）：#range-label 追加实际跨度（不冒充 10 年）",
+              (label, years))
 
     # ---- TM-5 自选跨组：10 个 chip，勾 GSPC+SH → 2 条线且都从 100 起算 ----
     page.click('#trend-view button[data-view="compare"]')

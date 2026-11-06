@@ -21,7 +21,8 @@ from datetime import datetime
 from pathlib import Path
 
 from src.analyzer import (ALERT_DYNAMIC, ALERT_K_FACTOR, ALERT_LOOKBACK_DAYS,
-                          alert_threshold, check_breach, load_history)
+                          alert_threshold, check_breach, load_history,
+                          rolling_dynamic_thresholds)
 
 # 回测标的：PRD 表 7 个（CYB 有阈值但 PRD 表未列，默认不纳入，决策 A）。
 BACKTEST_SYMBOLS = ["VIX", "VXN", "MOVE", "GSPC", "IXIC", "SH", "SZ"]
@@ -78,8 +79,13 @@ def _load_history_from_path(path: Path) -> list[dict]:
 def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict]:
     """回放触发事件，复用生产 check_breach 语义（严格大于、实时阈值、缺口断开）。
 
-    动态阈值：回放第 i 对 (rows[i-1], rows[i]) 时传 history[:i]（排除候选行 i，
-    窗口含到 prev 行为止的收益，等价于生产「昨日收益是分布最新成员」）。"""
+    动态阈值：回放第 i 对 (rows[i-1], rows[i]) 时用 `history[:i]` 算出的阈值（排除候选行 i，
+    窗口含到 prev 行为止的收益，等价于生产「昨日收益是分布最新成员」）。
+    ⚠️ 2026-11-06：回填 10 年历史后本函数从 0.9s 涨到 57s（每对行都 `sorted()` 一次完整前缀，
+    O(n² log n)）⇒ 改成每标的先 `rolling_dynamic_thresholds()` 一次算好整条阈值序列（O(n)），
+    逐点结果与逐次调用 `dynamic_alert_threshold(sym, history[:i])` **逐点等价**（同一公式、同一收益顺序）。"""
+    use_dynamic = bool(ALERT_DYNAMIC)
+    dyn_series = {sym: rolling_dynamic_thresholds(sym, history) for sym in symbols} if use_dynamic else {}
     triggers: list[dict] = []
     for i in range(1, len(history)):
         for sym in symbols:
@@ -88,7 +94,8 @@ def collect_triggers(history: list[dict], symbols=BACKTEST_SYMBOLS) -> list[dict
             prev = history[i - 1].get(key)
             if cur is None or prev is None:
                 continue
-            breach = check_breach(sym, cur, prev, history[:i])
+            dyn = dyn_series[sym][i] if use_dynamic else None
+            breach = check_breach(sym, cur, prev, None, dynamic_override=dyn)
             if breach is None:
                 continue
             triggers.append(

@@ -420,3 +420,67 @@ class TestMacroSnapshot:
         an.save_macro_snapshot([{"symbol": "GC=F"}], {"GC=F": 2.0}, {"GC=F": [("d", 2.0)]})
         assert an.load_watchlist_snapshot()["values"] == {"A": 1.0}
         assert an.load_macro_snapshot()["values"] == {"GC=F": 2.0}
+
+
+class TestRollingDynamicThresholds:
+    """动态阈值窗口语义（2026-11-06 两个真 bug 的回归护栏）。
+
+    ① `_trailing_returns` 过去取的是**最旧**的 N 个收益（`rets[:N]`，而 rets 是旧→新排列）：
+       历史一旦超过 N+1 根收盘，动态阈值就被冻结成「全库最早 N 根」算出的常数
+       （实测 10 年库上每个交易日都返回 1.0199…）。回填 10 年历史会把这条放大到线上告警。
+    ② 回放（`collect_triggers`）原先对每个 (行 × 标的) 都传 `history[:i]`，`_trailing_returns`
+       每次都 `sorted()` 整个前缀 ⇒ O(n² log n)，10 年历史下 `/api/backtest` 从 0.9s 涨到 47s。
+       `rolling_dynamic_thresholds` 必须与逐点调用**逐点等价**（否则优化等于改算法）。"""
+
+    @staticmethod
+    def _hist(vals, sym="vix", start_day=1):
+        return [{"date": f"2026-{1 + (i // 28):02d}-{1 + (i % 28):02d}", sym: v}
+                for i, v in enumerate(vals)]
+
+    def test_takes_latest_window_not_oldest(self):
+        """60 根收盘、窗口 5：阈值必须来自最后 5 根收益，而不是前 5 根。"""
+        vals = [100.0 + (i % 7) for i in range(60)]      # 前半段波动模式与后半段不同
+        vals[56:] = [200.0, 210.0, 205.0, 220.0]          # 尾部换成大幅波动
+        hist = self._hist(vals)
+        rets = an._trailing_returns("VIX", hist, 5)
+        assert len(rets) == 5
+        # 最新 5 根收益必然包含 200→210 / 220 这些大数；最旧窗口里全是 ~7% 的小波动
+        assert max(abs(r) for r in rets) > 4.0
+        assert an.dynamic_alert_threshold("VIX", hist, lookback_days=5) is not None
+
+    def test_rolling_matches_pointwise_every_row(self):
+        """回放序列 == 对每个前缀逐点调用（这是「优化不改语义」的唯一证据）。"""
+        vals = [100.0]
+        for i in range(80):
+            vals.append(vals[-1] * (1.0 + (0.02 if i % 3 else -0.03)))
+        hist = self._hist(vals)
+        series = an.rolling_dynamic_thresholds("VIX", hist, lookback_days=5, k_factor=2.0)
+        assert len(series) == len(hist)
+        for i in range(len(hist)):
+            expect = an.dynamic_alert_threshold("VIX", hist[:i], lookback_days=5, k_factor=2.0)
+            assert series[i] == pytest.approx(expect, rel=0, abs=1e-12), i
+
+    def test_rolling_skips_gaps_like_pointwise(self):
+        """缺口（None）不参与收益但对齐位置：rolling 的 None/有值必须与逐点一致。"""
+        vals = [100.0, None, 105.0, 103.0, None, None, 110.0, 108.0, 112.0, 109.0]
+        hist = self._hist(vals)
+        series = an.rolling_dynamic_thresholds("VIX", hist, lookback_days=2, k_factor=2.0)
+        for i in range(len(hist)):
+            expect = an.dynamic_alert_threshold("VIX", hist[:i], lookback_days=2, k_factor=2.0)
+            assert (series[i] is None) == (expect is None), i
+
+    def test_check_breach_override_equals_history_path(self):
+        """`dynamic_override` 与传 `history=` 结果相同（回放走的就是这条等价性）。"""
+        vals = [100.0, 104.0, 101.0, 108.0, 106.0, 111.0, 109.0]
+        hist = self._hist(vals)
+        series = an.rolling_dynamic_thresholds("GSPC", hist, lookback_days=3, k_factor=2.0)
+        i = len(hist) - 1
+        cur, prev = hist[i]["vix"], hist[i - 1]["vix"]
+        a = an.check_breach("GSPC", cur, prev, hist[:i])
+        b = an.check_breach("GSPC", cur, prev, None, dynamic_override=series[i])
+        if a is None:
+            assert b is None
+        else:
+            assert b is not None
+            assert (a["threshold"], a["threshold_mode"], a["level"]) == \
+                   (b["threshold"], b["threshold_mode"], b["level"])
