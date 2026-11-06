@@ -2,14 +2,14 @@
   "date": "2026-11-06",
   "indices": {
     "GSPC": {
-      "value": null,
+      "value": 7424.24,
       "change_pct": null,
-      "status": "未开盘"
+      "status": "连跌1日"
     },
     "IXIC": {
-      "value": null,
-      "change_pct": null,
-      "status": "未开盘"
+      "value": 24763.516,
+      "change_pct": 1.8446145872600936,
+      "status": "连涨1日"
     },
     "SH": {
       "value": 3649.1774,
@@ -211,7 +211,7 @@
       7568.92,
       7688.62,
       7425.99,
-      null
+      7424.24
     ],
     "ixic": [
       27266.38,
@@ -243,7 +243,7 @@
       25372.01,
       25736.514,
       24314.998,
-      null
+      24763.516
     ],
     "sh": [
       3842.1946,
@@ -407,8 +407,17 @@
     ]
   },
   "breach": {
-    "triggered": false,
-    "indices": []
+    "triggered": true,
+    "indices": [
+      {
+        "name": "IXIC",
+        "current": 24763.516,
+        "previous": 24314.998,
+        "change_pct": 1.84,
+        "threshold": 1.3887360930708996,
+        "level": "WARN"
+      }
+    ]
   },
   "sector_heat": {
     "gainers": [
@@ -481,11 +490,11 @@
     "losers": []
   },
   "search_keywords": [
+    "IXIC surge 2026-11-06",
     "农业 surge 2026-11-06",
     "金融 drop 2026-11-06",
     "消费 drop 2026-11-06",
-    "地产/基建 drop 2026-11-06",
-    "其他 drop 2026-11-06"
+    "地产/基建 drop 2026-11-06"
   ],
   "correlation": [],
   "watchlist": {
