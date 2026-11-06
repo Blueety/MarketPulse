@@ -24,11 +24,22 @@ fi
 export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
 before=$(sha256sum "$DB" 2>/dev/null | awk '{print $1}' || echo none)
+head_before=$(git rev-parse --short HEAD)
 # 显式给远端+分支：不依赖上游追踪配置（手工 `git init` 建立的工作区默认没有 tracking，
 # 裸 `git pull` 会报 "There is no tracking information for the current branch" —— 2026-10-17 实测）
-if ! git pull --ff-only --quiet origin "$(git rev-parse --abbrev-ref HEAD)"; then
-  echo "git pull 失败（网络不通 / deploy key 被撤 / 本地有改动导致非快进）" >&2
+if ! pull_out=$(git pull --ff-only --quiet origin "$(git rev-parse --abbrev-ref HEAD)" 2>&1); then
+  echo "git pull 失败（网络不通 / deploy key 被撤 / 本地有改动导致非快进）：" >&2
+  echo "$pull_out" >&2
   exit 1
+fi
+head_after=$(git rev-parse --short HEAD)
+# 把 HEAD 打进 journal（`journalctl -u marketpulse-pull.service`）：2026-11-06 排查过一次
+# 「push 了 30 分钟线上还是旧页面、每次运行都只说『无数据变化』」—— 那条消息只讲 DB，
+# 讲不了「代码到底拉到哪一版」，只能靠 ssh 上去 `git log` 才对得到。
+if [ "$head_before" != "$head_after" ]; then
+  echo "代码已更新：$head_before → $head_after"
+else
+  echo "代码无变化（HEAD=$head_after）"
 fi
 after=$(sha256sum "$DB" | awk '{print $1}')
 
