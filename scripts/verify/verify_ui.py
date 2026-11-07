@@ -5491,6 +5491,24 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     check(m14["oilFirst"] is not None and abs(m14["oilFirst"] - 100) <= 0.01,
           "TM-14c 原油线从可见窗口首个值 = 100 起算（与 history 系列同基准）", m14["oilFirst"])
     check("cl=f" in m14["stored"], "TM-14d 选择持久化到 localStorage（mp-trend-custom）", m14["stored"])
+    # TM-14e 刷新后仍生效：`CUSTOM_KEY_SET` 必须把 macro 键也算进白名单，
+    # 否则 loadCustomKeys() 会把 'cl=f' 静默过滤掉（2026-11-07 实测踩过：刷新后自选少一条线）
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_function(
+        "() => window.Chart && window.Chart.getChart(document.getElementById('chart-main'))",
+        timeout=45000)
+    page.wait_for_timeout(2500)
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
+    page.wait_for_timeout(1200)
+    restored = page.evaluate(
+        """() => {
+            const ds = (window.Chart.getChart(document.getElementById('chart-main')).data.datasets) || [];
+            return { labels: ds.map(d => d.label),
+                     active: Array.from(document.querySelectorAll('#trend-chips .trend-chip.active'))
+                                .map(b => b.dataset.key) };
+        }""")
+    check("cl=f" in restored["active"] and "原油" in restored["labels"],
+          "TM-14e 刷新后自选的原油仍在（CUSTOM_KEY_SET 含 macro 键）", restored)
     # 收尾：取消原油，避免污染后续断言（TM-6 之后还要切视图/切档）
     page.click('#trend-chips .trend-chip[data-key="cl=f"]')
     page.wait_for_timeout(600)

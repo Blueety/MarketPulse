@@ -145,8 +145,13 @@ const POINT_SYMBOLS = [
   { value: 'GCF', text: '黄金 COMEX' },
   { value: 'BTC', text: '比特币（BTC-USD）' }
 ];
-// 合法 chip key（history 的小写键）：POINT_SYMBOLS 全覆盖，含 gcf（history 列名是 gcf，非 gc=f）
-const CUSTOM_KEY_SET = POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); });
+// 「自选」可以在 history 之外叠加的 macro 标的（2026-11-07：原油 cl=f）。
+// ⚠️ 必须定义在 CUSTOM_KEY_SET 之前：持久化恢复要走同一份白名单，
+//    否则 localStorage 里的 'cl=f' 会被 loadCustomKeys() 静默过滤掉（刷新后自选少一条线）。
+var MACRO_CHIP_EXTRAS = [{ key: 'cl=f', label: '原油' }];
+// 合法 chip key：POINT_SYMBOLS 全覆盖（含 gcf —— history 列名是 gcf，非 gc=f） + macro 附加项
+const CUSTOM_KEY_SET = POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); })
+  .concat(MACRO_CHIP_EXTRAS.map(function (m) { return m.key; }));
 // 点位时间档 = 交易日条数（与 #range-bar 的 days 口径一致；10Y 档依赖 scripts/backfill_history.py 的 10 年回填）
 // 点位视图档位（2026-11-06 加「周/月」细档：原来只有年档，看短期波动没入口）。
 // `days` = 交易日条数（后端 `records[-days:]`）：5≈1周、22≈1月、65≈3月、130≈6月。
@@ -856,8 +861,7 @@ function renderTrendTabs() {
 // 「自选」chip 行：history 的 10 个标的 + macro 侧可叠加的标的（原油 cl=f）。
 // ⚠️ macro 标的**只在 `/api/macro` 已到达时**才出现在 chip 里 —— 否则会出现「点了 chip 却画不出线」
 //    （macro 取数失败 / 还没返回）。macro 晚到时由 fetch 回调补一次 renderTrendChips()。
-// 标签顺序：history 10 个（后端注册表序）→ 再追加 macro 附加项。
-var MACRO_CHIP_EXTRAS = [{ key: 'cl=f', label: '原油' }];
+// 标签顺序：history 10 个（后端注册表序）→ 再追加 macro 附加项（MACRO_CHIP_EXTRAS，定义在文件顶部附近）。
 function macroSeriesByKey() {
   const t = (state.macro && state.macro.trend) || null;
   const out = {};
