@@ -5371,9 +5371,9 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
     page.wait_for_timeout(400)
     m = page.evaluate(snap)
-    # 11 = history 的 10 个 + macro 侧「原油」（2026-11-07 起；macro 未到达时是 10）
-    check(m["chipsShown"] and m["chipCount"] in (10, 11),
-          "TM-5a 自选 tab：10 个 history chip（+ macro 原油）可见", (m["chipsShown"], m["chipCount"]))
+    # 11 = /api/history 的全部标的（2026-11-07 起原油 CLF 已入注册表）
+    check(m["chipsShown"] and m["chipCount"] == 11,
+          "TM-5a 自选 tab：11 个标的 chip 可见", (m["chipsShown"], m["chipCount"]))
     # 把选择收敛到 {gspc, sh}（默认组合可能被 localStorage 改过 → 逐个对齐，不断言默认值）
     want = {"gspc", "sh"}
     if m["chipCount"] >= 10:   # chip 行没渲染出来时不要再点（Playwright 会等 30s 才超时，掩盖真错）
@@ -5399,7 +5399,7 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           "TM-5c 只剩 1 个 chip 时取消无效（「至少保留 1 个」不变量）", (m["chipActive"], m["dsCount"]))
 
     # ---- TM-13 另类资产组 = BTC + 黄金 + 原油（2026-11-07 用户要求把原油并入本组）----
-    # 数据来源不同：btc 走 /api/history，gc=f / cl=f 走 /api/macro 的 5 年深度序列。
+    # 数据来源：btc / clf 走 /api/history（10 年 EOD），gc=f 走 /api/macro 的 5 年深度序列。
     # 判据取三条：① 3 条线且标签正确；② 三条都从可见窗口首个值 = 100 起算（同基准可比）；
     # ③ 原油末点涨跌幅 == 与 /api/macro 同源计算出的窗口变化（不是自证）。
     page.evaluate("() => document.querySelectorAll('#trend-tabs button')[3].click()")
@@ -5417,7 +5417,7 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
                 meta: Array.from(document.querySelectorAll('#trend-meta .meta-item')).map(e => e.textContent)
             };
         }""")
-    check(alt["labels"] == ["比特币（BTC-USD）", "黄金COMEX", "原油"],
+    check(alt["labels"] == ["比特币（BTC-USD）", "黄金COMEX", "原油（WTI）"],
           "TM-13a 另类资产组 3 条线：BTC + 黄金 + 原油（顺序固定）", alt["labels"])
     check(all(abs(y - 100) < 0.01 for y in alt["firstYs"] if y is not None)
           and len(alt["firstYs"]) == 3,
@@ -5426,18 +5426,18 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     check(len(alt["meta"]) == 3, "TM-13d meta 三项（每条线一个涨跌幅）", alt["meta"])
     oil_src = page.evaluate(
         """async () => {
-            const j = await (await fetch('/api/macro')).json();
-            const t = (j && j.trend) || {};
-            const s = (t.series || []).filter(x => x.key === 'cl=f')[0];
+            const j = await (await fetch('/api/history?symbols=CLF&days=365')).json();
+            const t = { dates: j.dates || [], series: (j.series || []).map(x => ({ key: x.key, raw: x.raw })) };
+            const s = (t.series || []).filter(x => x.key === 'clf')[0];
             if (!s) return null;
             const dates = t.dates || [];
             // 可见窗口 = 首页当前档位（30D）的起点
             const c = window.Chart.getChart(document.getElementById('chart-main'));
             // 窗口起点取自**原油自己的首点 x**（category 轴标签在 options.scales.x.labels，
             // c.data.labels 是 undefined —— 早先因此没过滤、把 5 年序列首值当成窗口基准，假红 +10%）
-            const oil = (c.data.datasets || []).filter(d => d.label === '原油')[0];
+            const oil = (c.data.datasets || []).filter(d => String(d.label).indexOf('原油') === 0)[0];
             const start = oil && oil.data.length ? oil.data[0].x : null;
-            // 用 **raw** 算窗口变化：后端 values 是「整段 5 年序列首值 = 100」的归一化，
+            // 用 **raw** 算窗口变化：后端 values 是「整段序列首值 = 100」的归一化，
             // 直接拿它做窗口内比值会把窗口前的涨跌算进来（实测 +10% vs 图上 -2.65% 的假红）。
             let base = null, last = null, n = 0;
             dates.forEach((d, i) => {
@@ -5449,33 +5449,33 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
             });
             return {change: (base && last != null) ? (last / base * 100 - 100) : null, n: n};
         }""")
-    oil_idx = alt["labels"].index("原油") if "原油" in alt["labels"] else -1
+    oil_idx = next((i for i, l in enumerate(alt["labels"]) if l.startswith("原油")), -1)
     check(oil_src is not None and oil_idx >= 0
           and alt["lastYs"][oil_idx] is not None
           and abs(alt["lastYs"][oil_idx] - 100 - oil_src["change"]) <= 0.05,
-          "TM-13e 原油末点涨跌幅 == /api/macro cl=f 同源窗口变化（非自证）",
+          "TM-13e 原油末点涨跌幅 == /api/history clf 同源窗口变化（非自证）",
           (None if oil_idx < 0 else alt["lastYs"][oil_idx], oil_src))
     check(alt["n"][oil_idx] >= 20 if oil_idx >= 0 else False,
           "TM-13f 原油在 30D 窗口内点数充足（≥20）", alt["n"])
 
-    # ---- TM-14 自选里也能勾到 macro 侧标的（原油 cl=f，2026-11-07）----
-    # 自选的 chip 目录 = history 10 个 + macro 附加项；勾原油后线要出现、颜色为 --c-oil、
-    # 并与「另类资产」组的口径一致（首点 = 100），选择要能持久化到 localStorage。
+    # ---- TM-14 自选里也能勾到原油（history 标的 clf，2026-11-07）----
+    # chip 目录 = /api/history 的 11 个标的；勾原油后线要出现、颜色为 --c-oil、
+    # 与「另类资产」组同口径（首点 = 100），选择要能持久化到 localStorage。
     page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
     page.wait_for_timeout(900)
     cat = page.evaluate("() => Array.from(document.querySelectorAll('#trend-chips .trend-chip')).map(b => b.dataset.key)")
-    check("cl=f" in cat, "TM-14a 自选 chip 目录含 macro 标的 cl=f（原油）", cat[-3:])
+    check("clf" in cat, "TM-14a 自选 chip 目录含原油（history 键 clf）", cat[-3:])
     has_oil = page.evaluate(
-        """() => { const b = document.querySelector('#trend-chips .trend-chip[data-key="cl=f"]');
+        """() => { const b = document.querySelector('#trend-chips .trend-chip[data-key="clf"]');
                    return !!(b && b.classList.contains('active')); }""")
     if not has_oil:
-        page.click('#trend-chips .trend-chip[data-key="cl=f"]')
+        page.click('#trend-chips .trend-chip[data-key="clf"]')
         page.wait_for_timeout(900)
     m14 = page.evaluate(
         """() => {
             const c = window.Chart.getChart(document.getElementById('chart-main'));
             const ds = c.data.datasets || [];
-            const oil = ds.filter(d => d.label === '原油')[0] || null;
+            const oil = ds.filter(d => d.label.indexOf('原油') === 0)[0] || null;
             const cs = getComputedStyle(document.documentElement);
             return {
                 labels: ds.map(d => d.label),
@@ -5486,13 +5486,13 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
                 stored: (function () { try { return JSON.parse(localStorage.getItem('mp-trend-custom') || '[]'); } catch (e) { return []; } })()
             };
         }""")
-    check("原油" in m14["labels"] and m14["oilN"] >= 20,
+    check(any(l.startswith("原油") for l in m14["labels"]) and m14["oilN"] >= 20,
           "TM-14b 勾原油后自选图里出现原油线（点数 ≥20）", (m14["labels"], m14["oilN"]))
     check(m14["oilFirst"] is not None and abs(m14["oilFirst"] - 100) <= 0.01,
           "TM-14c 原油线从可见窗口首个值 = 100 起算（与 history 系列同基准）", m14["oilFirst"])
-    check("cl=f" in m14["stored"], "TM-14d 选择持久化到 localStorage（mp-trend-custom）", m14["stored"])
-    # TM-14e 刷新后仍生效：`CUSTOM_KEY_SET` 必须把 macro 键也算进白名单，
-    # 否则 loadCustomKeys() 会把 'cl=f' 静默过滤掉（2026-11-07 实测踩过：刷新后自选少一条线）
+    check("clf" in m14["stored"], "TM-14d 选择持久化到 localStorage（mp-trend-custom）", m14["stored"])
+    # TM-14e 刷新后仍生效：`CUSTOM_KEY_SET` 必须覆盖 history 的全部键（含 clf），
+    # 否则 loadCustomKeys() 会把不在白名单里的键静默过滤掉（2026-11-07 实测踩过：刷新后自选少一条线）
     page.reload(wait_until="domcontentloaded")
     page.wait_for_function(
         "() => window.Chart && window.Chart.getChart(document.getElementById('chart-main'))",
@@ -5507,69 +5507,84 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
                      active: Array.from(document.querySelectorAll('#trend-chips .trend-chip.active'))
                                 .map(b => b.dataset.key) };
         }""")
-    check("cl=f" in restored["active"] and "原油" in restored["labels"],
-          "TM-14e 刷新后自选的原油仍在（CUSTOM_KEY_SET 含 macro 键）", restored)
+    check("clf" in restored["active"] and any("原油" in l for l in restored["labels"]),
+          "TM-14e 刷新后自选的原油仍在（CUSTOM_KEY_SET 白名单）", restored)
     # 收尾：取消原油，避免污染后续断言（TM-6 之后还要切视图/切档）
-    page.click('#trend-chips .trend-chip[data-key="cl=f"]')
+    page.click('#trend-chips .trend-chip[data-key="clf"]')
     page.wait_for_timeout(600)
 
-    # ---- TM-15 点位视图下拉也能选原油（macro 序列，2026-11-07）----
-    # 原油不在 /api/history（SYMBOLS 注册表只有 10 个）⇒ 点位视图必须走 macro 分支：
-    # 不发 /api/history?symbols=CL，序列取自 /api/macro.trend 的尾部（回看 + 可见窗口同语义）。
+    # ---- TM-15 点位视图下拉也能选原油（history 标的 CLF，10 年，2026-11-07）----
+    # 原油 2026-11-07 并入 SYMBOLS 并回填 10 年（`backfill_history.py --range 10y --symbols CLF`）
+    # ⇒ 点位视图走常规 /api/history 链路（不再是 macro 分支），10Y 档能真的拉到 2016 年。
     page.click('#trend-view button[data-view="point"]')
     page.wait_for_timeout(600)
     opts15 = page.evaluate(
         "() => Array.from((document.getElementById('point-symbol') || {options: []}).options)"
         ".map(o => ({v: o.value, t: o.textContent}))")
-    check(any(o["v"] == "CL=F" for o in opts15),
-          "TM-15a 点位下拉含「原油（WTI）」（value=CL=F）", opts15[-2:])
+    check(any(o["v"] == "CLF" for o in opts15),
+          "TM-15a 点位下拉含「原油（WTI）」（value=CLF）", opts15[-2:])
+    # ⚠️ 基线必须在**切到 CLF 之前**取：change 事件一触发就会发 `/api/history?symbols=CLF&days=…`，
+    #    等到 m15 里再取，实现请求已经在基线里了（实测 before=after=1 ⇒ 断言恒假）。
+    before15 = page.evaluate(
+        "() => performance.getEntriesByType('resource')"
+        ".filter(e => e.name.indexOf('symbols=CLF&days=2720') !== -1).length")
     page.evaluate(
         """() => { const s = document.getElementById('point-symbol');
-                   s.value = 'CL=F'; s.dispatchEvent(new Event('change')); }""")
+                   s.value = 'CLF'; s.dispatchEvent(new Event('change')); }""")
     page.wait_for_timeout(2200)
+    page.click('#point-range button[data-days="2600"]')      # 10Y
+    page.wait_for_timeout(2500)
     m15 = page.evaluate(
-        """async () => {
+        """async (baseCnt) => {
+            // 基线由调用方在「切到 CLF 之前」传入（见 TM-15 主体）；预言机自己发的是 days=2600，
+            // 不匹配 days=2720（= 2600 + MA_LOOKBACK 120）⇒ 不会把断言变成自证。
+            const implReqs = (u) => performance.getEntriesByType('resource')
+                .filter(e => e.name.indexOf(u) !== -1).length;
             const c = window.Chart.getChart(document.getElementById('chart-main'));
             const ds = (c && c.data.datasets) || [];
-            const mac = await (await fetch('/api/macro')).json();
-            const t = (mac && mac.trend) || {};
-            const src = (t.series || []).filter(x => x.key === 'cl=f')[0] || null;
             const price = ds[0] ? ds[0].data : [];
             const start = price.length ? price[0].x : null;
-            // 期望值：macro raw 在「可见窗口首个日期」之后的首个非空值
+            const j = await (await fetch('/api/history?symbols=CLF&days=2600')).json();
+            const raw = (((j.series || [])[0]) || {}).raw || [];
+            const dates = j.dates || [];
             let firstRaw = null;
-            if (src) {
-                const dates = t.dates || [];
-                for (let i = 0; i < dates.length; i++) {
-                    if (start && dates[i] < start) continue;
-                    if (src.raw && src.raw[i] != null) { firstRaw = src.raw[i]; break; }
-                }
+            for (let i = 0; i < dates.length; i++) {
+                if (start && dates[i] < start) continue;
+                if (raw[i] != null) { firstRaw = raw[i]; break; }
             }
             return {
                 labels: ds.map(d => d.label),
                 n: ds.map(d => d.data.length),
+                first: start,
                 y0: price.length ? price[0].y : null,
                 firstRaw: firstRaw,
+                rangeLabel: document.getElementById('range-label').textContent,
                 meta: Array.from(document.querySelectorAll('#trend-meta .meta-item')).map(e => e.textContent),
-                symbol: window.__mpPointSymbol,
-                historyReqs: performance.getEntriesByType('resource').map(e => e.name)
-                    .filter(u => u.indexOf('/api/history?') !== -1 && /symbols=CL/i.test(u))
+                // 实现请求的判据 = `days=2720`（2600 档 + MA_LOOKBACK 120）；预言机用的是 days=2600，不计入
+                implBefore: baseCnt,
+                implAfter: implReqs('symbols=CLF&days=2720')
             };
-        }""")
-    check(m15["labels"] == ["原油", "MA20", "MA60"],
+        }""", before15)
+    check(m15["labels"] == ["原油（WTI）", "MA20", "MA60"],
           "TM-15b 选原油后 3 条线（原油 + MA20 + MA60）", m15["labels"])
     check(m15["y0"] is not None and m15["firstRaw"] is not None
           and abs(m15["y0"] - m15["firstRaw"]) <= 0.01,
-          "TM-15c 原油点位首点 == /api/macro cl=f 同源窗口首值（非自证）",
+          "TM-15c 原油点位首点 == /api/history CLF 同源窗口首值（非自证）",
           (m15["y0"], m15["firstRaw"]))
-    check(m15["historyReqs"] == [],
-          "TM-15d 原油不发 /api/history?symbols=CL（走 macro 分支）", m15["historyReqs"])
+    check(m15["implAfter"] > m15["implBefore"],
+          "TM-15d 原油走常规 /api/history?symbols=CLF&days=<档+120> 链路（增量计数，非预言机自证）",
+          (m15["implBefore"], m15["implAfter"]))
+    # 10Y 真的能拉到 10 年前（回填生效），不是退化成一两年
+    check(bool(m15["first"]) and m15["first"] <= "2017-12-31" and m15["n"][0] >= 2000,
+          "TM-15e 原油 10Y 起点 ≤2017 且点数 ≥2000（10 年回填生效）", (m15["first"], m15["n"]))
     check(m15["meta"] and "原油" in m15["meta"][0],
-          "TM-15e meta 首项标注原油", m15["meta"][:1])
-    # 收尾：切回标普（后续断言按 history 标的走）
+          "TM-15f meta 首项标注原油", m15["meta"][:1])
+    # 收尾：切回标普 + 1Y（后续断言按 history 标的走）
     page.evaluate(
         """() => { const s = document.getElementById('point-symbol');
                    s.value = 'GSPC'; s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(1200)
+    page.click('#point-range button[data-days="260"]')
     page.wait_for_timeout(1500)
     page.click('#trend-view button[data-view="compare"]')
     page.wait_for_timeout(600)

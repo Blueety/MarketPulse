@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from src import fetcher as ft
 from src import analyzer as an
+from src.fetcher import ALT_SYMBOLS
 from src import reporter as rep
 
 
@@ -132,7 +133,7 @@ def test_render_snapshot_none_label(monkeypatch):
     assert "休市" not in out_us
 
     # alt：None → 数据暂缺
-    alt_syms = ["GCF", "BTC"]
+    alt_syms = sorted(ALT_SYMBOLS)
     out_alt = rep.render_snapshot(
         date="2026-09-04",
         values={s: None for s in alt_syms},

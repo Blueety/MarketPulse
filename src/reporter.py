@@ -34,12 +34,13 @@ MARKET_CHART_TIMEOUT = 5  # 分市场趋势图限时（秒），超时跳过该�
 MARKET_CHART_PANELS = {
     "us": [("gspc", "GSPC", "#2b6de8"), ("ixic", "IXIC", "#1a9e6c")],
     "cn": [("sh", "SH", "#d1495b"), ("sz", "SZ", "#e07600"), ("cyb", "CYB", "#7b5ce0")],
-    "alt": [("gcf", "GCF", "#d4a017"), ("btc", "BTC", "#f7931a")],
+    # 2026-11-07：原油入册（CLF）→ 另类资产趋势图三面板（黄金 / BTC / 原油）
+    "alt": [("gcf", "GCF", "#d4a017"), ("btc", "BTC", "#f7931a"), ("clf", "CLF", "#0e7c86")],
 }
 MARKET_CHART_TITLES = {
     "us": "US Major Indices — 30-Day Trend",
     "cn": "A-Share Major Indices — 30-Day Trend",
-    "alt": "Gold & Bitcoin — 30-Day Trend",
+    "alt": "Gold / Bitcoin / Crude — 30-Day Trend",
 }
 
 # 十五期：开盘分析独立输出目录（与 snapshots/ 同级，互不干扰）
@@ -1031,6 +1032,9 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             }
             for sym in SYMBOLS
         },
+        # ⚠️ 逐符号 30 日数组：顺序固定为「用户可读」的板块序（波动率 → 美股 → A 股 → 另类），
+        #    与 `indices`（按 SYMBOLS 注册表序）**不是**同一顺序 —— 消费方按 key 取，不按位置。
+        #    新增 HISTORY_KEYS 标的时必须在这里补一行（2026-11-07 原油 CLF 漏过，见 pitfall）。
         "history_30d": {
             "dates": [r["date"] for r in history],
             "vix": [r["vix"] for r in history],
@@ -1043,6 +1047,7 @@ def generate_context(date: str, values: dict, changes: dict, statuses: dict,
             "cyb": [r["cyb"] for r in history],
             "gcf": [r["gcf"] for r in history],
             "btc": [r["btc"] for r in history],
+            "clf": [r["clf"] for r in history],
         },
         "breach": {
             "triggered": bool(breaches),

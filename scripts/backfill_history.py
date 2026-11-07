@@ -58,7 +58,7 @@ from src.analyzer import (  # noqa: E402
 from src.fetcher import A_SHARE_SYMBOLS, SYMBOLS, _yahoo_chart_get  # noqa: E402
 
 DEFAULT_RANGE = "1y"
-SOURCE_THROTTLE = 0.5            # 源间节流（秒），降低 10 标的连续取数的 429 概率
+SOURCE_THROTTLE = 0.5            # 源间节流（秒），降低多标的连续取数的 429 概率
 AKSHARE_TIMEOUT = 15             # 秒；AkShare 走新浪源无 timeout，须 daemon 线程 + join 限时
 AKSHARE_FALLBACK_MIN = 30        # A 股标的 Yahoo 返回少于该天数 → 改用 AkShare（实测 399006.SZ 仅 1 天）
 
@@ -301,7 +301,7 @@ def finalize_and_report() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="MarketPulse 历史数据回填（近 1 年）")
-    ap.add_argument("--symbols", default="", help="逗号分隔的大写符号，默认全部 SYMBOLS（10 个）")
+    ap.add_argument("--symbols", default="", help="逗号分隔的大写符号，默认全部 SYMBOLS（默认全部 SYMBOLS）")
     ap.add_argument("--range", default=DEFAULT_RANGE, help=f"Yahoo chart range，默认 {DEFAULT_RANGE}")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划，不写盘")
     ap.add_argument("--no-patch-existing", action="store_true",

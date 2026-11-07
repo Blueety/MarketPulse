@@ -38,10 +38,13 @@ SYMBOLS = {
     "MOVE": {"label": "MOVE（债市波动）", "source": "yahoo", "ticker": "^MOVE"},
     "GCF": {"label": "黄金 COMEX", "source": "yahoo", "ticker": "GC=F"},
     "BTC": {"label": "比特币（BTC-USD）", "source": "yahoo", "ticker": "BTC-USD"},
+    # 2026-11-07：原油并入 history（原只有 /api/macro 的 5 年深度序列 ⇒ 点位视图 10Y 只能到 5 年）。
+    # 作为 history 标的后可回填 10 年、随日报每日落库，前端点位/自选都用同一份 EOD 序列。
+    "CLF": {"label": "原油（WTI）", "source": "yahoo", "ticker": "CL=F"},
 }
 # 另类资产分组（十期）：不参与告警、不参与波动率板块；纳入日报「💰 另类资产」板块与趋势图。
-# 追加在 MOVE 之后（与报告板块顺序一致），历史键自动派生为 gcf / btc（daily_report.py 推导覆盖）。
-ALT_SYMBOLS = frozenset({"GCF", "BTC"})
+# 追加在 MOVE 之后（与报告板块顺序一致），历史键自动派生为 gcf / btc / clf（daily_report.py 推导覆盖）。
+ALT_SYMBOLS = frozenset({"GCF", "BTC", "CLF"})
 # 大盘指数分组（与 SYMBOLS 同处数据注册表）；波动率组 = SYMBOLS 中排除本集合。
 # 顺序：美股大盘（GSPC/IXIC）在前、A 股大盘（SH/SZ/CYB）居中、波动率（VIX/VXN/MOVE）在后；
 # 该顺序决定 context indices、告警收集与报告板块的输出顺序（六期 B 三板块同序）。
@@ -52,7 +55,7 @@ A_SHARE_SYMBOLS = frozenset({"SH", "SZ", "CYB"})
 MARKETS = {
     "a-share": frozenset({"SH", "SZ", "CYB"}),
     "us": frozenset({"GSPC", "IXIC"}),
-    "alt": frozenset({"GCF", "BTC"}),  # 十期：另类资产单板块快照（不参与告警）
+    "alt": frozenset({"GCF", "BTC", "CLF"}),  # 十期：另类资产单板块快照（不参与告警）
 }
 # 11 个 SPDR 行业 ETF（代码 → 中文行业名），用于美股板块领涨/领跌（与 A 股板块逻辑一致）
 US_SECTOR_ETFS = {

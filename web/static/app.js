@@ -25,13 +25,13 @@ const SERIES_VAR = {
   gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
   vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc",
   "gc=f": "--c-gld",  // 三十四期：黄金 COMEX 沿用 GLD 金色 token
-  "cl=f": "--c-oil"   // 2026-11-07：原油（macro 序列），独立青色 token 以免与 BTC/黄金撞色
+  clf: "--c-oil"      // 2026-11-07：原油（history 标的 CLF），独立青色 token 以免与 BTC/黄金撞色
 };
 // CSS token 缺失时的保底色（= Dark 硬编码值）
 const SERIES_FALLBACK = {
   gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868", cyb: "#C792EA",
   vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A",
-  "gc=f": "#E5C07B", "cl=f": "#4DD0E1"
+  "gc=f": "#E5C07B", clf: "#4DD0E1"
 };
 const ALL_KEYS = Object.keys(SERIES_VAR);
 function colors() {
@@ -50,9 +50,10 @@ const GROUPS = [
   { id: "us", name: "美股大盘", keys: ["gspc", "ixic"] },
   { id: "cn", name: "A 股大盘", keys: ["sh", "sz", "cyb"] },
   { id: "vol", name: "波动率", keys: ["vix", "vxn", "move"] },
-  // 另类资产：BTC 走 history；黄金/原油走 /api/macro 的深度序列（macroExtras，顺序即画线顺序）
-  // ⚠️ 2026-11-07：原油（CL=F）按用户要求并入本组 —— macro 侧的 5 年序列已就绪，零后端改动。
-  { id: "alt", name: "另类资产", keys: ["btc"], macroExtras: ["gc=f", "cl=f"] }
+  // 另类资产：BTC / 原油走 history（原油 2026-11-07 并入 SYMBOLS 并回填 10 年）；
+  // 黄金仍走 /api/macro 的 GC=F 深度序列（盘中更鲜），由 `order` 钉住画线顺序 = btc → 黄金 → 原油。
+  { id: "alt", name: "另类资产", keys: ["btc", "clf"], macroExtras: ["gc=f"],
+    order: ["btc", "gc=f", "clf"] }
 ];
 
 // 静态占位模块（无数据源，仅保视觉；grep data-placeholder 定位全部待接点）
@@ -144,19 +145,12 @@ const POINT_SYMBOLS = [
   { value: 'MOVE', text: 'MOVE（债市波动）' },
   { value: 'GCF', text: '黄金 COMEX' },
   { value: 'BTC', text: '比特币（BTC-USD）' },
-  // 2026-11-07：原油并入点位视图。⚠️ 它**不在** /api/history 里（那是 SYMBOLS 注册表的 10 个），
-  // 序列来自 /api/macro 的 5 年深度序列 cl=f ⇒ fetchPoint() 走 macro 分支，不发 /api/history 请求。
-  { value: 'CL=F', text: '原油（WTI）', macro: 'cl=f' }
+  // 2026-11-07：原油已是 history 标的（SYMBOLS 里的 CLF，2016-11-07 起 10 年），走常规 /api/history 链路。
+  { value: 'CLF', text: '原油（WTI）' }
 ];
-// 「自选」可以在 history 之外叠加的 macro 标的（2026-11-07：原油 cl=f）。
-// ⚠️ 必须定义在 CUSTOM_KEY_SET 之前：持久化恢复要走同一份白名单，
-//    否则 localStorage 里的 'cl=f' 会被 loadCustomKeys() 静默过滤掉（刷新后自选少一条线）。
-var MACRO_CHIP_EXTRAS = [{ key: 'cl=f', label: '原油' }];
-// 合法 chip key：POINT_SYMBOLS 全覆盖（含 gcf —— history 列名是 gcf，非 gc=f） + macro 附加项
-const CUSTOM_KEY_SET = Array.from(new Set(
-  POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); })
-    .concat(MACRO_CHIP_EXTRAS.map(function (m) { return m.key; }))
-));
+// 合法 chip key：POINT_SYMBOLS 全覆盖（含 gcf —— history 列名是 gcf，非 gc=f；clf = 原油）。
+// ⚠️ 2026-11-07 起原油已是 history 标的（CLF），不再需要 macro 附加项 —— 那条特殊路径已删除。
+const CUSTOM_KEY_SET = POINT_SYMBOLS.map(function (s) { return s.value.toLowerCase(); });
 // 点位时间档 = 交易日条数（与 #range-bar 的 days 口径一致；10Y 档依赖 scripts/backfill_history.py 的 10 年回填）
 // 点位视图档位（2026-11-06 加「周/月」细档：原来只有年档，看短期波动没入口）。
 // `days` = 交易日条数（后端 `records[-days:]`）：5≈1周、22≈1月、65≈3月、130≈6月。
@@ -863,10 +857,7 @@ function renderTrendTabs() {
   });
 }
 
-// 「自选」chip 行：history 的 10 个标的 + macro 侧可叠加的标的（原油 cl=f）。
-// ⚠️ macro 标的**只在 `/api/macro` 已到达时**才出现在 chip 里 —— 否则会出现「点了 chip 却画不出线」
-//    （macro 取数失败 / 还没返回）。macro 晚到时由 fetch 回调补一次 renderTrendChips()。
-// 标签顺序：history 10 个（后端注册表序）→ 再追加 macro 附加项（MACRO_CHIP_EXTRAS，定义在文件顶部附近）。
+// 「自选」chip 行 = `/api/history` 的全部标的（11 个，含原油 CLF；无 history 时回落 POINT_SYMBOLS）。
 function macroSeriesByKey() {
   const t = (state.macro && state.macro.trend) || null;
   const out = {};
@@ -875,15 +866,10 @@ function macroSeriesByKey() {
 }
 function trendChipCatalog() {
   const series = (state.history || {}).series || [];
-  const base = series.length
-    ? series.map(function (s) { return { key: s.key, label: s.label }; })
-    : POINT_SYMBOLS.map(function (s) { return { key: s.value.toLowerCase(), label: s.text }; });
-  const have = macroSeriesByKey();
-  const seen = {};
-  base.forEach(function (c) { seen[c.key] = 1; });
-  return base.concat(MACRO_CHIP_EXTRAS.filter(function (m) {
-    return !!have[m.key] && !seen[m.key];
-  }));
+  if (series.length) {
+    return series.map(function (s) { return { key: s.key, label: s.label }; });
+  }
+  return POINT_SYMBOLS.map(function (s) { return { key: s.value.toLowerCase(), label: s.text }; });
 }
 
 function renderTrendChips() {
@@ -968,16 +954,14 @@ function renderMainChart() {
   const history = state.history || {};
   const dates = history.dates || [];
   const series = (history.series || []).filter(function (s) { return keys.indexOf(s.key) !== -1; });
-  // macro 侧序列（另类资产组固定 gc=f + cl=f；「自选」里勾到的 macro 键也走这条链）
+  // macro 侧序列（目前只有另类资产组的 gc=f 黄金深度序列）
   const macroTrend = (state.macro && state.macro.trend) ? state.macro.trend : null;
   const macroHave = macroSeriesByKey();
-  const wantedMacro = (g.macroExtras || []).concat(
-    isCustom ? keys.filter(function (k) { return !!macroHave[k] && (g.macroExtras || []).indexOf(k) === -1; }) : []
-  );
-  const macroSeries = [];
-  wantedMacro.forEach(function (k) {
-    const hit = macroHave[k];
-    if (hit && macroSeries.indexOf(hit) === -1) macroSeries.push(hit);
+  const macroKeys = (g.macroExtras || []).filter(function (k) { return !!macroHave[k]; });
+  const macroSeries = macroKeys.map(function (k) { return macroHave[k]; });
+  // 画线顺序：组可用 `order` 显式钉住（history 键与 macro 键混排）；否则 history 在前、macro 追加在后。
+  const order = (g.order || keys.concat(macroKeys)).filter(function (k) {
+    return keys.indexOf(k) !== -1 || macroKeys.indexOf(k) !== -1;
   });
 
   if (window.__chartFailed || !window.Chart) {
@@ -1034,10 +1018,10 @@ function renderMainChart() {
     axis = buildTradingAxis(dates, series);
   }
   const palette = colors();
-  const datasets = series.map(function (s) {
-    return buildLineDataset(s, seriesColor(palette, s.key), buildLinePts(s, dates, axis.dateIndexMap), { area: true });
-  });
-  const macroMetas = [];
+  const builtSeries = [];        // 与 datasets 同序（供 renderTrendMeta）
+  const datasets = [];
+  const macroPts = {};           // key → 可见点（**不要**写回 state.macro 的 payload：会跨渲染残留）
+  const macroMeta = {};          // key → 覆盖后的 meta
   macroSeries.forEach(function (ms, k) {
     const vis = macroVisible[k];
     if (!vis || !vis.length) return;
@@ -1061,10 +1045,24 @@ function renderMainChart() {
         pts.push({ x: p.d, y: lastVal, rawVal: lastRaw, filled: true });
       }
     });
-    if (!pts.length) return;
-    datasets.push(buildLineDataset(ms, seriesColor(palette, ms.key), pts, { area: true }));
+    if (!pts.length) return;     // 窗口内无可见点 ⇒ 视为缺席（不给 buildLineDataset 空数组）
+    macroPts[ms.key] = pts;
     // meta 的涨跌幅按可见窗口覆盖（后端算的是整段序列的变化，与所选档位不符）
-    macroMetas.push(Object.assign({}, ms, { change_7d: lastVal != null ? lastVal - 100 : null }));
+    macroMeta[ms.key] = Object.assign({}, ms, { change_7d: lastVal != null ? lastVal - 100 : null });
+  });
+  order.forEach(function (k) {
+    if (macroKeys.indexOf(k) !== -1) {
+      const ms = macroHave[k];
+      if (!ms || !macroPts[k]) return;
+      datasets.push(buildLineDataset(ms, seriesColor(palette, ms.key), macroPts[k], { area: true }));
+      builtSeries.push(macroMeta[k]);
+      return;
+    }
+    const s = series.filter(function (x) { return x.key === k; })[0];
+    if (!s) return;
+    datasets.push(buildLineDataset(s, seriesColor(palette, s.key),
+                                   buildLinePts(s, dates, axis.dateIndexMap), { area: true }));
+    builtSeries.push(s);
   });
   charts.main = new Chart(canvas, {
     type: 'line',
@@ -1072,7 +1070,7 @@ function renderMainChart() {
     options: buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.days) }),
     plugins: [hoverCrosshair]   // 内联插件仅挂本实例（不 Chart.register，避免影响全局）
   });
-  renderTrendMeta(g, series.concat(macroMetas));
+  renderTrendMeta(g, builtSeries);
 }
 
 // === 点位视图（单指数绝对点位 + MA20/MA60）===
@@ -1212,41 +1210,6 @@ function pointRequestDays() {
   return Math.min(state.point.days + MA_LOOKBACK, 3650);   // 后端 days 上限 3650
 }
 
-/** 点位取数的两种来源：
- *  - history 标的（10 个）：`GET /api/history?symbols=X&days=N`
- *  - macro 标的（原油 cl=f）：不发请求，直接切 `/api/macro.trend`（5 年深度序列），
- *    按 `pointRequestDays()` 取尾部 —— 与 history 分支共用同一份「回看 + 可见窗口」语义。
- * 返回统一结构 `{dates, series:[{key,label,values,raw}]}`（与 /api/history 同形）。
- */
-function fetchPointPayload() {
-  const macroKey = pointMacroKey();
-  if (!macroKey) {
-    return fetch(buildPointQuery()).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    });
-  }
-  return ensureMacro().then(function (mac) {
-    const t = (mac && mac.trend) || { dates: [], series: [] };
-    const src = (t.series || []).filter(function (x) { return x.key === macroKey; })[0];
-    if (!src) throw new Error('macro 序列缺失: ' + macroKey);
-    const allDates = t.dates || [];
-    const take = pointRequestDays();
-    const start = Math.max(0, allDates.length - take);
-    const dates = allDates.slice(start);
-    return {
-      dates: dates,
-      series: [{
-        key: src.key,
-        label: src.label,
-        values: (src.values || []).slice(start),
-        raw: (src.raw || []).slice(start),
-        change_7d: src.change_7d
-      }]
-    };
-  });
-}
-
 function buildPointQuery() {
   return '/api/history?symbols=' + encodeURIComponent(state.point.symbol) + '&days=' + pointRequestDays();
 }
@@ -1277,7 +1240,11 @@ function fetchPoint() {
   const wantDays = state.point.days;
   state.point.payload = null;
   showHomeChartSkel(true);
-  fetchPointPayload()
+  fetch(buildPointQuery())
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(function (payload) {
       if (wantSym !== state.point.symbol || wantDays !== state.point.days) return;   // 已切走 → 丢弃
       state.point.payload = payload;
@@ -1467,36 +1434,7 @@ function pointSymbolCatalog() {
   const base = series.length
     ? series.map(function (s) { return { value: String(s.key).toUpperCase(), text: s.label }; })
     : POINT_SYMBOLS.map(function (s) { return { value: s.value, text: s.text }; });
-  // 2026-11-07：macro 侧标的（原油）追加在最后 —— 与「自选」chip 同源同一份 MACRO_CHIP_EXTRAS
-  const have = macroSeriesByKey();
-  const seen = {};
-  base.forEach(function (c) { seen[c.value] = 1; });
-  return base.concat(MACRO_CHIP_EXTRAS.filter(function (m) {
-    return !!have[m.key] && !seen[m.key.toUpperCase()];
-  }).map(function (m) { return { value: m.key.toUpperCase(), text: m.label }; }));
-}
-
-// 点位视图里选中的是不是 macro 标的（原油）：是的话序列取自 /api/macro.trend
-function pointMacroKey() {
-  const hit = MACRO_CHIP_EXTRAS.filter(function (m) {
-    return m.key.toUpperCase() === String(state.point.symbol || '').toUpperCase();
-  })[0];
-  return hit ? hit.key : null;
-}
-
-// macro 数据按需就绪：点位视图选原油时，若首屏 macro 还没回来，这里补一次（幂等）
-var macroPromise = null;
-function ensureMacro() {
-  if (state.macro && state.macro.trend) return Promise.resolve(state.macro);
-  if (macroPromise) return macroPromise;
-  macroPromise = fetch('/api/macro')
-    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (d) {
-      state.macro = d || { stocks: [], trend: { dates: [], series: [] } };
-      macroPromise = null;
-      return state.macro;
-    }, function (e) { macroPromise = null; throw e; });
-  return macroPromise;
+  return base;
 }
 
 // 点位控件（标的 <select> + 时间档按钮）：一次渲染后由事件驱动，与视图切换解耦
@@ -2146,7 +2084,7 @@ document.addEventListener('DOMContentLoaded', function () {
       state.macro = data || { stocks: [] };
       renderOverview();
       renderTrendChart();   // 三十四期：macro 晚到时补画 alt 组的黄金 COMEX 线（点位视图下为空操作）
-      renderTrendChips();   // 2026-11-07：自选 chip 里的「原油」依赖 macro.trend，晚到后补建/补活
+
     })
     .catch(function (err) {
       console.error('[macro] fetch failed:', err);

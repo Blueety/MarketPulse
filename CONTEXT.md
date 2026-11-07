@@ -30,7 +30,7 @@ _Avoid_: 用「history 文件」「历史文件」指代 SQLite 长表。
 经济日历的数据表。它由 `scripts/sync_econ_calendar` 落盘，备份为**单文件全量** `data/backup/econ_events.json`（不按月冻结——表里有未来日程，按月冻结会既碎又旧）。
 
 **市场子集（MARKETS）**:
-取数与渲染的市场范围：`a-share` = SH/SZ/CYB，`us` = GSPC/IXIC。波动率（VIX/VXN/MOVE）与另类资产（GLD/BTC-USD）**不属于任何快照子集**：另类资产只出现在日报与趋势图，且不参与告警。
+取数与渲染的市场范围：`a-share` = SH/SZ/CYB，`us` = GSPC/IXIC。波动率（VIX/VXN/MOVE）与另类资产（GCF 黄金 COMEX / BTC-USD / CLF 原油 WTI）**不属于快照的 us/a-share 子集**（`alt` 子集 = 这三个）：另类资产只出现在日报与趋势图，且不参与告警。
 
 **大类聚合（板块热度）**:
 `SECTOR_MAPPING` / `aggregate_sectors` 把 ~175 个概念板块聚合成 10+1 个大类，日报与 context 的 `sector_heat` 用的是**聚合后**的大类，不是原始概念板块。

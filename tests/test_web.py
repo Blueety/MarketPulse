@@ -425,7 +425,7 @@ def test_api_history(client):
     data = r.json()
     # 默认值 30 天；夹具 8 条全为周内交易日，全量返回
     assert len(data["dates"]) == 8
-    assert len(data["series"]) == 10
+    assert len(data["series"]) == len(SYMBOLS)
     vix = next(s for s in data["series"] if s["key"] == "vix")
     # 全量 8 条中 08-05 的 vix 为 null，index 2
     assert vix["values"][2] is None
@@ -435,7 +435,7 @@ def test_api_latest(client):
     r = client.get("/api/latest")
     assert r.status_code == 200
     data = r.json()
-    assert len(data["indices"]) == 10
+    assert len(data["indices"]) == len(SYMBOLS)
     gspc = next(i for i in data["indices"] if i["symbol"] == "GSPC")
     assert gspc["value"] == 107.0
     # 相邻 08-30(106)→08-31(107)：+0.943…
@@ -463,7 +463,7 @@ def test_endpoints_empty_data(tmp_path, monkeypatch):
     c = TestClient(web.app.app)
     assert c.get("/").status_code == 200
     h = c.get("/api/history").json()
-    assert h["dates"] == [] and len(h["series"]) == 10
+    assert h["dates"] == [] and len(h["series"]) == len(SYMBOLS)
     lat = c.get("/api/latest").json()
     assert lat["date"] is None
     assert lat["indices"] == []
@@ -554,7 +554,7 @@ def test_api_history_days_param(client):
     data = r.json()
     assert len(data["dates"]) == 3
     assert data["dates"][-1] == "2026-08-12"  # 最近 3 条末位最新
-    assert len(data["series"]) == 10
+    assert len(data["series"]) == len(SYMBOLS)
 
 
 def test_api_history_days_caps(client):
@@ -594,7 +594,7 @@ def test_api_history_symbols_param(client):
     assert len(d["dates"]) == 8
     # 空串 → 全部 10
     r = client.get("/api/history?symbols=")
-    assert len(r.json()["series"]) == 10
+    assert len(r.json()["series"]) == len(SYMBOLS)
 
 
 def test_api_history_combined(client):

@@ -1217,7 +1217,7 @@ D6（缺项目级排除表）由「只查活文档」的设计取代（不需要
 - **两个数据源各管各的失败条**：`/api/history?days=`（对比）与 `/api/history?symbols=&days=`（点位）是两条独立取数链。`refresh()` 成功时**只在对比视图**收失败条（`if (state.trendView !== 'point') showHomeFailBar(false)`），否则点位取数失败会被一次 history 成功悄悄抹掉 → 432px 空卡零提示（「失败 ≠ 静默」）。点位失败要显式写卡内失败态（隐藏 canvas + `#chart-main-empty` 文案 + 清空 `#trend-meta`），因为 `renderPointChart()` 在 `payload === null` 时会早退。同理 `#home-retry` 必须同时重发 `fetchPoint()`。
 - **点位视图的图例画在 canvas 里，颜色必须由同一函数产出**（2026-11-06）：首页高度门禁只剩 24px，DOM 图例（任何一行）都会顶红 ⇒ 用 Chart.js 内建 legend（`position:'top'`、`align:'end'`），实测占 canvas 内 34px、`#chart-main-wrap` 高度不变。图例条目由 `generateLabels` 直接从 `dataset.pointBackgroundColor` 生成 ⇒ 标注色与线色同源，改配色不会出现「图例一套、线一套」。均线配色走 `maColorsFor(priceColor)`：首选 MA20=`--blue`、MA60=`--c-move`（紫），与该指数主色**或另一条均线**的 RGB 色距 < 110 时依次退到备选（创业板紫 `#C792EA` vs MA60 紫 `#A78BFA` ≈ 36 ⇒ 创业板自动变成金 `#E5C07B`）。闸门 `TM-11a..d` 断言「图例 3 项、色块 == 线色、SH 与创业板两两色距 ≥110」。
 - **均线窗口按「最近 N 个有效观测」取，不能按「最近 N 个日期槽位」**（2026-11-06 用户反馈「MA60 中间直接横过去、没有波折」）：`/api/history` 的 `dates` 是多市场共享的交易日轴，某标的在别的市场交易日上是 `null`（上证 299 槽位里 18 个 null）。旧实现要求「最近 60 个槽位内零缺失」才出一个点 ⇒ MA60 只剩 49 个点，剩下的点被 Chart.js 用一条**直线**连起来（2025-12-31 → 2026-07-29 一条 7 个月长弦，看着像算错）。修法见 `web/static/app.js` 的 `movingAvgPts`：滚动维护最近 `win` 个非空值的和，缺口不再吞点。判据（`verify_ui.py` TM-10）：MA 点数必须 == 有效观测数 − win + 1，且逐点等于独立预言机（滚动均值）；只看「线是平滑的」验不出这类错。
-- **历史库已含 10 年（2026-11-06 回填），`HISTORY_MAX` 早已废止**：`data/marketpulse.db` 现有 2606 个交易日（2016-11-07 ~ 2026-11-06，长表 25086 行、约 2.1 MB），`/api/history?days=2600` 能返回 2514 点。`config.json` 的 `history.retention_days`（= `analyzer.HISTORY_MAX`）**不生效**：写入路径（`append_history` / `merge_history`）不再裁剪，常量只为不破坏引用而保留。`scripts/backfill_history.py` 早先会打印「已达 HISTORY_MAX 上限，更早的行会被裁剪」的假警告（回填 5/10 年时让人以为白跑），2026-11-06 已删掉该提示与 `RETENTION_WARN_THRESHOLD` 常量。回填前置动作不变：先 `storage.wal_checkpoint()` 再备份 `data/marketpulse.db`（DB 是 tracked 文件，push 即线上数据源），回填脚本自身只新增 date 不存在的行。
+- **历史库已含 10 年（2026-11-06 回填），`HISTORY_MAX` 早已废止**：`data/marketpulse.db` 现有 2606 个交易日（2016-11-07 ~ 2026-11-06，长表 27917 行、约 2.3 MB），`/api/history?days=2600` 能返回 2514 点。`config.json` 的 `history.retention_days`（= `analyzer.HISTORY_MAX`）**不生效**：写入路径（`append_history` / `merge_history`）不再裁剪，常量只为不破坏引用而保留。`scripts/backfill_history.py` 早先会打印「已达 HISTORY_MAX 上限，更早的行会被裁剪」的假警告（回填 5/10 年时让人以为白跑），2026-11-06 已删掉该提示与 `RETENTION_WARN_THRESHOLD` 常量。回填前置动作不变：先 `storage.wal_checkpoint()` 再备份 `data/marketpulse.db`（DB 是 tracked 文件，push 即线上数据源），回填脚本自身只新增 date 不存在的行。
 - **动态告警阈值的窗口必须取「最新 N 根收益」，且回放不能重排前缀**（2026-11-06 两处连修）：
   ① `_trailing_returns` 原实现 `rets[:N]`（rets 为旧→新）取到的是**最旧** N 根 ⇒ 历史超过 N+1 根收盘后动态阈值被冻结成全库最早那一段的常数（10 年库上每天都是 `1.0199…`，即 2016 年那 20 根）；改成 `rets[-lookback_days:]`。测试此前看不出来，因为用例里收益数恰好 ≤ 窗口数。
   ② 回放（`src/backtest.py: collect_triggers`）过去对每对 (行 × 标的) 传 `history[:i]`，`_trailing_returns` 每次 `sorted()` 整个前缀 ⇒ O(n² log n)：10 年历史下 `/api/backtest` 从 0.9s 涨到 47s（`verify_ui` 的 BT 段 30s 超时直接崩）。现在每标的先跑 `analyzer.rolling_dynamic_thresholds()`（O(n) 滑动窗）拿到整条阈值序列，`check_breach(..., dynamic_override=...)` 直接吃，实测 47s → 0.56s。
@@ -1229,6 +1229,24 @@ D6（缺项目级排除表）由「只查活文档」的设计取代（不需要
   - 横轴 `axisLabelFormatter` 按实际跨度换格式：≤400 天 `M/D`、≤2200 天 `YY/M`、更长只标 `YYYY`。年档必须去重（2515 点 / 14 刻度 ≈ 180 天间隔 ⇒ 同一年出现两个刻度），去重只能放在 `mpYearDedupePlugin` 的 `beforeDraw` 里遍历 **autoSkip 后的** `scale.ticks` —— 写在 `ticks.callback` 里会对着「全部候选索引」判断，把整条轴清空（实测只剩 2016、2019）。分类标签在 `options.scales.x.labels`，**不是** `chart.data.labels`（本图只给 datasets）。
   - **黄金（`gcf`）曾整段缺失**：2025-10 ~ 2026-09 为空（线上 Yahoo 403，日报写不进 gcf）⇒ 1Y 图只剩 13~16 个点，看着像「只有几天」。`backfill_history.py` 的「补既有行 None」原先只对走 AkShare 的 A 股生效，现扩大到**所有取到序列的标的**：只在「该标的自己那天有 bar」的位置补 `None`，休市日不会凭空写出值。补完 gcf 1Y = 253/260、VIX 255/260、MOVE 252/260。
 - **均线必须「多取回看、算完再裁」，不能在请求窗口内算**（2026-11-07 用户反馈「这个均线是不是有问题」）：3M 档只有 ~64 个交易日，MA60 在窗口内凑不满 60 个观测 ⇒ 只剩右边一小截，看着像画错了。修法：`buildPointQuery()` 请求 `state.point.days + MA_LOOKBACK`（**120**，不是 60），均线在**全长序列**上算（`fullMap` 建全量 dateIndexMap），再用 `maVisible(pts, visSet)` 裁回窗口；价格线/meta/`pointSpanMonths` 一律用尾部 `days` 条的**可见切片**，否则区间涨跌、最高/最低、跨度提示都会被回看段污染。回看取 2 倍窗口宽度是因为共享日期轴上各市场约有 6% 空位（休市），只多取 60 条时 MA60 常差 4~5 个样本、窗口左端仍缺 5 个点（实测 2025-11-12 才开始）。闸门：`TM-10` 的期望点集 = 「可见观测里预言机算得出值的那些」，逐点比对 x 与 y；`TM-3`/`TM-12d` 断言请求 URL 是 `days=380`（1Y）/`days=142`（1月）。
-- **另类资产组现在是 3 条线：BTC（history）+ 黄金（macro gc=f）+ 原油（macro cl=f）**（2026-11-07 用户要求并入原油）：`GROUPS` 里该组由 `macroGold` 改成 `macroExtras: ["gc=f","cl=f"]`，`renderMainChart()` 里把「只画黄金」的整块逻辑泛化成遍历 —— 每条 macro 序列各自按**可见窗口首个非空值 = 100** 重归一化、各自算 meta 涨跌幅（后端 `change_7d` 是整段序列的变化，与所选档位不符，不能直接用）。日期轴取 history ∪ 所有 macro 可见段并集（再滤周末）。颜色：`SERIES_VAR["cl=f"] = "--c-oil"`（浅色 `#0E7C86` / 深色 `#4DD0E1`，与 BTC 橙、黄金金、ixic 绿都可区分）。闸门 `TM-13a..f`：三线标签顺序、三条都从 100 起算、三色互异、meta 三项、原油末点涨跌幅 == `/api/macro` 同源窗口变化。
-- **「自选」chip 现在混了两类数据源**（2026-11-07 用户要求把原油也加进自选）：目录 = `/api/history` 的 10 个 history 标的 + `MACRO_CHIP_EXTRAS`（`cl=f` 原油，来自 `/api/macro.trend`）。`renderMainChart()` 里 `wantedMacro = g.macroExtras ∪ 自选里勾到的 macro 键`，两类键**互斥**（macro 键不可能出现在 history series 里，反之亦然）⇒ 过滤 history 时不用担心误命中。三个易错点：① chip 只在 macro 已到达时出现（否则「点了 chip 画不出线」），`/api/macro` 成功回调里必须同时 `renderTrendChart()` + `renderTrendChips()`；② 空态判断要写成「history 与 macro 双空」才是空，只看 `series.length` 会让「自选只勾原油」变成空图；③ 闸门 `TM-5a` 的 chip 数是 **10 或 11**（macro 未到 10），`TM-14a..d` 管勾原油后的线/基准/持久化。
-- **点位视图（单指数绝对点位）现在混了两种取数来源**（2026-11-07）：`POINT_SYMBOLS` 末尾加了 `{value:'CL=F', macro:'cl=f'}`，`fetchPoint()` 改走 `fetchPointPayload()` 分流 —— history 标的发 `/api/history?symbols=X&days=N+120`；macro 标的（原油）**不发请求**，直接切 `/api/macro.trend` 尾部 `pointRequestDays()` 条，返回与 history 同形的 `{dates, series:[{key,label,values,raw}]}`。两个易错点：① 首屏 macro 可能还没回来 ⇒ `ensureMacro()` 幂等补取（并发只发一次）；② `pointSymbolCatalog()` 只在 history series 上构建下拉，必须再追加 `MACRO_CHIP_EXTRAS` 否则原油不可选；`CUSTOM_KEY_SET` 因 `POINT_SYMBOLS` 已含 `cl=f` 要用 Set 去重。闸门 `TM-15a..e`：下拉含 CL=F、选后三条线、首点 == macro 同源窗口首值、**不发 `/api/history?symbols=CL`**、meta 标原油。
+- **原油（CLF）2026-11-07 起是 history 标的**（`macro cl=f` 方案已废弃并删除）：`src/fetcher.py` 的
+  `SYMBOLS` 加 `CLF: CL=F`、`ALT_SYMBOLS`/`MARKETS["alt"]` 同步；`src/storage.py` 的 `HISTORY_KEYS` 追加 `clf`
+  （两处由 `tests/test_storage.py` 锁定同步）；DB 由 `scripts/backfill_history.py --range 10y --symbols CLF`
+  回填 2515 个交易日（2016-11-07 起）。三处消费点同一数据源：另类资产组 `order:['btc','gc=f','clf']`
+  （黄金仍来自 macro，其余来自 history，`order` 显式钉住画线顺序）、自选 chip 来自 `/api/history` 的 11 个标的、
+  点位视图下拉用 history 键 `CLF`（不是 `CL=F`）。颜色 `SERIES_VAR['clf']='--c-oil'`（浅 `#0E7C86` / 深 `#4DD0E1`）。
+- **加注册表标的的连带面（2026-11-07 实测，一次踩全）**：① `render_report` 的另类资产表按
+  `SYMBOLS ∩ ALT_SYMBOLS` 取行并直接 `values[sym]` 索引 ⇒ 所有手写 values/statuses 夹具都会 KeyError
+  （本轮 12 处，`tests/test_reporter.py::sample_data` 是共享夹具，改它连带 4 个 phase 文件）；
+  ② `context.history_30d` 是**手抄的逐符号数组**，不随 `SYMBOLS` 自动增长 —— 漏了 `clf` 会让
+  `indices`（11 项）与 `history_30d`（10 列）不对称，消费方按 key 取原油静默得 undefined
+  （回归护栏：`tests/test_context.py` 断言 `history_30d` 覆盖 `st.HISTORY_KEYS` 全集）；
+  ③ 日报「另类资产 30 日趋势」图的面板清单 `reporter.MARKET_CHART_PANELS["alt"]` 也是手抄的（漏 CLF ⇒ 图只有两条线）；
+  ④ 计数断言（`== 10`）改成 `== len(SYMBOLS)` 派生，别每次加标的都改数字。
+- **改前端标签文案要同步门禁里的精确匹配**：原油标签从「原油」变成「原油（WTI）」后，`label === '原油'`
+  的查找直接失效（本轮 TM-13e 的预言机因此拿错窗口基准，假红 +32.5% vs 图上 −2.44%）。
+  门禁里查线一律用 `String(label).indexOf('原油') === 0` 这类前缀匹配，并在断言文字里写清匹配口径。
+- **门禁断言不能用自己的请求证明自己**：TM-15d 原先「计数 `symbols=CLF` 的资源请求 ≥1」，
+  而同一段预言机代码自己就 `fetch('/api/history?symbols=CLF')` ⇒ 恒真。判据要区分**实现请求**
+  （`days=2720` = 档位 2600 + MA_LOOKBACK 120）与预言机请求，并比较请求前后增量。
+

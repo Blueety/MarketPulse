@@ -126,6 +126,13 @@ class TestGenerateContext:
         assert data["indices"]["MOVE"]["status"] == "平静"
         assert data["history_30d"]["dates"] == ["2026-08-28", "2026-08-29"]  # append 后调用，含当日
         assert data["history_30d"]["vix"] == [20.0, 21.0]
+        # 不变量（2026-11-07 review 发现 1 的回归护栏）：history_30d 必须覆盖**每一个** history 键，
+        # 否则 indices 有 11 项而 history_30d 只有 10 列，消费方按 key 取原油会静默得到 undefined
+        # （加原油 CLF 时漏过这一行，旧断言只等比了 8 个键，测不出来）。
+        missing = [k for k in st.HISTORY_KEYS if k not in data["history_30d"]]
+        assert missing == [], missing
+        for k in st.HISTORY_KEYS:
+            assert len(data["history_30d"][k]) == len(data["history_30d"]["dates"]), k
         assert len(data["history_30d"]["dates"]) == len(data["history_30d"]["vix"]) == \
             len(data["history_30d"]["vxn"]) == len(data["history_30d"]["move"]) == \
             len(data["history_30d"]["gspc"]) == len(data["history_30d"]["ixic"]) == \

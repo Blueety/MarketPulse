@@ -7,6 +7,7 @@ import pytest
 
 from src import reporter as rep
 from src.analyzer import build_statuses
+from src.fetcher import SYMBOLS
 
 
 def sample_data() -> dict:
@@ -16,12 +17,12 @@ def sample_data() -> dict:
         "values": {
             "GSPC": 4500.0, "IXIC": 17500.0, "SH": 3100.0, "SZ": 10000.0, "CYB": 2200.0,
             "VIX": 15.23, "VXN": 22.11, "MOVE": 95.40,
-            "GCF": 252.30, "BTC": 65000.00,
+            "GCF": 252.30, "BTC": 65000.00, "CLF": 78.40,
         },
         "changes": {
             "GSPC": 0.50, "IXIC": -0.30, "SH": 0.60, "SZ": -0.40, "CYB": 0.20,
             "VIX": 1.23, "VXN": -0.50, "MOVE": 2.00,
-            "GCF": 0.45, "BTC": -1.20,
+            "GCF": 0.45, "BTC": -1.20, "CLF": -0.85,
         },
         "statuses": {
             "GSPC": ("连涨1日", "大盘连续上涨1日。"),
@@ -34,6 +35,7 @@ def sample_data() -> dict:
             "MOVE": ("平静", "债市波动平稳，利率预期稳定。"),
             "GCF": ("连涨1日", "大盘连续上涨1日。"),
             "BTC": ("连跌1日", "大盘连续下跌1日。"),
+            "CLF": ("连跌1日", "大盘连续下跌1日。"),
         },
         "summary": "VIX 收于 15.23，市场状态：平静。",
         "has_history": True,
@@ -55,9 +57,9 @@ class TestRenderReport:
         data = sample_data()
         data["has_history"] = False
         data["changes"] = {"GSPC": None, "IXIC": None, "SH": None, "SZ": None, "CYB": None,
-                           "VIX": None, "VXN": None, "MOVE": None, "GCF": None, "BTC": None}
+                           "VIX": None, "VXN": None, "MOVE": None, "GCF": None, "BTC": None, "CLF": None}
         report = rep.render_report(**data)
-        assert report.count("首次运行，暂无历史对比") == 10
+        assert report.count("首次运行，暂无历史对比") == len(SYMBOLS)
 
     def test_failed_fetch_annotated(self):
         data = sample_data()

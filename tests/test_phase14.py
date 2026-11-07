@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from src import image_renderer as ir
+from src.fetcher import SYMBOLS
 
 SAMPLE_MD = """# 📊 全市场情绪日报
 
@@ -361,7 +362,7 @@ def test_daily_report_image_failure_exit_zero(monkeypatch, tmp_path):
     import daily_report as dr
 
     monkeypatch.setattr(dr, "fetch_all", lambda *a, **k: (
-        {s: 100.0 for s in ["GSPC", "IXIC", "SH", "SZ", "CYB", "VIX", "VXN", "MOVE", "GCF", "BTC"]}, {}))
+        {s: 100.0 for s in SYMBOLS}, {}))
     monkeypatch.setattr(dr, "fetch_sector_heat", lambda: ([], []))
     monkeypatch.setattr(dr, "fetch_us_sector_heat", lambda: ([], []))
     monkeypatch.setattr(dr, "load_last_values", lambda: {})
