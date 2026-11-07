@@ -853,13 +853,24 @@ function renderTrendTabs() {
   });
 }
 
-// 「自选」chip 行：10 个标的（顺序 = /api/history 的 series 顺序；无 history 时回落到 POINT_SYMBOLS）
+// 「自选」chip 行：history 的 10 个标的 + macro 侧可叠加的标的（原油 cl=f）。
+// ⚠️ macro 标的**只在 `/api/macro` 已到达时**才出现在 chip 里 —— 否则会出现「点了 chip 却画不出线」
+//    （macro 取数失败 / 还没返回）。macro 晚到时由 fetch 回调补一次 renderTrendChips()。
+// 标签顺序：history 10 个（后端注册表序）→ 再追加 macro 附加项。
+var MACRO_CHIP_EXTRAS = [{ key: 'cl=f', label: '原油' }];
+function macroSeriesByKey() {
+  const t = (state.macro && state.macro.trend) || null;
+  const out = {};
+  ((t && t.series) || []).forEach(function (s) { out[s.key] = s; });
+  return out;
+}
 function trendChipCatalog() {
   const series = (state.history || {}).series || [];
-  if (series.length) {
-    return series.map(function (s) { return { key: s.key, label: s.label }; });
-  }
-  return POINT_SYMBOLS.map(function (s) { return { key: s.value.toLowerCase(), label: s.text }; });
+  const base = series.length
+    ? series.map(function (s) { return { key: s.key, label: s.label }; })
+    : POINT_SYMBOLS.map(function (s) { return { key: s.value.toLowerCase(), label: s.text }; });
+  const have = macroSeriesByKey();
+  return base.concat(MACRO_CHIP_EXTRAS.filter(function (m) { return !!have[m.key]; }));
 }
 
 function renderTrendChips() {
@@ -939,10 +950,22 @@ function renderMainChart() {
 
   let g = GROUPS[0];
   GROUPS.concat([CUSTOM_GROUP]).forEach(function (x) { if (x.id === state.trendGroup) g = x; });
-  const keys = g.id === 'custom' ? state.customKeys : g.keys;
+  const isCustom = g.id === 'custom';
+  const keys = isCustom ? state.customKeys : g.keys;
   const history = state.history || {};
   const dates = history.dates || [];
   const series = (history.series || []).filter(function (s) { return keys.indexOf(s.key) !== -1; });
+  // macro 侧序列（另类资产组固定 gc=f + cl=f；「自选」里勾到的 macro 键也走这条链）
+  const macroTrend = (state.macro && state.macro.trend) ? state.macro.trend : null;
+  const macroHave = macroSeriesByKey();
+  const wantedMacro = (g.macroExtras || []).concat(
+    isCustom ? keys.filter(function (k) { return !!macroHave[k] && (g.macroExtras || []).indexOf(k) === -1; }) : []
+  );
+  const macroSeries = [];
+  wantedMacro.forEach(function (k) {
+    const hit = macroHave[k];
+    if (hit && macroSeries.indexOf(hit) === -1) macroSeries.push(hit);
+  });
 
   if (window.__chartFailed || !window.Chart) {
     canvas.style.display = 'none';
@@ -952,7 +975,7 @@ function renderMainChart() {
     }
     return;
   }
-  if (!dates.length || !series.length) {
+  if ((!dates.length && !macroSeries.length) || (!series.length && !macroSeries.length)) {
     canvas.style.display = 'none';
     if (emptyEl) {
       emptyEl.classList.remove('hidden');
@@ -975,14 +998,7 @@ function renderMainChart() {
   // 三十四期起：macro 深度序列按当前窗口起点裁剪（防 7D 轴被 5 年序列撑爆），
   // 轴取 history ∪ macro(可见段) 并集；macro 序列重归一化为「可见窗口首个非空值 = 100」
   // （与 history 系列同基准，可同轴比较；raw 保留真价供 tooltip），change 按可见窗口覆盖。
-  // 2026-11-07：由「只画黄金」泛化为遍历 g.macroExtras（另类资产 = 黄金 + 原油）。
-  const macroTrend = (state.macro && state.macro.trend) ? state.macro.trend : null;
-  const macroSeries = [];
-  (g.macroExtras || []).forEach(function (k) {
-    const hit = macroTrend && macroTrend.series
-      ? macroTrend.series.filter(function (x) { return x.key === k; })[0] : null;
-    if (hit) macroSeries.push(hit);
-  });
+  // 2026-11-07：由「只画黄金」泛化为遍历 macro 序列（另类资产 = 黄金 + 原油；自选里勾到的 macro 键同源）。
   const windowStart = dates.length ? dates[0] : null;
   const macroVisible = macroSeries.map(function (s) {
     const out = [];
@@ -2057,6 +2073,7 @@ document.addEventListener('DOMContentLoaded', function () {
       state.macro = data || { stocks: [] };
       renderOverview();
       renderTrendChart();   // 三十四期：macro 晚到时补画 alt 组的黄金 COMEX 线（点位视图下为空操作）
+      renderTrendChips();   // 2026-11-07：自选 chip 里的「原油」依赖 macro.trend，晚到后补建/补活
     })
     .catch(function (err) {
       console.error('[macro] fetch failed:', err);

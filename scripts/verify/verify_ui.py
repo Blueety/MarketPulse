@@ -5362,7 +5362,7 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     page.click('#point-range button[data-days="260"]')
     page.wait_for_timeout(1500)
 
-    # ---- TM-5 自选跨组：10 个 chip，勾 GSPC+SH → 2 条线且都从 100 起算 ----
+    # ---- TM-5 自选跨组：10 个 history chip + 1 个 macro chip（原油），勾 GSPC+SH → 2 条线且都从 100 起算 ----
     page.click('#trend-view button[data-view="compare"]')
     page.wait_for_timeout(400)
     m = page.evaluate(snap)
@@ -5371,11 +5371,12 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
     page.wait_for_timeout(400)
     m = page.evaluate(snap)
-    check(m["chipsShown"] and m["chipCount"] == 10,
-          "TM-5a 自选 tab：10 个标的 chip 可见", (m["chipsShown"], m["chipCount"]))
+    # 11 = history 的 10 个 + macro 侧「原油」（2026-11-07 起；macro 未到达时是 10）
+    check(m["chipsShown"] and m["chipCount"] in (10, 11),
+          "TM-5a 自选 tab：10 个 history chip（+ macro 原油）可见", (m["chipsShown"], m["chipCount"]))
     # 把选择收敛到 {gspc, sh}（默认组合可能被 localStorage 改过 → 逐个对齐，不断言默认值）
     want = {"gspc", "sh"}
-    if m["chipCount"] == 10:   # chip 行没渲染出来时不要再点（Playwright 会等 30s 才超时，掩盖真错）
+    if m["chipCount"] >= 10:   # chip 行没渲染出来时不要再点（Playwright 会等 30s 才超时，掩盖真错）
         for c in [{"key": k, "active": k in m["chipActive"]} for k in
                   ["gspc", "ixic", "sh", "sz", "cyb", "vix", "vxn", "move", "gcf", "btc"]]:
             if (c["key"] in want) != c["active"]:
@@ -5456,6 +5457,43 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
           (None if oil_idx < 0 else alt["lastYs"][oil_idx], oil_src))
     check(alt["n"][oil_idx] >= 20 if oil_idx >= 0 else False,
           "TM-13f 原油在 30D 窗口内点数充足（≥20）", alt["n"])
+
+    # ---- TM-14 自选里也能勾到 macro 侧标的（原油 cl=f，2026-11-07）----
+    # 自选的 chip 目录 = history 10 个 + macro 附加项；勾原油后线要出现、颜色为 --c-oil、
+    # 并与「另类资产」组的口径一致（首点 = 100），选择要能持久化到 localStorage。
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[4].click()")
+    page.wait_for_timeout(900)
+    cat = page.evaluate("() => Array.from(document.querySelectorAll('#trend-chips .trend-chip')).map(b => b.dataset.key)")
+    check("cl=f" in cat, "TM-14a 自选 chip 目录含 macro 标的 cl=f（原油）", cat[-3:])
+    has_oil = page.evaluate(
+        """() => { const b = document.querySelector('#trend-chips .trend-chip[data-key="cl=f"]');
+                   return !!(b && b.classList.contains('active')); }""")
+    if not has_oil:
+        page.click('#trend-chips .trend-chip[data-key="cl=f"]')
+        page.wait_for_timeout(900)
+    m14 = page.evaluate(
+        """() => {
+            const c = window.Chart.getChart(document.getElementById('chart-main'));
+            const ds = c.data.datasets || [];
+            const oil = ds.filter(d => d.label === '原油')[0] || null;
+            const cs = getComputedStyle(document.documentElement);
+            return {
+                labels: ds.map(d => d.label),
+                oilFirst: oil ? (oil.data[0] || {}).y : null,
+                oilColor: oil ? String(oil.borderColor) : null,
+                oilN: oil ? oil.data.length : 0,
+                tokenOil: cs.getPropertyValue('--c-oil').trim(),
+                stored: (function () { try { return JSON.parse(localStorage.getItem('mp-trend-custom') || '[]'); } catch (e) { return []; } })()
+            };
+        }""")
+    check("原油" in m14["labels"] and m14["oilN"] >= 20,
+          "TM-14b 勾原油后自选图里出现原油线（点数 ≥20）", (m14["labels"], m14["oilN"]))
+    check(m14["oilFirst"] is not None and abs(m14["oilFirst"] - 100) <= 0.01,
+          "TM-14c 原油线从可见窗口首个值 = 100 起算（与 history 系列同基准）", m14["oilFirst"])
+    check("cl=f" in m14["stored"], "TM-14d 选择持久化到 localStorage（mp-trend-custom）", m14["stored"])
+    # 收尾：取消原油，避免污染后续断言（TM-6 之后还要切视图/切档）
+    page.click('#trend-chips .trend-chip[data-key="cl=f"]')
+    page.wait_for_timeout(600)
 
     # ---- TM-6 两视图来回切换：容器高度稳定 + 无 pageerror ----
     err_before = len([e for e in errors if e.startswith("pageerror:")])
