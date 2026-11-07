@@ -5513,6 +5513,67 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     page.click('#trend-chips .trend-chip[data-key="cl=f"]')
     page.wait_for_timeout(600)
 
+    # ---- TM-15 点位视图下拉也能选原油（macro 序列，2026-11-07）----
+    # 原油不在 /api/history（SYMBOLS 注册表只有 10 个）⇒ 点位视图必须走 macro 分支：
+    # 不发 /api/history?symbols=CL，序列取自 /api/macro.trend 的尾部（回看 + 可见窗口同语义）。
+    page.click('#trend-view button[data-view="point"]')
+    page.wait_for_timeout(600)
+    opts15 = page.evaluate(
+        "() => Array.from((document.getElementById('point-symbol') || {options: []}).options)"
+        ".map(o => ({v: o.value, t: o.textContent}))")
+    check(any(o["v"] == "CL=F" for o in opts15),
+          "TM-15a 点位下拉含「原油（WTI）」（value=CL=F）", opts15[-2:])
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol');
+                   s.value = 'CL=F'; s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(2200)
+    m15 = page.evaluate(
+        """async () => {
+            const c = window.Chart.getChart(document.getElementById('chart-main'));
+            const ds = (c && c.data.datasets) || [];
+            const mac = await (await fetch('/api/macro')).json();
+            const t = (mac && mac.trend) || {};
+            const src = (t.series || []).filter(x => x.key === 'cl=f')[0] || null;
+            const price = ds[0] ? ds[0].data : [];
+            const start = price.length ? price[0].x : null;
+            // 期望值：macro raw 在「可见窗口首个日期」之后的首个非空值
+            let firstRaw = null;
+            if (src) {
+                const dates = t.dates || [];
+                for (let i = 0; i < dates.length; i++) {
+                    if (start && dates[i] < start) continue;
+                    if (src.raw && src.raw[i] != null) { firstRaw = src.raw[i]; break; }
+                }
+            }
+            return {
+                labels: ds.map(d => d.label),
+                n: ds.map(d => d.data.length),
+                y0: price.length ? price[0].y : null,
+                firstRaw: firstRaw,
+                meta: Array.from(document.querySelectorAll('#trend-meta .meta-item')).map(e => e.textContent),
+                symbol: window.__mpPointSymbol,
+                historyReqs: performance.getEntriesByType('resource').map(e => e.name)
+                    .filter(u => u.indexOf('/api/history?') !== -1 && /symbols=CL/i.test(u))
+            };
+        }""")
+    check(m15["labels"] == ["原油", "MA20", "MA60"],
+          "TM-15b 选原油后 3 条线（原油 + MA20 + MA60）", m15["labels"])
+    check(m15["y0"] is not None and m15["firstRaw"] is not None
+          and abs(m15["y0"] - m15["firstRaw"]) <= 0.01,
+          "TM-15c 原油点位首点 == /api/macro cl=f 同源窗口首值（非自证）",
+          (m15["y0"], m15["firstRaw"]))
+    check(m15["historyReqs"] == [],
+          "TM-15d 原油不发 /api/history?symbols=CL（走 macro 分支）", m15["historyReqs"])
+    check(m15["meta"] and "原油" in m15["meta"][0],
+          "TM-15e meta 首项标注原油", m15["meta"][:1])
+    # 收尾：切回标普（后续断言按 history 标的走）
+    page.evaluate(
+        """() => { const s = document.getElementById('point-symbol');
+                   s.value = 'GSPC'; s.dispatchEvent(new Event('change')); }""")
+    page.wait_for_timeout(1500)
+    page.click('#trend-view button[data-view="compare"]')
+    page.wait_for_timeout(600)
+
     # ---- TM-6 两视图来回切换：容器高度稳定 + 无 pageerror ----
     err_before = len([e for e in errors if e.startswith("pageerror:")])
     h0 = page.evaluate("() => Math.round(document.getElementById('chart-main-wrap').getBoundingClientRect().height)")
