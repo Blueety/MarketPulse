@@ -44,6 +44,7 @@
      加深为同色相的 #0D7D7D（4.61~4.95:1）；dark 段的 #2FD6A8 不动（深底上 10.35:1）。 */
   --c-gspc: #1677FF; --c-ixic: #0D7D7D; --c-sh: #F5222D; --c-sz: #FA8C16; --c-cyb: #722ED1;
   --c-vix: #CF1322; --c-vxn: #D4380D; --c-move: #2F54EB; --c-gld: #D4A017; --c-btc: #F7931A;
+  --c-oil: #0E7C86;   /* 原油（另类资产组，2026-11-07）：青绿，与 BTC 橙 / 黄金金 明显区分 */
   --c-tip-bg: rgba(255, 255, 255, 0.95); --c-tip-title: #1d1d1f; --c-tip-body: #1d1d1f;
   --c-tip-border: #d2d2d7; --c-axis-tick: #86868b;
   --c-grid-line: rgba(0, 0, 0, 0.06); --c-grid-line-bar: rgba(0, 0, 0, 0.1);
@@ -82,6 +83,7 @@
   --card-glow: var(--glass-highlight);
   --c-gspc: #66A8E0; --c-ixic: #2FD6A8; --c-sh: #FF6E5E; --c-sz: #F0A868; --c-cyb: #C792EA;
   --c-vix: #FFB454; --c-vxn: #E0913E; --c-move: #A78BFA; --c-gld: #E5C07B; --c-btc: #F7931A;
+  --c-oil: #4DD0E1;   /* 原油：深色底用更亮的青 */
   --c-tip-bg: rgba(17, 22, 30, 0.95); --c-tip-title: #E3E8EF; --c-tip-body: #E3E8EF;
   --c-tip-border: #1E2733; --c-axis-tick: #8492A6;
   --c-grid-line: rgba(30, 39, 51, 0.10); --c-grid-line-bar: rgba(30, 39, 51, 0.28);

@@ -94,8 +94,21 @@ def _probe_bls(timeout: float) -> tuple[bool, str]:
                                      headers={"User-Agent": _PROBE_UA,
                                               "Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            resp.read(4096)
-        return (resp.status == 200), f"HTTP {resp.status}"
+            body = resp.read(4096)
+        # ⚠️ BLS 在**日配额用尽**时仍返回 HTTP 200，只有 body 里的 `status` 是
+        #    `REQUEST_NOT_PROCESSED`（"daily threshold for total number of requests ... reached"）。
+        #    只看 HTTP 状态会把"配额耗尽"判成"上游可用" ⇒ 下游 MX-11 由 SKIP 变成 FAIL 噪声
+        #    （2026-11-07 实测：连跑几次门禁就把 BLS 当日配额打满）。
+        if resp.status != 200:
+            return False, f"HTTP {resp.status}"
+        try:
+            j = json.loads(body.decode("utf-8", errors="replace"))
+            st = str(j.get("status") or "")
+        except Exception:                     # noqa: BLE001 —— 解析不了 ⇒ 不确定 ⇒ 视为可用
+            return True, "响应无法解读(视为可用)"
+        if st and st != "REQUEST_SUCCEEDED":
+            return False, f"BLS status={st}"
+        return True, "HTTP 200"
     except urllib.error.HTTPError as exc:
         return False, f"HTTP {exc.code}"
     except urllib.error.URLError as exc:
@@ -5383,6 +5396,66 @@ def assert_trend_modes(page, url: str, errors: list[str]) -> None:
     m = page.evaluate(snap)
     check(m["chipActive"] == ["gspc"] and m["dsCount"] == 1,
           "TM-5c 只剩 1 个 chip 时取消无效（「至少保留 1 个」不变量）", (m["chipActive"], m["dsCount"]))
+
+    # ---- TM-13 另类资产组 = BTC + 黄金 + 原油（2026-11-07 用户要求把原油并入本组）----
+    # 数据来源不同：btc 走 /api/history，gc=f / cl=f 走 /api/macro 的 5 年深度序列。
+    # 判据取三条：① 3 条线且标签正确；② 三条都从可见窗口首个值 = 100 起算（同基准可比）；
+    # ③ 原油末点涨跌幅 == 与 /api/macro 同源计算出的窗口变化（不是自证）。
+    page.evaluate("() => document.querySelectorAll('#trend-tabs button')[3].click()")
+    page.wait_for_timeout(1800)
+    alt = page.evaluate(
+        """() => {
+            const c = window.Chart.getChart(document.getElementById('chart-main'));
+            const ds = c.data.datasets || [];
+            return {
+                labels: ds.map(d => d.label),
+                colors: ds.map(d => d.borderColor),
+                firstYs: ds.map(d => (d.data[0] || {}).y),
+                lastYs: ds.map(d => (d.data.slice(-1)[0] || {}).y),
+                n: ds.map(d => d.data.length),
+                meta: Array.from(document.querySelectorAll('#trend-meta .meta-item')).map(e => e.textContent)
+            };
+        }""")
+    check(alt["labels"] == ["比特币（BTC-USD）", "黄金COMEX", "原油"],
+          "TM-13a 另类资产组 3 条线：BTC + 黄金 + 原油（顺序固定）", alt["labels"])
+    check(all(abs(y - 100) < 0.01 for y in alt["firstYs"] if y is not None)
+          and len(alt["firstYs"]) == 3,
+          "TM-13b 三条线都从可见窗口首个值 = 100 起算（同基准）", alt["firstYs"])
+    check(len(set(alt["colors"])) == 3, "TM-13c 三条线颜色互不相同", alt["colors"])
+    check(len(alt["meta"]) == 3, "TM-13d meta 三项（每条线一个涨跌幅）", alt["meta"])
+    oil_src = page.evaluate(
+        """async () => {
+            const j = await (await fetch('/api/macro')).json();
+            const t = (j && j.trend) || {};
+            const s = (t.series || []).filter(x => x.key === 'cl=f')[0];
+            if (!s) return null;
+            const dates = t.dates || [];
+            // 可见窗口 = 首页当前档位（30D）的起点
+            const c = window.Chart.getChart(document.getElementById('chart-main'));
+            // 窗口起点取自**原油自己的首点 x**（category 轴标签在 options.scales.x.labels，
+            // c.data.labels 是 undefined —— 早先因此没过滤、把 5 年序列首值当成窗口基准，假红 +10%）
+            const oil = (c.data.datasets || []).filter(d => d.label === '原油')[0];
+            const start = oil && oil.data.length ? oil.data[0].x : null;
+            // 用 **raw** 算窗口变化：后端 values 是「整段 5 年序列首值 = 100」的归一化，
+            // 直接拿它做窗口内比值会把窗口前的涨跌算进来（实测 +10% vs 图上 -2.65% 的假红）。
+            let base = null, last = null, n = 0;
+            dates.forEach((d, i) => {
+                if (start && d < start) return;
+                const v = s.raw ? s.raw[i] : null;
+                if (v == null) return;
+                if (base === null) base = v;
+                last = v; n += 1;
+            });
+            return {change: (base && last != null) ? (last / base * 100 - 100) : null, n: n};
+        }""")
+    oil_idx = alt["labels"].index("原油") if "原油" in alt["labels"] else -1
+    check(oil_src is not None and oil_idx >= 0
+          and alt["lastYs"][oil_idx] is not None
+          and abs(alt["lastYs"][oil_idx] - 100 - oil_src["change"]) <= 0.05,
+          "TM-13e 原油末点涨跌幅 == /api/macro cl=f 同源窗口变化（非自证）",
+          (None if oil_idx < 0 else alt["lastYs"][oil_idx], oil_src))
+    check(alt["n"][oil_idx] >= 20 if oil_idx >= 0 else False,
+          "TM-13f 原油在 30D 窗口内点数充足（≥20）", alt["n"])
 
     # ---- TM-6 两视图来回切换：容器高度稳定 + 无 pageerror ----
     err_before = len([e for e in errors if e.startswith("pageerror:")])

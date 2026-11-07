@@ -24,12 +24,14 @@ applyTheme(getTheme());
 const SERIES_VAR = {
   gspc: "--c-gspc", ixic: "--c-ixic", sh: "--c-sh", sz: "--c-sz", cyb: "--c-cyb",
   vix: "--c-vix", vxn: "--c-vxn", move: "--c-move", gld: "--c-gld", btc: "--c-btc",
-  "gc=f": "--c-gld"   // 三十四期：黄金 COMEX 沿用 GLD 金色 token
+  "gc=f": "--c-gld",  // 三十四期：黄金 COMEX 沿用 GLD 金色 token
+  "cl=f": "--c-oil"   // 2026-11-07：原油（macro 序列），独立青色 token 以免与 BTC/黄金撞色
 };
 // CSS token 缺失时的保底色（= Dark 硬编码值）
 const SERIES_FALLBACK = {
   gspc: "#66A8E0", ixic: "#2FD6A8", sh: "#FF6E5E", sz: "#F0A868", cyb: "#C792EA",
-  vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A"
+  vix: "#FFB454", vxn: "#E0913E", move: "#A78BFA", gld: "#E5C07B", btc: "#F7931A",
+  "gc=f": "#E5C07B", "cl=f": "#4DD0E1"
 };
 const ALL_KEYS = Object.keys(SERIES_VAR);
 function colors() {
@@ -48,7 +50,9 @@ const GROUPS = [
   { id: "us", name: "美股大盘", keys: ["gspc", "ixic"] },
   { id: "cn", name: "A 股大盘", keys: ["sh", "sz", "cyb"] },
   { id: "vol", name: "波动率", keys: ["vix", "vxn", "move"] },
-  { id: "alt", name: "另类资产", keys: ["btc"], macroGold: "gc=f" }   // 三十四期：黄金线改用 /api/macro 的 GC=F 实时序列
+  // 另类资产：BTC 走 history；黄金/原油走 /api/macro 的深度序列（macroExtras，顺序即画线顺序）
+  // ⚠️ 2026-11-07：原油（CL=F）按用户要求并入本组 —— macro 侧的 5 年序列已就绪，零后端改动。
+  { id: "alt", name: "另类资产", keys: ["btc"], macroExtras: ["gc=f", "cl=f"] }
 ];
 
 // 静态占位模块（无数据源，仅保视觉；grep data-placeholder 定位全部待接点）
@@ -968,24 +972,31 @@ function renderMainChart() {
     Chart.register(window.ChartZoom);
     renderMainChart._zoomRegistered = true;
   }
-  // 三十四期补全：macro 深度序列（tail 400）按当前窗口起点裁剪（防 7D 轴被 400 点撑爆），
-  // 轴取 history ∪ macro(可见段) 并集；gc=f 重归一化为「可见窗口首个非空值 = 100」
-  // （与 history 系列同基准，双线可比；raw 保留真价供 tooltip），change 按可见窗口覆盖。
-  let axis;
-  let gcSeries = null;
-  if (g.macroGold) {
-    const mc = state.macro && state.macro.trend ? state.macro.trend : null;
-    gcSeries = (mc && mc.series ? mc.series : []).find(function (s) { return s.key === g.macroGold; }) || null;
-  }
+  // 三十四期起：macro 深度序列按当前窗口起点裁剪（防 7D 轴被 5 年序列撑爆），
+  // 轴取 history ∪ macro(可见段) 并集；macro 序列重归一化为「可见窗口首个非空值 = 100」
+  // （与 history 系列同基准，可同轴比较；raw 保留真价供 tooltip），change 按可见窗口覆盖。
+  // 2026-11-07：由「只画黄金」泛化为遍历 g.macroExtras（另类资产 = 黄金 + 原油）。
+  const macroTrend = (state.macro && state.macro.trend) ? state.macro.trend : null;
+  const macroSeries = [];
+  (g.macroExtras || []).forEach(function (k) {
+    const hit = macroTrend && macroTrend.series
+      ? macroTrend.series.filter(function (x) { return x.key === k; })[0] : null;
+    if (hit) macroSeries.push(hit);
+  });
   const windowStart = dates.length ? dates[0] : null;
-  const mcVisible = [];
-  if (gcSeries) {
-    (state.macro.trend.dates || []).forEach(function (d, i) {
+  const macroVisible = macroSeries.map(function (s) {
+    const out = [];
+    ((macroTrend && macroTrend.dates) || []).forEach(function (d, i) {
       if (windowStart && d < windowStart) return;
-      mcVisible.push({ d: d, i: i });
+      out.push({ d: d, i: i });
     });
+    return out;
+  });
+  let axis;
+  const anyMacro = macroSeries.length && macroVisible.some(function (v) { return v.length; });
+  if (anyMacro) {
     const all = new Set(dates);
-    mcVisible.forEach(function (p) { all.add(p.d); });
+    macroVisible.forEach(function (vis) { vis.forEach(function (p) { all.add(p.d); }); });
     const tradingDates = Array.from(all).filter(function (d) { return !isWeekendDate(d); }).sort();
     const dateIndexMap = {};
     tradingDates.forEach(function (d, i) { dateIndexMap[d] = i; });
@@ -997,41 +1008,42 @@ function renderMainChart() {
   const datasets = series.map(function (s) {
     return buildLineDataset(s, seriesColor(palette, s.key), buildLinePts(s, dates, axis.dateIndexMap), { area: true });
   });
-  let gcMeta = null;
-  if (gcSeries && mcVisible.length) {
+  const macroMetas = [];
+  macroSeries.forEach(function (ms, k) {
+    const vis = macroVisible[k];
+    if (!vis || !vis.length) return;
     let base = null;   // 可见窗口首个非空原始值
-    mcVisible.forEach(function (p) {
-      const v = gcSeries.values ? gcSeries.values[p.i] : null;
+    vis.forEach(function (p) {
+      const v = ms.values ? ms.values[p.i] : null;
       if (base === null && v != null) base = v;
     });
     const scale = base ? 100 / base : 1;
-    const gcPts = [];
+    const pts = [];
     let lastVal = null, lastRaw = null;
-    mcVisible.forEach(function (p) {
+    vis.forEach(function (p) {
       if (axis.dateIndexMap[p.d] === undefined) return;
-      const v = gcSeries.values ? gcSeries.values[p.i] : null;
-      const raw = gcSeries.raw ? gcSeries.raw[p.i] : null;
+      const v = ms.values ? ms.values[p.i] : null;
+      const raw = ms.raw ? ms.raw[p.i] : null;
       if (v != null) {
         lastVal = v * scale;
         lastRaw = raw;
-        gcPts.push({ x: p.d, y: lastVal, rawVal: raw });
+        pts.push({ x: p.d, y: lastVal, rawVal: raw });
       } else if (lastVal != null) {
-        gcPts.push({ x: p.d, y: lastVal, rawVal: lastRaw, filled: true });
+        pts.push({ x: p.d, y: lastVal, rawVal: lastRaw, filled: true });
       }
     });
-    if (gcPts.length) {
-      datasets.push(buildLineDataset(gcSeries, palette[gcSeries.key] || palette.gld, gcPts, { area: true }));
-      // meta 的涨跌幅按可见窗口覆盖（tail 400 下后端算的是 400 日变化，与所选档位不符）
-      gcMeta = Object.assign({}, gcSeries, { change_7d: lastVal != null ? lastVal - 100 : null });
-    }
-  }
+    if (!pts.length) return;
+    datasets.push(buildLineDataset(ms, seriesColor(palette, ms.key), pts, { area: true }));
+    // meta 的涨跌幅按可见窗口覆盖（后端算的是整段序列的变化，与所选档位不符）
+    macroMetas.push(Object.assign({}, ms, { change_7d: lastVal != null ? lastVal - 100 : null }));
+  });
   charts.main = new Chart(canvas, {
     type: 'line',
     data: { datasets: datasets },
     options: buildLineOptions(axis.tradingDates, { maxTicks: tickLimit(state.days) }),
     plugins: [hoverCrosshair]   // 内联插件仅挂本实例（不 Chart.register，避免影响全局）
   });
-  renderTrendMeta(g, gcMeta ? series.concat([gcMeta]) : series);
+  renderTrendMeta(g, series.concat(macroMetas));
 }
 
 // === 点位视图（单指数绝对点位 + MA20/MA60）===
